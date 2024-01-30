@@ -1,5 +1,4 @@
 use std::error;
-use crate::data::Data;
 use crate::modbus::{DeviceConfig, ModbusDevice};
 
 const MAX_LINES: usize = 10;
@@ -15,7 +14,6 @@ pub struct App {
     /// counter
     pub position: usize,
     pub displaying_holding: bool,
-    pub data: Data,
     pub rendered_data: String,
     pub device: ModbusDevice,
 }
@@ -28,7 +26,6 @@ impl App {
                 baud_rate: 9600,
                 slave_id: 1,
             }).unwrap(),
-            data: Data::from_json_file("data.json"),
             running: true,
             displaying_holding: true,
             position: 0,
@@ -53,29 +50,24 @@ impl App {
     }
 
     pub fn refresh(&mut self) {
-        let from_data = if self.displaying_holding {
-            &self.data.holding
+        let _from = self.position;
+        let _to = self.position + MAX_LINES;
+
+        let data = if self.displaying_holding {
+            self.device.read_holding_registers(self.position as u16, (MAX_LINES + 1) as u16)
         } else {
-            &self.data.input
-        };
+            self.device.read_input_registers(self.position as u16, (MAX_LINES + 1) as u16)
+        }.unwrap();
 
-        let from = std::cmp::min(self.position, from_data.len().checked_sub(MAX_LINES).unwrap_or(0));
-        let to = std::cmp::min(from + MAX_LINES, from_data.len());
-        let slice = &from_data[from..to];
+        let mut rendered_data = format!("{0: >5}: {1: <5} u32\n", "index", "u16");
+        for i in 0..MAX_LINES + 1 {
+            let byte = *data.get(i).unwrap_or(&0) as u8;
+            let next = *data.get(i + 1).unwrap_or(&0) as u8;
+            let word = ((next as u16) << 8) | byte as u16;
+            rendered_data.extend(format!("{0: >5}: {byte: <5} {word}\n", self.position + i).chars());
+        }
 
-        self.rendered_data = slice
-            .iter()                           // Create an iterator over the vector
-            .map(|reg| {
-                let value = if self.displaying_holding {
-                    self.device.read_holding_register(reg.address)
-                } else {
-                    self.device.read_input_register(reg.address)
-                };
-                let as_string = value.map(|n| n.to_string()).unwrap_or("ERROR".to_string());
-                format!("[{} - {}]: {}", reg.address, reg.name, as_string)
-            })      // Convert each number to a String
-            .collect::<Vec<String>>()         // Collect the strings into a Vec<String>
-            .join("\n");
+        self.rendered_data = rendered_data;
     }
 
     pub fn toggle_type(&mut self) {
@@ -90,16 +82,8 @@ impl App {
     }
 
     pub fn down(&mut self) {
-        let from_data = if self.displaying_holding {
-            &self.data.holding
-        } else {
-            &self.data.input
-        };
-
         if let Some(res) = self.position.checked_add(1) {
-            if res < from_data.len().checked_sub(MAX_LINES).unwrap_or(0) {
-                self.position = res;
-            }
+            self.position = res;
         }
     }
 }

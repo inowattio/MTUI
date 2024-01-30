@@ -13,7 +13,6 @@ pub mod tui;
 /// Event handler.
 pub mod handler;
 mod modbus;
-mod data;
 
 use std::io;
 use ratatui::backend::CrosstermBackend;

@@ -14,7 +14,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     // - https://docs.rs/ratatui/latest/ratatui/widgets/index.html
     // - https://github.com/ratatui-org/ratatui/tree/master/examples
     frame.render_widget(
-        Paragraph::new(format!("Index: {} {}\n{}", app.position, app.displaying_type(), app.rendered_data))
+        Paragraph::new(format!("At: {} on {}\n\n{}", app.position, app.displaying_type(), app.rendered_data))
         .block(
             Block::default()
                 .title("Press `q` to stop running, up and down to move, r to refresh values and t to switch between register types.")

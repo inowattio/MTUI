@@ -31,23 +31,23 @@ impl ModbusDevice {
 
         let mut device = ModbusDevice { config, context };
 
-        let _ = device.read_holding_register(0)?;
+        let _ = device.read_holding_registers(0, 1)?;
         Ok(device)
     }
 
-    pub fn read_input_register(&mut self, address: u16) -> Result<u16> {
+    pub fn read_input_registers(&mut self, address: u16, count: u16) -> Result<Vec<u16>> {
         let r = futures::executor::block_on(self
             .context
-            .read_input_registers(address, 1))?;
+            .read_input_registers(address, count))?;
 
-        Ok(r[0])
+        Ok(r)
     }
 
-    pub fn read_holding_register(&mut self, address: u16) -> Result<u16> {
+    pub fn read_holding_registers(&mut self, address: u16, count: u16) -> Result<Vec<u16>> {
         let r = futures::executor::block_on(self
             .context
-            .read_holding_registers(address, 1))?;
+            .read_holding_registers(address, count))?;
 
-        Ok(r[0])
+        Ok(r)
     }
 }
