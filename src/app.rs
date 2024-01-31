@@ -66,7 +66,6 @@ impl App {
 
     pub fn toggle_type(&mut self) {
         self.displaying_holding = !self.displaying_holding;
-        self.position = 0;
     }
 
     pub fn up(&mut self) {
