@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
-use tokio_modbus::client::{rtu, Context, Reader};
+use tokio_modbus::client::{rtu, Context, Reader, Writer};
 use tokio_modbus::slave::Slave;
 use tokio_serial::{SerialPort, SerialStream};
 use anyhow::Result;
@@ -46,6 +46,14 @@ impl ModbusDevice {
         let r = futures::executor::block_on(self
             .context
             .read_holding_registers(address, count))?;
+
+        Ok(r)
+    }
+
+    pub fn write_register(&mut self, address: u16, data: u16) -> Result<()> {
+        let r = futures::executor::block_on(self
+            .context
+            .write_single_register(address, data))?;
 
         Ok(r)
     }

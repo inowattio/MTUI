@@ -3,12 +3,20 @@ use crate::modbus::{DeviceConfig, ModbusDevice};
 
 const MAX_LINES: usize = 10;
 
+#[derive(Copy, Clone, Debug)]
+pub enum FocusType {
+    Jump,
+    Write
+}
+
 pub type AppResult<T> = Result<T, Box<dyn error::Error>>;
 
 #[derive(Debug)]
 pub struct App {
     pub running: bool,
     pub position: usize,
+    pub focus: Option<FocusType>,
+    pub input_number: Option<u16>,
     pub displaying_holding: bool,
     pub rendered_data: String,
     pub device: ModbusDevice,
@@ -22,10 +30,33 @@ impl App {
                 baud_rate: 9600,
                 slave_id: 1,
             }).unwrap(),
+            focus: None,
+            input_number: None,
             running: true,
             displaying_holding: true,
             position: 0,
             rendered_data: String::new(),
+        }
+    }
+
+    pub fn switch_focus_to(&mut self, focus: FocusType) {
+        self.focus = Some(focus);
+    }
+
+    pub fn do_action(&mut self) {
+        match self.focus {
+            None => self.position += 20,
+            Some(focus) => if let Some(number) = self.input_number {
+                match focus {
+                    FocusType::Jump => self.position = number as usize,
+                    FocusType::Write => {
+                        let _ = self.device.write_register(self.position as u16, number);
+                    }
+                };
+                self.quit();
+            } else {
+                self.quit();
+            }
         }
     }
 
@@ -40,7 +71,11 @@ impl App {
     pub fn tick(&self) {}
 
     pub fn quit(&mut self) {
-        self.running = false;
+        if self.focus.is_some() {
+            self.focus = None;
+        } else {
+            self.running = false;
+        }
     }
 
     pub fn refresh(&mut self) {

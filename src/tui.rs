@@ -1,12 +1,14 @@
-use crate::app::{App, AppResult};
+use crate::app::{App, AppResult, FocusType};
 use crate::event::EventHandler;
-use crate::ui;
 use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
 use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
 use ratatui::backend::Backend;
 use ratatui::Terminal;
 use std::io;
 use std::panic;
+use ratatui::layout::Alignment;
+use ratatui::prelude::{Color, Style};
+use ratatui::widgets::{Block, Borders, BorderType, Paragraph};
 
 #[derive(Debug)]
 pub struct Tui<B: Backend> {
@@ -35,7 +37,27 @@ impl<B: Backend> Tui<B> {
     }
 
     pub fn draw(&mut self, app: &mut App) -> AppResult<()> {
-        self.terminal.draw(|frame| ui::render(app, frame))?;
+        let headline = match app.focus {
+            None => format!("At: {} on {}\n\n{}", app.position, app.displaying_type(), app.rendered_data),
+            Some(kind) => match kind {
+                FocusType::Jump => format!("Jump from {} at: {}", app.position, app.input_number.map_or("none".to_string(), |n| n.to_string())),
+                FocusType::Write => format!("Write at {} value: {}", app.position, app.input_number.map_or("none".to_string(), |n| n.to_string()))
+            },
+        };
+
+        self.terminal.draw(|frame| frame.render_widget(
+            Paragraph::new(headline)
+                .block(
+                    Block::default()
+                        .title("Q - Exit; Up/Down - Move; R - Refresh; T - Switch Register Type; W - Write; J - Jump; Enter - Action")
+                        .title_alignment(Alignment::Center)
+                        .borders(Borders::ALL)
+                        .border_type(BorderType::Rounded),
+                )
+                .style(Style::default().fg(Color::Cyan).bg(Color::Black))
+                .alignment(Alignment::Left),
+            frame.size(),
+        ))?;
         Ok(())
     }
 

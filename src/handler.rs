@@ -1,4 +1,4 @@
-use crate::app::{App, AppResult};
+use crate::app::{App, AppResult, FocusType};
 use crossterm::event::{KeyCode, KeyEvent};
 
 pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
@@ -11,6 +11,35 @@ pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
         }
         KeyCode::Char('t') => {
             app.toggle_type();
+        }
+        KeyCode::Char('w') => {
+            app.switch_focus_to(FocusType::Write);
+        }
+        KeyCode::Char('j') => {
+            app.switch_focus_to(FocusType::Jump);
+        }
+        KeyCode::Char(c) if c.is_digit(10) => {
+            let n = c as u16 - '0' as u16;
+            match app.input_number {
+                None => {
+                    app.input_number = Some(n);
+                },
+                Some(input_number) => {
+                    app.input_number = Some(input_number * 10 + n)
+                }
+            }
+        }
+        KeyCode::Backspace => {
+            if let Some(input_number) = app.input_number {
+                if input_number.to_string().len() == 1 {
+                    app.input_number = None;
+                } else {
+                    app.input_number = Some(input_number / 10);
+                }
+            }
+        },
+        KeyCode::Enter => {
+            app.do_action();
         }
         KeyCode::Up => {
             app.up();
