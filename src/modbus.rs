@@ -20,7 +20,6 @@ pub struct ModbusDevice {
     context: Context,
 }
 
-#[warn(dead_code)] // remove this later on...
 impl ModbusDevice {
     pub fn new(config: DeviceConfig) -> Result<Self> {
         let slave = Slave(config.slave_id);

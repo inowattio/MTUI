@@ -3,15 +3,11 @@ use crate::modbus::{DeviceConfig, ModbusDevice};
 
 const MAX_LINES: usize = 10;
 
-/// Application result type.
 pub type AppResult<T> = Result<T, Box<dyn error::Error>>;
 
-/// Application.
 #[derive(Debug)]
 pub struct App {
-    /// Is the application running?
     pub running: bool,
-    /// counter
     pub position: usize,
     pub displaying_holding: bool,
     pub rendered_data: String,
@@ -41,10 +37,8 @@ impl App {
         }
     }
 
-    /// Handles the tick event of the terminal.
     pub fn tick(&self) {}
 
-    /// Set running to false to quit the application.
     pub fn quit(&mut self) {
         self.running = false;
     }

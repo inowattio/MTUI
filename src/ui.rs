@@ -9,10 +9,6 @@ use crate::app::App;
 
 /// Renders the user interface widgets.
 pub fn render(app: &mut App, frame: &mut Frame) {
-    // This is where you add new widgets.
-    // See the following resources:
-    // - https://docs.rs/ratatui/latest/ratatui/widgets/index.html
-    // - https://github.com/ratatui-org/ratatui/tree/master/examples
     frame.render_widget(
         Paragraph::new(format!("At: {} on {}\n\n{}", app.position, app.displaying_type(), app.rendered_data))
         .block(
