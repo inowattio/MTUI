@@ -44,9 +44,6 @@ impl App {
     }
 
     pub fn refresh(&mut self) {
-        let _from = self.position;
-        let _to = self.position + MAX_LINES;
-
         let data = if self.displaying_holding {
             self.device.read_holding_registers(self.position as u16, (MAX_LINES + 1) as u16)
         } else {
@@ -55,9 +52,9 @@ impl App {
 
         let mut rendered_data = format!("{0: >5}: {1: <5} u32\n", "index", "u16");
         for i in 0..MAX_LINES + 1 {
-            let byte = *data.get(i).unwrap_or(&0) as u8;
-            let next = *data.get(i + 1).unwrap_or(&0) as u8;
-            let word = ((next as u16) << 8) | byte as u16;
+            let byte = *data.get(i).unwrap_or(&0);
+            let next = *data.get(i + 1).unwrap_or(&0);
+            let word = (byte as u32) << 16 | (next as u32);
             rendered_data.extend(format!("{0: >5}: {byte: <5} {word}\n", self.position + i).chars());
         }
 
