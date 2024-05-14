@@ -18,14 +18,20 @@ pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
         KeyCode::Char('j') => {
             app.switch_focus_to(FocusType::Jump);
         }
-        KeyCode::Char(c) if c.is_digit(10) => {
-            let n = c as u16 - '0' as u16;
-            match app.input_number {
-                None => {
-                    app.input_number = Some(n);
-                },
-                Some(input_number) => {
-                    app.input_number = Some(input_number * 10 + n)
+        KeyCode::Char(c) => {
+            if c.is_digit(10) {
+                let n = c as u16 - '0' as u16;
+                match app.input_number {
+                    None => {
+                        app.input_number = Some(n as i32);
+                    },
+                    Some(input_number) => {
+                        app.input_number = Some(input_number * 10 + n as i32)
+                    }
+                }
+            } else if c == '-' {
+                if let Some(input_number) = app.input_number {
+                    app.input_number = Some(-input_number);
                 }
             }
         }

@@ -16,7 +16,7 @@ pub struct App {
     pub running: bool,
     pub position: usize,
     pub focus: Option<FocusType>,
-    pub input_number: Option<u16>,
+    pub input_number: Option<i32>,
     pub displaying_holding: bool,
     pub rendered_data: String,
     pub device: ModbusDevice,
@@ -50,7 +50,7 @@ impl App {
                 match focus {
                     FocusType::Jump => self.position = number as usize,
                     FocusType::Write => {
-                        let _ = self.device.write_register(self.position as u16, number);
+                        let _ = self.device.write_register(self.position as u16, number as u16);
                     }
                 };
                 self.quit();

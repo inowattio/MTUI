@@ -1,7 +1,7 @@
 # this is a script to build and send to raspberry pi
 USERNAME=raspberry
-HOST=192.168.1.199
-DESTINATION_FOLDER=/home/raspberry/test
+HOST=raspberry5.local
+DESTINATION_FOLDER=/home/raspberry
 BUILD_ARGS=""
 TARGET_PROFILE=debug
 
