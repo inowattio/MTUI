@@ -1,7 +1,7 @@
 use crate::app::{App, AppResult, State};
 use crossterm::event::{KeyCode, KeyEvent};
 
-pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
+pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
     match key_event.code {
         KeyCode::Char('q') => {
             app.quit();
@@ -45,7 +45,7 @@ pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
             }
         },
         KeyCode::Enter => {
-            app.do_action();
+            app.do_action().await;
         }
         KeyCode::Up => {
             app.up();

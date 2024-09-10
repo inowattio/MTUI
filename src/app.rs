@@ -1,15 +1,31 @@
 use std::error;
+use strum::{Display, EnumIter, FromRepr, IntoEnumIterator};
 use tokio_serial::{DataBits, Parity, StopBits};
-use crate::modbus::{DeviceConfig, Interface, InterfaceWiredParams, ModbusDevice};
+use crate::modbus::{DeviceConfig, Interface, InterfaceWiredParams, InterfaceWirelessParams, ModbusDevice};
 
 const MAX_LINES: usize = 10;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum State {
-    Configure,
+    Configure(ConfigureTab),
     Read,
     Jump,
     Write
+}
+
+impl Default for State {
+    fn default() -> Self {
+        Self::Configure(ConfigureTab::default())
+    }
+}
+
+#[derive(Default, Clone, Copy, Display, FromRepr, EnumIter, Debug, Eq, PartialEq)]
+pub enum ConfigureTab {
+    #[default]
+    #[strum(to_string = "Wireless")]
+    Wireless,
+    #[strum(to_string = "Wired")]
+    Wired,
 }
 
 pub type AppResult<T> = Result<T, Box<dyn error::Error>>;
@@ -22,26 +38,16 @@ pub struct App {
     pub input_number: Option<i32>,
     pub displaying_holding: bool,
     pub rendered_data: String,
-    pub device: ModbusDevice,
+    pub device: Option<ModbusDevice>,
+    pub config: DeviceConfig,
 }
 
 impl App {
     pub async fn new() -> Self {
         Self {
-            device: ModbusDevice::new(&DeviceConfig {
-                interface: Interface::Wired(InterfaceWiredParams {
-                    path: "/dev/ttyUSB0".to_string(),
-                    baud_rate: 9600,
-                    data_bits: DataBits::Eight,
-                    parity: Parity::None,
-                    stop_bits: StopBits::One,
-                }),
-                slave_id: 1,
-                timeout_connect_ms: 0,
-                timeout_command_ms: 0,
-                time_between_commands_ms: 0,
-            }).await.unwrap(),
-            state: State::Configure,
+            device: None,
+            config: DeviceConfig::default(),
+            state: State::default(),
             input_number: None,
             running: true,
             displaying_holding: true,
@@ -54,15 +60,18 @@ impl App {
         self.state = focus;
     }
 
-    pub fn do_action(&mut self) {
+    pub async fn do_action(&mut self) {
         match self.state {
-            State::Configure => self.state = State::Read,
+            State::Configure(_) => {
+                self.device = Some(ModbusDevice::new(&self.config).await.unwrap());
+                self.state = State::Read
+            },
             State::Read => self.position += 20,
             State::Jump => if let Some(number) = self.input_number {
                 self.position = number as usize
             }
             State::Write => if let Some(number) = self.input_number {
-                let _ = self.device.write_register(self.position as u16, number as u16);
+                let _ = self.device.as_ref().unwrap().write_register(self.position as u16, number as u16);
             }
         }
 
@@ -83,7 +92,7 @@ impl App {
 
     pub fn quit(&mut self) {
         match self.state {
-            State::Configure | State::Read => self.running = false,
+            State::Configure(_) | State::Read => self.running = false,
             _ => self.state = State::Read,
         }
     }
@@ -91,9 +100,9 @@ impl App {
     pub fn refresh(&mut self) {
         const AMOUNT: usize = MAX_LINES + 1;
         let data = if self.displaying_holding {
-            futures::executor::block_on(self.device.holdings::<AMOUNT>(self.position as u16))
+            futures::executor::block_on(self.device.as_ref().unwrap().holdings::<AMOUNT>(self.position as u16))
         } else {
-            futures::executor::block_on(self.device.inputs::<AMOUNT>(self.position as u16))
+            futures::executor::block_on(self.device.as_ref().unwrap().inputs::<AMOUNT>(self.position as u16))
         };
 
         let mut rendered_data = format!("{0: >5}: {1: <5} {2: <10} {3: <2}\n", "index", "u16", "u32", "_ascii_");
@@ -117,7 +126,20 @@ impl App {
     }
 
     pub fn toggle_type(&mut self) {
-        self.displaying_holding = !self.displaying_holding;
+        if let State::Configure(current) = &mut self.state {
+            *current = match *current {
+                ConfigureTab::Wireless => {
+                    self.config.interface = Interface::Wired(InterfaceWiredParams::default());
+                    ConfigureTab::Wired
+                },
+                ConfigureTab::Wired => {
+                    self.config.interface = Interface::Wireless(InterfaceWirelessParams::default());
+                    ConfigureTab::Wireless
+                }
+            };
+        } else {
+            self.displaying_holding = !self.displaying_holding;
+        }
     }
 
     pub fn up(&mut self) {

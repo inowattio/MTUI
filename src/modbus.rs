@@ -15,6 +15,12 @@ pub enum Interface {
     Wireless(InterfaceWirelessParams)
 }
 
+impl Default for Interface {
+    fn default() -> Self {
+        Self::Wireless(InterfaceWirelessParams::default())
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct InterfaceWiredParams {
     pub path: String,
@@ -24,13 +30,25 @@ pub struct InterfaceWiredParams {
     pub stop_bits: StopBits,
 }
 
-#[derive(Clone, Debug)]
+impl Default for InterfaceWiredParams {
+    fn default() -> Self {
+        Self {
+            path: "".to_string(),
+            baud_rate: 9600,
+            data_bits: DataBits::Eight,
+            parity: Parity::None,
+            stop_bits: StopBits::One,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default)]
 pub struct InterfaceWirelessParams {
     pub ip: String,
     pub port: u16,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct DeviceConfig {
     pub interface: Interface,
     pub slave_id: tokio_modbus::slave::SlaveId,

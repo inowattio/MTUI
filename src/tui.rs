@@ -1,4 +1,4 @@
-use crate::app::{App, AppResult, State};
+use crate::app::{App, AppResult, ConfigureTab, State};
 use crate::event::EventHandler;
 use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
 use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
@@ -9,6 +9,7 @@ use std::panic;
 use ratatui::layout::Alignment;
 use ratatui::prelude::{Color, Style};
 use ratatui::widgets::{Block, Borders, BorderType, Paragraph};
+use strum::IntoEnumIterator;
 
 #[derive(Debug)]
 pub struct Tui<B: Backend> {
@@ -38,17 +39,28 @@ impl<B: Backend> Tui<B> {
 
     pub fn draw(&mut self, app: &mut App) -> AppResult<()> {
         let headline = match app.state {
-            State::Configure => "Configure!".to_string(),
+            State::Configure(selectedTab) => {
+                ConfigureTab::iter().map(|e| if e == selectedTab {
+                    format!("*{e:?}*")
+                } else {
+                    format!("{e:?}")
+                }).collect::<Vec<String>>().join(" ")
+            },
             State::Read => format!("At: {} on {}\n\n{}", app.position, app.displaying_type(), app.rendered_data),
             State::Jump => format!("Jump from {} at: {}", app.position, app.input_number.map_or("none".to_string(), |n| n.to_string())),
             State::Write => format!("Write at {} value: {}", app.position, app.input_number.map_or("none".to_string(), |n| n.to_string()))
+        };
+
+        let commands = match app.state {
+            State::Configure(_) => "Q - Exit; Up/Down - Move; R - Check; T - Switch Config Type; Enter - Go",
+            _ => "Q - Exit; Up/Down - Move; R - Refresh; T - Switch Register Type; W - Write; J - Jump; Enter - Action"
         };
 
         self.terminal.draw(|frame| frame.render_widget(
             Paragraph::new(headline)
                 .block(
                     Block::default()
-                        .title("Q - Exit; Up/Down - Move; R - Refresh; T - Switch Register Type; W - Write; J - Jump; Enter - Action")
+                        .title(commands)
                         .title_alignment(Alignment::Center)
                         .borders(Borders::ALL)
                         .border_type(BorderType::Rounded),
