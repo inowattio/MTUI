@@ -97,12 +97,12 @@ impl App {
         }
     }
 
-    pub fn refresh(&mut self) {
+    pub async fn refresh(&mut self) {
         const AMOUNT: usize = MAX_LINES + 1;
         let data = if self.displaying_holding {
-            futures::executor::block_on(self.device.as_ref().unwrap().holdings::<AMOUNT>(self.position as u16))
+            self.device.as_ref().unwrap().holdings::<AMOUNT>(self.position as u16).await
         } else {
-            futures::executor::block_on(self.device.as_ref().unwrap().inputs::<AMOUNT>(self.position as u16))
+            self.device.as_ref().unwrap().inputs::<AMOUNT>(self.position as u16).await
         };
 
         let mut rendered_data = format!("{0: >5}: {1: <5} {2: <10} {3: <2}\n", "index", "u16", "u32", "_ascii_");

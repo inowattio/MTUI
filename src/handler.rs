@@ -7,7 +7,7 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
             app.quit();
         }
         KeyCode::Char('r') => {
-            app.refresh();
+            app.refresh().await;
         }
         KeyCode::Char('t') => {
             app.toggle_type();
