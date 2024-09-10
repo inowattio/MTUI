@@ -33,7 +33,7 @@ pub struct InterfaceWiredParams {
 impl Default for InterfaceWiredParams {
     fn default() -> Self {
         Self {
-            path: "".to_string(),
+            path: "/dev/ttyUSB0".to_string(),
             baud_rate: 9600,
             data_bits: DataBits::Eight,
             parity: Parity::None,
@@ -42,10 +42,19 @@ impl Default for InterfaceWiredParams {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct InterfaceWirelessParams {
     pub ip: String,
     pub port: u16,
+}
+
+impl Default for InterfaceWirelessParams {
+    fn default() -> Self {
+        Self {
+            ip: "192.168.200.1".to_string(),
+            port: 6607,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -129,13 +138,12 @@ impl ModbusDevice {
                     interface.port,
                 ));
                 let connection = tcp::connect_slave(socket_addr, slave);
-                let con = timeout(connection, timeout_connect, Duration::default())
-                    .await??;
+                let context = timeout(connection, timeout_connect, Duration::default()).await??;
 
                 tokio::time::sleep(Duration::from_secs(2)).await;
                 // TODO: hmmm
 
-                con
+                context
             }
         };
 

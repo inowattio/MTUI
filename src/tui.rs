@@ -10,6 +10,7 @@ use ratatui::layout::Alignment;
 use ratatui::prelude::{Color, Style};
 use ratatui::widgets::{Block, Borders, BorderType, Paragraph};
 use strum::IntoEnumIterator;
+use tui_textarea::TextArea;
 
 #[derive(Debug)]
 pub struct Tui<B: Backend> {
@@ -55,6 +56,17 @@ impl<B: Backend> Tui<B> {
             State::Configure(_) => "Q - Exit; Up/Down - Move; R - Check; T - Switch Config Type; Enter - Go",
             _ => "Q - Exit; Up/Down - Move; R - Refresh; T - Switch Register Type; W - Write; J - Jump; Enter - Action"
         };
+
+        if let State::Configure(state) = app.state {
+            match state {
+                ConfigureTab::Wireless => {
+
+                }
+                ConfigureTab::Wired => {
+
+                }
+            }
+        }
 
         self.terminal.draw(|frame| frame.render_widget(
             Paragraph::new(headline)

@@ -1,9 +1,8 @@
 use std::error;
 use strum::{Display, EnumIter, FromRepr, IntoEnumIterator};
-use tokio_serial::{DataBits, Parity, StopBits};
 use crate::modbus::{DeviceConfig, Interface, InterfaceWiredParams, InterfaceWirelessParams, ModbusDevice};
 
-const MAX_LINES: usize = 10;
+const MAX_LINES: usize = 1;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum State {
@@ -39,14 +38,18 @@ pub struct App {
     pub displaying_holding: bool,
     pub rendered_data: String,
     pub device: Option<ModbusDevice>,
-    pub config: DeviceConfig,
+    pub config_wireless: InterfaceWirelessParams,
+    pub config_wired: InterfaceWiredParams,
+    pub final_config: DeviceConfig,
 }
 
 impl App {
     pub async fn new() -> Self {
         Self {
             device: None,
-            config: DeviceConfig::default(),
+            config_wireless: Default::default(),
+            config_wired: Default::default(),
+            final_config: DeviceConfig::default(),
             state: State::default(),
             input_number: None,
             running: true,
@@ -62,8 +65,17 @@ impl App {
 
     pub async fn do_action(&mut self) {
         match self.state {
-            State::Configure(_) => {
-                self.device = Some(ModbusDevice::new(&self.config).await.unwrap());
+            State::Configure(configure) => {
+                self.device = Some(ModbusDevice::new(&DeviceConfig {
+                    interface: match configure {
+                        ConfigureTab::Wireless => Interface::Wireless(self.config_wireless.clone()),
+                        ConfigureTab::Wired => Interface::Wired(self.config_wired.clone()),
+                    },
+                    slave_id: 0,
+                    timeout_connect_ms: 3000,
+                    timeout_command_ms: 1000,
+                    time_between_commands_ms: 5,
+                }).await.unwrap());
                 self.state = State::Read
             },
             State::Read => self.position += 20,
@@ -127,13 +139,12 @@ impl App {
 
     pub fn toggle_type(&mut self) {
         if let State::Configure(current) = &mut self.state {
+            self.position = 0;
             *current = match *current {
                 ConfigureTab::Wireless => {
-                    self.config.interface = Interface::Wired(InterfaceWiredParams::default());
                     ConfigureTab::Wired
                 },
                 ConfigureTab::Wired => {
-                    self.config.interface = Interface::Wireless(InterfaceWirelessParams::default());
                     ConfigureTab::Wireless
                 }
             };
@@ -151,6 +162,21 @@ impl App {
     pub fn down(&mut self) {
         if let Some(res) = self.position.checked_add(1) {
             self.position = res;
+        }
+
+        if let State::Configure(tab) = self.state {
+            match tab {
+                ConfigureTab::Wired => {
+                    if self.position > 5 {
+                        self.position = 4;
+                    }
+                },
+                ConfigureTab::Wireless => {
+                    if self.position > 2 {
+                        self.position = 1;
+                    }
+                },
+            }
         }
     }
 }
