@@ -14,7 +14,7 @@ use crate::tui::Tui;
 
 #[tokio::main]
 async fn main() -> AppResult<()> {
-    let mut app = App::new();
+    let mut app = App::new().await;
 
     let backend = CrosstermBackend::new(io::stderr());
     let terminal = Terminal::new(backend)?;

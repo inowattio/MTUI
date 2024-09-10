@@ -1,5 +1,6 @@
 use std::error;
-use crate::modbus::{DeviceConfig, ModbusDevice};
+use tokio_serial::{DataBits, Parity, StopBits};
+use crate::modbus::{DeviceConfig, Interface, InterfaceWiredParams, ModbusDevice};
 
 const MAX_LINES: usize = 10;
 
@@ -23,13 +24,21 @@ pub struct App {
 }
 
 impl App {
-    pub fn new() -> Self {
+    pub async fn new() -> Self {
         Self {
-            device: ModbusDevice::new(DeviceConfig {
-                tty_path: "/dev/ttyUSB0".to_string(),
-                baud_rate: 9600,
+            device: ModbusDevice::new(&DeviceConfig {
+                interface: Interface::Wired(InterfaceWiredParams {
+                    path: "/dev/ttyUSB0".to_string(),
+                    baud_rate: 9600,
+                    data_bits: DataBits::Eight,
+                    parity: Parity::None,
+                    stop_bits: StopBits::One,
+                }),
                 slave_id: 1,
-            }).unwrap(),
+                timeout_connect_ms: 0,
+                timeout_command_ms: 0,
+                time_between_commands_ms: 0,
+            }).await.unwrap(),
             focus: None,
             input_number: None,
             running: true,
@@ -79,10 +88,11 @@ impl App {
     }
 
     pub fn refresh(&mut self) {
+        const AMOUNT: usize = MAX_LINES + 1;
         let data = if self.displaying_holding {
-            self.device.read_holding_registers(self.position as u16, (MAX_LINES + 1) as u16)
+            futures::executor::block_on(self.device.holdings::<AMOUNT>(self.position as u16))
         } else {
-            self.device.read_input_registers(self.position as u16, (MAX_LINES + 1) as u16)
+            futures::executor::block_on(self.device.inputs::<AMOUNT>(self.position as u16))
         };
 
         let mut rendered_data = format!("{0: >5}: {1: <5} {2: <10} {3: <2}\n", "index", "u16", "u32", "_ascii_");
