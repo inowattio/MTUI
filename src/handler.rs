@@ -1,4 +1,4 @@
-use crate::app::{App, AppResult, FocusType};
+use crate::app::{App, AppResult, State};
 use crossterm::event::{KeyCode, KeyEvent};
 
 pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
@@ -13,10 +13,10 @@ pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
             app.toggle_type();
         }
         KeyCode::Char('w') => {
-            app.switch_focus_to(FocusType::Write);
+            app.switch_focus_to(State::Write);
         }
         KeyCode::Char('j') => {
-            app.switch_focus_to(FocusType::Jump);
+            app.switch_focus_to(State::Jump);
         }
         KeyCode::Char(c) => {
             if c.is_digit(10) {

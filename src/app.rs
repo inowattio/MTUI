@@ -4,8 +4,10 @@ use crate::modbus::{DeviceConfig, Interface, InterfaceWiredParams, ModbusDevice}
 
 const MAX_LINES: usize = 10;
 
-#[derive(Copy, Clone, Debug)]
-pub enum FocusType {
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum State {
+    Configure,
+    Read,
     Jump,
     Write
 }
@@ -16,7 +18,7 @@ pub type AppResult<T> = Result<T, Box<dyn error::Error>>;
 pub struct App {
     pub running: bool,
     pub position: usize,
-    pub focus: Option<FocusType>,
+    pub state: State,
     pub input_number: Option<i32>,
     pub displaying_holding: bool,
     pub rendered_data: String,
@@ -39,7 +41,7 @@ impl App {
                 timeout_command_ms: 0,
                 time_between_commands_ms: 0,
             }).await.unwrap(),
-            focus: None,
+            state: State::Configure,
             input_number: None,
             running: true,
             displaying_holding: true,
@@ -48,24 +50,24 @@ impl App {
         }
     }
 
-    pub fn switch_focus_to(&mut self, focus: FocusType) {
-        self.focus = Some(focus);
+    pub fn switch_focus_to(&mut self, focus: State) {
+        self.state = focus;
     }
 
     pub fn do_action(&mut self) {
-        match self.focus {
-            None => self.position += 20,
-            Some(focus) => if let Some(number) = self.input_number {
-                match focus {
-                    FocusType::Jump => self.position = number as usize,
-                    FocusType::Write => {
-                        let _ = self.device.write_register(self.position as u16, number as u16);
-                    }
-                };
-                self.quit();
-            } else {
-                self.quit();
+        match self.state {
+            State::Configure => self.state = State::Read,
+            State::Read => self.position += 20,
+            State::Jump => if let Some(number) = self.input_number {
+                self.position = number as usize
             }
+            State::Write => if let Some(number) = self.input_number {
+                let _ = self.device.write_register(self.position as u16, number as u16);
+            }
+        }
+
+        if self.state == State::Write || self.state == State::Jump {
+            self.quit();
         }
     }
 
@@ -80,10 +82,9 @@ impl App {
     pub fn tick(&self) {}
 
     pub fn quit(&mut self) {
-        if self.focus.is_some() {
-            self.focus = None;
-        } else {
-            self.running = false;
+        match self.state {
+            State::Configure | State::Read => self.running = false,
+            _ => self.state = State::Read,
         }
     }
 
