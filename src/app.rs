@@ -83,7 +83,7 @@ impl App {
                 self.position = number as usize
             }
             State::Write => if let Some(number) = self.input_number {
-                let _ = self.device.as_ref().unwrap().write_register(self.position as u16, number as u16);
+                self.device.as_ref().unwrap().write_register(self.position as u16, number as u16).await.unwrap();
             }
         }
 
