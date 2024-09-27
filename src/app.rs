@@ -1,5 +1,5 @@
 use std::error;
-use strum::{Display, EnumIter, FromRepr, IntoEnumIterator};
+use strum::{Display, EnumIter, FromRepr};
 use crate::modbus::{DeviceConfig, Interface, InterfaceWiredParams, InterfaceWirelessParams, ModbusDevice};
 
 const MAX_LINES: usize = 1;
@@ -72,9 +72,9 @@ impl App {
                         ConfigureTab::Wired => Interface::Wired(self.config_wired.clone()),
                     },
                     slave_id: 0,
-                    timeout_connect_ms: 3000,
-                    timeout_command_ms: 1000,
-                    time_between_commands_ms: 5,
+                    timeout_connect_ms: 5000,
+                    timeout_command_ms: 5000,
+                    time_between_commands_ms: 30,
                 }).await.unwrap());
                 self.state = State::Read
             },
@@ -111,10 +111,11 @@ impl App {
 
     pub async fn refresh(&mut self) {
         const AMOUNT: usize = MAX_LINES + 1;
+        let device = self.device.as_ref().unwrap();
         let data = if self.displaying_holding {
-            self.device.as_ref().unwrap().holdings::<AMOUNT>(self.position as u16).await
+            device.holdings::<AMOUNT>(self.position as u16).await
         } else {
-            self.device.as_ref().unwrap().inputs::<AMOUNT>(self.position as u16).await
+            device.inputs::<AMOUNT>(self.position as u16).await
         };
 
         let mut rendered_data = format!("{0: >5}: {1: <5} {2: <10} {3: <2}\n", "index", "u16", "u32", "_ascii_");

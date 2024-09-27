@@ -10,7 +10,6 @@ use ratatui::layout::Alignment;
 use ratatui::prelude::{Color, Style};
 use ratatui::widgets::{Block, Borders, BorderType, Paragraph};
 use strum::IntoEnumIterator;
-use tui_textarea::TextArea;
 
 #[derive(Debug)]
 pub struct Tui<B: Backend> {
@@ -40,8 +39,8 @@ impl<B: Backend> Tui<B> {
 
     pub fn draw(&mut self, app: &mut App) -> AppResult<()> {
         let headline = match app.state {
-            State::Configure(selectedTab) => {
-                ConfigureTab::iter().map(|e| if e == selectedTab {
+            State::Configure(selected_tab) => {
+                ConfigureTab::iter().map(|e| if e == selected_tab {
                     format!("*{e:?}*")
                 } else {
                     format!("{e:?}")

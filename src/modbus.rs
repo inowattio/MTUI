@@ -1,13 +1,15 @@
+use std::borrow::Cow;
 use std::future::Future;
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio_modbus::client::{rtu, tcp, Context, Reader, Writer};
+use tokio_modbus::client::{rtu, tcp, Client, Context, Reader, Writer};
 use tokio_modbus::slave::Slave;
 use tokio_serial::{available_ports, DataBits, Parity, SerialPortType, SerialStream, StopBits};
 use anyhow::{Error, Result};
 use tokio::sync::Mutex;
+use tokio_modbus::{Request, Response};
 
 #[derive(Clone, Debug)]
 pub enum Interface {
@@ -51,8 +53,8 @@ pub struct InterfaceWirelessParams {
 impl Default for InterfaceWirelessParams {
     fn default() -> Self {
         Self {
-            ip: "192.168.200.1".to_string(),
-            port: 6607,
+            ip: "192.168.1.97".to_string(),
+            port: 502,
         }
     }
 }
@@ -100,6 +102,7 @@ macro_rules! timeout {
             let time_between = Duration::from_millis($this.config.time_between_commands_ms);
             timeout(hold.$action($($arg),*), timeout_command, time_between).await
                 .map_err(|e| anyhow::Error::from(e))?
+                .map_err(|e| anyhow::Error::from(e))?
                 .map_err(|e| anyhow::Error::from(e))
         }
     };
@@ -119,7 +122,7 @@ pub enum InterfaceScan {
 impl ModbusDevice {
     pub async fn new(config: &DeviceConfig) -> Result<Self> {
         let timeout_connect = Duration::from_millis(config.timeout_connect_ms);
-        let slave = Slave(config.slave_id);
+        let slave = Slave(0);
 
         let context = match &config.interface {
             Interface::Wired(interface) => {
@@ -157,7 +160,7 @@ impl ModbusDevice {
         let mut configs = Vec::new();
 
         const ADDRESSES: [(&str, u16); 1] = [
-            ("192.168.200.1", 6607), // inverter
+            ("192.168.1.97", 502), // inverter
             //"192.168.1.128:502",  // dongle
         ];
         const SLAVE_IDS: [u8; 1] = [0];
@@ -170,9 +173,9 @@ impl ModbusDevice {
                         port,
                     }),
                     slave_id,
-                    timeout_connect_ms: 3000,
-                    timeout_command_ms: 1000,
-                    time_between_commands_ms: 5,
+                    timeout_connect_ms: 6000,
+                    timeout_command_ms: 5000,
+                    time_between_commands_ms: 30,
                 })
             }
         }
@@ -318,5 +321,19 @@ impl ModbusDevice {
 
     pub async fn write_registers(&self, address: u16, data: &[u16]) -> Result<()> {
         timeout!(self, write_multiple_registers, (address, data))
+    }
+
+    pub async fn custom_function(&self, code: u8, data: &[u8]) -> Result<Vec<u8>> {
+        let mut hold = self.context.lock().await;
+        let timeout_command = Duration::from_millis(self.config.timeout_command_ms);
+        let time_between = Duration::from_millis(self.config.time_between_commands_ms);
+
+        let response = timeout(hold.call(Request::Custom(code, Cow::Borrowed(data))), timeout_command, time_between).await???;
+
+        if let Response::Custom(_, data) = response {
+            Ok(data.to_vec())
+        } else {
+            Err(anyhow::Error::msg("unexpected response type"))
+        }
     }
 }
