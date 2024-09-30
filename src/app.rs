@@ -1,21 +1,15 @@
 use std::error;
 use strum::{Display, EnumIter, FromRepr};
-use crate::modbus::{DeviceConfig, Interface, InterfaceWiredParams, InterfaceWirelessParams, ModbusDevice};
+use crate::modbus::{DeviceConfig, ModbusDevice};
 
 const MAX_LINES: usize = 1;
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Default)]
 pub enum State {
-    Configure(ConfigureTab),
+    #[default]
     Read,
     Jump,
     Write
-}
-
-impl Default for State {
-    fn default() -> Self {
-        Self::Configure(ConfigureTab::default())
-    }
 }
 
 #[derive(Default, Clone, Copy, Display, FromRepr, EnumIter, Debug, Eq, PartialEq)]
@@ -38,18 +32,14 @@ pub struct App {
     pub displaying_holding: bool,
     pub rendered_data: String,
     pub device: Option<ModbusDevice>,
-    pub config_wireless: InterfaceWirelessParams,
-    pub config_wired: InterfaceWiredParams,
-    pub final_config: DeviceConfig,
+    pub config: DeviceConfig,
 }
 
 impl App {
     pub async fn new() -> Self {
         Self {
             device: None,
-            config_wireless: Default::default(),
-            config_wired: Default::default(),
-            final_config: DeviceConfig::default(),
+            config: DeviceConfig::default(),
             state: State::default(),
             input_number: None,
             running: true,
@@ -65,19 +55,6 @@ impl App {
 
     pub async fn do_action(&mut self) {
         match self.state {
-            State::Configure(configure) => {
-                self.device = Some(ModbusDevice::new(&DeviceConfig {
-                    interface: match configure {
-                        ConfigureTab::Wireless => Interface::Wireless(self.config_wireless.clone()),
-                        ConfigureTab::Wired => Interface::Wired(self.config_wired.clone()),
-                    },
-                    slave_id: 0,
-                    timeout_connect_ms: 5000,
-                    timeout_command_ms: 5000,
-                    time_between_commands_ms: 30,
-                }).await.unwrap());
-                self.state = State::Read
-            },
             State::Read => self.position += 20,
             State::Jump => if let Some(number) = self.input_number {
                 self.position = number as usize
@@ -104,7 +81,7 @@ impl App {
 
     pub fn quit(&mut self) {
         match self.state {
-            State::Configure(_) | State::Read => self.running = false,
+            State::Read => self.running = false,
             _ => self.state = State::Read,
         }
     }
@@ -139,19 +116,7 @@ impl App {
     }
 
     pub fn toggle_type(&mut self) {
-        if let State::Configure(current) = &mut self.state {
-            self.position = 0;
-            *current = match *current {
-                ConfigureTab::Wireless => {
-                    ConfigureTab::Wired
-                },
-                ConfigureTab::Wired => {
-                    ConfigureTab::Wireless
-                }
-            };
-        } else {
-            self.displaying_holding = !self.displaying_holding;
-        }
+        self.displaying_holding = !self.displaying_holding;
     }
 
     pub fn up(&mut self) {
@@ -163,21 +128,6 @@ impl App {
     pub fn down(&mut self) {
         if let Some(res) = self.position.checked_add(1) {
             self.position = res;
-        }
-
-        if let State::Configure(tab) = self.state {
-            match tab {
-                ConfigureTab::Wired => {
-                    if self.position > 5 {
-                        self.position = 4;
-                    }
-                },
-                ConfigureTab::Wireless => {
-                    if self.position > 2 {
-                        self.position = 1;
-                    }
-                },
-            }
         }
     }
 }

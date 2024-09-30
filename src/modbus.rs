@@ -14,12 +14,12 @@ use tokio_modbus::{Request, Response};
 #[derive(Clone, Debug)]
 pub enum Interface {
     Wired(InterfaceWiredParams),
-    Wireless(InterfaceWirelessParams)
+    Network(InterfaceNetworkParams)
 }
 
 impl Default for Interface {
     fn default() -> Self {
-        Self::Wireless(InterfaceWirelessParams::default())
+        Self::Network(InterfaceNetworkParams::default())
     }
 }
 
@@ -45,12 +45,12 @@ impl Default for InterfaceWiredParams {
 }
 
 #[derive(Clone, Debug)]
-pub struct InterfaceWirelessParams {
+pub struct InterfaceNetworkParams {
     pub ip: String,
     pub port: u16,
 }
 
-impl Default for InterfaceWirelessParams {
+impl Default for InterfaceNetworkParams {
     fn default() -> Self {
         Self {
             ip: "192.168.1.97".to_string(),
@@ -135,7 +135,7 @@ impl ModbusDevice {
                 let port = SerialStream::open(&builder)?;
                 rtu::attach_slave(port, slave)
             }
-            Interface::Wireless(interface) => {
+            Interface::Network(interface) => {
                 let socket_addr = SocketAddr::V4(SocketAddrV4::new(
                     Ipv4Addr::from_str(&interface.ip)?,
                     interface.port,
@@ -168,7 +168,7 @@ impl ModbusDevice {
         for (address, port) in ADDRESSES {
             for slave_id in SLAVE_IDS {
                 configs.push(DeviceConfig {
-                    interface: Interface::Wireless(InterfaceWirelessParams {
+                    interface: Interface::Network(InterfaceNetworkParams {
                         ip: address.to_string(),
                         port,
                     }),
