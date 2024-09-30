@@ -1,9 +1,9 @@
 use std::error;
 use std::fs::File;
-use std::io::BufReader;
+use std::io::{BufReader, Write};
 use crate::modbus::ModbusDevice;
 
-const MAX_LINES: usize = 1;
+const MAX_LINES: usize = 4;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Default)]
 pub enum State {
@@ -88,7 +88,7 @@ impl App {
     }
 
     pub async fn refresh(&mut self) {
-        const AMOUNT: usize = MAX_LINES + 1;
+        const AMOUNT: usize = MAX_LINES;
 
         let data = if self.displaying_holding {
             self.device.holdings::<AMOUNT>(self.position as u16).await
@@ -100,7 +100,7 @@ impl App {
 
         match data {
             Ok(data) => {
-                for i in 0..MAX_LINES + 1 {
+                for i in 0..MAX_LINES {
                     let byte = *data.get(i).unwrap_or(&0);
                     let next = *data.get(i + 1).unwrap_or(&0);
                     let word = (byte as u32) << 16 | (next as u32);
