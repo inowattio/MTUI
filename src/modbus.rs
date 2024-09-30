@@ -217,7 +217,7 @@ pub enum InterfaceScan {
 impl ModbusDevice {
     pub async fn new(config: &DeviceConfig) -> Result<Self> {
         let timeout_connect = Duration::from_millis(config.timeout_connect_ms);
-        let slave = Slave(0);
+        let slave = Slave(config.slave_id);
 
         let context = match &config.interface {
             Interface::Wired(interface) => {
