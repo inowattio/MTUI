@@ -6,24 +6,140 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio_modbus::client::{rtu, tcp, Client, Context, Reader, Writer};
 use tokio_modbus::slave::Slave;
-use tokio_serial::{available_ports, DataBits, Parity, SerialPortType, SerialStream, StopBits};
+use tokio_serial::{available_ports, SerialPortType, SerialStream};
 use anyhow::{Error, Result};
+use serde::Deserialize;
 use tokio::sync::Mutex;
 use tokio_modbus::{Request, Response};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize)]
 pub enum Interface {
     Wired(InterfaceWiredParams),
     Network(InterfaceNetworkParams)
 }
 
-impl Default for Interface {
-    fn default() -> Self {
-        Self::Network(InterfaceNetworkParams::default())
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize)]
+pub enum DataBits {
+    Five,
+    Six,
+    Seven,
+    Eight,
+}
+
+impl Into<tokio_serial::DataBits> for DataBits {
+    fn into(self) -> tokio_serial::DataBits {
+        match self {
+            DataBits::Five => tokio_serial::DataBits::Five,
+            DataBits::Six => tokio_serial::DataBits::Six,
+            DataBits::Seven => tokio_serial::DataBits::Seven,
+            DataBits::Eight => tokio_serial::DataBits::Eight,
+        }
     }
 }
 
-#[derive(Clone, Debug)]
+impl From<DataBits> for u8 {
+    fn from(val: DataBits) -> Self {
+        match val {
+            DataBits::Five => 5,
+            DataBits::Six => 6,
+            DataBits::Seven => 7,
+            DataBits::Eight => 8,
+        }
+    }
+}
+
+impl TryFrom<u8> for DataBits {
+    type Error = &'static str;
+
+    fn try_from(value: u8) -> std::result::Result<Self, Self::Error> {
+        Ok(match value {
+            5 => Self::Five,
+            6 => Self::Six,
+            7 => Self::Seven,
+            8 => Self::Eight,
+            _ => Err("Failed to parse parity")?,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize)]
+pub enum Parity {
+    None,
+    Odd,
+    Even,
+}
+
+impl Into<tokio_serial::Parity> for Parity {
+    fn into(self) -> tokio_serial::Parity {
+        match self {
+            Parity::None => tokio_serial::Parity::None,
+            Parity::Odd => tokio_serial::Parity::Odd,
+            Parity::Even => tokio_serial::Parity::Even,
+        }
+    }
+}
+
+impl From<Parity> for u8 {
+    fn from(val: Parity) -> Self {
+        match val {
+            Parity::None => 0,
+            Parity::Odd => 1,
+            Parity::Even => 2,
+        }
+    }
+}
+
+impl TryFrom<u8> for Parity {
+    type Error = &'static str;
+
+    fn try_from(value: u8) -> std::result::Result<Self, Self::Error> {
+        Ok(match value {
+            0 => Self::None,
+            1 => Self::Odd,
+            2 => Self::Even,
+            _ => Err("Failed to parse parity")?,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize)]
+pub enum StopBits {
+    One,
+    Two,
+}
+
+impl Into<tokio_serial::StopBits> for StopBits {
+    fn into(self) -> tokio_serial::StopBits {
+        match self {
+            StopBits::One => tokio_serial::StopBits::One,
+            StopBits::Two => tokio_serial::StopBits::Two,
+        }
+    }
+}
+
+impl From<StopBits> for u8 {
+    fn from(val: StopBits) -> Self {
+        match val {
+            StopBits::One => 1,
+            StopBits::Two => 2,
+        }
+    }
+}
+
+impl TryFrom<u8> for StopBits {
+    type Error = &'static str;
+
+    fn try_from(value: u8) -> std::result::Result<Self, Self::Error> {
+        Ok(match value {
+            1 => Self::One,
+            2 => Self::Two,
+            _ => Err("Failed to parse stop bits")?,
+        })
+    }
+}
+
+#[derive(Clone, Debug, Deserialize)]
 pub struct InterfaceWiredParams {
     pub path: String,
     pub baud_rate: u32,
@@ -32,34 +148,13 @@ pub struct InterfaceWiredParams {
     pub stop_bits: StopBits,
 }
 
-impl Default for InterfaceWiredParams {
-    fn default() -> Self {
-        Self {
-            path: "/dev/ttyUSB0".to_string(),
-            baud_rate: 9600,
-            data_bits: DataBits::Eight,
-            parity: Parity::None,
-            stop_bits: StopBits::One,
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct InterfaceNetworkParams {
     pub ip: String,
     pub port: u16,
 }
 
-impl Default for InterfaceNetworkParams {
-    fn default() -> Self {
-        Self {
-            ip: "192.168.1.97".to_string(),
-            port: 502,
-        }
-    }
-}
-
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct DeviceConfig {
     pub interface: Interface,
     pub slave_id: tokio_modbus::slave::SlaveId,
@@ -128,9 +223,9 @@ impl ModbusDevice {
             Interface::Wired(interface) => {
                 let builder = tokio_serial::new(&interface.path, interface.baud_rate)
                     .timeout(timeout_connect)
-                    .data_bits(interface.data_bits)
-                    .parity(interface.parity)
-                    .stop_bits(interface.stop_bits);
+                    .data_bits(interface.data_bits.into())
+                    .parity(interface.parity.into())
+                    .stop_bits(interface.stop_bits.into());
 
                 let port = SerialStream::open(&builder)?;
                 rtu::attach_slave(port, slave)

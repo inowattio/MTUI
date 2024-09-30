@@ -1,6 +1,8 @@
 use std::error;
+use std::fs::File;
+use std::io::BufReader;
 use strum::{Display, EnumIter, FromRepr};
-use crate::modbus::{DeviceConfig, ModbusDevice};
+use crate::modbus::ModbusDevice;
 
 const MAX_LINES: usize = 1;
 
@@ -31,15 +33,17 @@ pub struct App {
     pub input_number: Option<i32>,
     pub displaying_holding: bool,
     pub rendered_data: String,
-    pub device: Option<ModbusDevice>,
-    pub config: DeviceConfig,
+    pub device: ModbusDevice,
 }
 
 impl App {
     pub async fn new() -> Self {
+        let file = File::open("config.json").unwrap();
+        let reader = BufReader::new(file);
+        let config = serde_json::from_reader(reader).unwrap();
+
         Self {
-            device: None,
-            config: DeviceConfig::default(),
+            device: ModbusDevice::new(&config).await.unwrap(),
             state: State::default(),
             input_number: None,
             running: true,
@@ -60,7 +64,7 @@ impl App {
                 self.position = number as usize
             }
             State::Write => if let Some(number) = self.input_number {
-                self.device.as_ref().unwrap().write_register(self.position as u16, number as u16).await.unwrap();
+                self.device.write_register(self.position as u16, number as u16).await.unwrap();
             }
         }
 
@@ -88,11 +92,11 @@ impl App {
 
     pub async fn refresh(&mut self) {
         const AMOUNT: usize = MAX_LINES + 1;
-        let device = self.device.as_ref().unwrap();
+
         let data = if self.displaying_holding {
-            device.holdings::<AMOUNT>(self.position as u16).await
+            self.device.holdings::<AMOUNT>(self.position as u16).await
         } else {
-            device.inputs::<AMOUNT>(self.position as u16).await
+            self.device.inputs::<AMOUNT>(self.position as u16).await
         };
 
         let mut rendered_data = format!("{0: >5}: {1: <5} {2: <10} {3: <2}\n", "index", "u16", "u32", "_ascii_");
