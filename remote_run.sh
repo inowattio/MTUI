@@ -1,6 +1,7 @@
 # this is a script to build and send to raspberry pi
 USERNAME=raspberry
 HOST=raspberry5.local
+PORT=22
 DESTINATION_FOLDER=/home/raspberry
 BUILD_ARGS=""
 TARGET_PROFILE=debug
@@ -14,12 +15,12 @@ CROSS_ENVS=""
 echo "[1/5] Building..."
 eval "$CROSS_ENVS" cross build "$BUILD_ARGS" --target $TARGET
 
-if [ "$1" = "build_only" ]; then
+if [ "$1" = "build" ]; then
     exit 0
 fi
 
 echo "[1/2] Preliminary commands..."
-ssh $USERNAME@$HOST "mkdir $DESTINATION_FOLDER ; cd $DESTINATION_FOLDER ; sudo -S chmod 777 $DESTINATION_FOLDER ; sudo -S rm $BINARY_FILE"
+ssh -p $PORT $USERNAME@$HOST "mkdir $DESTINATION_FOLDER ; cd $DESTINATION_FOLDER ; sudo -S chmod 777 $DESTINATION_FOLDER ; sudo -S rm $BINARY_FILE"
 echo "[2/2] Sending the binary file..."
-scp -r $SOURCE_FOLDER/$BINARY_FILE $USERNAME@$HOST:$DESTINATION_FOLDER
+scp -P $PORT -r $SOURCE_FOLDER/$BINARY_FILE $USERNAME@$HOST:$DESTINATION_FOLDER
 echo "[-/-] Program exited."
