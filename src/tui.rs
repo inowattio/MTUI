@@ -40,11 +40,13 @@ impl<B: Backend> Tui<B> {
     pub fn draw(&mut self, app: &mut App) -> AppResult<()> {
         let headline = match app.state {
             State::Configure(selected_tab) => {
-                ConfigureTab::iter().map(|e| if e == selected_tab {
+                let tabs = ConfigureTab::iter().map(|e| if e == selected_tab {
                     format!("*{e:?}*")
                 } else {
                     format!("{e:?}")
-                }).collect::<Vec<String>>().join(" ")
+                }).collect::<Vec<String>>().join(" ");
+                
+                format!("Configure type: {tabs}")
             },
             State::Read => format!("At: {} on {}\n\n{}", app.position, app.displaying_type(), app.rendered_data),
             State::Jump => format!("Jump from {} at: {}", app.position, app.input_number.map_or("none".to_string(), |n| n.to_string())),
