@@ -1,7 +1,6 @@
 use std::error;
 use std::fs::File;
 use std::io::BufReader;
-use strum::{Display, EnumIter, FromRepr};
 use crate::modbus::ModbusDevice;
 
 const MAX_LINES: usize = 1;
@@ -14,12 +13,10 @@ pub enum State {
     Write
 }
 
-#[derive(Default, Clone, Copy, Display, FromRepr, EnumIter, Debug, Eq, PartialEq)]
+#[derive(Default, Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ConfigureTab {
     #[default]
-    #[strum(to_string = "Wireless")]
     Wireless,
-    #[strum(to_string = "Wired")]
     Wired,
 }
 
