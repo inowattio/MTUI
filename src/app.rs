@@ -1,6 +1,6 @@
 use std::error;
 use std::fs::File;
-use std::io::{BufReader, Write};
+use std::io::BufReader;
 use crate::modbus::ModbusDevice;
 
 const MAX_LINES: usize = 4;
