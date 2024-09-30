@@ -12,7 +12,7 @@ futures = "0.3.28"
 tokio-util = "0.7.9"
 serde = { version = "1.0.195", features = ["derive"] }
 
-tokio-modbus = { version = "0.10.0", default-features = false, features = ["rtu"] } # device
+tokio-modbus = { version = "0.14.1", default-features = false, features = ["rtu", "tcp"] } # device
 tokio-serial = { version = "5.4.4" }
 async-trait = "0.1.77"
 

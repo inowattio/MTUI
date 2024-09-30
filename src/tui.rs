@@ -1,4 +1,4 @@
-use crate::app::{App, AppResult, FocusType};
+use crate::app::{App, AppResult, State};
 use crate::event::EventHandler;
 use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
 use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
@@ -37,19 +37,19 @@ impl<B: Backend> Tui<B> {
     }
 
     pub fn draw(&mut self, app: &mut App) -> AppResult<()> {
-        let headline = match app.focus {
-            None => format!("At: {} on {}\n\n{}", app.position, app.displaying_type(), app.rendered_data),
-            Some(kind) => match kind {
-                FocusType::Jump => format!("Jump from {} at: {}", app.position, app.input_number.map_or("none".to_string(), |n| n.to_string())),
-                FocusType::Write => format!("Write at {} value: {}", app.position, app.input_number.map_or("none".to_string(), |n| n.to_string()))
-            },
+        let headline = match app.state {
+            State::Read => format!("At: {} on {}\n\n{}", app.position, app.displaying_type(), app.rendered_data),
+            State::Jump => format!("Jump from {} at: {}", app.position, app.input_number.map_or("none".to_string(), |n| n.to_string())),
+            State::Write => format!("Write at {} value: {}", app.position, app.input_number.map_or("none".to_string(), |n| n.to_string()))
         };
+
+        let commands = "Q - Exit; Up/Down - Move; R - Refresh; T - Switch Register Type; W - Write; J - Jump; Enter - Action";
 
         self.terminal.draw(|frame| frame.render_widget(
             Paragraph::new(headline)
                 .block(
                     Block::default()
-                        .title("Q - Exit; Up/Down - Move; R - Refresh; T - Switch Register Type; W - Write; J - Jump; Enter - Action")
+                        .title(commands)
                         .title_alignment(Alignment::Center)
                         .borders(Borders::ALL)
                         .border_type(BorderType::Rounded),

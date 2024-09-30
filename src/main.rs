@@ -14,7 +14,7 @@ use crate::tui::Tui;
 
 #[tokio::main]
 async fn main() -> AppResult<()> {
-    let mut app = App::new();
+    let mut app = App::new().await;
 
     let backend = CrosstermBackend::new(io::stderr());
     let terminal = Terminal::new(backend)?;
@@ -26,7 +26,7 @@ async fn main() -> AppResult<()> {
         tui.draw(&mut app)?;
         match tui.events.next().await? {
             Event::Tick => app.tick(),
-            Event::Key(key_event) => handle_key_events(key_event, &mut app)?,
+            Event::Key(key_event) => handle_key_events(key_event, &mut app).await?,
             Event::Mouse(_) => {}
             Event::Resize(_, _) => {}
         }
