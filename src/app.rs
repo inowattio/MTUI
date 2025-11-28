@@ -116,16 +116,14 @@ impl App {
         match self.state {
             State::Read => self.position += 20,
             State::Jump => if let Some(number) = self.input_number {
-                self.position = number as usize
+                self.position = number as usize;
+                self.quit();
             }
             State::Write => if let Some(number) = self.input_number {
                 self.device.write_register(self.position as u16, number as u16).await.unwrap();
+                self.quit();
             }
             State::Help => { },
-        }
-
-        if self.state != State::Read {
-            self.quit();
         }
     }
 
