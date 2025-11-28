@@ -17,7 +17,7 @@ use crate::mock::MockContext;
 pub enum Interface {
     Wired(InterfaceWiredParams),
     Network(InterfaceNetworkParams),
-    Mock(InterfaceMockParams),
+    Mock,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
@@ -141,11 +141,6 @@ impl TryFrom<u8> for StopBits {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct InterfaceMockParams {
-    pub name: String,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct InterfaceWiredParams {
     pub path: String,
     pub baud_rate: u32,
@@ -244,9 +239,7 @@ impl ModbusDevice {
 
                 context
             }
-            Interface::Mock(_) => {
-                MockContext::new().into()
-            }
+            Interface::Mock => MockContext::new()
         };
 
         Ok(Self {

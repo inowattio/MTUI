@@ -1,6 +1,6 @@
 use std::{error, fs};
 use serde::{Deserialize, Serialize};
-use crate::modbus::{DeviceConfig, Interface, InterfaceMockParams, ModbusDevice};
+use crate::modbus::{DeviceConfig, Interface, ModbusDevice};
 
 const MAX_LINES: usize = 4;
 
@@ -46,7 +46,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             device: DeviceConfig {
-                interface: Interface::Mock(InterfaceMockParams { name: "".to_string() }),
+                interface: Interface::Mock,
                 slave_id: 0,
                 timeout_connect_ms: 1000,
                 timeout_command_ms: 2000,

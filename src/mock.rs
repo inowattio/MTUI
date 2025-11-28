@@ -7,13 +7,7 @@ use tokio_modbus::slave::SlaveContext;
 pub struct MockContext;
 
 impl MockContext {
-    pub fn new() -> Self {
-        Self
-    }
-}
-
-impl Into<Context> for MockContext {
-    fn into(self) -> Context {
+    pub fn new() -> Context {
         let client: Box<dyn Client> = Box::new(Self);
         client.into()
     }
