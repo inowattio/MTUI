@@ -117,11 +117,11 @@ impl App {
             State::Read => self.position += 20,
             State::Jump => if let Some(number) = self.input_number {
                 self.position = number as usize;
-                self.quit();
+                self.state = State::Read;
             }
             State::Write => if let Some(number) = self.input_number {
                 self.device.write_register(self.position as u16, number as u16).await.unwrap();
-                self.quit();
+                self.state = State::Read;
             }
             State::Help => { },
         }
@@ -144,10 +144,7 @@ impl App {
     }
 
     pub fn quit(&mut self) {
-        match self.state {
-            State::Read => self.running = false,
-            _ => self.state = State::Read,
-        }
+        self.running = false
     }
 
     pub async fn refresh(&mut self) {
