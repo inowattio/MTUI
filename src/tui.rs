@@ -16,7 +16,7 @@ pub struct Tui<B: Backend> {
     pub events: EventHandler,
 }
 
-impl<B: Backend> Tui<B> {
+impl<B: Backend> Tui<B> where <B as Backend>::Error: 'static {
     pub fn new(terminal: Terminal<B>, events: EventHandler) -> Self {
         Self { terminal, events }
     }
@@ -71,7 +71,7 @@ impl<B: Backend> Tui<B> {
                 )
                 .style(Style::default().fg(Color::Cyan).bg(Color::Black))
                 .alignment(Alignment::Left),
-            frame.size(),
+            frame.area(),
         ))?;
         Ok(())
     }

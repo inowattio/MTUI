@@ -33,4 +33,8 @@ impl Client for MockContext {
             _ => unimplemented!(),
         }
     }
+
+    async fn disconnect(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
 }

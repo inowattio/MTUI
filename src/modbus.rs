@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::fmt::Debug;
 use std::future::Future;
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::str::FromStr;
@@ -204,10 +205,16 @@ macro_rules! timeout {
     };
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct ModbusDevice {
     context: Arc<Mutex<Context>>,
     config: DeviceConfig,
+}
+
+impl Debug for ModbusDevice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ModbusDevice {{ config: {:?} }}", self.config)
+    }
 }
 
 impl ModbusDevice {
