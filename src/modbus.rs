@@ -6,18 +6,19 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio_modbus::client::{rtu, tcp, Client, Context, Reader, Writer};
 use tokio_modbus::slave::Slave;
-use tokio_serial::{available_ports, SerialPortType, SerialStream};
+use tokio_serial::SerialStream;
 use anyhow::{Error, Result};
 use serde::Deserialize;
 use tokio::sync::Mutex;
 use tokio_modbus::{Request, Response};
+use crate::mock::MockContext;
 
 #[derive(Clone, Debug, Deserialize)]
 pub enum Interface {
     Wired(InterfaceWiredParams),
-    Network(InterfaceNetworkParams)
+    Network(InterfaceNetworkParams),
+    Mock(InterfaceMockParams),
 }
-
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize)]
 pub enum DataBits {
@@ -140,6 +141,11 @@ impl TryFrom<u8> for StopBits {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+pub struct InterfaceMockParams {
+    pub name: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
 pub struct InterfaceWiredParams {
     pub path: String,
     pub baud_rate: u32,
@@ -209,11 +215,6 @@ pub struct ModbusDevice {
     config: DeviceConfig,
 }
 
-pub enum InterfaceScan {
-    Wired,
-    Wireless
-}
-
 impl ModbusDevice {
     pub async fn new(config: &DeviceConfig) -> Result<Self> {
         let timeout_connect = Duration::from_millis(config.timeout_connect_ms);
@@ -243,101 +244,15 @@ impl ModbusDevice {
 
                 context
             }
+            Interface::Mock(_) => {
+                MockContext::new().into()
+            }
         };
 
         Ok(Self {
             context: Arc::new(Mutex::new(context)),
             config: config.clone(),
         })
-    }
-
-    pub async fn scan_wireless() -> Result<Vec<DeviceConfig>> {
-        let mut configs = Vec::new();
-
-        const ADDRESSES: [(&str, u16); 1] = [
-            ("192.168.1.97", 502), // inverter
-            //"192.168.1.128:502",  // dongle
-        ];
-        const SLAVE_IDS: [u8; 1] = [0];
-
-        for (address, port) in ADDRESSES {
-            for slave_id in SLAVE_IDS {
-                configs.push(DeviceConfig {
-                    interface: Interface::Network(InterfaceNetworkParams {
-                        ip: address.to_string(),
-                        port,
-                    }),
-                    slave_id,
-                    timeout_connect_ms: 6000,
-                    timeout_command_ms: 5000,
-                    time_between_commands_ms: 30,
-                })
-            }
-        }
-
-        Ok(configs)
-    }
-
-    pub async fn scan_wired() -> Result<Vec<DeviceConfig>> {
-        let mut configs = Vec::new();
-
-        const DISCOVER_BAUDS: [u32; 1] = [9600];
-        const SLAVE_IDS: [u8; 3] = [1, 2, 3];
-
-        let ports = available_ports()?
-            .into_iter()
-            .filter(|p| {
-                matches!(
-                    p.port_type,
-                    SerialPortType::UsbPort(_) | SerialPortType::Unknown
-                )
-            });
-
-        for device in ports {
-            for baud_rate in DISCOVER_BAUDS {
-                for slave_id in SLAVE_IDS {
-                    configs.push(DeviceConfig {
-                        interface: Interface::Wired(InterfaceWiredParams {
-                            path: device.port_name.clone(),
-                            baud_rate,
-                            data_bits: DataBits::Eight,
-                            parity: Parity::None,
-                            stop_bits: StopBits::One,
-                        }),
-                        slave_id,
-                        timeout_connect_ms: 850,
-                        timeout_command_ms: 850,
-                        time_between_commands_ms: 5,
-                    });
-                }
-            }
-        }
-
-        Ok(configs)
-    }
-
-    pub async fn scan(interface: InterfaceScan) -> Result<Vec<DeviceConfig>> {
-        let configs = match interface {
-            InterfaceScan::Wired => Self::scan_wired().await,
-            InterfaceScan::Wireless => Self::scan_wireless().await,
-        }?;
-
-        let mut devices = Vec::new();
-        for config in configs {
-            if Self::new(&config).await.is_ok() {
-                devices.push(config);
-            }
-        }
-
-        Ok(devices)
-    }
-
-    pub async fn coils(&self, address: u16, count: u16) -> Result<Vec<bool>> {
-        timeout!(self, read_coils, (address, count))
-    }
-
-    pub async fn discretes(&self, address: u16, count: u16) -> Result<Vec<bool>> {
-        timeout!(self, read_discrete_inputs, (address, count))
     }
 
     pub async fn inputs<const N: usize>(&self, address: u16) -> Result<[u16; N]> {
