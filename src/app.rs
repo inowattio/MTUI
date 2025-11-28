@@ -114,7 +114,7 @@ impl App {
 
     pub async fn do_action(&mut self) {
         match self.state {
-            State::Read => self.position += 20,
+            State::Read => self.position += self.config.registers_batch as usize,
             State::Jump => if let Some(number) = self.input_number {
                 self.position = number as usize;
                 self.state = State::Read;
