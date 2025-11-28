@@ -19,7 +19,7 @@ impl Interpretator {
             header.push_str(&format!("{0: <10} ", "f32"))
         }
         if interpretation.ascii {
-            header.push_str(&format!("{0: <7} ", "_ascii_"))
+            header.push_str(&format!("{0: <5} ", "ascii"))
         }
         if interpretation.bits {
             header.push_str(&format!("{0: <8} ", "bits"))
@@ -59,12 +59,20 @@ impl Interpretator {
                 row.push_str(&format!("{s: <10} "))
             }
             if self.interpretation.ascii {
-                let mut s = format!("_{}_", String::from_utf8_lossy(&[byte as u8, next as u8]));
-                let max_len = 7;
-                if s.len() > max_len {
-                    s.truncate(max_len);
-                }
-                row.push_str(&format!("{s:<7} "))
+                let s: String = [byte, next]
+                    .iter()
+                    .flat_map(|n| [(n >> 8) as u8, (n & 0xFF) as u8])
+                    .map(|b| {
+                        let c = b as char;
+                        if c.is_ascii_graphic() {
+                            c
+                        } else {
+                            '·'
+                        }
+                    })
+                    .collect();
+
+                row.push_str(&format!("{s:<5} "))
             }
             if self.interpretation.bits {
                 row.push_str(&format!("{byte:<08b} "))
