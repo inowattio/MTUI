@@ -1,4 +1,5 @@
 use std::{error, fs};
+use std::time::Instant;
 use serde::{Deserialize, Serialize};
 use crate::modbus::{DeviceConfig, Interface, ModbusDevice};
 
@@ -25,6 +26,7 @@ pub type AppResult<T> = Result<T, Box<dyn error::Error>>;
 #[derive(Debug)]
 pub struct App {
     pub config: Config,
+    pub refresh_timer: Instant,
     pub running: bool,
     pub position: usize,
     pub state: State,
@@ -39,7 +41,7 @@ pub struct Config {
     pub device: DeviceConfig,
     pub interpretations: Interpretations,
     pub registers_batch: u64,
-    pub auto_update_interval_seconds: Option<u32>
+    pub auto_update_interval_seconds: Option<u64>
 }
 
 impl Default for Config {
@@ -101,6 +103,7 @@ impl App {
             displaying_holding: true,
             position: 0,
             rendered_data: String::new(),
+            refresh_timer: Instant::now(),
         }
     }
 
@@ -133,7 +136,14 @@ impl App {
         }
     }
 
-    pub fn tick(&self) {}
+    pub async fn tick(&mut self) {
+        if let Some(refresh_seconds) = self.config.auto_update_interval_seconds {
+            if self.refresh_timer.elapsed().as_secs() > refresh_seconds {
+                self.refresh().await;
+                self.refresh_timer = Instant::now();
+            }
+        }
+    }
 
     pub fn quit(&mut self) {
         match self.state {
