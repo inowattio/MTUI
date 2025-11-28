@@ -8,7 +8,8 @@ pub struct Interpretator {
 
 impl Interpretator {
     pub fn new(interpretation: Interpretations) -> Self {
-        let mut header = format!("{0: >5}: {1: <5} ", "index", "u16");
+        let mut header = format!("{0: >5}: {1: <5} {2: <5} ", "index", "u16", "i16");
+
         if interpretation.u32 {
             header.push_str(&format!("{0: <10} ", "u32"))
         }
@@ -39,7 +40,7 @@ impl Interpretator {
             let byte = *data.get(i).unwrap_or(&0);
             let next = *data.get(i + 1).unwrap_or(&0);
 
-            let mut row = format!("{0: >5}: {byte: <5} ", index + i);
+            let mut row = format!("{0: >5}: {1: <5} {2: <5} ", index + i, byte, byte as i16);
 
             let word = (byte as u32) << 16 | (next as u32);
             if self.interpretation.u32 {
