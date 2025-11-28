@@ -8,19 +8,19 @@ use tokio_modbus::client::{rtu, tcp, Client, Context, Reader, Writer};
 use tokio_modbus::slave::Slave;
 use tokio_serial::SerialStream;
 use anyhow::{Error, Result};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 use tokio_modbus::{Request, Response};
 use crate::mock::MockContext;
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Interface {
     Wired(InterfaceWiredParams),
     Network(InterfaceNetworkParams),
     Mock(InterfaceMockParams),
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
 pub enum DataBits {
     Five,
     Six,
@@ -64,7 +64,7 @@ impl TryFrom<u8> for DataBits {
     }
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
 pub enum Parity {
     None,
     Odd,
@@ -104,7 +104,7 @@ impl TryFrom<u8> for Parity {
     }
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
 pub enum StopBits {
     One,
     Two,
@@ -140,12 +140,12 @@ impl TryFrom<u8> for StopBits {
     }
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct InterfaceMockParams {
     pub name: String,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct InterfaceWiredParams {
     pub path: String,
     pub baud_rate: u32,
@@ -154,13 +154,13 @@ pub struct InterfaceWiredParams {
     pub stop_bits: StopBits,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct InterfaceNetworkParams {
     pub ip: String,
     pub port: u16,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct DeviceConfig {
     pub interface: Interface,
     pub slave_id: tokio_modbus::slave::SlaveId,

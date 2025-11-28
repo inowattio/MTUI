@@ -1,7 +1,6 @@
-use std::error;
-use std::fs::File;
-use std::io::BufReader;
-use crate::modbus::ModbusDevice;
+use std::{error, fs};
+use serde::{Deserialize, Serialize};
+use crate::modbus::{DeviceConfig, Interface, InterfaceMockParams, ModbusDevice};
 
 const MAX_LINES: usize = 4;
 
@@ -25,6 +24,7 @@ pub type AppResult<T> = Result<T, Box<dyn error::Error>>;
 
 #[derive(Debug)]
 pub struct App {
+    pub config: Config,
     pub running: bool,
     pub position: usize,
     pub state: State,
@@ -34,14 +34,67 @@ pub struct App {
     pub device: ModbusDevice,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Config {
+    pub device: DeviceConfig,
+    pub interpretations: Interpretations,
+    pub registers_batch: u64,
+    pub auto_update_interval_seconds: Option<u32>
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            device: DeviceConfig {
+                interface: Interface::Mock(InterfaceMockParams { name: "".to_string() }),
+                slave_id: 0,
+                timeout_connect_ms: 1000,
+                timeout_command_ms: 2000,
+                time_between_commands_ms: 3,
+            },
+            interpretations: Interpretations {
+                u32: true,
+                i32: true,
+                f32: false,
+                ascii: false,
+                bits: false,
+            },
+            registers_batch: 4,
+            auto_update_interval_seconds: Some(1),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Interpretations {
+    pub u32: bool,
+    pub i32: bool,
+    pub f32: bool,
+    pub ascii: bool,
+    pub bits: bool,
+}
+
+fn dump_example_config_and_exit() {
+    let example_config = Config::default();
+    let config_string = serde_json::to_string_pretty(&example_config).unwrap();
+
+    fs::write("config.json", config_string).unwrap();
+    std::process::exit(0)
+}
+
+fn fetch_config_or_exit() -> Config {
+    let content = fs::read_to_string("config.json").inspect_err(|_| dump_example_config_and_exit()).unwrap();
+    serde_json::from_str(&content).inspect_err(|e| println!("Could not parse config: {e}")).unwrap()
+}
+
 impl App {
     pub async fn new() -> Self {
-        let file = File::open("config.json").unwrap();
-        let reader = BufReader::new(file);
-        let config = serde_json::from_reader(reader).unwrap();
+        let config = fetch_config_or_exit();
+        let device = ModbusDevice::new(&config.device).await.unwrap();
 
         Self {
-            device: ModbusDevice::new(&config).await.unwrap(),
+            config,
+            device,
             state: State::default(),
             input_number: None,
             running: true,
