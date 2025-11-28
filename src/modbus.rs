@@ -248,8 +248,8 @@ impl ModbusDevice {
         })
     }
 
-    pub async fn inputs<const N: usize>(&self, address: u16) -> Result<[u16; N]> {
-        timeout!(self, read_input_registers, (address, N as u16))?
+    pub async fn inputs(&self, address: u16, quantity: u16) -> Result<Vec<u16>> {
+        timeout!(self, read_input_registers, (address, quantity))?
             .try_into().map_err(|_| Error::msg("Nope"))
     }
 
@@ -259,28 +259,28 @@ impl ModbusDevice {
     }
 
     pub async fn input_word(&self, address: u16) -> Result<u32> {
-        let [h, l] = self.inputs(address).await?;
+        let [h, l] = self.inputs(address, 2).await?.try_into().unwrap();
         Ok(combine_u16_to_u32(h, l))
     }
 
-    pub async fn input_words<const N: usize>(&self, address: u16) -> Result<[u32; N]> {
-        let mut combined = [0u32; N];
+    pub async fn input_words(&self, address: u16, quantity: u16) -> Result<Vec<u32>> {
+        let mut combined = vec![0u32; quantity as usize];
 
         for (i, item) in combined.iter_mut().enumerate() {
-            let [h, l] = self.inputs(address + (i * 2) as u16).await?;
+            let [h, l] = self.inputs(address + (i * 2) as u16, 2).await?.try_into().unwrap();
             *item = combine_u16_to_u32(h, l);
         }
 
         Ok(combined)
     }
 
-    pub async fn input_ascii<const N: usize>(&self, address: u16) -> Result<String> {
-        let data = self.inputs::<N>(address).await?;
+    pub async fn input_ascii(&self, address: u16, quantity: u16) -> Result<String> {
+        let data = self.inputs(address, quantity).await?;
         Ok(vec_to_string(&data))
     }
 
-    pub async fn holdings<const N: usize>(&self, address: u16) -> Result<[u16; N]> {
-        timeout!(self, read_holding_registers, (address, N as u16))?
+    pub async fn holdings(&self, address: u16, quantity: u16) -> Result<Vec<u16>> {
+        timeout!(self, read_holding_registers, (address, quantity))?
             .try_into().map_err(|_| Error::msg("Nope"))
     }
 
@@ -290,7 +290,7 @@ impl ModbusDevice {
     }
 
     pub async fn holding_word(&self, address: u16) -> Result<u32> {
-        let [h, l] = self.holdings(address).await?;
+        let [h, l] = self.holdings(address, 2).await?.try_into().unwrap();
         Ok(combine_u16_to_u32(h, l))
     }
 
@@ -298,16 +298,11 @@ impl ModbusDevice {
         let mut combined = [0u32; N];
 
         for (i, item) in combined.iter_mut().enumerate() {
-            let [h, l] = self.holdings(address + (i * 2) as u16).await?;
+            let [h, l] = self.holdings(address + (i * 2) as u16, 2).await?.try_into().unwrap();
             *item = combine_u16_to_u32(h, l);
         }
 
         Ok(combined)
-    }
-
-    pub async fn holding_ascii<const N: usize>(&self, address: u16) -> Result<String> {
-        let data = self.holdings::<N>(address).await?;
-        Ok(vec_to_string(&data))
     }
 
     pub async fn write_coil(&self, address: u16, coil: bool) -> Result<()> {

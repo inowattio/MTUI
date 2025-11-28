@@ -3,8 +3,6 @@ use std::time::Instant;
 use serde::{Deserialize, Serialize};
 use crate::modbus::{DeviceConfig, Interface, ModbusDevice};
 
-const MAX_LINES: usize = 4;
-
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Default)]
 pub enum State {
     #[default]
@@ -40,7 +38,7 @@ pub struct App {
 pub struct Config {
     pub device: DeviceConfig,
     pub interpretations: Interpretations,
-    pub registers_batch: u64,
+    pub registers_batch: u16,
     pub auto_update_interval_seconds: Option<u64>
 }
 
@@ -153,19 +151,20 @@ impl App {
     }
 
     pub async fn refresh(&mut self) {
-        const AMOUNT: usize = MAX_LINES;
+        let amount = self.config.registers_batch;
 
         let data = if self.displaying_holding {
-            self.device.holdings::<AMOUNT>(self.position as u16).await
+            self.device.holdings(self.position as u16, amount).await
         } else {
-            self.device.inputs::<AMOUNT>(self.position as u16).await
+            self.device.inputs(self.position as u16, amount).await
         };
 
         let mut rendered_data = format!("{0: >5}: {1: <5} {2: <10} {3: <10} {4: <2}\n", "index", "u16", "u32", "i32", "_ascii_");
 
         match data {
             Ok(data) => {
-                for i in 0..MAX_LINES {
+                for i in 0..amount {
+                    let i = i as usize;
                     let byte = *data.get(i).unwrap_or(&0);
                     let next = *data.get(i + 1).unwrap_or(&0);
                     let word = (byte as u32) << 16 | (next as u32);
