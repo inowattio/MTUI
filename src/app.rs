@@ -1,6 +1,7 @@
 use std::{error, fs};
 use std::time::Instant;
 use serde::{Deserialize, Serialize};
+use crate::interpretator::Interpretator;
 use crate::modbus::{DeviceConfig, Interface, ModbusDevice};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Default)]
@@ -32,6 +33,7 @@ pub struct App {
     pub displaying_holding: bool,
     pub rendered_data: String,
     pub device: ModbusDevice,
+    pub interpreter: Interpretator,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -56,7 +58,7 @@ impl Default for Config {
                 u32: true,
                 i32: true,
                 f32: false,
-                ascii: false,
+                ascii: true,
                 bits: false,
             },
             registers_batch: 4,
@@ -93,6 +95,7 @@ impl App {
         let device = ModbusDevice::new(&config.device).await.unwrap();
 
         Self {
+            interpreter: Interpretator::new(config.interpretations.clone()),
             config,
             device,
             state: State::default(),
@@ -159,26 +162,10 @@ impl App {
             self.device.inputs(self.position as u16, amount).await
         };
 
-        let mut rendered_data = format!("{0: >5}: {1: <5} {2: <10} {3: <10} {4: <2}\n", "index", "u16", "u32", "i32", "_ascii_");
-
-        match data {
-            Ok(data) => {
-                for i in 0..amount {
-                    let i = i as usize;
-                    let byte = *data.get(i).unwrap_or(&0);
-                    let next = *data.get(i + 1).unwrap_or(&0);
-                    let word = (byte as u32) << 16 | (next as u32);
-                    let iword = word as i32;
-                    let as_ascii = format!("_{}_", String::from_utf8_lossy(&[byte as u8, next as u8]));
-                    rendered_data.extend(format!("{0: >5}: {byte: <5} {word: <10} {iword: <10} {as_ascii: <2}\n", self.position + i).chars());
-                }
-            }
-            Err(e) => {
-                rendered_data.extend(e.to_string().chars());
-            }
-        }
-
-        self.rendered_data = rendered_data;
+        self.rendered_data = match data {
+            Ok(data) => self.interpreter.run(data, self.position),
+            Err(e) => e.to_string()
+        };
     }
 
     pub fn toggle_type(&mut self) {

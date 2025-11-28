@@ -1,17 +1,15 @@
-use std::borrow::Cow;
 use std::fmt::Debug;
 use std::future::Future;
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio_modbus::client::{rtu, tcp, Client, Context, Reader, Writer};
+use tokio_modbus::client::{rtu, tcp, Context, Reader, Writer};
 use tokio_modbus::slave::Slave;
 use tokio_serial::SerialStream;
-use anyhow::{Error, Result};
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
-use tokio_modbus::{Request, Response};
 use crate::mock::MockContext;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -165,21 +163,6 @@ pub struct DeviceConfig {
     pub time_between_commands_ms: u64,
 }
 
-pub const fn combine_u16_to_u32(high: u16, low: u16) -> u32 {
-    // Shift the 'high' value to the left by 16 bits and then combine it with the
-    // 'low' value
-    (high as u32) << 16 | (low as u32)
-}
-
-pub fn vec_to_string(data: &[u16]) -> String {
-    let bytes: Vec<u8> = data
-        .iter()
-        .flat_map(|n| [(n >> 8) as u8, (n & 0xFF) as u8])
-        .collect();
-
-    String::from_utf8_lossy(&bytes).to_string()
-}
-
 async fn timeout<F, D>(future: F, timeout: Duration, between: Duration) -> Result<D>
 where
     F: Future<Output = D> + Send,
@@ -256,89 +239,14 @@ impl ModbusDevice {
     }
 
     pub async fn inputs(&self, address: u16, quantity: u16) -> Result<Vec<u16>> {
-        timeout!(self, read_input_registers, (address, quantity))?
-            .try_into().map_err(|_| Error::msg("Nope"))
-    }
-
-    pub async fn input(&self, address: u16) -> Result<u16> {
-        let data = timeout!(self, read_input_registers, (address, 1))?;
-        Ok(data[0])
-    }
-
-    pub async fn input_word(&self, address: u16) -> Result<u32> {
-        let [h, l] = self.inputs(address, 2).await?.try_into().unwrap();
-        Ok(combine_u16_to_u32(h, l))
-    }
-
-    pub async fn input_words(&self, address: u16, quantity: u16) -> Result<Vec<u32>> {
-        let mut combined = vec![0u32; quantity as usize];
-
-        for (i, item) in combined.iter_mut().enumerate() {
-            let [h, l] = self.inputs(address + (i * 2) as u16, 2).await?.try_into().unwrap();
-            *item = combine_u16_to_u32(h, l);
-        }
-
-        Ok(combined)
-    }
-
-    pub async fn input_ascii(&self, address: u16, quantity: u16) -> Result<String> {
-        let data = self.inputs(address, quantity).await?;
-        Ok(vec_to_string(&data))
+        timeout!(self, read_input_registers, (address, quantity))
     }
 
     pub async fn holdings(&self, address: u16, quantity: u16) -> Result<Vec<u16>> {
-        timeout!(self, read_holding_registers, (address, quantity))?
-            .try_into().map_err(|_| Error::msg("Nope"))
-    }
-
-    pub async fn holding(&self, address: u16) -> Result<u16> {
-        let data = timeout!(self, read_holding_registers, (address, 1))?;
-        Ok(data[0])
-    }
-
-    pub async fn holding_word(&self, address: u16) -> Result<u32> {
-        let [h, l] = self.holdings(address, 2).await?.try_into().unwrap();
-        Ok(combine_u16_to_u32(h, l))
-    }
-
-    pub async fn holding_words<const N: usize>(&self, address: u16) -> Result<[u32; N]> {
-        let mut combined = [0u32; N];
-
-        for (i, item) in combined.iter_mut().enumerate() {
-            let [h, l] = self.holdings(address + (i * 2) as u16, 2).await?.try_into().unwrap();
-            *item = combine_u16_to_u32(h, l);
-        }
-
-        Ok(combined)
-    }
-
-    pub async fn write_coil(&self, address: u16, coil: bool) -> Result<()> {
-        timeout!(self, write_single_coil, (address, coil))
-    }
-
-    pub async fn write_coils(&self, address: u16, coils: &[bool]) -> Result<()> {
-        timeout!(self, write_multiple_coils, (address, coils))
+        timeout!(self, read_holding_registers, (address, quantity))
     }
 
     pub async fn write_register(&self, address: u16, data: u16) -> Result<()> {
         timeout!(self, write_single_register, (address, data))
-    }
-
-    pub async fn write_registers(&self, address: u16, data: &[u16]) -> Result<()> {
-        timeout!(self, write_multiple_registers, (address, data))
-    }
-
-    pub async fn custom_function(&self, code: u8, data: &[u8]) -> Result<Vec<u8>> {
-        let mut hold = self.context.lock().await;
-        let timeout_command = Duration::from_millis(self.config.timeout_command_ms);
-        let time_between = Duration::from_millis(self.config.time_between_commands_ms);
-
-        let response = timeout(hold.call(Request::Custom(code, Cow::Borrowed(data))), timeout_command, time_between).await???;
-
-        if let Response::Custom(_, data) = response {
-            Ok(data.to_vec())
-        } else {
-            Err(anyhow::Error::msg("unexpected response type"))
-        }
     }
 }

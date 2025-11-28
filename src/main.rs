@@ -4,6 +4,7 @@ pub mod tui;
 pub mod handler;
 mod modbus;
 mod mock;
+mod interpretator;
 
 use std::io;
 use ratatui::backend::CrosstermBackend;
