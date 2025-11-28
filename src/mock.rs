@@ -30,6 +30,9 @@ impl Client for MockContext {
             Request::ReadInputRegisters(a, b) => {
                 Ok(Ok(Response::ReadInputRegisters(vec![a + b; b as usize])))
             },
+            Request::WriteSingleRegister(a, b) => {
+                Ok(Ok(Response::WriteSingleRegister(a, b)))
+            }
             _ => unimplemented!(),
         }
     }
