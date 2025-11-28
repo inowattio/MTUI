@@ -19,6 +19,9 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
             app.switch_focus_to(State::Write);
         }
         KeyCode::Char('j') => {
+            if let Some(n) = app.input_number.as_mut() {
+                *n = n.abs();
+            }
             app.switch_focus_to(State::Jump);
         }
         KeyCode::Char(c) => {
@@ -29,10 +32,12 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
                         app.input_number = Some(n as i32);
                     },
                     Some(input_number) => {
-                        app.input_number = Some(input_number * 10 + n as i32)
+                        if let Some(new_value) = input_number.checked_mul(10).map(|i| i.checked_add(n as i32)).flatten() {
+                            app.input_number = Some(new_value);
+                        }
                     }
                 }
-            } else if c == '-' {
+            } else if c == '-' && app.state != State::Jump {
                 if let Some(input_number) = app.input_number {
                     app.input_number = Some(-input_number);
                 }
