@@ -41,16 +41,16 @@ impl<B: Backend> Tui<B> {
             State::Read => format!("At: {} on {}\n\n{}", app.position, app.displaying_type(), app.rendered_data),
             State::Jump => format!("Jump from {} at: {}", app.position, app.input_number.map_or("none".to_string(), |n| n.to_string())),
             State::Write => format!("Write at {} value: {}", app.position, app.input_number.map_or("none".to_string(), |n| n.to_string())),
-            State::Help => format!(#"\n\
-            Q - Exit/Back\n\
-            Up/Down - Move\n\
-            R - Refresh\n\
-            T - Switch Register Type\n\
-            W - Write\n\
-            J - Jump\n\
-            H - Help\n\
-            Enter - Action\n\
-            \n")
+            State::Help => "\n
+            Q - Exit/Back\n
+            Up/Down - Move\n
+            R - Refresh\n
+            T - Switch Register Type\n
+            W - Write\n
+            J - Jump\n
+            H - Help\n
+            Enter - Action\n
+            \n".to_string()
         };
 
         let title = match app.state {
