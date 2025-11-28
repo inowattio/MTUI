@@ -141,7 +141,6 @@ impl App {
         if let Some(refresh_seconds) = self.config.auto_update_interval_seconds {
             if self.refresh_timer.elapsed().as_secs() > refresh_seconds {
                 self.refresh().await;
-                self.refresh_timer = Instant::now();
             }
         }
     }
@@ -166,6 +165,8 @@ impl App {
             Ok(data) => self.interpreter.run(data, self.position),
             Err(e) => e.to_string()
         };
+
+        self.refresh_timer = Instant::now();
     }
 
     pub fn toggle_type(&mut self) {
