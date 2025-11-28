@@ -127,11 +127,11 @@ impl App {
         }
     }
 
-    pub fn displaying_type(&self) -> String {
+    pub fn displaying_type(&self) -> &'static str {
         if self.displaying_holding {
-            String::from("Holding")
+            "Holding"
         } else {
-            String::from("Input")
+            "Input"
         }
     }
 
