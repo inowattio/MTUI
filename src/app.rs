@@ -10,7 +10,8 @@ pub enum State {
     #[default]
     Read,
     Jump,
-    Write
+    Write,
+    Help,
 }
 
 #[derive(Default, Clone, Copy, Debug, Eq, PartialEq)]
@@ -63,9 +64,10 @@ impl App {
             State::Write => if let Some(number) = self.input_number {
                 self.device.write_register(self.position as u16, number as u16).await.unwrap();
             }
+            State::Help => { },
         }
 
-        if self.state == State::Write || self.state == State::Jump {
+        if self.state != State::Jump {
             self.quit();
         }
     }

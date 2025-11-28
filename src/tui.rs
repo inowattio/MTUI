@@ -37,19 +37,34 @@ impl<B: Backend> Tui<B> {
     }
 
     pub fn draw(&mut self, app: &mut App) -> AppResult<()> {
-        let headline = match app.state {
+        let content = match app.state {
             State::Read => format!("At: {} on {}\n\n{}", app.position, app.displaying_type(), app.rendered_data),
             State::Jump => format!("Jump from {} at: {}", app.position, app.input_number.map_or("none".to_string(), |n| n.to_string())),
-            State::Write => format!("Write at {} value: {}", app.position, app.input_number.map_or("none".to_string(), |n| n.to_string()))
+            State::Write => format!("Write at {} value: {}", app.position, app.input_number.map_or("none".to_string(), |n| n.to_string())),
+            State::Help => format!(#"\n\
+            Q - Exit/Back\n\
+            Up/Down - Move\n\
+            R - Refresh\n\
+            T - Switch Register Type\n\
+            W - Write\n\
+            J - Jump\n\
+            H - Help\n\
+            Enter - Action\n\
+            \n")
         };
 
-        let commands = "Q - Exit; Up/Down - Move; R - Refresh; T - Switch Register Type; W - Write; J - Jump; Enter - Action";
+        let title = match app.state {
+            State::Read => "H - Help",
+            State::Jump => "Enter - Go; Q - Back",
+            State::Write => "Enter - Write; Q - Back",
+            State::Help => "Q/Enter - Back"
+        };
 
         self.terminal.draw(|frame| frame.render_widget(
-            Paragraph::new(headline)
+            Paragraph::new(content)
                 .block(
                     Block::default()
-                        .title(commands)
+                        .title(title)
                         .title_alignment(Alignment::Center)
                         .borders(Borders::ALL)
                         .border_type(BorderType::Rounded),

@@ -6,6 +6,9 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         KeyCode::Char('q') => {
             app.quit();
         }
+        KeyCode::Char('h') => {
+            app.switch_focus_to(State::Help);
+        }
         KeyCode::Char('r') => {
             app.refresh().await;
         }
