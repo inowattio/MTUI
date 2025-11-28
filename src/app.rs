@@ -124,7 +124,7 @@ impl App {
             State::Help => { },
         }
 
-        if self.state != State::Jump {
+        if self.state != State::Read {
             self.quit();
         }
     }
