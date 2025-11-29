@@ -93,6 +93,7 @@ fn dump_example_config_and_exit() {
     let config_string = serde_json::to_string_pretty(&example_config).unwrap();
 
     fs::write("config.json", config_string).unwrap();
+    println!("No config file found, dumped example.");
     std::process::exit(0)
 }
 
