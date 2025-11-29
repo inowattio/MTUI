@@ -38,7 +38,7 @@ impl<B: Backend> Tui<B> where <B as Backend>::Error: 'static {
 
     pub fn draw(&mut self, app: &mut App) -> AppResult<()> {
         let content = match &app.state {
-            State::Read => format!("At: {} on {}\n\n{}", app.position, app.displaying_type(), app.rendered_data),
+            State::Read(params) => format!("At: {} on {}\n\n{}", app.position, app.displaying_type(), params.data),
             State::Jump(params) => format!("Jump from {} at: {}", app.position, params.position.map_or("none".to_string(), |n| n.to_string())),
             State::Write(params) => format!("Write at {} value: {}\nResult: {:?}",
                                     app.position, params.value.map_or("none".to_string(), |n| n.to_string()), params.result),
@@ -55,7 +55,7 @@ Enter - Action".to_string(),
         };
 
         let title = match app.state {
-            State::Read => "H - Help",
+            State::Read(_) => "H - Help",
             State::Jump(_) => "Enter - Go; Q - Back",
             State::Write(_) => "Enter - Write; Q - Back",
             State::Help => "Q/Enter - Back",

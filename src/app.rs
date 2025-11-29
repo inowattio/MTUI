@@ -22,9 +22,14 @@ pub struct JumpParams {
     pub position: Option<i32>
 }
 
+#[derive(Debug, Default, PartialEq)]
+pub struct ReadParams {
+    pub data: String,
+}
+
 #[derive(Debug, PartialEq)]
 pub enum State {
-    Read,
+    Read(ReadParams),
     Jump(JumpParams),
     Write(WriteParams),
     Help,
@@ -48,7 +53,6 @@ pub struct App {
     pub position: usize,
     pub state: State,
     pub displaying_holding: bool,
-    pub rendered_data: String,
     pub device: ModbusDevice,
     pub interpreter: Interpretator,
 }
@@ -116,11 +120,10 @@ impl App {
             interpreter: Interpretator::new(config.interpretations.clone()),
             config,
             device,
-            state: State::Read,
+            state: State::Read(Default::default()),
             running: true,
             displaying_holding: true,
             position: 0,
-            rendered_data: String::new(),
             refresh_timer: Instant::now(),
         }
     }
@@ -131,7 +134,7 @@ impl App {
 
     pub async fn do_action(&mut self) {
         match &mut self.state {
-            State::Read => self.position += self.config.registers_batch as usize,
+            State::Read(_) => self.position += self.config.registers_batch as usize,
             State::Jump(params) => if let Some(number) = params.position {
                 self.position = number as usize;
                 self.quit();
@@ -166,7 +169,7 @@ impl App {
 
     pub async fn tick(&mut self) {
         if let Some(refresh_seconds) = self.config.auto_update_interval_seconds {
-            if self.state == State::Read {
+            if matches!(self.state, State::Read(_)) {
                 if self.refresh_timer.elapsed().as_secs() > refresh_seconds {
                     self.refresh().await;
                 }
@@ -178,8 +181,8 @@ impl App {
 
     pub fn quit(&mut self) {
         match self.state {
-            State::Read => self.running = false,
-            _ => self.state = State::Read,
+            State::Read(_) => self.running = false,
+            _ => self.state = State::Read(Default::default()),
         }
     }
 
@@ -194,10 +197,13 @@ impl App {
     }
 
     pub async fn refresh(&mut self) {
-        self.rendered_data = match self.aquire_data().await {
-            Ok(data) => self.interpreter.run(data, self.position, true),
-            Err(e) => e.to_string()
-        };
+        let data = self.aquire_data().await;
+        if let State::Read(params) = &mut self.state {
+            params.data = match data {
+                Ok(data) => self.interpreter.run(data, self.position, true),
+                Err(e) => e.to_string()
+            };
+        }
 
         self.refresh_timer = Instant::now();
     }
