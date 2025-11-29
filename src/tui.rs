@@ -16,7 +16,7 @@ pub struct Tui<B: Backend> {
     pub events: EventHandler,
 }
 
-impl<B: Backend> Tui<B> {
+impl<B: Backend> Tui<B> where <B as Backend>::Error: 'static {
     pub fn new(terminal: Terminal<B>, events: EventHandler) -> Self {
         Self { terminal, events }
     }
@@ -37,26 +37,45 @@ impl<B: Backend> Tui<B> {
     }
 
     pub fn draw(&mut self, app: &mut App) -> AppResult<()> {
-        let headline = match app.state {
-            State::Read => format!("At: {} on {}\n\n{}", app.position, app.displaying_type(), app.rendered_data),
-            State::Jump => format!("Jump from {} at: {}", app.position, app.input_number.map_or("none".to_string(), |n| n.to_string())),
-            State::Write => format!("Write at {} value: {}", app.position, app.input_number.map_or("none".to_string(), |n| n.to_string()))
+        let device = app.config.display_device();
+
+        let content = match &app.state {
+            State::Read(params) => format!("At: {} on {}\n\n{}", app.position, app.displaying_type(), params.data),
+            State::Jump(params) => format!("Jump from {} at: {}", app.position, params.position.map_or("none".to_string(), |n| n.to_string())),
+            State::Write(params) => format!("Write at {} value: {}\nResult: {:?}",
+                                    app.position, params.value.map_or("none".to_string(), |n| n.to_string()), params.result),
+            State::Help => "Q - Exit/Back
+Up/Down - Move Cursor
+R - Refresh Data
+T - Switch Register Type
+W - Write
+J - Jump
+D - Dump
+H - Help
+Enter - Action".to_string(),
+            State::Dump(params) => format!("From: {} on {}, started: {}", app.position, app.displaying_type(), params.started),
         };
 
-        let commands = "Q - Exit; Up/Down - Move; R - Refresh; T - Switch Register Type; W - Write; J - Jump; Enter - Action";
+        let title = match app.state {
+            State::Read(_) => "H - Help",
+            State::Jump(_) => "Enter - Go; Q - Back",
+            State::Write(_) => "Enter - Write; Q - Back",
+            State::Help => "Q/Enter - Back",
+            State::Dump(_) => "Enter - Start/Continue; Q - Back"
+        };
 
         self.terminal.draw(|frame| frame.render_widget(
-            Paragraph::new(headline)
+            Paragraph::new(format!("Device: {device}\n{content}"))
                 .block(
                     Block::default()
-                        .title(commands)
+                        .title(title)
                         .title_alignment(Alignment::Center)
                         .borders(Borders::ALL)
                         .border_type(BorderType::Rounded),
                 )
                 .style(Style::default().fg(Color::Cyan).bg(Color::Black))
                 .alignment(Alignment::Left),
-            frame.size(),
+            frame.area(),
         ))?;
         Ok(())
     }
