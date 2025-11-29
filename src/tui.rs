@@ -42,16 +42,15 @@ impl<B: Backend> Tui<B> where <B as Backend>::Error: 'static {
             State::Jump => format!("Jump from {} at: {}", app.position, app.input_number.map_or("none".to_string(), |n| n.to_string())),
             State::Write(params) => format!("Write at {} value: {}\nResult: {:?}",
                                     app.position, app.input_number.map_or("none".to_string(), |n| n.to_string()), params.result),
-            State::Help => "\n
-            Q - Exit/Back\n
-            Up/Down - Move\n
-            R - Refresh\n
-            T - Switch Register Type\n
-            W - Write\n
-            J - Jump\n
-            H - Help\n
-            Enter - Action\n
-            \n".to_string(),
+            State::Help => "Q - Exit/Back
+Up/Down - Move Cursor
+R - Refresh Data
+T - Switch Register Type
+W - Write
+J - Jump
+D - Dump
+H - Help
+Enter - Action".to_string(),
             State::Dump(params) => format!("From: {} on {}, started: {}", app.position, app.displaying_type(), params.started),
         };
 
