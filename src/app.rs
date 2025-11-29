@@ -58,6 +58,16 @@ pub struct Config {
     pub auto_update_interval_seconds: Option<u64>
 }
 
+impl Config {
+    pub fn display_device(&self) -> String {
+        match &self.device.interface {
+            Interface::Mock => "Mock".to_string(),
+            Interface::Wired(p) => format!("Wired {} ({})", p.path, p.baud_rate),
+            Interface::Network(p) => format!("Network: {}:{}", p.ip, p.port),
+        }
+    }
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {

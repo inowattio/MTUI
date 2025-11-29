@@ -37,6 +37,8 @@ impl<B: Backend> Tui<B> where <B as Backend>::Error: 'static {
     }
 
     pub fn draw(&mut self, app: &mut App) -> AppResult<()> {
+        let device = app.config.display_device();
+
         let content = match &app.state {
             State::Read(params) => format!("At: {} on {}\n\n{}", app.position, app.displaying_type(), params.data),
             State::Jump(params) => format!("Jump from {} at: {}", app.position, params.position.map_or("none".to_string(), |n| n.to_string())),
@@ -63,7 +65,7 @@ Enter - Action".to_string(),
         };
 
         self.terminal.draw(|frame| frame.render_widget(
-            Paragraph::new(content)
+            Paragraph::new(format!("Device: {device}\n{content}"))
                 .block(
                     Block::default()
                         .title(title)
