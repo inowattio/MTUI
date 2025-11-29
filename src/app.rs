@@ -36,13 +36,6 @@ pub enum State {
     Dump(DumpParams),
 }
 
-#[derive(Default, Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ConfigureTab {
-    #[default]
-    Wireless,
-    Wired,
-}
-
 pub type AppResult<T> = Result<T, Box<dyn error::Error>>;
 
 #[derive(Debug)]
