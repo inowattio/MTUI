@@ -8,13 +8,13 @@ pub struct Interpretator {
 
 impl Interpretator {
     pub fn new(interpretation: Interpretations) -> Self {
-        let mut header = format!("{0: >5}: {1: <5} {2: <5} ", "index", "u16", "i16");
+        let mut header = format!("{0: >5}: {1: <5} {2: <6} ", "index", "u16", "i16");
 
         if interpretation.u32 {
             header.push_str(&format!("{0: <10} ", "u32"))
         }
         if interpretation.i32 {
-            header.push_str(&format!("{0: <10} ", "i32"))
+            header.push_str(&format!("{0: <11} ", "i32"))
         }
         if interpretation.f32 {
             header.push_str(&format!("{0: <10} ", "f32"))
@@ -48,14 +48,14 @@ impl Interpretator {
             let byte = *data.get(i).unwrap_or(&0);
             let next = *data.get(i + 1).unwrap_or(&0);
 
-            let mut row = format!("{0: >5}: {1: <5} {2: <5} ", index + i, byte, byte as i16);
+            let mut row = format!("{0: >5}: {1: <5} {2: <6} ", index + i, byte, byte as i16);
 
             let word = (byte as u32) << 16 | (next as u32);
             if self.interpretation.u32 {
                 row.push_str(&format!("{word: <10} "))
             }
             if self.interpretation.i32 {
-                row.push_str(&format!("{: <10} ", word as i32))
+                row.push_str(&format!("{: <11} ", word as i32))
             }
             if self.interpretation.f32 {
                 let x = f32::from_bits(word);
