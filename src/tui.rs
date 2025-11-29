@@ -37,10 +37,11 @@ impl<B: Backend> Tui<B> where <B as Backend>::Error: 'static {
     }
 
     pub fn draw(&mut self, app: &mut App) -> AppResult<()> {
-        let content = match app.state {
+        let content = match &app.state {
             State::Read => format!("At: {} on {}\n\n{}", app.position, app.displaying_type(), app.rendered_data),
             State::Jump => format!("Jump from {} at: {}", app.position, app.input_number.map_or("none".to_string(), |n| n.to_string())),
-            State::Write => format!("Write at {} value: {}", app.position, app.input_number.map_or("none".to_string(), |n| n.to_string())),
+            State::Write(params) => format!("Write at {} value: {}\nResult: {:?}",
+                                    app.position, app.input_number.map_or("none".to_string(), |n| n.to_string()), params.result),
             State::Help => "\n
             Q - Exit/Back\n
             Up/Down - Move\n
@@ -50,14 +51,16 @@ impl<B: Backend> Tui<B> where <B as Backend>::Error: 'static {
             J - Jump\n
             H - Help\n
             Enter - Action\n
-            \n".to_string()
+            \n".to_string(),
+            State::Dump(params) => format!("From: {} on {}, started: {}", app.position, app.displaying_type(), params.started),
         };
 
         let title = match app.state {
             State::Read => "H - Help",
             State::Jump => "Enter - Go; Q - Back",
-            State::Write => "Enter - Write; Q - Back",
-            State::Help => "Q/Enter - Back"
+            State::Write(_) => "Enter - Write; Q - Back",
+            State::Help => "Q/Enter - Back",
+            State::Dump(_) => "Enter - Start/Continue; Q - Back"
         };
 
         self.terminal.draw(|frame| frame.render_widget(

@@ -33,8 +33,16 @@ impl Interpretator {
         }
     }
 
-    pub fn run(&self, data: Vec<u16>, index: usize) -> String {
-        let mut rendered_data = self.header.clone();
+    pub fn header(&self) -> String {
+        self.header.clone()
+    }
+
+    pub fn run(&self, data: Vec<u16>, index: usize, with_head: bool) -> String {
+        let mut rendered_data = if with_head {
+            self.header.clone()
+        } else {
+            String::new()
+        };
 
         for i in 0..data.len() {
             let byte = *data.get(i).unwrap_or(&0);

@@ -1,16 +1,28 @@
 use std::{error, fs};
 use std::time::Instant;
 use serde::{Deserialize, Serialize};
+use tokio::fs::OpenOptions;
+use tokio::io::AsyncWriteExt;
 use crate::interpretator::Interpretator;
 use crate::modbus::{DeviceConfig, Interface, ModbusDevice};
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Default)]
+#[derive(Debug, Default, PartialEq)]
+pub struct WriteParams {
+    pub(crate) result: Option<String>
+}
+
+#[derive(Debug, Default, PartialEq)]
+pub struct DumpParams {
+    pub started: bool,
+}
+
+#[derive(Debug, PartialEq)]
 pub enum State {
-    #[default]
     Read,
     Jump,
-    Write,
+    Write(WriteParams),
     Help,
+    Dump(DumpParams),
 }
 
 #[derive(Default, Clone, Copy, Debug, Eq, PartialEq)]
@@ -98,7 +110,7 @@ impl App {
             interpreter: Interpretator::new(config.interpretations.clone()),
             config,
             device,
-            state: State::default(),
+            state: State::Read,
             input_number: None,
             running: true,
             displaying_holding: true,
@@ -113,17 +125,29 @@ impl App {
     }
 
     pub async fn do_action(&mut self) {
-        match self.state {
+        match &mut self.state {
             State::Read => self.position += self.config.registers_batch as usize,
             State::Jump => if let Some(number) = self.input_number {
                 self.position = number as usize;
-                self.state = State::Read;
+                self.quit();
             }
-            State::Write => if let Some(number) = self.input_number {
-                self.device.write_register(self.position as u16, number as u16).await.unwrap();
-                self.state = State::Read;
+            State::Write(params) => if let Some(number) = self.input_number {
+                let result = self.device.write_register(self.position as u16, number as u16).await;
+                params.result = Some(format!("{result:#?}"));
             }
             State::Help => { },
+            State::Dump(params) => {
+                let mut file = OpenOptions::new().create(true).append(true).open("dump.txt").await.unwrap();
+
+                if !params.started {
+                    file.write_all(self.interpreter.header().as_bytes()).await.unwrap();
+                    params.started = true;
+                }
+
+                let data = self.aquire_data().await.unwrap();
+                self.position = self.position + self.config.registers_batch as usize;
+                file.write_all(self.interpreter.run(data, self.position, false).as_bytes()).await.unwrap();
+            },
         }
     }
 
@@ -137,27 +161,36 @@ impl App {
 
     pub async fn tick(&mut self) {
         if let Some(refresh_seconds) = self.config.auto_update_interval_seconds {
-            if self.refresh_timer.elapsed().as_secs() > refresh_seconds {
-                self.refresh().await;
+            if self.state == State::Read {
+                if self.refresh_timer.elapsed().as_secs() > refresh_seconds {
+                    self.refresh().await;
+                }
+            } else {
+                self.refresh_timer = Instant::now();
             }
         }
     }
 
     pub fn quit(&mut self) {
-        self.running = false
+        match self.state {
+            State::Read => self.running = false,
+            _ => self.state = State::Read,
+        }
     }
 
-    pub async fn refresh(&mut self) {
+    pub async fn aquire_data(&self) -> Result<Vec<u16>, anyhow::Error> {
         let amount = self.config.registers_batch;
 
-        let data = if self.displaying_holding {
+        if self.displaying_holding {
             self.device.holdings(self.position as u16, amount).await
         } else {
             self.device.inputs(self.position as u16, amount).await
-        };
+        }
+    }
 
-        self.rendered_data = match data {
-            Ok(data) => self.interpreter.run(data, self.position),
+    pub async fn refresh(&mut self) {
+        self.rendered_data = match self.aquire_data().await {
+            Ok(data) => self.interpreter.run(data, self.position, true),
             Err(e) => e.to_string()
         };
 
