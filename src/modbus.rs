@@ -229,7 +229,7 @@ impl ModbusDevice {
 
                 context
             }
-            Interface::Mock => MockContext::new()
+            Interface::Mock => MockContext::make()
         };
 
         Ok(Self {

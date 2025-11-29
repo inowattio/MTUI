@@ -40,14 +40,14 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
                 _ => &mut None,
             };
 
-            if c.is_digit(10) {
+            if c.is_ascii_digit() {
                 let n = c as u16 - '0' as u16;
                 match target {
                     None => {
                         *target = Some(n as i32);
                     },
                     Some(input_number) => {
-                        if let Some(new_value) = input_number.checked_mul(10).map(|i| i.checked_add(n as i32)).flatten() {
+                        if let Some(new_value) = input_number.checked_mul(10).and_then(|i| i.checked_add(n as i32)) {
                             *target = Some(new_value);
                         }
                     }
@@ -68,7 +68,7 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
                     Some(*input_number / 10)
                 }
             } else {
-                target.clone()
+                *target
             };
             *target = new_value;
         },

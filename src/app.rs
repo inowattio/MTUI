@@ -146,7 +146,7 @@ impl App {
                 }
 
                 let data = self.aquire_data().await.unwrap();
-                self.position = self.position + self.config.registers_batch as usize;
+                self.position += self.config.registers_batch as usize;
                 file.write_all(self.interpreter.run(data, self.position, false).as_bytes()).await.unwrap();
             },
         }
