@@ -8,7 +8,8 @@ use crate::modbus::{DeviceConfig, Interface, ModbusDevice};
 
 #[derive(Debug, Default, PartialEq)]
 pub struct WriteParams {
-    pub(crate) result: Option<String>
+    pub result: Option<String>,
+    pub value: Option<i32>,
 }
 
 #[derive(Debug, Default, PartialEq)]
@@ -16,10 +17,15 @@ pub struct DumpParams {
     pub started: bool,
 }
 
+#[derive(Debug, Default, PartialEq)]
+pub struct JumpParams {
+    pub position: Option<i32>
+}
+
 #[derive(Debug, PartialEq)]
 pub enum State {
     Read,
-    Jump,
+    Jump(JumpParams),
     Write(WriteParams),
     Help,
     Dump(DumpParams),
@@ -41,7 +47,6 @@ pub struct App {
     pub running: bool,
     pub position: usize,
     pub state: State,
-    pub input_number: Option<i32>,
     pub displaying_holding: bool,
     pub rendered_data: String,
     pub device: ModbusDevice,
@@ -112,7 +117,6 @@ impl App {
             config,
             device,
             state: State::Read,
-            input_number: None,
             running: true,
             displaying_holding: true,
             position: 0,
@@ -128,11 +132,11 @@ impl App {
     pub async fn do_action(&mut self) {
         match &mut self.state {
             State::Read => self.position += self.config.registers_batch as usize,
-            State::Jump => if let Some(number) = self.input_number {
+            State::Jump(params) => if let Some(number) = params.position {
                 self.position = number as usize;
                 self.quit();
             }
-            State::Write(params) => if let Some(number) = self.input_number {
+            State::Write(params) => if let Some(number) = params.value {
                 let result = self.device.write_register(self.position as u16, number as u16).await;
                 params.result = Some(format!("{result:#?}"));
             }
