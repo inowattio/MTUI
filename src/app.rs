@@ -117,7 +117,7 @@ fn fetch_config_or_exit() -> Config {
 impl App {
     pub async fn new() -> Self {
         let config = fetch_config_or_exit();
-        let device = ModbusDevice::new(&config.device).await.unwrap();
+        let device = ModbusDevice::new(&config.device).await.inspect_err(|e| println!("Could not initialize device: {e}")).unwrap();
 
         Self {
             interpreter: Interpretator::new(config.interpretations.clone()),
