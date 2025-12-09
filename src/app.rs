@@ -158,6 +158,8 @@ impl App {
         } else {
             self.pinned_registers.push(selection);
         }
+
+        self.pinned_registers.sort_by(|(_, a), (_, b)| a.cmp(&b));
     }
 
     pub async fn do_action(&mut self) {
