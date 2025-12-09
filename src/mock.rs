@@ -28,7 +28,7 @@ impl Client for MockContext {
                 Ok(Ok(Response::ReadHoldingRegisters(vec![a + b; b as usize])))
             },
             Request::ReadInputRegisters(a, b) => {
-                Ok(Ok(Response::ReadInputRegisters(vec![a + b; b as usize])))
+                Ok(Ok(Response::ReadInputRegisters(vec![a + b + 1; b as usize])))
             },
             Request::WriteSingleRegister(a, b) => {
                 Ok(Ok(Response::WriteSingleRegister(a, b)))
