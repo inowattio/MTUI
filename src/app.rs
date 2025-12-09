@@ -24,7 +24,9 @@ pub struct JumpParams {
 
 #[derive(Debug, Default, PartialEq)]
 pub struct ReadParams {
-    pub data: String,
+    pub header: String,
+    pub main_data: String,
+    pub pinned_data: String,
 }
 
 #[derive(Debug, PartialEq)]
@@ -250,7 +252,6 @@ impl App {
 
     pub async fn refresh(&mut self) {
         let is_in_read = matches!(self.state, State::Read(_));
-        let mut text = String::new();
         if is_in_read {
             let data = self.aquire_data().await;
             let header = self.interpreter.header();
@@ -315,11 +316,11 @@ impl App {
                 Err(e) => e.to_string()
             };
 
-            text = format!("{header}\n{main_data}\nPinned data:\n{pinned_data}");
-        }
-
-        if let State::Read(params) = &mut self.state {
-            params.data = text;
+            if let State::Read(params) = &mut self.state {
+                params.header = header;
+                params.main_data = main_data;
+                params.pinned_data = pinned_data;
+            }
         }
 
         self.refresh_timer = Instant::now();
