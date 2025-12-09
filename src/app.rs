@@ -38,6 +38,12 @@ pub enum State {
 
 pub type AppResult<T> = Result<T, Box<dyn error::Error>>;
 
+#[derive(Debug, Eq, PartialEq)]
+pub enum RegisterType {
+    Holding,
+    Input,
+}
+
 #[derive(Debug)]
 pub struct App {
     pub config: Config,
@@ -45,7 +51,7 @@ pub struct App {
     pub running: bool,
     pub position: usize,
     pub state: State,
-    pub displaying_holding: bool,
+    pub register_display_type: RegisterType,
     pub device: ModbusDevice,
     pub interpreter: Interpretator,
 }
@@ -125,7 +131,7 @@ impl App {
             device,
             state: State::Read(Default::default()),
             running: true,
-            displaying_holding: true,
+            register_display_type: RegisterType::Holding,
             position: 0,
             refresh_timer: Instant::now(),
         }
@@ -163,7 +169,7 @@ impl App {
     }
 
     pub fn displaying_type(&self) -> &'static str {
-        if self.displaying_holding {
+        if self.register_display_type == RegisterType::Holding {
             "Holding"
         } else {
             "Input"
@@ -192,7 +198,7 @@ impl App {
     pub async fn aquire_data(&self) -> Result<Vec<u16>, anyhow::Error> {
         let amount = self.config.registers_batch;
 
-        if self.displaying_holding {
+        if self.register_display_type == RegisterType::Holding {
             self.device.holdings(self.position as u16, amount).await
         } else {
             self.device.inputs(self.position as u16, amount).await
@@ -212,7 +218,11 @@ impl App {
     }
 
     pub fn toggle_type(&mut self) {
-        self.displaying_holding = !self.displaying_holding;
+        if self.register_display_type == RegisterType::Holding {
+            self.register_display_type = RegisterType::Input;
+        } else {
+            self.register_display_type = RegisterType::Holding;
+        }
     }
 
     pub fn up(&mut self) {
