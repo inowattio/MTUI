@@ -38,11 +38,14 @@ pub enum State {
 
 pub type AppResult<T> = Result<T, Box<dyn error::Error>>;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum RegisterType {
     Holding,
     Input,
 }
+
+pub type RegisterCell = (RegisterType, usize);
+pub type RegisterCellValue = (RegisterCell, u16);
 
 #[derive(Debug)]
 pub struct App {
@@ -52,6 +55,7 @@ pub struct App {
     pub position: usize,
     pub state: State,
     pub register_display_type: RegisterType,
+    pub pinned_registers: Vec<RegisterCell>,
     pub device: ModbusDevice,
     pub interpreter: Interpretator,
 }
@@ -134,11 +138,26 @@ impl App {
             register_display_type: RegisterType::Holding,
             position: 0,
             refresh_timer: Instant::now(),
+            pinned_registers: Vec::default(),
         }
     }
 
     pub fn switch_focus_to(&mut self, focus: State) {
         self.state = focus;
+    }
+
+    pub fn pinned(&mut self) {
+        if !matches!(self.state, State::Read(_)) {
+            return;
+        }
+
+        let selection = (self.register_display_type, self.position);
+
+        if let Some(pos) = self.pinned_registers.iter().position(|x| *x == selection) {
+            self.pinned_registers.remove(pos);
+        } else {
+            self.pinned_registers.push(selection);
+        }
     }
 
     pub async fn do_action(&mut self) {
@@ -158,12 +177,14 @@ impl App {
 
                 if !params.started {
                     file.write_all(self.interpreter.header().as_bytes()).await.unwrap();
+                    file.write_all(b"\n").await.unwrap();
                     params.started = true;
                 }
 
                 let data = self.aquire_data().await.unwrap();
                 self.position += self.config.registers_batch as usize;
-                file.write_all(self.interpreter.run(data, self.position, false).as_bytes()).await.unwrap();
+                file.write_all(self.interpreter.run(data, self.position, |_| None).join("\n").as_bytes()).await.unwrap();
+                file.write_all(b"\n").await.unwrap();
             },
         }
     }
@@ -195,23 +216,108 @@ impl App {
         }
     }
 
-    pub async fn aquire_data(&self) -> Result<Vec<u16>, anyhow::Error> {
+    pub async fn aquire_data(&self) -> Result<Vec<RegisterCellValue>, anyhow::Error> {
         let amount = self.config.registers_batch;
 
-        if self.register_display_type == RegisterType::Holding {
-            self.device.holdings(self.position as u16, amount).await
+        let values = if self.register_display_type == RegisterType::Holding {
+            self.device.holdings(self.position as u16, amount).await?
         } else {
-            self.device.inputs(self.position as u16, amount).await
+            self.device.inputs(self.position as u16, amount).await?
+        };
+
+        Ok(values.into_iter().enumerate().map(|(i, v)| ((self.register_display_type, self.position + i), v)).collect())
+    }
+
+    pub async fn aquire_pinned_data(&self) -> Result<Vec<RegisterCellValue>, anyhow::Error> {
+        let mut collection = Vec::with_capacity(self.pinned_registers.len());
+
+        for cell in &self.pinned_registers {
+            let cell = cell.clone();
+            let (kind, address) = cell;
+            let address = address as u16;
+            let value = match kind {
+                RegisterType::Holding => self.device.holdings(address, 1).await?,
+                RegisterType::Input => self.device.inputs(address, 1).await?
+            }.into_iter().next().unwrap();
+
+            collection.push((cell, value));
         }
+
+        Ok(collection)
     }
 
     pub async fn refresh(&mut self) {
-        let data = self.aquire_data().await;
-        if let State::Read(params) = &mut self.state {
-            params.data = match data {
-                Ok(data) => self.interpreter.run(data, self.position, true),
+        let is_in_read = matches!(self.state, State::Read(_));
+        let mut text = String::new();
+        if is_in_read {
+            let data = self.aquire_data().await;
+            let header = self.interpreter.header();
+
+            let sfr = self.pinned_registers.clone();
+            let fav_checker = |cell: RegisterCellValue| {
+                let ((c_kind, c_address), _) = cell;
+                let is_pinned = sfr.clone().into_iter().position(|(kind, address)| kind == c_kind && address == c_address).is_some();
+                if is_pinned {
+                    Some("Pinned".into())
+                } else {
+                    None
+                }
+            };
+
+            let main_data = match data {
+                Ok(data) => self.interpreter.run(data, self.position, fav_checker).join("\n"),
                 Err(e) => e.to_string()
             };
+
+            let data = self.aquire_pinned_data().await;
+            let pinned_data = match data {
+                Ok(data) => {
+                    let mut t = String::new();
+                    let mut skip = false;
+
+                    for i in 0..data.len() {
+                        if skip {
+                            skip = false;
+                            continue;
+                        }
+
+                        let c = *data.get(i).unwrap();
+                        let batch = match data.get(i + 1).map(|v| v.clone()) {
+                            None => vec![c],
+                            Some(n) => {
+                                let ((c_kind, c_address), _) = c;
+                                let ((n_kind, n_address), _) = n;
+                                if n_kind == c_kind && n_address == c_address + 1 {
+                                    skip = true;
+                                    vec![c, n]
+                                } else {
+                                    vec![c]
+                                }
+                            }
+                        };
+                        let ((_, address), _) = c;
+
+                        let line = self.interpreter.run(batch, address, |c| {
+                            let ((kind, _), _) = c;
+                            Some(match kind {
+                                RegisterType::Holding => "Holding",
+                                RegisterType::Input => "Input",
+                            }.to_string())
+                        }).join("\n");
+
+                        t.push_str(&format!("{line}\n"));
+                    }
+
+                    t
+                },
+                Err(e) => e.to_string()
+            };
+
+            text = format!("{header}\n{main_data}\nPinned data:\n{pinned_data}");
+        }
+
+        if let State::Read(params) = &mut self.state {
+            params.data = text;
         }
 
         self.refresh_timer = Instant::now();

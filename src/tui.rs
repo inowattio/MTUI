@@ -40,7 +40,16 @@ impl<B: Backend> Tui<B> where <B as Backend>::Error: 'static {
         let device = app.config.display_device();
 
         let content = match &app.state {
-            State::Read(params) => format!("At: {} on {}\n\n{}", app.position, app.displaying_type(), params.data),
+            State::Read(params) => {
+                let is_pinned = app.pinned_registers.iter()
+                    .position(|(kind, address)| kind == &app.register_display_type && *address == app.position).is_some();
+                let pinned_string = if is_pinned {
+                    "(Pinned)"
+                } else {
+                    ""
+                };
+                format!("At: {} on {} {}\n\n{}", app.position, app.displaying_type(), pinned_string, params.data)
+            },
             State::Jump(params) => format!("Jump from {} at: {}", app.position, params.position.map_or("none".to_string(), |n| n.to_string())),
             State::Write(params) => format!("Write at {} value: {}\nResult: {:?}",
                                     app.position, params.value.map_or("none".to_string(), |n| n.to_string()), params.result),
@@ -52,12 +61,13 @@ W - Write
 J - Jump
 D - Dump
 H - Help
+P - Add/Remove Pin (Read only)
 Enter - Action".to_string(),
             State::Dump(params) => format!("From: {} on {}, started: {}", app.position, app.displaying_type(), params.started),
         };
 
         let title = match app.state {
-            State::Read(_) => "H - Help",
+            State::Read(_) => "H - Help; P - Add/Remove Pin",
             State::Jump(_) => "Enter - Go; Q - Back",
             State::Write(_) => "Enter - Write; Q - Back",
             State::Help => "Q/Enter - Back",

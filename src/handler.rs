@@ -7,6 +7,9 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         KeyCode::Char('q') => {
             app.quit();
         }
+        KeyCode::Char('p') => {
+            app.pinned();
+        }
         KeyCode::Char('d') => {
             app.switch_focus_to(State::Dump(DumpParams::default()));
         }

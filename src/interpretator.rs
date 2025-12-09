@@ -1,4 +1,4 @@
-use crate::app::Interpretations;
+use crate::app::{Interpretations, RegisterCellValue};
 
 #[derive(Debug)]
 pub struct Interpretator {
@@ -26,7 +26,6 @@ impl Interpretator {
             header.push_str(&format!("{0: <8} ", "bits"))
         }
 
-        header.push('\n');
         Self {
             interpretation,
             header,
@@ -37,20 +36,18 @@ impl Interpretator {
         self.header.clone()
     }
 
-    pub fn run(&self, data: Vec<u16>, index: usize, with_head: bool) -> String {
-        let mut rendered_data = if with_head {
-            self.header.clone()
-        } else {
-            String::new()
-        };
+    pub fn run(&self, data: Vec<RegisterCellValue>, index: usize, additional: impl Fn(RegisterCellValue) -> Option<String>) -> Vec<String> {
+        let mut lines = Vec::with_capacity(data.len());
 
         for i in 0..data.len() {
-            let byte = *data.get(i).unwrap_or(&0);
-            let next = *data.get(i + 1).unwrap_or(&0);
+            let current = *data.get(i).unwrap();
+            let byte = current.1;
+            let next = data.get(i + 1);
+            let next_byte = next.map(|(_, v)| *v).unwrap_or(0);
 
             let mut row = format!("{0: >5}: {1: <5} {2: <6} ", index + i, byte, byte as i16);
 
-            let word = (byte as u32) << 16 | (next as u32);
+            let word = (byte as u32) << 16 | (next_byte as u32);
             if self.interpretation.u32 {
                 row.push_str(&format!("{word: <10} "))
             }
@@ -68,7 +65,7 @@ impl Interpretator {
                 row.push_str(&format!("{s: <10} "))
             }
             if self.interpretation.ascii {
-                let s: String = [byte, next]
+                let s: String = [byte, next_byte]
                     .iter()
                     .flat_map(|n| [(n >> 8) as u8, (n & 0xFF) as u8])
                     .map(|b| {
@@ -86,11 +83,14 @@ impl Interpretator {
             if self.interpretation.bits {
                 row.push_str(&format!("{byte:<08b} "))
             }
+            
+            if let Some(t) = additional(current) {
+                row.push_str(&format!("{t} "));
+            }
 
-            rendered_data.push_str(&row);
-            rendered_data.push('\n');
+            lines.push(row);
         }
 
-        rendered_data
+        lines
     }
 }
