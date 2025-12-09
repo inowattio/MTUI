@@ -2,13 +2,16 @@ use async_trait::async_trait;
 use tokio_modbus::client::{Client, Context};
 use tokio_modbus::{Request, Response, Slave};
 use tokio_modbus::slave::SlaveContext;
+use std::collections::HashMap;
 
-#[derive(Debug)]
-pub struct MockContext;
+#[derive(Debug, Default)]
+pub struct MockContext {
+    holdings: HashMap<u16, u16>,
+}
 
 impl MockContext {
     pub fn make() -> Context {
-        let client: Box<dyn Client> = Box::new(Self);
+        let client: Box<dyn Client> = Box::new(Self::default());
         client.into()
     }
 }
@@ -24,15 +27,26 @@ impl SlaveContext for MockContext {
 impl Client for MockContext {
     async fn call(&mut self, request: Request<'_>) -> tokio_modbus::Result<Response> {
         match request {
-            Request::ReadHoldingRegisters(a, b) => {
-                Ok(Ok(Response::ReadHoldingRegisters(vec![a + b; b as usize])))
-            },
+            Request::ReadHoldingRegisters(addr, count) => {
+                let mut regs = Vec::with_capacity(count as usize);
+                for offset in 0..count {
+                    let reg_addr = addr + offset;
+                    let value = *self.holdings.get(&reg_addr).unwrap_or(&(addr + count));
+                    regs.push(value);
+                }
+
+                Ok(Ok(Response::ReadHoldingRegisters(regs)))
+            }
+
             Request::ReadInputRegisters(a, b) => {
                 Ok(Ok(Response::ReadInputRegisters(vec![a + b + 1; b as usize])))
-            },
-            Request::WriteSingleRegister(a, b) => {
-                Ok(Ok(Response::WriteSingleRegister(a, b)))
             }
+
+            Request::WriteSingleRegister(addr, value) => {
+                self.holdings.insert(addr, value);
+                Ok(Ok(Response::WriteSingleRegister(addr, value)))
+            }
+
             _ => unimplemented!(),
         }
     }
