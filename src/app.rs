@@ -146,7 +146,7 @@ impl App {
         self.state = focus;
     }
 
-    pub fn pinned(&mut self) {
+    pub fn pin(&mut self) {
         if !matches!(self.state, State::Read(_)) {
             return;
         }
