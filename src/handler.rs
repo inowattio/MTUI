@@ -40,6 +40,15 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
 
                     &mut params.value
                 },
+                State::Dump(params) => {
+                    if params.started {
+                        return Ok(());
+                    }
+
+                    params.error = None;
+
+                    &mut params.total_batches
+                },
                 _ => &mut None,
             };
 
@@ -61,6 +70,15 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
             let target = match &mut app.state {
                 State::Jump(params) => &mut params.position,
                 State::Write(params) => &mut params.value,
+                State::Dump(params) => {
+                    if params.started {
+                        return Ok(());
+                    }
+
+                    params.error = None;
+
+                    &mut params.total_batches
+                },
                 _ => &mut None,
             };
 

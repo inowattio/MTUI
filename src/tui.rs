@@ -8,7 +8,7 @@ use std::io;
 use std::panic;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout};
 use ratatui::prelude::{Color, Style};
-use ratatui::widgets::{Block, Borders, BorderType, Paragraph};
+use ratatui::widgets::{Block, Borders, BorderType, Gauge, Paragraph};
 
 #[derive(Debug)]
 pub struct Tui<B: Backend> {
@@ -46,7 +46,7 @@ impl<B: Backend> Tui<B> where <B as Backend>::Error: 'static {
             State::Jump(_) => "Enter - Go; Q - Back",
             State::Write(_) => "Enter - Write; Q - Back",
             State::Help => "Q/Enter - Back",
-            State::Dump(_) => "Enter - Start/Continue; Q - Back"
+            State::Dump(_) => "Enter - Start; 0-9 Set Batches; Q - Back"
             };
 
             if let State::Read(params) = &app.state {
@@ -98,8 +98,75 @@ impl<B: Backend> Tui<B> where <B as Backend>::Error: 'static {
                 return;
             }
 
+            if let State::Dump(params) = &app.state {
+                let outer = Block::default()
+                    .title(title)
+                    .title_alignment(Alignment::Center)
+                    .borders(Borders::ALL)
+                    .border_type(BorderType::Rounded);
+
+                let outer_area = frame.area();
+                let inner_area = outer.inner(outer_area);
+                frame.render_widget(outer, outer_area);
+
+                let rows = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints(
+                        [
+                            Constraint::Length(3),
+                            Constraint::Length(3),
+                            Constraint::Min(0),
+                        ]
+                            .as_ref(),
+                    )
+                    .split(inner_area);
+
+                let info = format!(
+                    "Device: {}\nStart at {} on {}",
+                    device,
+                    params.start_position,
+                    app.displaying_type()
+                );
+                frame.render_widget(
+                    Paragraph::new(info).style(base_style).alignment(Alignment::Left),
+                    rows[0],
+                );
+
+                let ratio = if let Some(total) = params.total_batches {
+                    if total == 0 {
+                        0.0
+                    } else {
+                        (params.completed_batches as f64 / total as f64).clamp(0.0, 1.0)
+                    }
+                } else {
+                    0.0
+                };
+                let progress_text = match params.total_batches {
+                    Some(total) => format!("{}/{} batches ({}/{} registers)", params.completed_batches, total, params.completed_batches * app.config.registers_batch as u32, total * app.config.registers_batch as i32),
+                    None => "Set batch count to start".to_string(),
+                };
+                let gauge = Gauge::default()
+                    .gauge_style(base_style)
+                    .label(progress_text)
+                    .ratio(ratio);
+                frame.render_widget(gauge, rows[1]);
+
+                let status = if params.started { "Running" } else { "Idle" };
+                let mut details = format!(
+                    "Batch size: {} | Status: {}",
+                    app.config.registers_batch, status
+                );
+                if let Some(err) = &params.error {
+                    details.push_str(&format!("\nError: {err}"));
+                }
+                frame.render_widget(
+                    Paragraph::new(details).style(base_style).alignment(Alignment::Left),
+                    rows[2],
+                );
+                return;
+            }
+
             let content = match &app.state {
-                State::Read(_) => unreachable!(),
                 State::Jump(params) => format!("Jump from {} at: {}", app.position, params.position.map_or("none".to_string(), |n| n.to_string())),
                 State::Write(params) => format!("Write at {} value: {}\nResult: {:?}",
                                         app.position, params.value.map_or("none".to_string(), |n| n.to_string()), params.result),
@@ -113,7 +180,7 @@ D - Dump
 H - Help
 P - Add/Remove Pin (Read only)
 Enter - Action".to_string(),
-                State::Dump(params) => format!("From: {} on {}, started: {}", app.position, app.displaying_type(), params.started),
+                _ => unreachable!(),
             };
 
             frame.render_widget(
