@@ -15,7 +15,7 @@ pub struct WriteParams {
 #[derive(Debug, PartialEq)]
 pub struct DumpParams {
     pub started: bool,
-    pub total_batches: Option<u32>,
+    pub total_batches: Option<i32>,
     pub completed_batches: u32,
     pub start_position: usize,
     pub header_written: bool,
@@ -215,7 +215,7 @@ impl App {
                     return;
                 };
 
-                if total_batches == 0 {
+                if total_batches < 1 {
                     params.error = Some("Batch count must be greater than 0.".to_string());
                     return;
                 }
@@ -244,7 +244,7 @@ impl App {
             let State::Dump(params) = &mut self.state else {
                 return Ok(());
             };
-            let Some(total_batches) = params.total_batches else {
+            let Some(total_batches) = params.total_batches.map(|v| v as u32) else {
                 return Ok(());
             };
 
@@ -433,6 +433,12 @@ impl App {
     }
 
     pub fn toggle_type(&mut self) {
+        if let State::Dump(params) = &mut self.state {
+            if params.started {
+                return;
+            }
+        }
+
         if self.register_display_type == RegisterType::Holding {
             self.register_display_type = RegisterType::Input;
         } else {
