@@ -449,12 +449,22 @@ impl App {
     pub fn up(&mut self) {
         if let Some(res) = self.position.checked_sub(1) {
             self.position = res;
+            self.update_dump_position();
         }
     }
 
     pub fn down(&mut self) {
         if let Some(res) = self.position.checked_add(1) {
             self.position = res;
+            self.update_dump_position();
+        }
+    }
+
+    pub fn update_dump_position(&mut self) {
+        if let State::Dump(params) = &mut self.state {
+            if !params.started {
+                params.start_position = self.position;
+            }
         }
     }
 }
