@@ -12,9 +12,33 @@ pub struct WriteParams {
     pub value: Option<i32>,
 }
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct DumpParams {
     pub started: bool,
+    pub total_batches: Option<u32>,
+    pub completed_batches: u32,
+    pub start_position: usize,
+    pub header_written: bool,
+    pub error: Option<String>,
+}
+
+impl DumpParams {
+    pub fn new(start_position: usize) -> Self {
+        Self {
+            started: false,
+            total_batches: None,
+            completed_batches: 0,
+            start_position,
+            header_written: false,
+            error: None,
+        }
+    }
+}
+
+impl Default for DumpParams {
+    fn default() -> Self {
+        Self::new(0)
+    }
 }
 
 #[derive(Debug, Default, PartialEq)]
@@ -145,7 +169,10 @@ impl App {
     }
 
     pub fn switch_focus_to(&mut self, focus: State) {
-        self.state = focus;
+        self.state = match focus {
+            State::Dump(_) => State::Dump(DumpParams::new(self.position)),
+            other => other,
+        };
     }
 
     pub fn pin(&mut self) {
@@ -165,6 +192,8 @@ impl App {
     }
 
     pub async fn do_action(&mut self) {
+        let mut start_dump_run = false;
+
         match &mut self.state {
             State::Read(_) => self.position += self.config.registers_batch as usize,
             State::Jump(params) => if let Some(number) = params.position {
@@ -177,20 +206,80 @@ impl App {
             }
             State::Help => { },
             State::Dump(params) => {
-                let mut file = OpenOptions::new().create(true).append(true).open("dump.txt").await.unwrap();
-
-                if !params.started {
-                    file.write_all(self.interpreter.header().as_bytes()).await.unwrap();
-                    file.write_all(b"\n").await.unwrap();
-                    params.started = true;
+                if params.started {
+                    return;
                 }
 
-                let data = self.aquire_data().await.unwrap();
-                self.position += self.config.registers_batch as usize;
-                file.write_all(self.interpreter.run(data, self.position, |_| None).join("\n").as_bytes()).await.unwrap();
-                file.write_all(b"\n").await.unwrap();
+                let Some(total_batches) = params.total_batches else {
+                    params.error = Some("Set a batch count before starting.".to_string());
+                    return;
+                };
+
+                if total_batches == 0 {
+                    params.error = Some("Batch count must be greater than 0.".to_string());
+                    return;
+                }
+
+                params.started = true;
+                params.completed_batches = 0;
+                params.header_written = false;
+                params.error = None;
+                self.position = params.start_position;
+                start_dump_run = true;
             },
         }
+
+        if start_dump_run {
+            if let Err(e) = self.perform_dump_batch().await {
+                if let State::Dump(params) = &mut self.state {
+                    params.started = false;
+                    params.error = Some(e.to_string());
+                }
+            }
+        }
+    }
+
+    async fn perform_dump_batch(&mut self) -> Result<(), anyhow::Error> {
+        let (header_needed, starting_index, total_batches) = {
+            let State::Dump(params) = &mut self.state else {
+                return Ok(());
+            };
+            let Some(total_batches) = params.total_batches else {
+                return Ok(());
+            };
+
+            if params.completed_batches >= total_batches {
+                params.started = false;
+                return Ok(());
+            }
+
+            (!params.header_written, self.position, total_batches)
+        };
+
+        {
+            let mut file = OpenOptions::new().create(true).append(true).open("dump.txt").await?;
+
+            if header_needed {
+                file.write_all(self.interpreter.header().as_bytes()).await?;
+                file.write_all(b"\n").await?;
+            }
+
+            let data = self.aquire_data().await?;
+            file.write_all(self.interpreter.run(data, starting_index, |_| None).join("\n").as_bytes()).await?;
+            file.write_all(b"\n").await?;
+        }
+
+        if let State::Dump(params) = &mut self.state {
+            params.header_written = true;
+            params.completed_batches += 1;
+            self.position = starting_index + self.config.registers_batch as usize;
+
+            if params.completed_batches >= total_batches {
+                params.started = false;
+            }
+        }
+
+        Ok(())
     }
 
     pub fn displaying_type(&self) -> &'static str {
@@ -202,6 +291,23 @@ impl App {
     }
 
     pub async fn tick(&mut self) {
+        let should_run_dump = matches!(&self.state, State::Dump(DumpParams { started: true, .. }));
+        let is_dump_state = matches!(self.state, State::Dump(_));
+
+        if should_run_dump {
+            if let Err(e) = self.perform_dump_batch().await {
+                if let State::Dump(params) = &mut self.state {
+                    params.started = false;
+                    params.error = Some(e.to_string());
+                }
+            }
+            self.refresh_timer = Instant::now();
+            return;
+        } else if is_dump_state {
+            self.refresh_timer = Instant::now();
+            return;
+        }
+
         if let Some(refresh_seconds) = self.config.auto_update_interval_seconds {
             if matches!(self.state, State::Read(_)) {
                 if self.refresh_timer.elapsed().as_secs() > refresh_seconds {

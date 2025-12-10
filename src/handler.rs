@@ -29,6 +29,24 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
             app.switch_focus_to(State::Jump(Default::default()));
         }
         KeyCode::Char(c) => {
+            if let State::Dump(params) = &mut app.state {
+                if params.started {
+                    return Ok(());
+                }
+
+                params.error = None;
+
+                if c.is_ascii_digit() {
+                    let n = c.to_digit(10).unwrap();
+                    params.total_batches = match params.total_batches {
+                        None => Some(n),
+                        Some(current) => current.checked_mul(10).and_then(|i| i.checked_add(n)),
+                    };
+                }
+
+                return Ok(());
+            }
+
             let target = match &mut app.state {
                 State::Jump(params) => &mut params.position,
                 State::Write(params) => {
@@ -58,9 +76,29 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
             }
         }
         KeyCode::Backspace => {
+            if let State::Dump(params) = &mut app.state {
+                if params.started {
+                    return Ok(());
+                }
+
+                params.error = None;
+
+                params.total_batches = params.total_batches.and_then(|value| {
+                    if value < 10 {
+                        None
+                    } else {
+                        Some(value / 10)
+                    }
+                });
+                return Ok(());
+            }
+
             let target = match &mut app.state {
                 State::Jump(params) => &mut params.position,
                 State::Write(params) => &mut params.value,
+                State::Dump(params) => {
+
+                },
                 _ => &mut None,
             };
 
