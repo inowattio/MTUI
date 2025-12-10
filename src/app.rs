@@ -74,7 +74,7 @@ pub enum State {
 
 pub type AppResult<T> = Result<T, Box<dyn error::Error>>;
 
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Ord, PartialOrd, Serialize, Deserialize)]
 pub enum RegisterType {
     Holding,
     Input,
@@ -224,7 +224,7 @@ impl App {
             self.pinned_registers.push(selection);
         }
 
-        self.pinned_registers.sort_by(|(_, a), (_, b)| a.cmp(&b));
+        self.pinned_registers.sort();
     }
 
     pub async fn do_action(&mut self) {
