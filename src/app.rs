@@ -6,6 +6,8 @@ use tokio::io::AsyncWriteExt;
 use crate::interpretator::Interpretator;
 use crate::modbus::{DeviceConfig, Interface, ModbusDevice};
 
+const CONFIG_PATH: &str = "config.json";
+
 #[derive(Debug, Default, PartialEq)]
 pub struct WriteParams {
     pub result: Option<String>,
@@ -166,13 +168,13 @@ fn dump_example_config_and_exit() {
     let example_config = Config::default();
     let config_string = serde_json::to_string_pretty(&example_config).unwrap();
 
-    fs::write("config.json", config_string).unwrap();
+    fs::write(CONFIG_PATH, config_string).unwrap();
     println!("No config file found, dumped example.");
     std::process::exit(0)
 }
 
 fn fetch_config_or_exit() -> Config {
-    let content = fs::read_to_string("config.json").inspect_err(|_| dump_example_config_and_exit()).unwrap();
+    let content = fs::read_to_string(CONFIG_PATH).inspect_err(|_| dump_example_config_and_exit()).unwrap();
     serde_json::from_str(&content).inspect_err(|e| println!("Could not parse config: {e}")).unwrap()
 }
 
