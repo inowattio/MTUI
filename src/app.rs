@@ -64,7 +64,7 @@ pub enum State {
 
 pub type AppResult<T> = Result<T, Box<dyn error::Error>>;
 
-#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Serialize, Deserialize)]
 pub enum RegisterType {
     Holding,
     Input,
@@ -86,6 +86,28 @@ pub struct App {
     pub interpreter: Interpretator,
 }
 
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct PinnedRegisters {
+    pub holdings: Vec<usize>,
+    pub inputs: Vec<usize>,
+}
+
+impl From<PinnedRegisters> for Vec<RegisterCell> {
+    fn from(value: PinnedRegisters) -> Self {
+        let mut collection = Vec::new();
+
+        for holding in value.holdings {
+            collection.push((RegisterType::Holding, holding));
+        }
+
+        for input in value.inputs {
+            collection.push((RegisterType::Input, input));
+        }
+
+        collection
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Config {
     pub device: DeviceConfig,
@@ -93,6 +115,7 @@ pub struct Config {
     pub registers_batch: u16,
     pub auto_update_interval_seconds: Option<u64>,
     pub dump_file: String,
+    pub pinned_defaults: PinnedRegisters,
 }
 
 impl Config {
@@ -125,6 +148,7 @@ impl Default for Config {
             registers_batch: 4,
             auto_update_interval_seconds: Some(1),
             dump_file: "dump.txt".into(),
+            pinned_defaults: Default::default(),
         }
     }
 }
@@ -159,6 +183,7 @@ impl App {
 
         Self {
             interpreter: Interpretator::new(config.interpretations.clone()),
+            pinned_registers: config.pinned_defaults.clone().into(),
             config,
             device,
             state: State::Read(Default::default()),
@@ -166,7 +191,6 @@ impl App {
             register_display_type: RegisterType::Holding,
             position: 0,
             refresh_timer: Instant::now(),
-            pinned_registers: Vec::default(),
         }
     }
 

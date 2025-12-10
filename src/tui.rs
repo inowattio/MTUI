@@ -87,7 +87,11 @@ impl<B: Backend> Tui<B> where <B as Backend>::Error: 'static {
                 );
 
                 let pinned_text = if params.pinned_data.is_empty() {
-                    "Pinned data\nNo pinned registers. Press P to add one.".to_string()
+                    if app.pinned_registers.is_empty() {
+                        "Pinned data\nNo pinned registers."
+                    } else {
+                        "Pinned data\nNo pinned data."
+                    }.to_string()
                 } else {
                     format!("Pinned data\n{}\n{}", params.header, params.pinned_data)
                 };
