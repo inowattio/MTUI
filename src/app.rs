@@ -91,7 +91,8 @@ pub struct Config {
     pub device: DeviceConfig,
     pub interpretations: Interpretations,
     pub registers_batch: u16,
-    pub auto_update_interval_seconds: Option<u64>
+    pub auto_update_interval_seconds: Option<u64>,
+    pub dump_file: String,
 }
 
 impl Config {
@@ -123,6 +124,7 @@ impl Default for Config {
             },
             registers_batch: 4,
             auto_update_interval_seconds: Some(1),
+            dump_file: "dump.txt".into(),
         }
     }
 }
@@ -257,7 +259,7 @@ impl App {
         };
 
         {
-            let mut file = OpenOptions::new().create(true).append(true).open("dump.txt").await?;
+            let mut file = OpenOptions::new().create(true).append(true).open(&self.config.dump_file).await?;
 
             if header_needed {
                 file.write_all(self.interpreter.header().as_bytes()).await?;
