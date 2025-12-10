@@ -9,9 +9,17 @@ use crate::modbus::{DeviceConfig, Interface, ModbusDevice};
 const CONFIG_PATH: &str = "config.json";
 
 #[derive(Debug, Default, PartialEq)]
+pub enum WriteType {
+    #[default]
+    Word,
+    DWord
+}
+
+#[derive(Debug, Default, PartialEq)]
 pub struct WriteParams {
     pub result: Option<String>,
     pub value: Option<i32>,
+    pub write_type: WriteType
 }
 
 #[derive(Debug, PartialEq)]
@@ -229,7 +237,10 @@ impl App {
                 self.quit();
             }
             State::Write(params) => if let Some(number) = params.value {
-                let result = self.device.write_register(self.position as u16, number as u16).await;
+                let result = match params.write_type {
+                    WriteType::Word => self.device.write_register(self.position as u16, number as u16).await,
+                    WriteType::DWord => self.device.write_register_word(self.position as u16, number).await,
+                };
                 params.result = Some(format!("{result:#?}"));
             }
             State::Help => { },

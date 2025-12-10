@@ -249,4 +249,14 @@ impl ModbusDevice {
     pub async fn write_register(&self, address: u16, data: u16) -> Result<()> {
         timeout!(self, write_single_register, (address, data))
     }
+
+    pub async fn write_registers(&self, address: u16, data: &[u16]) -> Result<()> {
+        timeout!(self, write_multiple_registers, (address, data))
+    }
+
+    pub async fn write_register_word(&self, address: u16, data: i32) -> Result<()> {
+        let high = (data >> 16) as u16;
+        let low = (data & 0xFFFF) as u16;
+        self.write_registers(address, &[high, low]).await
+    }
 }

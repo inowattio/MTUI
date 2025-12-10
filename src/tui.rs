@@ -172,8 +172,8 @@ impl<B: Backend> Tui<B> where <B as Backend>::Error: 'static {
 
             let content = match &app.state {
                 State::Jump(params) => format!("Jump from {} at: {}", app.position, params.position.map_or("none".to_string(), |n| n.to_string())),
-                State::Write(params) => format!("Write at {} value: {}\nResult: {:?}",
-                                        app.position, params.value.map_or("none".to_string(), |n| n.to_string()), params.result),
+                State::Write(params) => format!("Write at {} value: {} ({:?})\nResult: {:?}",
+                                        app.position, params.value.map_or("none".to_string(), |n| n.to_string()), params.write_type, params.result),
                 State::Help => "Q - Exit/Back
 Up/Down - Move Cursor
 R - Refresh Data

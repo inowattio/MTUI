@@ -1,5 +1,5 @@
 use std::ops::Neg;
-use crate::app::{App, AppResult, DumpParams, State};
+use crate::app::{App, AppResult, DumpParams, State, WriteType};
 use crossterm::event::{KeyCode, KeyEvent};
 
 pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
@@ -23,7 +23,14 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
             app.toggle_type();
         }
         KeyCode::Char('w') => {
-            app.switch_focus_to(State::Write(Default::default()));
+            if let State::Write(params) = &mut app.state {
+                params.write_type = match params.write_type {
+                    WriteType::Word => WriteType::DWord,
+                    WriteType::DWord => WriteType::Word
+                }
+            } else {
+                app.switch_focus_to(State::Write(Default::default()));
+            }
         }
         KeyCode::Char('j') => {
             app.switch_focus_to(State::Jump(Default::default()));

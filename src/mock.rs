@@ -47,6 +47,14 @@ impl Client for MockContext {
                 Ok(Ok(Response::WriteSingleRegister(addr, value)))
             }
 
+            Request::WriteMultipleRegisters(addr, values) => {
+                let quantity = values.len() as u16;
+                for (i, v) in values.to_vec().into_iter().enumerate() {
+                    self.holdings.insert(addr + i as u16, v);
+                }
+                Ok(Ok(Response::WriteMultipleRegisters(addr, quantity)))
+            }
+
             _ => unimplemented!(),
         }
     }
