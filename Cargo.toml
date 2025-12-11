@@ -13,6 +13,7 @@ serde = { version = "1.0.228", features = ["derive"] }
 tokio-modbus = { version = "0.17.0", default-features = false, features = ["rtu", "tcp"] } # device
 tokio-serial = { version = "5.4.5" }
 async-trait = "0.1.89"
+num-traits = "0.2.19"
 
 anyhow = "1.0.100"
 serde_json = "1.0.145"
