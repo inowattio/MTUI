@@ -29,6 +29,7 @@ pub struct DumpParams {
     pub total_batches: Option<i32>,
     pub completed_batches: u32,
     pub start_position: usize,
+    pub position: usize,
     pub header_written: bool,
     pub error: Option<String>,
 }
@@ -36,7 +37,7 @@ pub struct DumpParams {
 #[derive(Debug, Default, PartialEq)]
 pub struct JumpParams {
     pub from: usize,
-    pub to: Option<i32>
+    pub to: Option<usize>
 }
 
 #[derive(Debug, Default, PartialEq)]
@@ -189,7 +190,7 @@ impl App {
     pub fn get_current_position(&self) -> usize {
         match &self.state {
             State::Read(p) => p.position,
-            State::Jump(p) => p.from,
+            State::Jump(p) => p.to.unwrap_or(p.from),
             State::Write(p) => p.position,
             State::Dump(p) => p.start_position,
             State::Help => 0,
@@ -224,8 +225,9 @@ impl App {
         if !matches!(self.state, State::Read(_)) {
             return;
         }
+        let position = self.get_current_position();
 
-        let selection = (self.register_display_type, self.position);
+        let selection = (self.register_display_type, position);
 
         if let Some(pos) = self.pinned_registers.iter().position(|x| *x == selection) {
             self.pinned_registers.remove(pos);
@@ -240,15 +242,12 @@ impl App {
         let mut start_dump_run = false;
 
         match &mut self.state {
-            State::Read(_) => self.position += self.config.registers_batch as usize,
-            State::Jump(params) => if let Some(number) = params.position {
-                self.position = number as usize;
-                self.quit();
-            }
+            State::Read(p) => p.position += self.config.registers_batch as usize,
+            State::Jump(_) => self.switch_focus_to(State::Read(Default::default())),
             State::Write(params) => if let Some(number) = params.value {
                 let result = match params.write_type {
-                    WriteType::Word => self.device.write_register(self.position as u16, number as u16).await,
-                    WriteType::DWord => self.device.write_register_word(self.position as u16, number).await,
+                    WriteType::Word => self.device.write_register(params.position as u16, number as u16).await,
+                    WriteType::DWord => self.device.write_register_word(params.position as u16, number).await,
                 };
                 params.result = Some(format!("{result:#?}"));
             }
@@ -272,7 +271,7 @@ impl App {
                 params.completed_batches = 0;
                 params.header_written = false;
                 params.error = None;
-                self.position = params.start_position;
+                params.position = params.start_position;
                 start_dump_run = true;
             },
         }
@@ -301,7 +300,7 @@ impl App {
                 return Ok(());
             }
 
-            (!params.header_written, self.position, total_batches)
+            (!params.header_written, params.position, total_batches)
         };
 
         {
@@ -320,7 +319,7 @@ impl App {
         if let State::Dump(params) = &mut self.state {
             params.header_written = true;
             params.completed_batches += 1;
-            self.position = starting_index + self.config.registers_batch as usize;
+            params.position = starting_index + self.config.registers_batch as usize;
 
             if params.completed_batches >= total_batches {
                 params.started = false;
@@ -376,14 +375,15 @@ impl App {
 
     pub async fn aquire_data(&self) -> Result<Vec<RegisterCellValue>, anyhow::Error> {
         let amount = self.config.registers_batch;
+        let position = self.get_current_position() as u16;
 
         let values = if self.register_display_type == RegisterType::Holding {
-            self.device.holdings(self.position as u16, amount).await?
+            self.device.holdings(position, amount).await?
         } else {
-            self.device.inputs(self.position as u16, amount).await?
+            self.device.inputs(position, amount).await?
         };
 
-        Ok(values.into_iter().enumerate().map(|(i, v)| ((self.register_display_type, self.position + i), v)).collect())
+        Ok(values.into_iter().enumerate().map(|(i, v)| ((self.register_display_type, position as usize + i), v)).collect())
     }
 
     pub async fn aquire_pinned_data(&self) -> Result<Vec<RegisterCellValue>, anyhow::Error> {
@@ -421,8 +421,9 @@ impl App {
                 }
             };
 
+            let position = self.get_current_position();
             let main_data = match data {
-                Ok(data) => self.interpreter.run(data, self.position, fav_checker).join("\n"),
+                Ok(data) => self.interpreter.run(data, position, fav_checker).join("\n"),
                 Err(e) => e.to_string()
             };
 
@@ -495,24 +496,27 @@ impl App {
     }
 
     pub fn up(&mut self) {
-        if let Some(res) = self.position.checked_sub(1) {
-            self.position = res;
-            self.update_dump_position();
-        }
+        if let Some(new_pos) = self.get_current_position().checked_sub(1) {
+            self.set_current_position(new_pos)
+        };
+
     }
 
     pub fn down(&mut self) {
-        if let Some(res) = self.position.checked_add(1) {
-            self.position = res;
-            self.update_dump_position();
-        }
+        if let Some(new_pos) = self.get_current_position().checked_add(1) {
+            self.set_current_position(new_pos)
+        };
     }
 
-    pub fn update_dump_position(&mut self) {
-        if let State::Dump(params) = &mut self.state {
-            if !params.started {
-                params.start_position = self.position;
-            }
+    pub fn set_current_position(&mut self, new_pos: usize) {
+        match &mut self.state {
+            State::Read(p) => p.position = new_pos,
+            State::Jump(p) => p.to = Some(new_pos),
+            State::Write(p) => p.position = new_pos,
+            State::Help => {}
+            State::Dump(p) => if !p.started {
+                p.start_position = new_pos
+            },
         }
     }
 }
