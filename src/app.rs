@@ -17,12 +17,13 @@ pub enum WriteType {
 
 #[derive(Debug, Default, PartialEq)]
 pub struct WriteParams {
+    pub position: usize,
     pub result: Option<String>,
     pub value: Option<i32>,
     pub write_type: WriteType
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Default)]
 pub struct DumpParams {
     pub started: bool,
     pub total_batches: Option<i32>,
@@ -32,32 +33,15 @@ pub struct DumpParams {
     pub error: Option<String>,
 }
 
-impl DumpParams {
-    pub fn new(start_position: usize) -> Self {
-        Self {
-            started: false,
-            total_batches: None,
-            completed_batches: 0,
-            start_position,
-            header_written: false,
-            error: None,
-        }
-    }
-}
-
-impl Default for DumpParams {
-    fn default() -> Self {
-        Self::new(0)
-    }
-}
-
 #[derive(Debug, Default, PartialEq)]
 pub struct JumpParams {
-    pub position: Option<i32>
+    pub from: usize,
+    pub to: Option<i32>
 }
 
 #[derive(Debug, Default, PartialEq)]
 pub struct ReadParams {
+    pub position: usize,
     pub header: String,
     pub main_data: String,
     pub pinned_data: String,
@@ -88,7 +72,6 @@ pub struct App {
     pub config: Config,
     pub refresh_timer: Instant,
     pub running: bool,
-    pub position: usize,
     pub state: State,
     pub register_display_type: RegisterType,
     pub pinned_registers: Vec<RegisterCell>,
@@ -199,15 +182,41 @@ impl App {
             state: State::Read(Default::default()),
             running: true,
             register_display_type: RegisterType::Holding,
-            position: 0,
             refresh_timer: Instant::now(),
         }
     }
 
+    pub fn get_current_position(&self) -> usize {
+        match &self.state {
+            State::Read(p) => p.position,
+            State::Jump(p) => p.from,
+            State::Write(p) => p.position,
+            State::Dump(p) => p.start_position,
+            State::Help => 0,
+        }
+    }
+
     pub fn switch_focus_to(&mut self, focus: State) {
+        let position = self.get_current_position();
+
         self.state = match focus {
-            State::Dump(_) => State::Dump(DumpParams::new(self.position)),
-            other => other,
+            State::Dump(_) => State::Dump(DumpParams {
+                start_position: position,
+                ..Default::default()
+            }),
+            State::Write(_) => State::Write(WriteParams {
+                position,
+                ..Default::default()
+            }),
+            State::Jump(_) => State::Jump(JumpParams {
+                from: position,
+                ..Default::default()
+            }),
+            State::Read(_) => State::Read(ReadParams {
+                position,
+                ..Default::default()
+            }),
+            State::Help => State::Help,
         };
     }
 

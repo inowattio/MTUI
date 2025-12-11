@@ -51,7 +51,7 @@ impl<B: Backend> Tui<B> where <B as Backend>::Error: 'static {
 
             if let State::Read(params) = &app.state {
                 let is_pinned = app.pinned_registers.iter()
-                    .position(|(kind, address)| kind == &app.register_display_type && *address == app.position).is_some();
+                    .position(|(kind, address)| kind == &app.register_display_type && *address == params.position).is_some();
                 let pinned_string = if is_pinned { "(Pinned)" } else { "" };
 
                 let outer = Block::default()
@@ -64,7 +64,7 @@ impl<B: Backend> Tui<B> where <B as Backend>::Error: 'static {
                 let inner_area = outer.inner(outer_area);
                 frame.render_widget(outer, outer_area);
 
-                let info = format!("Device: {}\nAt: {} on {} {}", device, app.position, app.displaying_type(), pinned_string);
+                let info = format!("Device: {}\nAt: {} on {} {}", device, params.position, app.displaying_type(), pinned_string);
                 let rows = Layout::default()
                     .direction(Direction::Vertical)
                     .constraints([Constraint::Length(2), Constraint::Min(0)].as_ref())
@@ -171,9 +171,9 @@ impl<B: Backend> Tui<B> where <B as Backend>::Error: 'static {
             }
 
             let content = match &app.state {
-                State::Jump(params) => format!("Jump from {} at: {}", app.position, params.position.map_or("none".to_string(), |n| n.to_string())),
+                State::Jump(params) => format!("Jump from {} at: {:?}", params.from, params.to),
                 State::Write(params) => format!("Write at {} value: {} ({:?})\nResult: {:?}",
-                                        app.position, params.value.map_or("none".to_string(), |n| n.to_string()), params.write_type, params.result),
+                                        params.position, params.value.map_or("none".to_string(), |n| n.to_string()), params.write_type, params.result),
                 State::Help => "Q - Exit/Back
 Up/Down - Move Cursor
 R - Refresh Data

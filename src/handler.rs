@@ -37,7 +37,7 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         }
         KeyCode::Char(c) => {
             let target = match &mut app.state {
-                State::Jump(params) => &mut params.position,
+                State::Jump(params) => &mut params.to,
                 State::Write(params) => {
                     if c == '-' {
                         if let Some(input_number) = &mut params.value {
@@ -75,7 +75,7 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         }
         KeyCode::Backspace => {
             let target = match &mut app.state {
-                State::Jump(params) => &mut params.position,
+                State::Jump(params) => &mut params.to,
                 State::Write(params) => &mut params.value,
                 State::Dump(params) => {
                     if params.started {
