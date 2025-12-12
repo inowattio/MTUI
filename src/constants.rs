@@ -1,0 +1,19 @@
+
+pub const CONFIG_PATH: &str = "config.json";
+
+pub mod keybind {
+    use crossterm::event::KeyCode;
+
+    pub const EXIT: KeyCode = KeyCode::Char('q');
+    pub const PIN: KeyCode = KeyCode::Char('p');
+    pub const DUMP: KeyCode = KeyCode::Char('d');
+    pub const HELP: KeyCode = KeyCode::Char('h');
+    pub const REFRESH: KeyCode = KeyCode::Char('r');
+    pub const TOGGLE: KeyCode = KeyCode::Char('t');
+    pub const WRITE: KeyCode = KeyCode::Char('w');
+    pub const JUMP: KeyCode = KeyCode::Char('j');
+    pub const NEGATOR: KeyCode = KeyCode::Char('-');
+    pub const ACTION: KeyCode = KeyCode::Enter;
+    pub const MOVE_UP: KeyCode = KeyCode::Up;
+    pub const MOVE_DOWN: KeyCode = KeyCode::Down;
+}

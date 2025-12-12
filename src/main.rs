@@ -6,6 +6,10 @@ mod modbus;
 mod mock;
 mod interpretator;
 mod num_ops;
+mod register;
+mod config;
+mod state;
+mod constants;
 
 use std::io;
 use ratatui::backend::CrosstermBackend;

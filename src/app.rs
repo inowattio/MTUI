@@ -3,10 +3,12 @@ use std::time::Instant;
 use serde::{Deserialize, Serialize};
 use tokio::fs::OpenOptions;
 use tokio::io::AsyncWriteExt;
-use crate::interpretator::Interpretator;
-use crate::modbus::{DeviceConfig, Interface, ModbusDevice};
-
-const CONFIG_PATH: &str = "config.json";
+use crate::config::Config;
+use crate::constants::CONFIG_PATH;
+use crate::interpretator::Interpretor;
+use crate::modbus::ModbusDevice;
+use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
+use crate::state::{no_data_text, DumpParams, JumpParams, ReadParams, State, StateTransition, WriteParams};
 
 #[derive(Debug, Default, PartialEq)]
 pub enum WriteType {
@@ -15,87 +17,7 @@ pub enum WriteType {
     DWord
 }
 
-#[derive(Debug, Default, PartialEq)]
-pub struct WriteParams {
-    pub position: u16,
-    pub result: Option<String>,
-    pub value: Option<i32>,
-    pub write_type: WriteType
-}
-
-#[derive(Debug, PartialEq, Default)]
-pub struct DumpParams {
-    pub started: bool,
-    pub total_batches: Option<u16>,
-    pub completed_batches: u16,
-    pub start_position: u16,
-    pub position: u16,
-    pub header_written: bool,
-    pub error: Option<String>,
-    pub register_type: RegisterType,
-}
-
-#[derive(Debug, Default, PartialEq)]
-pub struct JumpParams {
-    pub from: u16,
-    pub to: u16
-}
-
-#[derive(Debug, PartialEq)]
-pub struct ReadParams {
-    pub position: u16,
-    pub main_data: String,
-    pub pinned_data: String,
-    pub refresh_timer: Instant,
-    pub register_type: RegisterType,
-}
-
-pub fn no_data_text() -> String {
-    "No data, press 'R' to refresh.".into()
-}
-
-impl Default for ReadParams {
-    fn default() -> Self {
-        Self {
-            position: 0,
-            main_data: no_data_text(),
-            pinned_data: "".to_string(),
-            refresh_timer: Instant::now(),
-            register_type: Default::default(),
-        }
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub enum State {
-    Read(ReadParams),
-    Jump(JumpParams),
-    Write(WriteParams),
-    Help,
-    Dump(DumpParams),
-}
-
 pub type AppResult<T> = Result<T, Box<dyn error::Error>>;
-
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Ord, PartialOrd, Serialize, Deserialize, Default)]
-pub enum RegisterType {
-    #[default]
-    Holding,
-    Input,
-}
-
-impl RegisterType {
-    pub fn toggle(&mut self) {
-        if *self == RegisterType::Holding {
-            *self = RegisterType::Input;
-        } else {
-            *self = RegisterType::Holding;
-        }
-    }
-}
-
-pub type RegisterCell = (RegisterType, u16);
-pub type RegisterCellValue = (RegisterCell, u16);
 
 #[derive(Debug)]
 pub struct App {
@@ -104,7 +26,7 @@ pub struct App {
     pub state: State,
     pub pinned_registers: Vec<RegisterCell>,
     pub device: ModbusDevice,
-    pub interpreter: Interpretator,
+    pub interpreter: Interpretor,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -129,60 +51,6 @@ impl From<PinnedRegisters> for Vec<RegisterCell> {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct Config {
-    pub device: DeviceConfig,
-    pub interpretations: Interpretations,
-    pub registers_batch: u16,
-    pub auto_update_interval_seconds: Option<u64>,
-    pub dump_file: String,
-    pub pinned_defaults: PinnedRegisters,
-}
-
-impl Config {
-    pub fn display_device(&self) -> String {
-        match &self.device.interface {
-            Interface::Mock => "Mock".to_string(),
-            Interface::Wired(p) => format!("Wired {} ({})", p.path, p.baud_rate),
-            Interface::Network(p) => format!("Network: {}:{}", p.ip, p.port),
-        }
-    }
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            device: DeviceConfig {
-                interface: Interface::Mock,
-                slave_id: 0,
-                timeout_connect_ms: 1000,
-                timeout_command_ms: 2000,
-                time_between_commands_ms: 3,
-            },
-            interpretations: Interpretations {
-                u32: true,
-                i32: true,
-                f32: false,
-                ascii: true,
-                bits: false,
-            },
-            registers_batch: 4,
-            auto_update_interval_seconds: Some(1),
-            dump_file: "dump.txt".into(),
-            pinned_defaults: Default::default(),
-        }
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct Interpretations {
-    pub u32: bool,
-    pub i32: bool,
-    pub f32: bool,
-    pub ascii: bool,
-    pub bits: bool,
-}
-
 fn dump_example_config_and_exit() {
     let example_config = Config::default();
     let config_string = serde_json::to_string_pretty(&example_config).unwrap();
@@ -203,7 +71,7 @@ impl App {
         let device = ModbusDevice::new(&config.device).await.inspect_err(|e| println!("Could not initialize device: {e}")).unwrap();
 
         Self {
-            interpreter: Interpretator::new(config.interpretations.clone()),
+            interpreter: Interpretor::new(config.interpretations.clone()),
             pinned_registers: config.pinned_defaults.clone().into(),
             config,
             device,
@@ -222,7 +90,7 @@ impl App {
         }
     }
 
-    pub fn switch_focus_to(&mut self, focus: State) {
+    pub fn switch_focus_to(&mut self, focus: StateTransition) {
         let position = self.get_current_position();
         let register_type = match &self.state {
             State::Read(p) => p.register_type,
@@ -231,25 +99,25 @@ impl App {
         };
 
         self.state = match focus {
-            State::Dump(_) => State::Dump(DumpParams {
+            StateTransition::Dump => State::Dump(DumpParams {
                 start_position: position,
                 register_type,
                 ..Default::default()
             }),
-            State::Write(_) => State::Write(WriteParams {
+            StateTransition::Write => State::Write(WriteParams {
                 position,
                 ..Default::default()
             }),
-            State::Jump(_) => State::Jump(JumpParams {
+            StateTransition::Jump => State::Jump(JumpParams {
                 from: position,
                 ..Default::default()
             }),
-            State::Read(_) => State::Read(ReadParams {
+            StateTransition::Read => State::Read(ReadParams {
                 position,
                 register_type,
                 ..Default::default()
             }),
-            State::Help => State::Help,
+            StateTransition::Help => State::Help,
         };
     }
 
@@ -276,7 +144,7 @@ impl App {
 
         match &mut self.state {
             State::Read(p) => p.position += self.config.registers_batch,
-            State::Jump(_) => self.switch_focus_to(State::Read(Default::default())),
+            State::Jump(_) => self.switch_focus_to(StateTransition::Read),
             State::Write(params) => if let Some(number) = params.value {
                 let result = match params.write_type {
                     WriteType::Word => self.device.write_register(params.position, number as u16).await,
@@ -284,7 +152,7 @@ impl App {
                 };
                 params.result = Some(format!("{result:#?}"));
             }
-            State::Help => { },
+            State::Help => self.quit(),
             State::Dump(params) => {
                 if params.started {
                     return;

@@ -1,13 +1,14 @@
-use crate::app::{Interpretations, RegisterCellValue};
+use crate::config::InterpretorConfig;
+use crate::register::RegisterCellValue;
 
 #[derive(Debug)]
-pub struct Interpretator {
-    interpretation: Interpretations,
+pub struct Interpretor {
+    config: InterpretorConfig,
     header: String,
 }
 
-impl Interpretator {
-    pub fn new(interpretation: Interpretations) -> Self {
+impl Interpretor {
+    pub fn new(interpretation: InterpretorConfig) -> Self {
         let mut header = format!("{0: >5}: {1: <5} {2: <6} ", "index", "u16", "i16");
 
         if interpretation.u32 {
@@ -27,7 +28,7 @@ impl Interpretator {
         }
 
         Self {
-            interpretation,
+            config: interpretation,
             header,
         }
     }
@@ -47,13 +48,13 @@ impl Interpretator {
             let mut row = format!("{0: >5}: {1: <5} {2: <6} ", index + i as u16, byte, byte as i16);
 
             let word = (byte as u32) << 16 | (next_byte as u32);
-            if self.interpretation.u32 {
+            if self.config.u32 {
                 row.push_str(&format!("{word: <10} "))
             }
-            if self.interpretation.i32 {
+            if self.config.i32 {
                 row.push_str(&format!("{: <11} ", word as i32))
             }
-            if self.interpretation.f32 {
+            if self.config.f32 {
                 let x = f32::from_bits(word);
                 let mut s = format!("{x}");
 
@@ -63,7 +64,7 @@ impl Interpretator {
                 }
                 row.push_str(&format!("{s: <10} "))
             }
-            if self.interpretation.ascii {
+            if self.config.ascii {
                 let s: String = [byte, next_byte]
                     .iter()
                     .flat_map(|n| [(n >> 8) as u8, (n & 0xFF) as u8])
@@ -79,7 +80,7 @@ impl Interpretator {
 
                 row.push_str(&format!("{s:<5} "))
             }
-            if self.interpretation.bits {
+            if self.config.bits {
                 row.push_str(&format!("{byte:<08b} "))
             }
             

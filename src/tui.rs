@@ -1,4 +1,4 @@
-use crate::app::{no_data_text, App, AppResult, State};
+use crate::app::{App, AppResult};
 use crate::event::EventHandler;
 use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
 use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
@@ -9,6 +9,8 @@ use std::panic;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout};
 use ratatui::prelude::{Color, Style};
 use ratatui::widgets::{Block, Borders, BorderType, Gauge, Paragraph};
+use crate::state::{no_data_text, State};
+use crate::constants::keybind::*;
 
 #[derive(Debug)]
 pub struct Tui<B: Backend> {
@@ -42,11 +44,11 @@ impl<B: Backend> Tui<B> where <B as Backend>::Error: 'static {
 
         self.terminal.draw(|frame| {
             let title = match &app.state {
-            State::Read(_) => "H - Help; P - Add/Remove Pin",
-            State::Jump(_) => "Enter - Go; Q - Back",
-            State::Write(_) => "Enter - Write; Q - Back",
-            State::Help => "Q/Enter - Back",
-            State::Dump(_) => "Enter - Start; 0-9 Set Batches; Q - Back"
+                State::Read(_) => format!("{HELP} - Help; {PIN} - Add/Remove Pin"),
+                State::Jump(_) => format!("{ACTION} - Go; {EXIT} - Back"),
+                State::Write(_) => format!("{ACTION} - Write; {EXIT} - Back"),
+                State::Help => format!("{EXIT}/{ACTION} - Back"),
+                State::Dump(_) => format!("{ACTION} - Start; 0-9 Set Batches; {EXIT} - Back"),
             };
 
             if let State::Read(params) = &app.state {
@@ -176,16 +178,16 @@ impl<B: Backend> Tui<B> where <B as Backend>::Error: 'static {
                 State::Jump(params) => format!("Jump from {} at: {:?}", params.from, params.to),
                 State::Write(params) => format!("Write at {} value: {} ({:?})\nResult: {:?}",
                                         params.position, params.value.map_or("none".to_string(), |n| n.to_string()), params.write_type, params.result),
-                State::Help => "Q - Exit/Back
-Up/Down - Move Cursor
-R - Refresh Data
-T - Switch Register Type
-W - Write
-J - Jump
-D - Dump
-H - Help
-P - Add/Remove Pin (Read only)
-Enter - Action".to_string(),
+                State::Help => format!("{EXIT} - Exit/Back
+{MOVE_UP}/{MOVE_DOWN} - Move Cursor
+{REFRESH} - Refresh Data
+{TOGGLE} - Switch Register Type
+{WRITE} - Write
+{JUMP} - Jump
+{DUMP} - Dump
+{HELP} - Help
+{PIN} - Add/Remove Pin (Read only)
+{ACTION} - Action"),
                 _ => unreachable!(),
             };
 
