@@ -1,4 +1,4 @@
-use crate::app::{App, AppResult, State};
+use crate::app::{no_data_text, App, AppResult, State};
 use crate::event::EventHandler;
 use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
 use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
@@ -80,21 +80,23 @@ impl<B: Backend> Tui<B> where <B as Backend>::Error: 'static {
                     .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
                     .split(rows[1]);
 
-                let main_text = format!("Main data\n{}\n{}", params.header, params.main_data);
+                let header = app.interpreter.header();
+                let main_text = format!("Main data\n{}\n{}", header, params.main_data);
                 frame.render_widget(
                     Paragraph::new(main_text).style(base_style).alignment(Alignment::Left),
                     columns[0],
                 );
 
-                let pinned_text = if params.pinned_data.is_empty() {
+                let pinned_state = if params.pinned_data.is_empty() {
                     if app.pinned_registers.is_empty() {
-                        "Pinned data\nNo pinned registers."
+                        "No pinned registers.".into()
                     } else {
-                        "Pinned data\nNo pinned data."
-                    }.to_string()
+                        no_data_text()
+                    }
                 } else {
-                    format!("Pinned data\n{}\n{}", params.header, params.pinned_data)
+                    params.pinned_data.clone()
                 };
+                let pinned_text = format!("Pinned data\n{}\n{}", header, pinned_state);
                 frame.render_widget(
                     Paragraph::new(pinned_text).style(base_style).alignment(Alignment::Left),
                     columns[1],

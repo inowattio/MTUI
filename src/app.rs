@@ -44,19 +44,21 @@ pub struct JumpParams {
 #[derive(Debug, PartialEq)]
 pub struct ReadParams {
     pub position: u16,
-    pub header: String,
     pub main_data: String,
     pub pinned_data: String,
     pub refresh_timer: Instant,
     pub register_type: RegisterType,
 }
 
+pub fn no_data_text() -> String {
+    "No data, press 'R' to refresh.".into()
+}
+
 impl Default for ReadParams {
     fn default() -> Self {
         Self {
             position: 0,
-            header: "".to_string(),
-            main_data: "".to_string(),
+            main_data: no_data_text(),
             pinned_data: "".to_string(),
             refresh_timer: Instant::now(),
             register_type: Default::default(),
@@ -435,7 +437,6 @@ impl App {
         };
 
         let data = self.aquire_data(register_type).await;
-        let header = self.interpreter.header();
 
         let sfr = &self.pinned_registers;
         let fav_checker = |cell: RegisterCellValue| {
@@ -498,7 +499,6 @@ impl App {
         };
 
         if let State::Read(params) = &mut self.state {
-            params.header = header;
             params.main_data = main_data;
             params.pinned_data = pinned_data;
         }
@@ -506,7 +506,10 @@ impl App {
 
     pub fn toggle_type(&mut self) {
         match &mut self.state {
-            State::Read(p) => p.register_type.toggle(),
+            State::Read(p) => {
+                p.main_data = no_data_text();
+                p.register_type.toggle()
+            },
             State::Dump(p) => {
                 if !p.started {
                     p.register_type.toggle()
