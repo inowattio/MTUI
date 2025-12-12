@@ -1,4 +1,4 @@
-use crate::app::{App, AppResult, State};
+use crate::app::{no_data_text, App, AppResult, State};
 use crate::event::EventHandler;
 use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
 use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
@@ -51,7 +51,7 @@ impl<B: Backend> Tui<B> where <B as Backend>::Error: 'static {
 
             if let State::Read(params) = &app.state {
                 let is_pinned = app.pinned_registers.iter()
-                    .position(|(kind, address)| kind == &app.register_display_type && *address == app.position).is_some();
+                    .position(|(kind, address)| kind == &params.register_type && *address == params.position).is_some();
                 let pinned_string = if is_pinned { "(Pinned)" } else { "" };
 
                 let outer = Block::default()
@@ -64,7 +64,7 @@ impl<B: Backend> Tui<B> where <B as Backend>::Error: 'static {
                 let inner_area = outer.inner(outer_area);
                 frame.render_widget(outer, outer_area);
 
-                let info = format!("Device: {}\nAt: {} on {} {}", device, app.position, app.displaying_type(), pinned_string);
+                let info = format!("Device: {}\nAt: {} on {:?} {}", device, params.position, params.register_type, pinned_string);
                 let rows = Layout::default()
                     .direction(Direction::Vertical)
                     .constraints([Constraint::Length(2), Constraint::Min(0)].as_ref())
@@ -80,21 +80,23 @@ impl<B: Backend> Tui<B> where <B as Backend>::Error: 'static {
                     .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
                     .split(rows[1]);
 
-                let main_text = format!("Main data\n{}\n{}", params.header, params.main_data);
+                let header = app.interpreter.header();
+                let main_text = format!("Main data\n{}\n{}", header, params.main_data);
                 frame.render_widget(
                     Paragraph::new(main_text).style(base_style).alignment(Alignment::Left),
                     columns[0],
                 );
 
-                let pinned_text = if params.pinned_data.is_empty() {
+                let pinned_state = if params.pinned_data.is_empty() {
                     if app.pinned_registers.is_empty() {
-                        "Pinned data\nNo pinned registers."
+                        "No pinned registers.".into()
                     } else {
-                        "Pinned data\nNo pinned data."
-                    }.to_string()
+                        no_data_text()
+                    }
                 } else {
-                    format!("Pinned data\n{}\n{}", params.header, params.pinned_data)
+                    params.pinned_data.clone()
                 };
+                let pinned_text = format!("Pinned data\n{}\n{}", header, pinned_state);
                 frame.render_widget(
                     Paragraph::new(pinned_text).style(base_style).alignment(Alignment::Left),
                     columns[1],
@@ -126,10 +128,10 @@ impl<B: Backend> Tui<B> where <B as Backend>::Error: 'static {
                     .split(inner_area);
 
                 let info = format!(
-                    "Device: {}\nStart at {} on {}",
+                    "Device: {}\nStart at {} on {:?}",
                     device,
                     params.start_position,
-                    app.displaying_type()
+                    params.register_type
                 );
                 frame.render_widget(
                     Paragraph::new(info).style(base_style).alignment(Alignment::Left),
@@ -146,7 +148,7 @@ impl<B: Backend> Tui<B> where <B as Backend>::Error: 'static {
                     0.0
                 };
                 let progress_text = match params.total_batches {
-                    Some(total) => format!("{}/{} batches ({}/{} registers)", params.completed_batches, total, params.completed_batches * app.config.registers_batch as u32, total * app.config.registers_batch as i32),
+                    Some(total) => format!("{}/{} batches ({}/{} registers)", params.completed_batches, total, params.completed_batches as usize * app.config.registers_batch as usize, total as usize * app.config.registers_batch as usize),
                     None => "Set batch count to start".to_string(),
                 };
                 let gauge = Gauge::default()
@@ -171,9 +173,9 @@ impl<B: Backend> Tui<B> where <B as Backend>::Error: 'static {
             }
 
             let content = match &app.state {
-                State::Jump(params) => format!("Jump from {} at: {}", app.position, params.position.map_or("none".to_string(), |n| n.to_string())),
+                State::Jump(params) => format!("Jump from {} at: {:?}", params.from, params.to),
                 State::Write(params) => format!("Write at {} value: {} ({:?})\nResult: {:?}",
-                                        app.position, params.value.map_or("none".to_string(), |n| n.to_string()), params.write_type, params.result),
+                                        params.position, params.value.map_or("none".to_string(), |n| n.to_string()), params.write_type, params.result),
                 State::Help => "Q - Exit/Back
 Up/Down - Move Cursor
 R - Refresh Data

@@ -1,6 +1,6 @@
-use std::ops::Neg;
 use crate::app::{App, AppResult, DumpParams, State, WriteType};
 use crossterm::event::{KeyCode, KeyEvent};
+use crate::num_ops::{decrement_by, decrement_option_by, digit_add, digit_add_option, digit_remove, digit_remove_option, increment_by, increment_option_by, negate_opt_option};
 
 pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
     match key_event.code {
@@ -36,47 +36,38 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
             app.switch_focus_to(State::Jump(Default::default()));
         }
         KeyCode::Char(c) => {
-            let target = match &mut app.state {
-                State::Jump(params) => &mut params.position,
-                State::Write(params) => {
-                    if c == '-' {
-                        if let Some(input_number) = &mut params.value {
-                            *input_number = input_number.neg();
-                        }
-                    }
-
-                    &mut params.value
-                },
-                State::Dump(params) => {
-                    if params.started {
-                        return Ok(());
-                    }
-
-                    params.error = None;
-
-                    &mut params.total_batches
-                },
-                _ => &mut None,
-            };
-
             if c.is_ascii_digit() {
-                let n = c as u16 - '0' as u16;
-                match target {
-                    None => {
-                        *target = Some(n as i32);
-                    },
-                    Some(input_number) => {
-                        if let Some(new_value) = input_number.checked_mul(10).and_then(|i| i.checked_add(n as i32)) {
-                            *target = Some(new_value);
+                let digit = c as u8 - '0' as u8;
+
+                match &mut app.state {
+                    State::Read(params) => digit_add(&mut params.position, digit),
+                    State::Jump(params) => digit_add(&mut params.to, digit),
+                    State::Write(params) => digit_add_option(&mut params.value, digit),
+                    State::Dump(params) => {
+                        if params.started {
+                            return Ok(());
                         }
-                    }
-                }
-            }
+
+                        params.error = None;
+
+                        digit_add_option(&mut params.total_batches, digit)
+                    },
+                    _ => {}
+                };
+            } else if c == '-' {
+                match &mut app.state {
+                    State::Write(params) => negate_opt_option(&mut params.value),
+                    _ => {}
+                };
+            } else {
+                return Ok(());
+            };
         }
         KeyCode::Backspace => {
-            let target = match &mut app.state {
-                State::Jump(params) => &mut params.position,
-                State::Write(params) => &mut params.value,
+            match &mut app.state {
+                State::Read(params) => digit_remove(&mut params.position),
+                State::Jump(params) => digit_remove(&mut params.to),
+                State::Write(params) => digit_remove_option(&mut params.value),
                 State::Dump(params) => {
                     if params.started {
                         return Ok(());
@@ -84,30 +75,31 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
 
                     params.error = None;
 
-                    &mut params.total_batches
+                    digit_remove_option(&mut params.total_batches)
                 },
-                _ => &mut None,
+                _ => {},
             };
-
-            let new_value = if let Some(input_number) = target {
-                if input_number.to_string().len() == 1 {
-                    None
-                } else {
-                    Some(*input_number / 10)
-                }
-            } else {
-                *target
-            };
-            *target = new_value;
         },
         KeyCode::Enter => {
             app.do_action().await;
         }
         KeyCode::Up => {
-            app.up();
+            match &mut app.state {
+                State::Read(p) => decrement_by(&mut p.position, 1),
+                State::Jump(p) => decrement_by(&mut p.to, 1),
+                State::Write(p) => decrement_option_by(&mut p.value, 1),
+                State::Dump(p) => decrement_by(&mut p.start_position, 1),
+                _ => {},
+            }
         }
         KeyCode::Down => {
-            app.down();
+            match &mut app.state {
+                State::Read(p) => increment_by(&mut p.position, 1),
+                State::Jump(p) => increment_by(&mut p.to, 1),
+                State::Write(p) => increment_option_by(&mut p.value, 1),
+                State::Dump(p) => increment_by(&mut p.start_position, 1),
+                _ => {},
+            }
         }
         _ => {}
     }
