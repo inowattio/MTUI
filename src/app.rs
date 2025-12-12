@@ -32,6 +32,7 @@ pub struct DumpParams {
     pub position: u16,
     pub header_written: bool,
     pub error: Option<String>,
+    pub register_type: RegisterType,
 }
 
 #[derive(Debug, Default, PartialEq)]
@@ -47,6 +48,7 @@ pub struct ReadParams {
     pub main_data: String,
     pub pinned_data: String,
     pub refresh_timer: Instant,
+    pub register_type: RegisterType,
 }
 
 impl Default for ReadParams {
@@ -57,6 +59,7 @@ impl Default for ReadParams {
             main_data: "".to_string(),
             pinned_data: "".to_string(),
             refresh_timer: Instant::now(),
+            register_type: Default::default(),
         }
     }
 }
@@ -72,10 +75,21 @@ pub enum State {
 
 pub type AppResult<T> = Result<T, Box<dyn error::Error>>;
 
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Ord, PartialOrd, Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Ord, PartialOrd, Serialize, Deserialize, Default)]
 pub enum RegisterType {
+    #[default]
     Holding,
     Input,
+}
+
+impl RegisterType {
+    pub fn toggle(&mut self) {
+        if *self == RegisterType::Holding {
+            *self = RegisterType::Input;
+        } else {
+            *self = RegisterType::Holding;
+        }
+    }
 }
 
 pub type RegisterCell = (RegisterType, u16);
@@ -86,7 +100,6 @@ pub struct App {
     pub config: Config,
     pub running: bool,
     pub state: State,
-    pub register_display_type: RegisterType,
     pub pinned_registers: Vec<RegisterCell>,
     pub device: ModbusDevice,
     pub interpreter: Interpretator,
@@ -194,7 +207,6 @@ impl App {
             device,
             state: State::Read(Default::default()),
             running: true,
-            register_display_type: RegisterType::Holding,
         }
     }
 
@@ -210,10 +222,16 @@ impl App {
 
     pub fn switch_focus_to(&mut self, focus: State) {
         let position = self.get_current_position();
+        let register_type = match &self.state {
+            State::Read(p) => p.register_type,
+            State::Dump(p) => p.register_type,
+            _ => Default::default()
+        };
 
         self.state = match focus {
             State::Dump(_) => State::Dump(DumpParams {
                 start_position: position,
+                register_type,
                 ..Default::default()
             }),
             State::Write(_) => State::Write(WriteParams {
@@ -226,6 +244,7 @@ impl App {
             }),
             State::Read(_) => State::Read(ReadParams {
                 position,
+                register_type,
                 ..Default::default()
             }),
             State::Help => State::Help,
@@ -233,13 +252,13 @@ impl App {
     }
 
     pub fn pin(&mut self) {
-        let position = if let State::Read(p) = &self.state {
-            p.position
+        let (position, register_display_type) = if let State::Read(p) = &self.state {
+            (p.position, p.register_type)
         } else {
             return;
         };
 
-        let selection = (self.register_display_type, position);
+        let selection = (register_display_type, position);
 
         if let Some(pos) = self.pinned_registers.iter().position(|x| *x == selection) {
             self.pinned_registers.remove(pos);
@@ -299,7 +318,7 @@ impl App {
     }
 
     async fn perform_dump_batch(&mut self) -> Result<(), anyhow::Error> {
-        let (header_needed, starting_index, total_batches, dump_file) = {
+        let (header_needed, starting_index, total_batches, dump_file, register_type) = {
             let State::Dump(params) = &mut self.state else {
                 return Ok(());
             };
@@ -313,7 +332,7 @@ impl App {
                 return Ok(());
             }
 
-            (!params.header_written, params.position, total_batches, self.config.dump_file.clone())
+            (!params.header_written, params.position, total_batches, self.config.dump_file.clone(), params.register_type)
         };
 
         let mut file = OpenOptions::new().create(true).append(true).open(&dump_file).await?;
@@ -323,7 +342,7 @@ impl App {
             file.write_all(b"\n").await?;
         }
 
-        let data = self.aquire_data().await?;
+        let data = self.aquire_data(register_type).await?;
         file.write_all(self.interpreter.run(data, starting_index, |_| None).join("\n").as_bytes()).await?;
         file.write_all(b"\n").await?;
 
@@ -338,14 +357,6 @@ impl App {
         }
 
         Ok(())
-    }
-
-    pub fn displaying_type(&self) -> &'static str {
-        if self.register_display_type == RegisterType::Holding {
-            "Holding"
-        } else {
-            "Input"
-        }
     }
 
     pub async fn tick(&mut self) {
@@ -384,17 +395,17 @@ impl App {
         }
     }
 
-    pub async fn aquire_data(&self) -> Result<Vec<RegisterCellValue>, anyhow::Error> {
+    pub async fn aquire_data(&self, register_type: RegisterType) -> Result<Vec<RegisterCellValue>, anyhow::Error> {
         let amount = self.config.registers_batch;
         let position = self.get_current_position();
 
-        let values = if self.register_display_type == RegisterType::Holding {
+        let values = if register_type == RegisterType::Holding {
             self.device.holdings(position, amount).await?
         } else {
             self.device.inputs(position, amount).await?
         };
 
-        Ok(values.into_iter().enumerate().map(|(i, v)| ((self.register_display_type, position + i as u16), v)).collect())
+        Ok(values.into_iter().enumerate().map(|(i, v)| ((register_type, position + i as u16), v)).collect())
     }
 
     pub async fn aquire_pinned_data(&self) -> Result<Vec<RegisterCellValue>, anyhow::Error> {
@@ -416,14 +427,14 @@ impl App {
     }
 
     pub async fn refresh(&mut self) {
-        let position = if let State::Read(p) = &mut self.state {
+        let (position, register_type) = if let State::Read(p) = &mut self.state {
             p.refresh_timer = Instant::now();
-            p.position
+            (p.position, p.register_type)
         } else {
             return;
         };
 
-        let data = self.aquire_data().await;
+        let data = self.aquire_data(register_type).await;
         let header = self.interpreter.header();
 
         let sfr = &self.pinned_registers;
@@ -494,16 +505,14 @@ impl App {
     }
 
     pub fn toggle_type(&mut self) {
-        if let State::Dump(params) = &mut self.state {
-            if params.started {
-                return;
-            }
-        }
-
-        if self.register_display_type == RegisterType::Holding {
-            self.register_display_type = RegisterType::Input;
-        } else {
-            self.register_display_type = RegisterType::Holding;
+        match &mut self.state {
+            State::Read(p) => p.register_type.toggle(),
+            State::Dump(p) => {
+                if !p.started {
+                    p.register_type.toggle()
+                }
+            },
+            _ => {}
         }
     }
 }

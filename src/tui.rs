@@ -51,7 +51,7 @@ impl<B: Backend> Tui<B> where <B as Backend>::Error: 'static {
 
             if let State::Read(params) = &app.state {
                 let is_pinned = app.pinned_registers.iter()
-                    .position(|(kind, address)| kind == &app.register_display_type && *address == params.position).is_some();
+                    .position(|(kind, address)| kind == &params.register_type && *address == params.position).is_some();
                 let pinned_string = if is_pinned { "(Pinned)" } else { "" };
 
                 let outer = Block::default()
@@ -64,7 +64,7 @@ impl<B: Backend> Tui<B> where <B as Backend>::Error: 'static {
                 let inner_area = outer.inner(outer_area);
                 frame.render_widget(outer, outer_area);
 
-                let info = format!("Device: {}\nAt: {} on {} {}", device, params.position, app.displaying_type(), pinned_string);
+                let info = format!("Device: {}\nAt: {} on {:?} {}", device, params.position, params.register_type, pinned_string);
                 let rows = Layout::default()
                     .direction(Direction::Vertical)
                     .constraints([Constraint::Length(2), Constraint::Min(0)].as_ref())
@@ -126,10 +126,10 @@ impl<B: Backend> Tui<B> where <B as Backend>::Error: 'static {
                     .split(inner_area);
 
                 let info = format!(
-                    "Device: {}\nStart at {} on {}",
+                    "Device: {}\nStart at {} on {:?}",
                     device,
                     params.start_position,
-                    app.displaying_type()
+                    params.register_type
                 );
                 frame.render_widget(
                     Paragraph::new(info).style(base_style).alignment(Alignment::Left),
