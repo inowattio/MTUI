@@ -17,7 +17,7 @@ pub enum WriteType {
 
 #[derive(Debug, Default, PartialEq)]
 pub struct WriteParams {
-    pub position: usize,
+    pub position: u16,
     pub result: Option<String>,
     pub value: Option<i32>,
     pub write_type: WriteType
@@ -26,23 +26,23 @@ pub struct WriteParams {
 #[derive(Debug, PartialEq, Default)]
 pub struct DumpParams {
     pub started: bool,
-    pub total_batches: Option<i32>,
-    pub completed_batches: u32,
-    pub start_position: usize,
-    pub position: usize,
+    pub total_batches: Option<u16>,
+    pub completed_batches: u16,
+    pub start_position: u16,
+    pub position: u16,
     pub header_written: bool,
     pub error: Option<String>,
 }
 
 #[derive(Debug, Default, PartialEq)]
 pub struct JumpParams {
-    pub from: usize,
-    pub to: Option<usize>
+    pub from: u16,
+    pub to: u16
 }
 
 #[derive(Debug, Default, PartialEq)]
 pub struct ReadParams {
-    pub position: usize,
+    pub position: u16,
     pub header: String,
     pub main_data: String,
     pub pinned_data: String,
@@ -65,7 +65,7 @@ pub enum RegisterType {
     Input,
 }
 
-pub type RegisterCell = (RegisterType, usize);
+pub type RegisterCell = (RegisterType, u16);
 pub type RegisterCellValue = (RegisterCell, u16);
 
 #[derive(Debug)]
@@ -82,8 +82,8 @@ pub struct App {
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct PinnedRegisters {
-    pub holdings: Vec<usize>,
-    pub inputs: Vec<usize>,
+    pub holdings: Vec<u16>,
+    pub inputs: Vec<u16>,
 }
 
 impl From<PinnedRegisters> for Vec<RegisterCell> {
@@ -187,10 +187,10 @@ impl App {
         }
     }
 
-    pub fn get_current_position(&self) -> usize {
+    pub fn get_current_position(&self) -> u16 {
         match &self.state {
             State::Read(p) => p.position,
-            State::Jump(p) => p.to.unwrap_or(p.from),
+            State::Jump(p) => p.to,
             State::Write(p) => p.position,
             State::Dump(p) => p.start_position,
             State::Help => 0,
@@ -222,10 +222,11 @@ impl App {
     }
 
     pub fn pin(&mut self) {
-        if !matches!(self.state, State::Read(_)) {
+        let position = if let State::Read(p) = &self.state {
+            p.position
+        } else {
             return;
-        }
-        let position = self.get_current_position();
+        };
 
         let selection = (self.register_display_type, position);
 
@@ -242,12 +243,12 @@ impl App {
         let mut start_dump_run = false;
 
         match &mut self.state {
-            State::Read(p) => p.position += self.config.registers_batch as usize,
+            State::Read(p) => p.position += self.config.registers_batch,
             State::Jump(_) => self.switch_focus_to(State::Read(Default::default())),
             State::Write(params) => if let Some(number) = params.value {
                 let result = match params.write_type {
-                    WriteType::Word => self.device.write_register(params.position as u16, number as u16).await,
-                    WriteType::DWord => self.device.write_register_word(params.position as u16, number).await,
+                    WriteType::Word => self.device.write_register(params.position, number as u16).await,
+                    WriteType::DWord => self.device.write_register_word(params.position, number).await,
                 };
                 params.result = Some(format!("{result:#?}"));
             }
@@ -291,7 +292,7 @@ impl App {
             let State::Dump(params) = &mut self.state else {
                 return Ok(());
             };
-            let Some(total_batches) = params.total_batches.map(|v| v as u32) else {
+            let Some(total_batches) = params.total_batches else {
                 return Ok(());
             };
 
@@ -319,7 +320,7 @@ impl App {
         if let State::Dump(params) = &mut self.state {
             params.header_written = true;
             params.completed_batches += 1;
-            params.position = starting_index + self.config.registers_batch as usize;
+            params.position = starting_index + self.config.registers_batch;
 
             if params.completed_batches >= total_batches {
                 params.started = false;
@@ -375,7 +376,7 @@ impl App {
 
     pub async fn aquire_data(&self) -> Result<Vec<RegisterCellValue>, anyhow::Error> {
         let amount = self.config.registers_batch;
-        let position = self.get_current_position() as u16;
+        let position = self.get_current_position();
 
         let values = if self.register_display_type == RegisterType::Holding {
             self.device.holdings(position, amount).await?
@@ -383,7 +384,7 @@ impl App {
             self.device.inputs(position, amount).await?
         };
 
-        Ok(values.into_iter().enumerate().map(|(i, v)| ((self.register_display_type, position as usize + i), v)).collect())
+        Ok(values.into_iter().enumerate().map(|(i, v)| ((self.register_display_type, position + i as u16), v)).collect())
     }
 
     pub async fn aquire_pinned_data(&self) -> Result<Vec<RegisterCellValue>, anyhow::Error> {
@@ -405,80 +406,82 @@ impl App {
     }
 
     pub async fn refresh(&mut self) {
-        let is_in_read = matches!(self.state, State::Read(_));
-        if is_in_read {
-            let data = self.aquire_data().await;
-            let header = self.interpreter.header();
+        self.refresh_timer = Instant::now();
 
-            let sfr = self.pinned_registers.clone();
-            let fav_checker = |cell: RegisterCellValue| {
-                let ((c_kind, c_address), _) = cell;
-                let is_pinned = sfr.clone().into_iter().position(|(kind, address)| kind == c_kind && address == c_address).is_some();
-                if is_pinned {
-                    Some("Pinned".into())
-                } else {
-                    None
-                }
-            };
+        let position = if let State::Read(p) = &self.state {
+            p.position
+        } else {
+            return;
+        };
 
-            let position = self.get_current_position();
-            let main_data = match data {
-                Ok(data) => self.interpreter.run(data, position, fav_checker).join("\n"),
-                Err(e) => e.to_string()
-            };
+        let data = self.aquire_data().await;
+        let header = self.interpreter.header();
 
-            let data = self.aquire_pinned_data().await;
-            let pinned_data = match data {
-                Ok(data) => {
-                    let mut t = String::new();
-                    let mut skip = false;
+        let sfr = self.pinned_registers.clone();
+        let fav_checker = |cell: RegisterCellValue| {
+            let ((c_kind, c_address), _) = cell;
+            let is_pinned = sfr.clone().into_iter().position(|(kind, address)| kind == c_kind && address == c_address).is_some();
+            if is_pinned {
+                Some("Pinned".into())
+            } else {
+                None
+            }
+        };
 
-                    for i in 0..data.len() {
-                        if skip {
-                            skip = false;
-                            continue;
-                        }
+        let main_data = match data {
+            Ok(data) => self.interpreter.run(data, position, fav_checker).join("\n"),
+            Err(e) => e.to_string()
+        };
 
-                        let c = *data.get(i).unwrap();
-                        let batch = match data.get(i + 1).map(|v| v.clone()) {
-                            None => vec![c],
-                            Some(n) => {
-                                let ((c_kind, c_address), _) = c;
-                                let ((n_kind, n_address), _) = n;
-                                if n_kind == c_kind && n_address == c_address + 1 {
-                                    skip = true;
-                                    vec![c, n]
-                                } else {
-                                    vec![c]
-                                }
-                            }
-                        };
-                        let ((_, address), _) = c;
+        let data = self.aquire_pinned_data().await;
+        let pinned_data = match data {
+            Ok(data) => {
+                let mut t = String::new();
+                let mut skip = false;
 
-                        let line = self.interpreter.run(batch, address, |c| {
-                            let ((kind, _), _) = c;
-                            Some(match kind {
-                                RegisterType::Holding => "Holding",
-                                RegisterType::Input => "Input",
-                            }.to_string())
-                        }).join("\n");
-
-                        t.push_str(&format!("{line}\n"));
+                for i in 0..data.len() {
+                    if skip {
+                        skip = false;
+                        continue;
                     }
 
-                    t
-                },
-                Err(e) => e.to_string()
-            };
+                    let c = *data.get(i).unwrap();
+                    let batch = match data.get(i + 1).map(|v| v.clone()) {
+                        None => vec![c],
+                        Some(n) => {
+                            let ((c_kind, c_address), _) = c;
+                            let ((n_kind, n_address), _) = n;
+                            if n_kind == c_kind && n_address == c_address + 1 {
+                                skip = true;
+                                vec![c, n]
+                            } else {
+                                vec![c]
+                            }
+                        }
+                    };
+                    let ((_, address), _) = c;
 
-            if let State::Read(params) = &mut self.state {
-                params.header = header;
-                params.main_data = main_data;
-                params.pinned_data = pinned_data;
-            }
+                    let line = self.interpreter.run(batch, address, |c| {
+                        let ((kind, _), _) = c;
+                        Some(match kind {
+                            RegisterType::Holding => "Holding",
+                            RegisterType::Input => "Input",
+                        }.to_string())
+                    }).join("\n");
+
+                    t.push_str(&format!("{line}\n"));
+                }
+
+                t
+            },
+            Err(e) => e.to_string()
+        };
+
+        if let State::Read(params) = &mut self.state {
+            params.header = header;
+            params.main_data = main_data;
+            params.pinned_data = pinned_data;
         }
-
-        self.refresh_timer = Instant::now();
     }
 
     pub fn toggle_type(&mut self) {
@@ -492,31 +495,6 @@ impl App {
             self.register_display_type = RegisterType::Input;
         } else {
             self.register_display_type = RegisterType::Holding;
-        }
-    }
-
-    pub fn up(&mut self) {
-        if let Some(new_pos) = self.get_current_position().checked_sub(1) {
-            self.set_current_position(new_pos)
-        };
-
-    }
-
-    pub fn down(&mut self) {
-        if let Some(new_pos) = self.get_current_position().checked_add(1) {
-            self.set_current_position(new_pos)
-        };
-    }
-
-    pub fn set_current_position(&mut self, new_pos: usize) {
-        match &mut self.state {
-            State::Read(p) => p.position = new_pos,
-            State::Jump(p) => p.to = Some(new_pos),
-            State::Write(p) => p.position = new_pos,
-            State::Help => {}
-            State::Dump(p) => if !p.started {
-                p.start_position = new_pos
-            },
         }
     }
 }

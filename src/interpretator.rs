@@ -36,7 +36,7 @@ impl Interpretator {
         self.header.clone()
     }
 
-    pub fn run(&self, data: Vec<RegisterCellValue>, index: usize, additional: impl Fn(RegisterCellValue) -> Option<String>) -> Vec<String> {
+    pub fn run(&self, data: Vec<RegisterCellValue>, index: u16, additional: impl Fn(RegisterCellValue) -> Option<String>) -> Vec<String> {
         let mut lines = Vec::with_capacity(data.len());
 
         for i in 0..data.len() {
@@ -45,7 +45,7 @@ impl Interpretator {
             let next = data.get(i + 1);
             let next_byte = next.map(|(_, v)| *v).unwrap_or(0);
 
-            let mut row = format!("{0: >5}: {1: <5} {2: <6} ", index + i, byte, byte as i16);
+            let mut row = format!("{0: >5}: {1: <5} {2: <6} ", index + i as u16, byte, byte as i16);
 
             let word = (byte as u32) << 16 | (next_byte as u32);
             if self.interpretation.u32 {

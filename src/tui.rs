@@ -146,7 +146,7 @@ impl<B: Backend> Tui<B> where <B as Backend>::Error: 'static {
                     0.0
                 };
                 let progress_text = match params.total_batches {
-                    Some(total) => format!("{}/{} batches ({}/{} registers)", params.completed_batches, total, params.completed_batches * app.config.registers_batch as u32, total * app.config.registers_batch as i32),
+                    Some(total) => format!("{}/{} batches ({}/{} registers)", params.completed_batches, total, params.completed_batches as usize * app.config.registers_batch as usize, total as usize * app.config.registers_batch as usize),
                     None => "Set batch count to start".to_string(),
                 };
                 let gauge = Gauge::default()
