@@ -426,12 +426,12 @@ impl App {
         let data = self.aquire_data().await;
         let header = self.interpreter.header();
 
-        let sfr = self.pinned_registers.clone();
+        let sfr = &self.pinned_registers;
         let fav_checker = |cell: RegisterCellValue| {
             let ((c_kind, c_address), _) = cell;
-            let is_pinned = sfr.clone().into_iter().position(|(kind, address)| kind == c_kind && address == c_address).is_some();
+            let is_pinned = sfr.iter().any(|(kind, address)| *kind == c_kind && *address == c_address);
             if is_pinned {
-                Some("Pinned".into())
+                Some("Pinned".to_string())
             } else {
                 None
             }
@@ -445,7 +445,7 @@ impl App {
         let data = self.aquire_pinned_data().await;
         let pinned_data = match data {
             Ok(data) => {
-                let mut t = String::new();
+                let mut lines = Vec::new();
                 let mut skip = false;
 
                 for i in 0..data.len() {
@@ -454,10 +454,10 @@ impl App {
                         continue;
                     }
 
-                    let c = *data.get(i).unwrap();
-                    let batch = match data.get(i + 1).map(|v| v.clone()) {
+                    let c = data[i];
+                    let batch = match data.get(i + 1) {
                         None => vec![c],
-                        Some(n) => {
+                        Some(&n) => {
                             let ((c_kind, c_address), _) = c;
                             let ((n_kind, n_address), _) = n;
                             if n_kind == c_kind && n_address == c_address + 1 {
@@ -478,10 +478,10 @@ impl App {
                         }.to_string())
                     }).join("\n");
 
-                    t.push_str(&format!("{line}\n"));
+                    lines.push(line);
                 }
 
-                t
+                lines.join("\n")
             },
             Err(e) => e.to_string()
         };

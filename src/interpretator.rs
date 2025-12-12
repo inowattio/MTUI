@@ -40,10 +40,9 @@ impl Interpretator {
         let mut lines = Vec::with_capacity(data.len());
 
         for i in 0..data.len() {
-            let current = *data.get(i).unwrap();
+            let current = data[i];
             let byte = current.1;
-            let next = data.get(i + 1);
-            let next_byte = next.map(|(_, v)| *v).unwrap_or(0);
+            let next_byte = data.get(i + 1).map(|(_, v)| *v).unwrap_or(0);
 
             let mut row = format!("{0: >5}: {1: <5} {2: <6} ", index + i as u16, byte, byte as i16);
 
