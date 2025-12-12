@@ -40,12 +40,25 @@ pub struct JumpParams {
     pub to: u16
 }
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct ReadParams {
     pub position: u16,
     pub header: String,
     pub main_data: String,
     pub pinned_data: String,
+    pub refresh_timer: Instant,
+}
+
+impl Default for ReadParams {
+    fn default() -> Self {
+        Self {
+            position: 0,
+            header: "".to_string(),
+            main_data: "".to_string(),
+            pinned_data: "".to_string(),
+            refresh_timer: Instant::now(),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -71,7 +84,6 @@ pub type RegisterCellValue = (RegisterCell, u16);
 #[derive(Debug)]
 pub struct App {
     pub config: Config,
-    pub refresh_timer: Instant,
     pub running: bool,
     pub state: State,
     pub register_display_type: RegisterType,
@@ -183,7 +195,6 @@ impl App {
             state: State::Read(Default::default()),
             running: true,
             register_display_type: RegisterType::Holding,
-            refresh_timer: Instant::now(),
         }
     }
 
@@ -288,10 +299,11 @@ impl App {
     }
 
     async fn perform_dump_batch(&mut self) -> Result<(), anyhow::Error> {
-        let (header_needed, starting_index, total_batches) = {
+        let (header_needed, starting_index, total_batches, dump_file) = {
             let State::Dump(params) = &mut self.state else {
                 return Ok(());
             };
+
             let Some(total_batches) = params.total_batches else {
                 return Ok(());
             };
@@ -301,21 +313,19 @@ impl App {
                 return Ok(());
             }
 
-            (!params.header_written, params.position, total_batches)
+            (!params.header_written, params.position, total_batches, self.config.dump_file.clone())
         };
 
-        {
-            let mut file = OpenOptions::new().create(true).append(true).open(&self.config.dump_file).await?;
+        let mut file = OpenOptions::new().create(true).append(true).open(&dump_file).await?;
 
-            if header_needed {
-                file.write_all(self.interpreter.header().as_bytes()).await?;
-                file.write_all(b"\n").await?;
-            }
-
-            let data = self.aquire_data().await?;
-            file.write_all(self.interpreter.run(data, starting_index, |_| None).join("\n").as_bytes()).await?;
+        if header_needed {
+            file.write_all(self.interpreter.header().as_bytes()).await?;
             file.write_all(b"\n").await?;
         }
+
+        let data = self.aquire_data().await?;
+        file.write_all(self.interpreter.run(data, starting_index, |_| None).join("\n").as_bytes()).await?;
+        file.write_all(b"\n").await?;
 
         if let State::Dump(params) = &mut self.state {
             params.header_written = true;
@@ -339,31 +349,31 @@ impl App {
     }
 
     pub async fn tick(&mut self) {
-        let should_run_dump = matches!(&self.state, State::Dump(DumpParams { started: true, .. }));
-        let is_dump_state = matches!(self.state, State::Dump(_));
+        let should_perform_dump = matches!(&self.state, State::Dump(p) if p.started);
 
-        if should_run_dump {
-            if let Err(e) = self.perform_dump_batch().await {
-                if let State::Dump(params) = &mut self.state {
-                    params.started = false;
-                    params.error = Some(e.to_string());
-                }
-            }
-            self.refresh_timer = Instant::now();
-            return;
-        } else if is_dump_state {
-            self.refresh_timer = Instant::now();
-            return;
-        }
+        match &mut self.state {
+            State::Read(p) => {
+                let refresh_seconds = if let Some(refresh_seconds) = self.config.auto_update_interval_seconds {
+                    refresh_seconds
+                } else {
+                    return;
+                };
 
-        if let Some(refresh_seconds) = self.config.auto_update_interval_seconds {
-            if matches!(self.state, State::Read(_)) {
-                if self.refresh_timer.elapsed().as_secs() > refresh_seconds {
+                if p.refresh_timer.elapsed().as_secs() > refresh_seconds {
                     self.refresh().await;
                 }
-            } else {
-                self.refresh_timer = Instant::now();
-            }
+            },
+            State::Dump(_) => {
+                if should_perform_dump {
+                    if let Err(e) = self.perform_dump_batch().await {
+                        if let State::Dump(p) = &mut self.state {
+                            p.started = false;
+                            p.error = Some(e.to_string());
+                        }
+                    }
+                }
+            },
+            _ => {}
         }
     }
 
@@ -406,9 +416,8 @@ impl App {
     }
 
     pub async fn refresh(&mut self) {
-        self.refresh_timer = Instant::now();
-
-        let position = if let State::Read(p) = &self.state {
+        let position = if let State::Read(p) = &mut self.state {
+            p.refresh_timer = Instant::now();
             p.position
         } else {
             return;
