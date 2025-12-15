@@ -33,6 +33,7 @@ impl Default for Config {
                 time_between_commands_ms: 3,
             },
             interpretations: InterpretorConfig {
+                hex: false,
                 u32: true,
                 i32: true,
                 f32: false,
@@ -49,6 +50,7 @@ impl Default for Config {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct InterpretorConfig {
+    pub hex: bool,
     pub u32: bool,
     pub i32: bool,
     pub f32: bool,

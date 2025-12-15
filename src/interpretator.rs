@@ -11,6 +11,9 @@ impl Interpretor {
     pub fn new(interpretation: InterpretorConfig) -> Self {
         let mut header = format!("{0: >5}: {1: <5} {2: <6} ", "index", "u16", "i16");
 
+        if interpretation.hex {
+            header.push_str(&format!("{0: <4} ", "hex"))
+        }
         if interpretation.u32 {
             header.push_str(&format!("{0: <10} ", "u32"))
         }
@@ -48,6 +51,9 @@ impl Interpretor {
             let mut row = format!("{0: >5}: {1: <5} {2: <6} ", index + i as u16, byte, byte as i16);
 
             let word = (byte as u32) << 16 | (next_byte as u32);
+            if self.config.hex {
+                row.push_str(&format!("{byte:<04X} "))
+            }
             if self.config.u32 {
                 row.push_str(&format!("{word: <10} "))
             }
