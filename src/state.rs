@@ -64,6 +64,18 @@ pub enum State {
     Dump(DumpParams),
 }
 
+impl State {
+    pub fn kind(&self) -> &str {
+        match self {
+            State::Read(_) => "Read",
+            State::Jump(_) => "Jump",
+            State::Write(_) => "Write",
+            State::Help => "Help",
+            State::Dump(_) => "Dump",
+        }
+    }
+}
+
 pub enum StateTransition {
     Read,
     Jump,

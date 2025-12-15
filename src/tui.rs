@@ -40,10 +40,11 @@ impl<B: Backend> Tui<B> where <B as Backend>::Error: 'static {
 
     pub fn draw(&mut self, app: &mut App) -> AppResult<()> {
         let device = app.config.display_device();
-        let base_style = Style::default().fg(Color::Cyan).bg(Color::Black);
+        let base_style = Style::default().fg(Color::White);
 
         self.terminal.draw(|frame| {
-            let title = match &app.state {
+            let top_title = app.state.kind();
+            let bottom_title = match &app.state {
                 State::Read(_) => format!("{HELP} - Help; {PIN} - Add/Remove Pin"),
                 State::Jump(_) => format!("{ACTION} - Go; {EXIT} - Back"),
                 State::Write(_) => format!("{ACTION} - Write; {EXIT} - Back"),
@@ -51,22 +52,23 @@ impl<B: Backend> Tui<B> where <B as Backend>::Error: 'static {
                 State::Dump(_) => format!("{ACTION} - Start; 0-9 Set Batches; {EXIT} - Back"),
             };
 
+            let outer = Block::default()
+                .title_top(top_title)
+                .title_bottom(bottom_title)
+                .style(Style::default().fg(Color::LightGreen))
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded);
+
             if let State::Read(params) = &app.state {
                 let is_pinned = app.pinned_registers.iter()
                     .position(|(kind, address)| kind == &params.register_type && *address == params.position).is_some();
                 let pinned_string = if is_pinned { "(Pinned)" } else { "" };
 
-                let outer = Block::default()
-                    .title(title)
-                    .title_alignment(Alignment::Center)
-                    .borders(Borders::ALL)
-                    .border_type(BorderType::Rounded);
-
                 let outer_area = frame.area();
                 let inner_area = outer.inner(outer_area);
                 frame.render_widget(outer, outer_area);
 
-                let info = format!("Device: {}\nAt: {} on {:?} {}", device, params.position, params.register_type, pinned_string);
+                let info = format!("Device: {} at: {} on {:?} {}", device, params.position, params.register_type, pinned_string);
                 let rows = Layout::default()
                     .direction(Direction::Vertical)
                     .constraints([Constraint::Length(2), Constraint::Min(0)].as_ref())
@@ -107,12 +109,6 @@ impl<B: Backend> Tui<B> where <B as Backend>::Error: 'static {
             }
 
             if let State::Dump(params) = &app.state {
-                let outer = Block::default()
-                    .title(title)
-                    .title_alignment(Alignment::Center)
-                    .borders(Borders::ALL)
-                    .border_type(BorderType::Rounded);
-
                 let outer_area = frame.area();
                 let inner_area = outer.inner(outer_area);
                 frame.render_widget(outer, outer_area);
@@ -193,13 +189,7 @@ impl<B: Backend> Tui<B> where <B as Backend>::Error: 'static {
 
             frame.render_widget(
                 Paragraph::new(format!("Device: {device}\n{content}"))
-                    .block(
-                        Block::default()
-                            .title(title)
-                            .title_alignment(Alignment::Center)
-                            .borders(Borders::ALL)
-                            .border_type(BorderType::Rounded),
-                    )
+                    .block(outer)
                     .style(base_style)
                     .alignment(Alignment::Left),
                 frame.area(),
