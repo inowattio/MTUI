@@ -26,12 +26,11 @@ async fn main() -> AppResult<()> {
     let backend = CrosstermBackend::new(io::stderr());
     let terminal = Terminal::new(backend)?;
     let events = EventHandler::new();
-    let mut tui = Tui::new(terminal, events);
-    tui.init()?;
+    let mut tui = Tui::new(terminal, events)?;
 
     while app.running {
         tui.draw(&mut app)?;
-        match tui.events.next().await? {
+        match tui.next_event().await? {
             Event::Tick => app.tick().await,
             Event::Key(key_event) => handle_key_events(key_event, &mut app).await?,
             Event::Mouse(_) => {}

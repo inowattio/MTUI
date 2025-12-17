@@ -3,7 +3,7 @@ mod make_top_title;
 mod draw_state;
 
 use crate::app::{App, AppResult};
-use crate::event::EventHandler;
+use crate::event::{Event, EventHandler};
 use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
 use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
 use ratatui::backend::Backend;
@@ -19,15 +19,11 @@ use crate::tui::make_top_title::make_top_title;
 #[derive(Debug)]
 pub struct Tui<B: Backend> {
     terminal: Terminal<B>,
-    pub events: EventHandler,
+    events: EventHandler,
 }
 
 impl<B: Backend> Tui<B> where <B as Backend>::Error: 'static {
-    pub fn new(terminal: Terminal<B>, events: EventHandler) -> Self {
-        Self { terminal, events }
-    }
-
-    pub fn init(&mut self) -> AppResult<()> {
+    pub fn new(mut terminal: Terminal<B>, events: EventHandler) -> AppResult<Self> {
         terminal::enable_raw_mode()?;
         crossterm::execute!(io::stderr(), EnterAlternateScreen, EnableMouseCapture)?;
 
@@ -37,9 +33,10 @@ impl<B: Backend> Tui<B> where <B as Backend>::Error: 'static {
             panic_hook(panic);
         }));
 
-        self.terminal.hide_cursor()?;
-        self.terminal.clear()?;
-        Ok(())
+        terminal.hide_cursor()?;
+        terminal.clear()?;
+
+        Ok(Self { terminal, events })
     }
 
     pub fn draw(&mut self, app: &mut App) -> AppResult<()> {
@@ -78,5 +75,9 @@ impl<B: Backend> Tui<B> where <B as Backend>::Error: 'static {
         Self::reset()?;
         self.terminal.show_cursor()?;
         Ok(())
+    }
+
+    pub async fn next_event(&mut self) -> AppResult<Event> {
+        self.events.next().await
     }
 }
