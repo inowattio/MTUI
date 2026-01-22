@@ -279,18 +279,42 @@ impl App {
     }
 
     pub async fn aquire_pinned_data(&self) -> Result<Vec<RegisterCellValue>, anyhow::Error> {
-        let mut collection = Vec::with_capacity(self.pinned_registers.len());
+        let regs = &self.pinned_registers;
+        let mut collection = Vec::with_capacity(regs.len());
 
-        for cell in &self.pinned_registers {
-            let cell = cell.clone();
-            let (kind, address) = cell;
-            let address = address as u16;
-            let value = match kind {
-                RegisterType::Holding => self.device.holdings(address, 1).await?,
-                RegisterType::Input => self.device.inputs(address, 1).await?
-            }.into_iter().next().unwrap();
+        let mut i = 0usize;
+        while i < regs.len() {
+            let (kind, start_addr_raw) = regs[i].clone();
+            let start_addr = start_addr_raw;
 
-            collection.push((cell, value));
+            let mut run_len = 1usize;
+            while i + run_len < regs.len() {
+                let (next_kind, next_addr_raw) = regs[i + run_len].clone();
+                let next_addr = next_addr_raw;
+
+                if next_kind == kind && next_addr == start_addr + (run_len as u16) {
+                    run_len += 1;
+                } else {
+                    break;
+                }
+            }
+
+            let values = match kind {
+                RegisterType::Holding => self.device.holdings(start_addr, run_len as u16).await?,
+                RegisterType::Input => self.device.inputs(start_addr, run_len as u16).await?,
+            };
+
+            for j in 0..run_len {
+                let cell = regs[i + j].clone();
+                let value = values
+                    .get(j)
+                    .cloned()
+                    .unwrap();
+
+                collection.push((cell, value));
+            }
+
+            i += run_len;
         }
 
         Ok(collection)
