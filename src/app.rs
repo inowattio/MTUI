@@ -212,14 +212,26 @@ impl App {
             file.write_all(b"\n").await?;
         }
 
-        let data = self.aquire_data(register_type).await?;
-        file.write_all(self.interpreter.run(data, starting_index, |_| None).join("\n").as_bytes()).await?;
-        file.write_all(b"\n").await?;
+        let data_result = self.aquire_data(register_type).await;
+        let mut error_message = None;
+
+        match data_result {
+            Ok(data) => {
+                file.write_all(self.interpreter.run(data, starting_index, |_| None).join("\n").as_bytes()).await?;
+                file.write_all(b"\n").await?;
+            }
+            Err(e) => {
+                error_message = Some(e.to_string());
+                let line = format!("{starting_index}: error");
+                file.write_all(line.as_bytes()).await?;
+            }
+        }
 
         if let State::Dump(params) = &mut self.state {
             params.header_written = true;
             params.completed_batches += 1;
             params.position = starting_index + self.config.registers_batch;
+            params.error = error_message;
 
             if params.completed_batches >= total_batches {
                 params.started = false;
