@@ -37,6 +37,8 @@ impl Default for Config {
                 u32: true,
                 i32: true,
                 f32: false,
+                u64: false,
+                i64: false,
                 ascii: true,
                 bits: false,
             },
@@ -54,6 +56,8 @@ pub struct InterpretorConfig {
     pub u32: bool,
     pub i32: bool,
     pub f32: bool,
+    pub u64: bool,
+    pub i64: bool,
     pub ascii: bool,
     pub bits: bool,
 }

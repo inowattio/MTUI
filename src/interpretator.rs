@@ -20,6 +20,12 @@ impl Interpretor {
         if interpretation.i32 {
             header.push_str(&format!("{0: <11} ", "i32"))
         }
+        if interpretation.u64 {
+            header.push_str(&format!("{0: <20} ", "u64"))
+        }
+        if interpretation.i64 {
+            header.push_str(&format!("{0: <21} ", "i64"))
+        }
         if interpretation.f32 {
             header.push_str(&format!("{0: <10} ", "f32"))
         }
@@ -46,11 +52,17 @@ impl Interpretor {
         for i in 0..data.len() {
             let current = data[i];
             let byte = current.1;
-            let next_byte = data.get(i + 1).map(|(_, v)| *v).unwrap_or(0);
+            let next_byte_1st = data.get(i + 1).map(|(_, v)| *v).unwrap_or(0);
+            let next_byte_2nd = data.get(i + 2).map(|(_, v)| *v).unwrap_or(0);
+            let next_byte_3rd = data.get(i + 3).map(|(_, v)| *v).unwrap_or(0);
 
             let mut row = format!("{0: >5}: {1: <5} {2: <6} ", index + i as u16, byte, byte as i16);
 
-            let word = (byte as u32) << 16 | (next_byte as u32);
+            let word = (byte as u32) << 16 | (next_byte_1st as u32);
+            let dword = ((byte as u64) << 48) |
+                ((next_byte_1st as u64) << 32) |
+                ((next_byte_2nd as u64) << 16) |
+                ( next_byte_3rd as u64);
             if self.config.hex {
                 row.push_str(&format!("{byte:<04X} "))
             }
@@ -59,6 +71,12 @@ impl Interpretor {
             }
             if self.config.i32 {
                 row.push_str(&format!("{: <11} ", word as i32))
+            }
+            if self.config.u64 {
+                row.push_str(&format!("{dword: <20} "))
+            }
+            if self.config.i64 {
+                row.push_str(&format!("{: <21} ", dword as i64))
             }
             if self.config.f32 {
                 let x = f32::from_bits(word);
@@ -71,7 +89,7 @@ impl Interpretor {
                 row.push_str(&format!("{s: <10} "))
             }
             if self.config.ascii {
-                let s: String = [byte, next_byte]
+                let s: String = [byte, next_byte_1st]
                     .iter()
                     .flat_map(|n| [(n >> 8) as u8, (n & 0xFF) as u8])
                     .map(|b| {
