@@ -85,7 +85,7 @@ impl App {
             State::Read(p) => p.position,
             State::Jump(p) => p.to,
             State::Write(p) => p.position,
-            State::Dump(p) => p.start_position,
+            State::Dump(p) => p.position,
             State::Help => 0,
         }
     }
