@@ -80,7 +80,7 @@ impl App {
             .unwrap();
 
         Self {
-            interpreter: Interpretor::new(config.interpretations.clone()),
+            interpreter: Interpretor::new(config.interpretations.clone(), config.device.word_order),
             pinned_registers: config.pinned_defaults.clone().into(),
             config,
             device,

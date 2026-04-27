@@ -1,5 +1,8 @@
+use serde::{Deserialize, Serialize};
 use crate::app::PinnedRegisters;
-use crate::modbus::{DeviceConfig, Interface};
+use crate::modbus::{
+    DataBits, DeviceConfig, Interface, InterfaceWiredParams, Parity, StopBits, WordOrder,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -26,11 +29,18 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             device: DeviceConfig {
-                interface: Interface::Mock,
+                interface: Interface::Wired(InterfaceWiredParams {
+                    path: "".to_string(),
+                    baud_rate: 0,
+                    data_bits: DataBits::Five,
+                    parity: Parity::None,
+                    stop_bits: StopBits::One,
+                }),
                 slave_id: 0,
                 timeout_connect_ms: 1000,
                 timeout_command_ms: 2000,
                 time_between_commands_ms: 3,
+                word_order: WordOrder::default(),
             },
             interpretations: InterpretorConfig {
                 hex: false,
@@ -61,3 +71,4 @@ pub struct InterpretorConfig {
     pub ascii: bool,
     pub bits: bool,
 }
+
