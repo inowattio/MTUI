@@ -36,12 +36,10 @@ impl Client for MockContext {
                 Ok(Ok(Response::ReadHoldingRegisters(regs)))
             }
 
-            Request::ReadInputRegisters(a, b) => {
-                Ok(Ok(Response::ReadInputRegisters(vec![
+            Request::ReadInputRegisters(a, b) => Ok(Ok(Response::ReadInputRegisters(vec![
                     a + b + 1;
                     b as usize
-                ])))
-            }
+                ]))),
 
             Request::WriteSingleRegister(addr, value) => {
                 self.holdings.insert(addr, value);

@@ -49,7 +49,12 @@ impl Interpretor {
         self.header.clone()
     }
 
-    pub fn run(&self, data: Vec<RegisterCellValue>, index: u16, additional: impl Fn(RegisterCellValue) -> Option<String>) -> Vec<String> {
+    pub fn run(
+        &self,
+        data: Vec<RegisterCellValue>,
+        index: u16,
+        additional: impl Fn(RegisterCellValue) -> Option<String>,
+    ) -> Vec<String> {
         let mut lines = Vec::with_capacity(data.len());
 
         for i in 0..data.len() {
@@ -59,7 +64,12 @@ impl Interpretor {
             let next_byte_2nd = data.get(i + 2).map(|(_, v)| *v).unwrap_or(0);
             let next_byte_3rd = data.get(i + 3).map(|(_, v)| *v).unwrap_or(0);
 
-            let mut row = format!("{0: >5}: {1: <5} {2: <6} ", index + i as u16, byte, byte as i16);
+            let mut row = format!(
+                "{0: >5}: {1: <5} {2: <6} ",
+                index + i as u16,
+                byte,
+                byte as i16
+            );
 
             let word = self.word_order.make_word(byte, next_byte_1st);
             let second_word = self.word_order.make_word(next_byte_2nd, next_byte_3rd);
@@ -108,7 +118,7 @@ impl Interpretor {
             if self.config.bits {
                 row.push_str(&format!("{byte:<08b} "))
             }
-            
+
             if let Some(t) = additional(current) {
                 row.push_str(&format!("{t} "));
             }
