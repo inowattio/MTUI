@@ -1,8 +1,8 @@
+use crate::app::AppResult;
+use crate::constants::EVENT_HANDLER_TICKRATE;
 use crossterm::event::{Event as CrosstermEvent, KeyEvent, MouseEvent};
 use futures::{FutureExt, StreamExt};
 use tokio::sync::mpsc;
-use crate::app::AppResult;
-use crate::constants::EVENT_HANDLER_TICKRATE;
 
 #[derive(Clone, Copy, Debug)]
 pub enum Event {
@@ -63,8 +63,6 @@ impl EventHandler {
         self.receiver
             .recv()
             .await
-            .ok_or(Box::new(std::io::Error::other(
-                "This is an IO error",
-            )))
+            .ok_or(Box::new(std::io::Error::other("This is an IO error")))
     }
 }

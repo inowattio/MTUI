@@ -1,20 +1,22 @@
-use std::{error, fs};
-use std::time::Instant;
-use serde::{Deserialize, Serialize};
-use tokio::fs::OpenOptions;
-use tokio::io::AsyncWriteExt;
 use crate::config::Config;
 use crate::constants::CONFIG_PATH;
 use crate::interpretator::Interpretor;
 use crate::modbus::ModbusDevice;
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
-use crate::state::{no_data_text, DumpParams, JumpParams, ReadParams, State, StateTransition, WriteParams};
+use crate::state::{
+    no_data_text, DumpParams, JumpParams, ReadParams, State, StateTransition, WriteParams,
+};
+use serde::{Deserialize, Serialize};
+use std::time::Instant;
+use std::{error, fs};
+use tokio::fs::OpenOptions;
+use tokio::io::AsyncWriteExt;
 
 #[derive(Debug, Default, PartialEq)]
 pub enum WriteType {
     #[default]
     Word,
-    DWord
+    DWord,
 }
 
 pub type AppResult<T> = Result<T, Box<dyn error::Error>>;
@@ -61,14 +63,21 @@ fn dump_example_config_and_exit() {
 }
 
 fn fetch_config_or_exit() -> Config {
-    let content = fs::read_to_string(CONFIG_PATH).inspect_err(|_| dump_example_config_and_exit()).unwrap();
-    serde_json::from_str(&content).inspect_err(|e| println!("Could not parse config: {e}")).unwrap()
+    let content = fs::read_to_string(CONFIG_PATH)
+        .inspect_err(|_| dump_example_config_and_exit())
+        .unwrap();
+    serde_json::from_str(&content)
+        .inspect_err(|e| println!("Could not parse config: {e}"))
+        .unwrap()
 }
 
 impl App {
     pub async fn new() -> Self {
         let config = fetch_config_or_exit();
-        let device = ModbusDevice::new(&config.device).await.inspect_err(|e| println!("Could not initialize device: {e}")).unwrap();
+        let device = ModbusDevice::new(&config.device)
+            .await
+            .inspect_err(|e| println!("Could not initialize device: {e}"))
+            .unwrap();
 
         Self {
             interpreter: Interpretor::new(config.interpretations.clone()),
@@ -95,7 +104,7 @@ impl App {
         let register_type = match &self.state {
             State::Read(p) => p.register_type,
             State::Dump(p) => p.register_type,
-            _ => Default::default()
+            _ => Default::default(),
         };
 
         self.state = match focus {
@@ -145,12 +154,22 @@ impl App {
         match &mut self.state {
             State::Read(p) => p.position += self.config.registers_batch,
             State::Jump(_) => self.switch_focus_to(StateTransition::Read),
-            State::Write(params) => if let Some(number) = params.value {
-                let result = match params.write_type {
-                    WriteType::Word => self.device.write_register(params.position, number as u16).await,
-                    WriteType::DWord => self.device.write_register_word(params.position, number).await,
-                };
-                params.result = Some(format!("{result:#?}"));
+            State::Write(params) => {
+                if let Some(number) = params.value {
+                    let result = match params.write_type {
+                        WriteType::Word => {
+                            self.device
+                                .write_register(params.position, number as u16)
+                                .await
+                        }
+                        WriteType::DWord => {
+                            self.device
+                                .write_register_word(params.position, number)
+                                .await
+                        }
+                    };
+                    params.result = Some(format!("{result:#?}"));
+                }
             }
             State::Help => self.quit(),
             State::Dump(params) => {
@@ -174,7 +193,7 @@ impl App {
                 params.error = None;
                 params.position = params.start_position;
                 start_dump_run = true;
-            },
+            }
         }
 
         if start_dump_run {
@@ -202,10 +221,20 @@ impl App {
                 return Ok(());
             }
 
-            (!params.header_written, params.position, total_batches, self.config.dump_file.clone(), params.register_type)
+            (
+                !params.header_written,
+                params.position,
+                total_batches,
+                self.config.dump_file.clone(),
+                params.register_type,
+            )
         };
 
-        let mut file = OpenOptions::new().create(true).append(true).open(&dump_file).await?;
+        let mut file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&dump_file)
+            .await?;
 
         if header_needed {
             file.write_all(self.interpreter.header().as_bytes()).await?;
@@ -217,7 +246,13 @@ impl App {
 
         match data_result {
             Ok(data) => {
-                file.write_all(self.interpreter.run(data, starting_index, |_| None).join("\n").as_bytes()).await?;
+                file.write_all(
+                    self.interpreter
+                        .run(data, starting_index, |_| None)
+                        .join("\n")
+                        .as_bytes(),
+                )
+                .await?;
                 file.write_all(b"\n").await?;
             }
             Err(e) => {
@@ -246,16 +281,17 @@ impl App {
 
         match &mut self.state {
             State::Read(p) => {
-                let refresh_seconds = if let Some(refresh_seconds) = self.config.auto_update_interval_seconds {
-                    refresh_seconds
-                } else {
-                    return;
-                };
+                let refresh_seconds =
+                    if let Some(refresh_seconds) = self.config.auto_update_interval_seconds {
+                        refresh_seconds
+                    } else {
+                        return;
+                    };
 
                 if p.refresh_timer.elapsed().as_secs() > refresh_seconds {
                     self.refresh().await;
                 }
-            },
+            }
             State::Dump(_) => {
                 if should_perform_dump {
                     if let Err(e) = self.perform_dump_batch().await {
@@ -265,7 +301,7 @@ impl App {
                         }
                     }
                 }
-            },
+            }
             _ => {}
         }
     }
@@ -277,7 +313,10 @@ impl App {
         }
     }
 
-    pub async fn aquire_data(&self, register_type: RegisterType) -> Result<Vec<RegisterCellValue>, anyhow::Error> {
+    pub async fn aquire_data(
+        &self,
+        register_type: RegisterType,
+    ) -> Result<Vec<RegisterCellValue>, anyhow::Error> {
         let amount = self.config.registers_batch;
         let position = self.get_current_position();
 
@@ -287,7 +326,11 @@ impl App {
             self.device.inputs(position, amount).await?
         };
 
-        Ok(values.into_iter().enumerate().map(|(i, v)| ((register_type, position + i as u16), v)).collect())
+        Ok(values
+            .into_iter()
+            .enumerate()
+            .map(|(i, v)| ((register_type, position + i as u16), v))
+            .collect())
     }
 
     pub async fn aquire_pinned_data(&self) -> Result<Vec<RegisterCellValue>, anyhow::Error> {
@@ -318,10 +361,7 @@ impl App {
 
             for j in 0..run_len {
                 let cell = regs[i + j].clone();
-                let value = values
-                    .get(j)
-                    .cloned()
-                    .unwrap();
+                let value = values.get(j).cloned().unwrap();
 
                 collection.push((cell, value));
             }
@@ -345,7 +385,9 @@ impl App {
         let sfr = &self.pinned_registers;
         let fav_checker = |cell: RegisterCellValue| {
             let ((c_kind, c_address), _) = cell;
-            let is_pinned = sfr.iter().any(|(kind, address)| *kind == c_kind && *address == c_address);
+            let is_pinned = sfr
+                .iter()
+                .any(|(kind, address)| *kind == c_kind && *address == c_address);
             if is_pinned {
                 Some("Pinned".to_string())
             } else {
@@ -355,7 +397,7 @@ impl App {
 
         let main_data = match data {
             Ok(data) => self.interpreter.run(data, position, fav_checker).join("\n"),
-            Err(e) => e.to_string()
+            Err(e) => e.to_string(),
         };
 
         let data = self.aquire_pinned_data().await;
@@ -386,20 +428,26 @@ impl App {
                     };
                     let ((_, address), _) = c;
 
-                    let line = self.interpreter.run(batch, address, |c| {
-                        let ((kind, _), _) = c;
-                        Some(match kind {
-                            RegisterType::Holding => "Holding",
-                            RegisterType::Input => "Input",
-                        }.to_string())
-                    }).join("\n");
+                    let line = self
+                        .interpreter
+                        .run(batch, address, |c| {
+                            let ((kind, _), _) = c;
+                            Some(
+                                match kind {
+                                    RegisterType::Holding => "Holding",
+                                    RegisterType::Input => "Input",
+                                }
+                                .to_string(),
+                            )
+                        })
+                        .join("\n");
 
                     lines.push(line);
                 }
 
                 lines.join("\n")
-            },
-            Err(e) => e.to_string()
+            }
+            Err(e) => e.to_string(),
         };
 
         if let State::Read(params) = &mut self.state {
@@ -413,12 +461,12 @@ impl App {
             State::Read(p) => {
                 p.main_data = no_data_text();
                 p.register_type.toggle()
-            },
+            }
             State::Dump(p) => {
                 if !p.started {
                     p.register_type.toggle()
                 }
-            },
+            }
             _ => {}
         }
     }

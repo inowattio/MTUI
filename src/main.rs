@@ -1,23 +1,23 @@
 pub mod app;
+mod config;
+mod constants;
 pub mod event;
-pub mod tui;
 pub mod handler;
-mod modbus;
-mod mock;
 mod interpretator;
+mod mock;
+mod modbus;
 mod num_ops;
 mod register;
-mod config;
 mod state;
-mod constants;
+pub mod tui;
 
-use std::io;
-use ratatui::backend::CrosstermBackend;
-use ratatui::Terminal;
 use crate::app::{App, AppResult};
 use crate::event::{Event, EventHandler};
 use crate::handler::handle_key_events;
 use crate::tui::Tui;
+use ratatui::backend::CrosstermBackend;
+use ratatui::Terminal;
+use std::io;
 
 #[tokio::main]
 async fn main() -> AppResult<()> {

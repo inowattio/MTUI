@@ -1,20 +1,20 @@
+mod draw_state;
 mod make_bottom_title;
 mod make_top_title;
-mod draw_state;
 
 use crate::app::{App, AppResult};
 use crate::event::{Event, EventHandler};
-use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
-use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
-use ratatui::backend::Backend;
-use ratatui::Terminal;
-use std::io;
-use std::panic;
-use ratatui::prelude::{Color, Style};
-use ratatui::widgets::{Block, Borders, BorderType};
 use crate::state::State;
 use crate::tui::make_bottom_title::make_bottom_title;
 use crate::tui::make_top_title::make_top_title;
+use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
+use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
+use ratatui::backend::Backend;
+use ratatui::prelude::{Color, Style};
+use ratatui::widgets::{Block, BorderType, Borders};
+use ratatui::Terminal;
+use std::io;
+use std::panic;
 
 #[derive(Debug)]
 pub struct Tui<B: Backend> {
@@ -22,7 +22,10 @@ pub struct Tui<B: Backend> {
     events: EventHandler,
 }
 
-impl<B: Backend> Tui<B> where <B as Backend>::Error: 'static {
+impl<B: Backend> Tui<B>
+where
+    <B as Backend>::Error: 'static,
+{
     pub fn new(mut terminal: Terminal<B>, events: EventHandler) -> AppResult<Self> {
         terminal::enable_raw_mode()?;
         crossterm::execute!(io::stderr(), EnterAlternateScreen, EnableMouseCapture)?;
@@ -53,7 +56,7 @@ impl<B: Backend> Tui<B> where <B as Backend>::Error: 'static {
                 .style(Style::default().fg(Color::LightGreen))
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded);
-            
+
             match &app.state {
                 State::Read(p) => draw_state::read::draw(p, app, frame, outer, base_style, device),
                 State::Dump(p) => draw_state::dump::draw(p, app, frame, outer, base_style, device),

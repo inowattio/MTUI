@@ -1,11 +1,18 @@
-use ratatui::Frame;
+use crate::app::App;
+use crate::state::DumpParams;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout};
 use ratatui::prelude::Style;
 use ratatui::widgets::{Block, Gauge, Paragraph};
-use crate::app::App;
-use crate::state::DumpParams;
+use ratatui::Frame;
 
-pub fn draw(params: &DumpParams, app: &App, frame: &mut Frame, outer: Block, base_style: Style, device: String) {
+pub fn draw(
+    params: &DumpParams,
+    app: &App,
+    frame: &mut Frame,
+    outer: Block,
+    base_style: Style,
+    device: String,
+) {
     let outer_area = frame.area();
     let inner_area = outer.inner(outer_area);
     frame.render_widget(outer, outer_area);
@@ -18,18 +25,18 @@ pub fn draw(params: &DumpParams, app: &App, frame: &mut Frame, outer: Block, bas
                 Constraint::Length(3),
                 Constraint::Min(0),
             ]
-                .as_ref(),
+            .as_ref(),
         )
         .split(inner_area);
 
     let info = format!(
         "Device: {}\nStart at {} on {:?}",
-        device,
-        params.start_position,
-        params.register_type
+        device, params.start_position, params.register_type
     );
     frame.render_widget(
-        Paragraph::new(info).style(base_style).alignment(Alignment::Left),
+        Paragraph::new(info)
+            .style(base_style)
+            .alignment(Alignment::Left),
         rows[0],
     );
 
@@ -43,7 +50,13 @@ pub fn draw(params: &DumpParams, app: &App, frame: &mut Frame, outer: Block, bas
         0.0
     };
     let progress_text = match params.total_batches {
-        Some(total) => format!("{}/{} batches ({}/{} registers)", params.completed_batches, total, params.completed_batches as usize * app.config.registers_batch as usize, total as usize * app.config.registers_batch as usize),
+        Some(total) => format!(
+            "{}/{} batches ({}/{} registers)",
+            params.completed_batches,
+            total,
+            params.completed_batches as usize * app.config.registers_batch as usize,
+            total as usize * app.config.registers_batch as usize
+        ),
         None => "Set batch count to start".to_string(),
     };
     let gauge = Gauge::default()
@@ -61,7 +74,9 @@ pub fn draw(params: &DumpParams, app: &App, frame: &mut Frame, outer: Block, bas
         details.push_str(&format!("\nError: {err}"));
     }
     frame.render_widget(
-        Paragraph::new(details).style(base_style).alignment(Alignment::Left),
+        Paragraph::new(details)
+            .style(base_style)
+            .alignment(Alignment::Left),
         rows[2],
     );
 }

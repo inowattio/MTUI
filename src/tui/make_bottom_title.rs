@@ -1,5 +1,5 @@
-use crate::state::State;
 use crate::constants::keybind::*;
+use crate::state::State;
 
 pub fn make_bottom_title(state: &State) -> String {
     match state {

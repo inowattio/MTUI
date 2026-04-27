@@ -1,14 +1,14 @@
-use std::time::Instant;
 use crate::app::WriteType;
 use crate::constants::keybind;
 use crate::register::RegisterType;
+use std::time::Instant;
 
 #[derive(Debug, Default, PartialEq)]
 pub struct WriteParams {
     pub position: u16,
     pub result: Option<String>,
     pub value: Option<i32>,
-    pub write_type: WriteType
+    pub write_type: WriteType,
 }
 
 #[derive(Debug, PartialEq, Default)]
@@ -26,7 +26,7 @@ pub struct DumpParams {
 #[derive(Debug, Default, PartialEq)]
 pub struct JumpParams {
     pub from: u16,
-    pub to: u16
+    pub to: u16,
 }
 
 #[derive(Debug, PartialEq)]
@@ -37,7 +37,6 @@ pub struct ReadParams {
     pub refresh_timer: Instant,
     pub register_type: RegisterType,
 }
-
 
 impl Default for ReadParams {
     fn default() -> Self {
@@ -69,5 +68,5 @@ pub enum StateTransition {
     Jump,
     Write,
     Help,
-    Dump
+    Dump,
 }

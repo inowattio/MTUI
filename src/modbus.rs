@@ -1,16 +1,16 @@
+use crate::mock::MockContext;
+use anyhow::Result;
+use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use std::future::Future;
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::Mutex;
 use tokio_modbus::client::{rtu, tcp, Context, Reader, Writer};
 use tokio_modbus::slave::Slave;
 use tokio_serial::SerialStream;
-use anyhow::Result;
-use serde::{Deserialize, Serialize};
-use tokio::sync::Mutex;
-use crate::mock::MockContext;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Interface {
@@ -166,7 +166,8 @@ pub struct DeviceConfig {
 async fn timeout<F, D>(future: F, timeout: Duration, between: Duration) -> Result<D>
 where
     F: Future<Output = D> + Send,
-    D: Send, {
+    D: Send,
+{
     let output = tokio::time::timeout(timeout, future).await?;
 
     tokio::time::sleep(between).await;
@@ -229,7 +230,7 @@ impl ModbusDevice {
 
                 context
             }
-            Interface::Mock => MockContext::make()
+            Interface::Mock => MockContext::make(),
         };
 
         Ok(Self {

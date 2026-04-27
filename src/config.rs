@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
 use crate::app::PinnedRegisters;
 use crate::modbus::{DeviceConfig, Interface};
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Config {
@@ -61,4 +61,3 @@ pub struct InterpretorConfig {
     pub ascii: bool,
     pub bits: bool,
 }
-

@@ -1,11 +1,12 @@
-use ratatui::Frame;
+use crate::constants::keybind::*;
 use ratatui::layout::Alignment;
 use ratatui::prelude::Style;
 use ratatui::widgets::{Block, Paragraph};
-use crate::constants::keybind::*;
+use ratatui::Frame;
 
 pub fn draw(frame: &mut Frame, outer: Block, base_style: Style, device: String) {
-    let content = format!("{EXIT} - Exit/Back
+    let content = format!(
+        "{EXIT} - Exit/Back
 {MOVE_UP}/{MOVE_DOWN} - Move Cursor
 {REFRESH} - Refresh Data
 {TOGGLE} - Switch Register Type
@@ -14,8 +15,9 @@ pub fn draw(frame: &mut Frame, outer: Block, base_style: Style, device: String) 
 {DUMP} - Dump
 {HELP} - Help
 {PIN} - Add/Remove Pin (Read only)
-{ACTION} - Action");
-    
+{ACTION} - Action"
+    );
+
     frame.render_widget(
         Paragraph::new(format!("Device: {device}\n{content}"))
             .block(outer)
