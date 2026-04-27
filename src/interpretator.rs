@@ -1,4 +1,5 @@
 use crate::config::InterpretorConfig;
+use crate::modbus::WordOrder;
 use crate::register::RegisterCellValue;
 
 #[derive(Debug)]

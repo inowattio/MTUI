@@ -3,7 +3,6 @@ use crate::app::PinnedRegisters;
 use crate::modbus::{
     DataBits, DeviceConfig, Interface, InterfaceWiredParams, Parity, StopBits, WordOrder,
 };
-use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Config {
