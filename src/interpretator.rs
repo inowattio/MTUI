@@ -2,7 +2,7 @@ use crate::config::InterpretorConfig;
 use crate::modbus::WordOrder;
 use crate::register::RegisterCellValue;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Interpretor {
     config: InterpretorConfig,
     word_order: WordOrder,

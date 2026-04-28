@@ -29,6 +29,7 @@ async fn main() -> AppResult<()> {
     let mut tui = Tui::new(terminal, events)?;
 
     while app.running {
+        app.complete_background_task().await;
         tui.draw(&mut app)?;
         match tui.next_event().await? {
             Event::Tick => app.tick().await,

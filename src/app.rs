@@ -11,8 +11,9 @@ use std::time::Instant;
 use std::{error, fs};
 use tokio::fs::OpenOptions;
 use tokio::io::AsyncWriteExt;
+use tokio::task::JoinHandle;
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum WriteType {
     #[default]
     Word,
@@ -22,6 +23,28 @@ pub enum WriteType {
 pub type AppResult<T> = Result<T, Box<dyn error::Error>>;
 
 #[derive(Debug)]
+enum BackgroundTask {
+    Refresh(JoinHandle<RefreshTaskResult>),
+    Write(JoinHandle<String>),
+    DumpBatch(JoinHandle<DumpBatchTaskResult>),
+}
+
+#[derive(Debug)]
+struct RefreshTaskResult {
+    position: u16,
+    register_type: RegisterType,
+    main_data: Result<Vec<RegisterCellValue>, String>,
+    pinned_data: Result<Vec<RegisterCellValue>, String>,
+}
+
+#[derive(Debug)]
+struct DumpBatchTaskResult {
+    starting_index: u16,
+    total_batches: u16,
+    result: Result<Option<String>, String>,
+}
+
+#[derive(Debug)]
 pub struct App {
     pub config: Config,
     pub running: bool,
@@ -29,6 +52,7 @@ pub struct App {
     pub pinned_registers: Vec<RegisterCell>,
     pub device: ModbusDevice,
     pub interpreter: Interpretor,
+    background_task: Option<BackgroundTask>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -86,6 +110,7 @@ impl App {
             device,
             state: State::Read(Default::default()),
             running: true,
+            background_task: None,
         }
     }
 
@@ -156,19 +181,23 @@ impl App {
             State::Jump(_) => self.switch_focus_to(StateTransition::Read),
             State::Write(params) => {
                 if let Some(number) = params.value {
-                    let result = match params.write_type {
-                        WriteType::Word => {
-                            self.device
-                                .write_register(params.position, number as u16)
-                                .await
-                        }
-                        WriteType::DWord => {
-                            self.device
-                                .write_register_word(params.position, number)
-                                .await
-                        }
-                    };
-                    params.result = Some(format!("{result:#?}"));
+                    if self.background_task.is_some() {
+                        params.result = Some("Device is busy.".to_string());
+                    } else {
+                        let device = self.device.clone();
+                        let position = params.position;
+                        let write_type = params.write_type;
+
+                        params.result = Some("Writing...".to_string());
+                        self.background_task = Some(BackgroundTask::Write(tokio::spawn(async move {
+                            let result = match write_type {
+                                WriteType::Word => device.write_register(position, number as u16).await,
+                                WriteType::DWord => device.write_register_word(position, number).await,
+                            };
+
+                            format!("{result:#?}")
+                        })));
+                    }
                 }
             }
             State::Help => self.quit(),
@@ -197,28 +226,27 @@ impl App {
         }
 
         if start_dump_run {
-            if let Err(e) = self.perform_dump_batch().await {
-                if let State::Dump(params) = &mut self.state {
-                    params.started = false;
-                    params.error = Some(e.to_string());
-                }
-            }
+            self.start_dump_batch();
         }
     }
 
-    async fn perform_dump_batch(&mut self) -> Result<(), anyhow::Error> {
+    fn start_dump_batch(&mut self) {
+        if self.background_task.is_some() {
+            return;
+        }
+
         let (header_needed, starting_index, total_batches, dump_file, register_type) = {
             let State::Dump(params) = &mut self.state else {
-                return Ok(());
+                return;
             };
 
             let Some(total_batches) = params.total_batches else {
-                return Ok(());
+                return;
             };
 
             if params.completed_batches >= total_batches {
                 params.started = false;
-                return Ok(());
+                return;
             }
 
             (
@@ -230,79 +258,81 @@ impl App {
             )
         };
 
-        let mut file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&dump_file)
-            .await?;
+        let device = self.device.clone();
+        let interpreter = self.interpreter.clone();
+        let amount = self.config.registers_batch;
 
-        if header_needed {
-            file.write_all(self.interpreter.header().as_bytes()).await?;
-            file.write_all(b"\n").await?;
-        }
+        self.background_task = Some(BackgroundTask::DumpBatch(tokio::spawn(async move {
+            let result = async {
+                let mut file = OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(&dump_file)
+                    .await
+                    .map_err(|e| e.to_string())?;
 
-        let data_result = self.aquire_data(register_type).await;
-        let mut error_message = None;
+                if header_needed {
+                    file.write_all(interpreter.header().as_bytes())
+                        .await
+                        .map_err(|e| e.to_string())?;
+                    file.write_all(b"\n").await.map_err(|e| e.to_string())?;
+                }
 
-        match data_result {
-            Ok(data) => {
-                file.write_all(
-                    self.interpreter
-                        .run(data, starting_index, |_| None)
-                        .join("\n")
-                        .as_bytes(),
-                )
-                .await?;
-                file.write_all(b"\n").await?;
+                let data_result =
+                    Self::aquire_data_with(&device, amount, starting_index, register_type).await;
+                let mut error_message = None;
+
+                match data_result {
+                    Ok(data) => {
+                        file.write_all(
+                            interpreter
+                                .run(data, starting_index, |_| None)
+                                .join("\n")
+                                .as_bytes(),
+                        )
+                        .await
+                        .map_err(|e| e.to_string())?;
+                        file.write_all(b"\n").await.map_err(|e| e.to_string())?;
+                    }
+                    Err(e) => {
+                        error_message = Some(e.to_string());
+                        let line = format!("{starting_index}: error");
+                        file.write_all(line.as_bytes())
+                            .await
+                            .map_err(|e| e.to_string())?;
+                    }
+                }
+
+                Ok(error_message)
             }
-            Err(e) => {
-                error_message = Some(e.to_string());
-                let line = format!("{starting_index}: error");
-                file.write_all(line.as_bytes()).await?;
+            .await;
+
+            DumpBatchTaskResult {
+                starting_index,
+                total_batches,
+                result,
             }
-        }
-
-        if let State::Dump(params) = &mut self.state {
-            params.header_written = true;
-            params.completed_batches += 1;
-            params.position = starting_index + self.config.registers_batch;
-            params.error = error_message;
-
-            if params.completed_batches >= total_batches {
-                params.started = false;
-            }
-        }
-
-        Ok(())
+        })));
     }
 
     pub async fn tick(&mut self) {
+        self.complete_background_task().await;
+        if self.background_task.is_some() {
+            return;
+        }
+
         let should_perform_dump = matches!(&self.state, State::Dump(p) if p.started);
+        let should_refresh = matches!(
+            &self.state,
+            State::Read(p)
+                if self.config.auto_update_interval_seconds
+                    .is_some_and(|seconds| p.refresh_timer.elapsed().as_secs() > seconds)
+        );
 
-        match &mut self.state {
-            State::Read(p) => {
-                let refresh_seconds =
-                    if let Some(refresh_seconds) = self.config.auto_update_interval_seconds {
-                        refresh_seconds
-                    } else {
-                        return;
-                    };
-
-                if p.refresh_timer.elapsed().as_secs() > refresh_seconds {
-                    self.refresh().await;
-                }
-            }
-            State::Dump(_) => {
-                if should_perform_dump {
-                    if let Err(e) = self.perform_dump_batch().await {
-                        if let State::Dump(p) = &mut self.state {
-                            p.started = false;
-                            p.error = Some(e.to_string());
-                        }
-                    }
-                }
-            }
-            _ => {}
+        if should_refresh {
+            self.refresh().await;
+        } else if should_perform_dump {
+            self.start_dump_batch();
         }
     }
 
@@ -317,13 +347,25 @@ impl App {
         &self,
         register_type: RegisterType,
     ) -> Result<Vec<RegisterCellValue>, anyhow::Error> {
-        let amount = self.config.registers_batch;
-        let position = self.get_current_position();
+        Self::aquire_data_with(
+            &self.device,
+            self.config.registers_batch,
+            self.get_current_position(),
+            register_type,
+        )
+        .await
+    }
 
+    async fn aquire_data_with(
+        device: &ModbusDevice,
+        amount: u16,
+        position: u16,
+        register_type: RegisterType,
+    ) -> Result<Vec<RegisterCellValue>, anyhow::Error> {
         let values = if register_type == RegisterType::Holding {
-            self.device.holdings(position, amount).await?
+            device.holdings(position, amount).await?
         } else {
-            self.device.inputs(position, amount).await?
+            device.inputs(position, amount).await?
         };
 
         Ok(values
@@ -334,7 +376,13 @@ impl App {
     }
 
     pub async fn aquire_pinned_data(&self) -> Result<Vec<RegisterCellValue>, anyhow::Error> {
-        let regs = &self.pinned_registers;
+        Self::aquire_pinned_data_with(&self.device, &self.pinned_registers).await
+    }
+
+    async fn aquire_pinned_data_with(
+        device: &ModbusDevice,
+        regs: &[RegisterCell],
+    ) -> Result<Vec<RegisterCellValue>, anyhow::Error> {
         let mut collection = Vec::with_capacity(regs.len());
 
         let mut i = 0usize;
@@ -355,8 +403,8 @@ impl App {
             }
 
             let values = match kind {
-                RegisterType::Holding => self.device.holdings(start_addr, run_len as u16).await?,
-                RegisterType::Input => self.device.inputs(start_addr, run_len as u16).await?,
+                RegisterType::Holding => device.holdings(start_addr, run_len as u16).await?,
+                RegisterType::Input => device.inputs(start_addr, run_len as u16).await?,
             };
 
             for j in 0..run_len {
@@ -373,14 +421,48 @@ impl App {
     }
 
     pub async fn refresh(&mut self) {
+        if self.background_task.is_some() {
+            return;
+        }
+
         let (position, register_type) = if let State::Read(p) = &mut self.state {
             p.refresh_timer = Instant::now();
+            p.main_data = "Loading...".to_string();
             (p.position, p.register_type)
         } else {
             return;
         };
 
-        let data = self.aquire_data(register_type).await;
+        let device = self.device.clone();
+        let pinned_registers = self.pinned_registers.clone();
+        let amount = self.config.registers_batch;
+
+        self.background_task = Some(BackgroundTask::Refresh(tokio::spawn(async move {
+            let main_data = Self::aquire_data_with(&device, amount, position, register_type)
+                .await
+                .map_err(|e| e.to_string());
+            let pinned_data = Self::aquire_pinned_data_with(&device, &pinned_registers)
+                .await
+                .map_err(|e| e.to_string());
+
+            RefreshTaskResult {
+                position,
+                register_type,
+                main_data,
+                pinned_data,
+            }
+        })));
+    }
+
+    fn apply_refresh_result(&mut self, result: RefreshTaskResult) {
+        let position = result.position;
+        if !matches!(
+            &self.state,
+            State::Read(params)
+                if params.position == position && params.register_type == result.register_type
+        ) {
+            return;
+        }
 
         let sfr = &self.pinned_registers;
         let fav_checker = |cell: RegisterCellValue| {
@@ -395,13 +477,12 @@ impl App {
             }
         };
 
-        let main_data = match data {
+        let main_data = match result.main_data {
             Ok(data) => self.interpreter.run(data, position, fav_checker).join("\n"),
             Err(e) => e.to_string(),
         };
 
-        let data = self.aquire_pinned_data().await;
-        let pinned_data = match data {
+        let pinned_data = match result.pinned_data {
             Ok(data) => {
                 let mut lines = Vec::new();
                 let mut skip = false;
@@ -453,6 +534,69 @@ impl App {
         if let State::Read(params) = &mut self.state {
             params.main_data = main_data;
             params.pinned_data = pinned_data;
+        }
+    }
+
+    pub async fn complete_background_task(&mut self) {
+        let Some(task) = self.background_task.as_ref() else {
+            return;
+        };
+
+        if !match task {
+            BackgroundTask::Refresh(handle) => handle.is_finished(),
+            BackgroundTask::Write(handle) => handle.is_finished(),
+            BackgroundTask::DumpBatch(handle) => handle.is_finished(),
+        } {
+            return;
+        }
+
+        let task = self.background_task.take().unwrap();
+
+        match task {
+            BackgroundTask::Refresh(handle) => match handle.await {
+                Ok(result) => self.apply_refresh_result(result),
+                Err(e) => {
+                    if let State::Read(params) = &mut self.state {
+                        params.main_data = e.to_string();
+                    }
+                }
+            },
+            BackgroundTask::Write(handle) => {
+                let result = handle.await.unwrap_or_else(|e| e.to_string());
+                if let State::Write(params) = &mut self.state {
+                    params.result = Some(result);
+                }
+            }
+            BackgroundTask::DumpBatch(handle) => match handle.await {
+                Ok(result) => self.apply_dump_batch_result(result),
+                Err(e) => {
+                    if let State::Dump(params) = &mut self.state {
+                        params.started = false;
+                        params.error = Some(e.to_string());
+                    }
+                }
+            },
+        }
+    }
+
+    fn apply_dump_batch_result(&mut self, result: DumpBatchTaskResult) {
+        if let State::Dump(params) = &mut self.state {
+            match result.result {
+                Ok(error_message) => {
+                    params.header_written = true;
+                    params.completed_batches += 1;
+                    params.position = result.starting_index + self.config.registers_batch;
+                    params.error = error_message;
+
+                    if params.completed_batches >= result.total_batches {
+                        params.started = false;
+                    }
+                }
+                Err(error) => {
+                    params.started = false;
+                    params.error = Some(error);
+                }
+            }
         }
     }
 
