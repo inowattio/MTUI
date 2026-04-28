@@ -129,6 +129,7 @@ impl App {
         let register_type = match &self.state {
             State::Read(p) => p.register_type,
             State::Dump(p) => p.register_type,
+            State::Jump(p) => p.register_type,
             _ => Default::default(),
         };
 
@@ -144,6 +145,7 @@ impl App {
             }),
             StateTransition::Jump => State::Jump(JumpParams {
                 from: position,
+                register_type,
                 ..Default::default()
             }),
             StateTransition::Read => State::Read(ReadParams {

@@ -27,6 +27,7 @@ pub struct DumpParams {
 pub struct JumpParams {
     pub from: u16,
     pub to: u16,
+    pub register_type: RegisterType,
 }
 
 #[derive(Debug, PartialEq)]

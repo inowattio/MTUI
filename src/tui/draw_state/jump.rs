@@ -11,7 +11,10 @@ pub fn draw(
     base_style: Style,
     device: String,
 ) {
-    let content = format!("Jump from {} at: {:?}", params.from, params.to);
+    let content = format!(
+        "Jump from {} at: {:?} ({:?})",
+        params.from, params.to, params.register_type
+    );
 
     frame.render_widget(
         Paragraph::new(format!("Device: {device}\n{content}"))
