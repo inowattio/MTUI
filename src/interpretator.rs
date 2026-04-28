@@ -1,14 +1,16 @@
 use crate::config::InterpretorConfig;
+use crate::modbus::WordOrder;
 use crate::register::RegisterCellValue;
 
 #[derive(Debug)]
 pub struct Interpretor {
     config: InterpretorConfig,
+    word_order: WordOrder,
     header: String,
 }
 
 impl Interpretor {
-    pub fn new(interpretation: InterpretorConfig) -> Self {
+    pub fn new(interpretation: InterpretorConfig, word_order: WordOrder) -> Self {
         let mut header = format!("{0: >5}: {1: <5} {2: <6} ", "index", "u16", "i16");
 
         if interpretation.hex {
@@ -38,6 +40,7 @@ impl Interpretor {
 
         Self {
             config: interpretation,
+            word_order,
             header,
         }
     }
@@ -68,11 +71,9 @@ impl Interpretor {
                 byte as i16
             );
 
-            let word = (byte as u32) << 16 | (next_byte_1st as u32);
-            let dword = ((byte as u64) << 48)
-                | ((next_byte_1st as u64) << 32)
-                | ((next_byte_2nd as u64) << 16)
-                | (next_byte_3rd as u64);
+            let word = self.word_order.make_word(byte, next_byte_1st);
+            let second_word = self.word_order.make_word(next_byte_2nd, next_byte_3rd);
+            let dword = self.word_order.make_dword(word, second_word);
             if self.config.hex {
                 row.push_str(&format!("{byte:<04X} "))
             }

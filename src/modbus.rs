@@ -154,6 +154,117 @@ pub struct InterfaceNetworkParams {
     pub port: u16,
 }
 
+pub trait ModbusDataOrder: Clone + Send + Sync {
+    fn make_word(a: u16, b: u16) -> u32;
+    fn make_dword(a: u32, b: u32) -> u64;
+    fn split_word(data: u32) -> [u16; 2];
+}
+
+#[derive(Clone)]
+pub struct ABCD;
+impl ModbusDataOrder for ABCD {
+    fn make_word(a: u16, b: u16) -> u32 {
+        ((a as u32) << 16) | (b as u32)
+    }
+
+    fn make_dword(a: u32, b: u32) -> u64 {
+        ((a as u64) << 32) | (b as u64)
+    }
+
+    fn split_word(data: u32) -> [u16; 2] {
+        [(data >> 16) as u16, (data & 0xFFFF) as u16]
+    }
+}
+
+#[derive(Clone)]
+pub struct BADC;
+impl ModbusDataOrder for BADC {
+    fn make_word(a: u16, b: u16) -> u32 {
+        ABCD::make_word(a.swap_bytes(), b.swap_bytes())
+    }
+
+    fn make_dword(a: u32, b: u32) -> u64 {
+        ABCD::make_dword(a.swap_bytes(), b.swap_bytes())
+    }
+
+    fn split_word(data: u32) -> [u16; 2] {
+        let [a, b] = ABCD::split_word(data);
+        [a.swap_bytes(), b.swap_bytes()]
+    }
+}
+
+#[derive(Clone)]
+pub struct CDAB;
+impl ModbusDataOrder for CDAB {
+    fn make_word(a: u16, b: u16) -> u32 {
+        ABCD::make_word(b, a)
+    }
+
+    fn make_dword(a: u32, b: u32) -> u64 {
+        ABCD::make_dword(b, a)
+    }
+
+    fn split_word(data: u32) -> [u16; 2] {
+        let [a, b] = ABCD::split_word(data);
+        [b, a]
+    }
+}
+
+#[derive(Clone)]
+pub struct DCBA;
+impl ModbusDataOrder for DCBA {
+    fn make_word(a: u16, b: u16) -> u32 {
+        ABCD::make_word(b.swap_bytes(), a.swap_bytes())
+    }
+
+    fn make_dword(a: u32, b: u32) -> u64 {
+        ABCD::make_dword(b.swap_bytes(), a.swap_bytes())
+    }
+
+    fn split_word(data: u32) -> [u16; 2] {
+        let [a, b] = ABCD::split_word(data);
+        [b.swap_bytes(), a.swap_bytes()]
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
+pub enum WordOrder {
+    #[default]
+    ABCD,
+    BADC,
+    CDAB,
+    DCBA,
+}
+
+impl WordOrder {
+    pub fn make_word(self, a: u16, b: u16) -> u32 {
+        match self {
+            Self::ABCD => ABCD::make_word(a, b),
+            Self::BADC => BADC::make_word(a, b),
+            Self::CDAB => CDAB::make_word(a, b),
+            Self::DCBA => DCBA::make_word(a, b),
+        }
+    }
+
+    pub fn make_dword(self, a: u32, b: u32) -> u64 {
+        match self {
+            Self::ABCD => ABCD::make_dword(a, b),
+            Self::BADC => BADC::make_dword(a, b),
+            Self::CDAB => CDAB::make_dword(a, b),
+            Self::DCBA => DCBA::make_dword(a, b),
+        }
+    }
+
+    pub fn split_word(self, data: u32) -> [u16; 2] {
+        match self {
+            Self::ABCD => ABCD::split_word(data),
+            Self::BADC => BADC::split_word(data),
+            Self::CDAB => CDAB::split_word(data),
+            Self::DCBA => DCBA::split_word(data),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct DeviceConfig {
     pub interface: Interface,
@@ -161,6 +272,8 @@ pub struct DeviceConfig {
     pub timeout_connect_ms: u64,
     pub timeout_command_ms: u64,
     pub time_between_commands_ms: u64,
+    #[serde(default)]
+    pub word_order: WordOrder,
 }
 
 async fn timeout<F, D>(future: F, timeout: Duration, between: Duration) -> Result<D>
@@ -247,6 +360,75 @@ impl ModbusDevice {
         timeout!(self, read_holding_registers, (address, quantity))
     }
 
+    pub async fn input_word(&self, address: u16) -> Result<u32> {
+        let data = self.inputs(address, 2).await?;
+        anyhow::ensure!(data.len() == 2, "Expected 2 values.");
+        Ok(self.config.word_order.make_word(data[0], data[1]))
+    }
+
+    pub async fn input_words(&self, address: u16, quantity: u16) -> Result<Vec<u32>> {
+        let register_count = quantity
+            .checked_mul(2)
+            .ok_or_else(|| anyhow::anyhow!("Input word quantity is too large."))?;
+        let data = self.inputs(address, register_count).await?;
+        anyhow::ensure!(
+            data.len() == register_count as usize,
+            "Expected {register_count} values."
+        );
+        Ok(data
+            .chunks_exact(2)
+            .map(|word| self.config.word_order.make_word(word[0], word[1]))
+            .collect())
+    }
+
+    pub async fn holding_word(&self, address: u16) -> Result<u32> {
+        let data = self.holdings(address, 2).await?;
+        anyhow::ensure!(data.len() == 2, "Expected 2 values.");
+        Ok(self.config.word_order.make_word(data[0], data[1]))
+    }
+
+    pub async fn holding_dword(&self, address: u16) -> Result<u64> {
+        let data = self.holdings(address, 4).await?;
+        anyhow::ensure!(data.len() == 4, "Expected 4 values.");
+        let high = self.config.word_order.make_word(data[0], data[1]);
+        let low = self.config.word_order.make_word(data[2], data[3]);
+        Ok(self.config.word_order.make_dword(high, low))
+    }
+
+    pub async fn holding_words(&self, address: u16, quantity: u16) -> Result<Vec<u32>> {
+        let register_count = quantity
+            .checked_mul(2)
+            .ok_or_else(|| anyhow::anyhow!("Holding word quantity is too large."))?;
+        let data = self.holdings(address, register_count).await?;
+        anyhow::ensure!(
+            data.len() == register_count as usize,
+            "Expected {register_count} values."
+        );
+        Ok(data
+            .chunks_exact(2)
+            .map(|word| self.config.word_order.make_word(word[0], word[1]))
+            .collect())
+    }
+
+    pub async fn holding_dwords(&self, address: u16, quantity: u16) -> Result<Vec<u64>> {
+        let register_count = quantity
+            .checked_mul(4)
+            .ok_or_else(|| anyhow::anyhow!("Holding dword quantity is too large."))?;
+        let data = self.holdings(address, register_count).await?;
+        anyhow::ensure!(
+            data.len() == register_count as usize,
+            "Expected {register_count} values."
+        );
+        Ok(data
+            .chunks_exact(4)
+            .map(|dword| {
+                let high = self.config.word_order.make_word(dword[0], dword[1]);
+                let low = self.config.word_order.make_word(dword[2], dword[3]);
+                self.config.word_order.make_dword(high, low)
+            })
+            .collect())
+    }
+
     pub async fn write_register(&self, address: u16, data: u16) -> Result<()> {
         timeout!(self, write_single_register, (address, data))
     }
@@ -256,8 +438,16 @@ impl ModbusDevice {
     }
 
     pub async fn write_register_word(&self, address: u16, data: i32) -> Result<()> {
-        let high = (data >> 16) as u16;
-        let low = (data & 0xFFFF) as u16;
-        self.write_registers(address, &[high, low]).await
+        let words = self.config.word_order.split_word(data as u32);
+        self.write_registers(address, &words).await
+    }
+
+    pub async fn write_register_words(&self, address: u16, data: &[i32]) -> Result<()> {
+        for (i, item) in data.iter().enumerate() {
+            self.write_register_word(address + (i * 2) as u16, *item)
+                .await?;
+        }
+
+        Ok(())
     }
 }
