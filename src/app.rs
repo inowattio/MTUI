@@ -514,21 +514,10 @@ impl App {
             }
         }
 
-        let sfr = &self.pinned_registers;
         let labels = &self.labels;
-        let fav_checker = |cell: RegisterCellValue| {
+        let labeler = |cell: RegisterCellValue| {
             let ((c_kind, c_address), _) = cell;
-            let mut parts = Vec::new();
-            if let Some(text) = labels.get(&(c_kind, c_address)) {
-                parts.push(text.clone());
-            }
-            if sfr
-                .iter()
-                .any(|(kind, address)| *kind == c_kind && *address == c_address)
-            {
-                parts.push("Pinned".to_string());
-            }
-            (!parts.is_empty()).then(|| parts.join(" "))
+            labels.get(&(c_kind, c_address)).cloned()
         };
 
         let ascii_string = match &result.main_data {
@@ -542,7 +531,7 @@ impl App {
         };
 
         let main_data = match result.main_data {
-            Ok(data) => self.interpreter.run(data, position, fav_checker).join("\n"),
+            Ok(data) => self.interpreter.run(data, position, labeler).join("\n"),
             Err(e) => e.to_string(),
         };
 
@@ -577,14 +566,7 @@ impl App {
                         .interpreter
                         .run(batch, address, |c| {
                             let ((kind, c_address), _) = c;
-                            let kind_str = match kind {
-                                RegisterType::Holding => "Holding",
-                                RegisterType::Input => "Input",
-                            };
-                            match labels.get(&(kind, c_address)) {
-                                Some(text) => Some(format!("{kind_str} {text}")),
-                                None => Some(kind_str.to_string()),
-                            }
+                            labels.get(&(kind, c_address)).cloned()
                         })
                         .join("\n");
 

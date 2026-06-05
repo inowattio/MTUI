@@ -79,6 +79,7 @@ impl Default for Config {
                 i64: false,
                 ascii: true,
                 bits: false,
+                label: true,
             },
             registers_batch: 4,
             auto_update_interval_seconds: Some(1),
@@ -99,4 +100,5 @@ pub struct InterpretorConfig {
     pub i64: bool,
     pub ascii: bool,
     pub bits: bool,
+    pub label: bool,
 }

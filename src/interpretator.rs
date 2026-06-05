@@ -37,6 +37,9 @@ impl Interpretor {
         if interpretation.bits {
             header.push_str(&format!("{0: <8} ", "bits"))
         }
+        if interpretation.label {
+            header.push_str("label");
+        }
 
         Self {
             config: interpretation,
@@ -71,7 +74,7 @@ impl Interpretor {
         &self,
         data: Vec<RegisterCellValue>,
         index: u16,
-        additional: impl Fn(RegisterCellValue) -> Option<String>,
+        label: impl Fn(RegisterCellValue) -> Option<String>,
     ) -> Vec<String> {
         let mut lines = Vec::with_capacity(data.len());
 
@@ -137,8 +140,10 @@ impl Interpretor {
                 row.push_str(&format!("{byte:<08b} "))
             }
 
-            if let Some(t) = additional(current) {
-                row.push_str(&format!("{t} "));
+            if self.config.label {
+                if let Some(t) = label(current) {
+                    row.push_str(&t);
+                }
             }
 
             lines.push(row);
