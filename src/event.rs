@@ -4,12 +4,13 @@ use crossterm::event::{Event as CrosstermEvent, KeyEvent, MouseEvent};
 use futures::{FutureExt, StreamExt};
 use tokio::sync::mpsc;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub enum Event {
     Tick,
     Key(KeyEvent),
     Mouse(MouseEvent),
     Resize(u16, u16),
+    Paste(String),
 }
 
 #[allow(dead_code)]
@@ -39,6 +40,9 @@ async fn event_processor(tx: mpsc::UnboundedSender<Event>) {
                     },
                     CrosstermEvent::Resize(x, y) => {
                         let _ = tx.send(Event::Resize(x, y));
+                    },
+                    CrosstermEvent::Paste(data) => {
+                        let _ = tx.send(Event::Paste(data));
                     },
                     _ => ()
                 }

@@ -13,7 +13,7 @@ pub mod tui;
 
 use crate::app::{App, AppResult};
 use crate::event::{Event, EventHandler};
-use crate::handler::handle_key_events;
+use crate::handler::{handle_key_events, handle_paste};
 use crate::tui::Tui;
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
@@ -36,6 +36,7 @@ async fn main() -> AppResult<()> {
             Event::Key(key_event) => handle_key_events(key_event, &mut app).await?,
             Event::Mouse(_) => {}
             Event::Resize(_, _) => {}
+            Event::Paste(data) => handle_paste(data, &mut app),
         }
     }
 

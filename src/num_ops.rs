@@ -1,4 +1,4 @@
-use num_traits::{CheckedAdd, CheckedDiv, CheckedMul, CheckedNeg, CheckedSub};
+use num_traits::{CheckedAdd, CheckedDiv, CheckedMul, CheckedNeg, CheckedSub, Zero};
 
 pub fn negate_opt_option<T>(v: &mut Option<T>)
 where
@@ -101,5 +101,21 @@ where
 {
     if let Some(c) = v.checked_add(&by.into()) {
         *v = c;
+    }
+}
+
+pub fn set_to_zero<T>(v: &mut T)
+where
+    T: Zero
+{
+    *v = T::zero();
+}
+
+pub fn set_option_to_zero<T>(v: &mut Option<T>)
+where
+    T: Zero
+{
+    if let Some(v) = v {
+        *v = T::zero();
     }
 }

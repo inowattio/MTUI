@@ -1,9 +1,6 @@
 use crate::app::{App, AppResult, WriteType};
 use crate::constants::keybind;
-use crate::num_ops::{
-    decrement_by, decrement_option_by, digit_add, digit_add_option, digit_remove,
-    digit_remove_option, increment_by, increment_option_by, negate_opt_option,
-};
+use crate::num_ops::{decrement_by, decrement_option_by, digit_add, digit_add_option, digit_remove, digit_remove_option, increment_by, increment_option_by, negate_opt_option, set_option_to_zero, set_to_zero};
 use crate::state::{State, StateTransition};
 use crossterm::event::{KeyCode, KeyEvent};
 
@@ -86,4 +83,38 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         _ => {}
     }
     Ok(())
+}
+
+pub fn handle_paste(data: String, app: &mut App) {
+    let original_size = data.len();
+    let digits = data.chars().into_iter().filter(char::is_ascii_digit).map(|c| c as u8 - '0' as u8).collect::<Vec<_>>();
+
+    if digits.len() != original_size {
+        return;
+    }
+
+    match &mut app.state {
+        State::Read(params) => set_to_zero(&mut params.position),
+        State::Jump(params) => set_to_zero(&mut params.to),
+        State::Write(params) => set_option_to_zero(&mut params.value),
+        _ => {}
+    };
+
+    for digit in digits {
+        match &mut app.state {
+            State::Read(params) => digit_add(&mut params.position, digit),
+            State::Jump(params) => digit_add(&mut params.to, digit),
+            State::Write(params) => digit_add_option(&mut params.value, digit),
+            State::Dump(params) => {
+                if params.started {
+                    return;
+                }
+
+                params.error = None;
+
+                digit_add_option(&mut params.total_batches, digit)
+            }
+            _ => {}
+        };
+    }
 }
