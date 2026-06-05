@@ -15,6 +15,7 @@ pub fn draw(frame: &mut Frame, outer: Block, base_style: Style, device: String) 
 {DUMP} - Dump
 {HELP} - Help
 {PIN} - Add/Remove Pin (Read only)
+{LABEL} - Label register (Read only)
 {ACTION} - Action"
     );
 

@@ -15,6 +15,7 @@ pub mod keybind {
     pub const TOGGLE: KeyCode = KeyCode::Char('t');
     pub const WRITE: KeyCode = KeyCode::Char('w');
     pub const JUMP: KeyCode = KeyCode::Char('j');
+    pub const LABEL: KeyCode = KeyCode::Char('l');
     pub const NEGATOR: KeyCode = KeyCode::Char('-');
     pub const ACTION: KeyCode = KeyCode::Enter;
     pub const MOVE_UP: KeyCode = KeyCode::Up;

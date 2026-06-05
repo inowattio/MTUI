@@ -5,6 +5,17 @@ use crate::state::{State, StateTransition};
 use crossterm::event::{KeyCode, KeyEvent};
 
 pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
+    if matches!(app.state, State::Label(_)) {
+        match key_event.code {
+            KeyCode::Esc => app.cancel_label(),
+            keybind::ACTION => app.commit_label(),
+            KeyCode::Backspace => app.label_backspace(),
+            KeyCode::Char(c) => app.label_input(c),
+            _ => {}
+        }
+        return Ok(());
+    }
+
     match key_event.code {
         keybind::EXIT => app.quit(),
         keybind::PIN => app.pin(),
@@ -13,6 +24,11 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         keybind::REFRESH => app.refresh().await,
         keybind::TOGGLE => app.toggle_type(),
         keybind::JUMP => app.switch_focus_to(StateTransition::Jump),
+        keybind::LABEL => {
+            if matches!(app.state, State::Read(_)) {
+                app.switch_focus_to(StateTransition::Label);
+            }
+        }
         keybind::ACTION => app.do_action().await,
         keybind::WRITE => {
             if let State::Write(params) = &mut app.state {

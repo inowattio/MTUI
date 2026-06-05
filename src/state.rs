@@ -30,6 +30,14 @@ pub struct JumpParams {
     pub register_type: RegisterType,
 }
 
+#[derive(Debug, Default, PartialEq)]
+pub struct LabelParams {
+    pub position: u16,
+    pub register_type: RegisterType,
+    pub text: String,
+    pub result: Option<String>,
+}
+
 #[derive(Debug, PartialEq)]
 pub struct ReadParams {
     pub position: u16,
@@ -74,6 +82,7 @@ pub enum State {
     Write(WriteParams),
     Help,
     Dump(DumpParams),
+    Label(LabelParams),
 }
 
 pub enum StateTransition {
@@ -82,4 +91,5 @@ pub enum StateTransition {
     Write,
     Help,
     Dump,
+    Label,
 }

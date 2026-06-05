@@ -1,10 +1,11 @@
-use crate::config::{Config, Labels};
+use crate::config::{Config, Label, Labels};
 use crate::constants::CONFIG_PATH;
 use crate::interpretator::Interpretor;
 use crate::modbus::ModbusDevice;
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
 use crate::state::{
-    no_data_text, DumpParams, JumpParams, ReadParams, State, StateTransition, WriteParams,
+    no_data_text, DumpParams, JumpParams, LabelParams, ReadParams, State, StateTransition,
+    WriteParams,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -97,6 +98,31 @@ impl From<Labels> for BTreeMap<RegisterCell, String> {
     }
 }
 
+impl From<&BTreeMap<RegisterCell, String>> for Labels {
+    fn from(map: &BTreeMap<RegisterCell, String>) -> Self {
+        let mut holdings = Vec::new();
+        let mut inputs = Vec::new();
+
+        for ((kind, address), text) in map {
+            let label = Label {
+                address: *address,
+                text: text.clone(),
+            };
+            match kind {
+                RegisterType::Holding => holdings.push(label),
+                RegisterType::Input => inputs.push(label),
+            }
+        }
+
+        Self { holdings, inputs }
+    }
+}
+
+fn save_config(config: &Config) -> Result<(), String> {
+    let content = serde_json::to_string_pretty(config).map_err(|e| e.to_string())?;
+    fs::write(CONFIG_PATH, content).map_err(|e| e.to_string())
+}
+
 fn dump_example_config_and_exit() {
     let example_config = Config::default();
     let config_string = serde_json::to_string_pretty(&example_config).unwrap();
@@ -146,6 +172,7 @@ impl App {
             State::Jump(p) => p.to,
             State::Write(p) => p.position,
             State::Dump(p) => p.position,
+            State::Label(p) => p.position,
             State::Help => 0,
         }
     }
@@ -180,7 +207,78 @@ impl App {
                 ..Default::default()
             }),
             StateTransition::Help => State::Help,
+            StateTransition::Label => {
+                let text = self
+                    .labels
+                    .get(&(register_type, position))
+                    .cloned()
+                    .unwrap_or_default();
+                State::Label(LabelParams {
+                    position,
+                    register_type,
+                    text,
+                    result: None,
+                })
+            }
         };
+    }
+
+    pub fn label_input(&mut self, c: char) {
+        if let State::Label(p) = &mut self.state {
+            p.result = None;
+            p.text.push(c);
+        }
+    }
+
+    pub fn label_backspace(&mut self) {
+        if let State::Label(p) = &mut self.state {
+            p.result = None;
+            p.text.pop();
+        }
+    }
+
+    pub fn cancel_label(&mut self) {
+        let State::Label(p) = &self.state else { return };
+        let position = p.position;
+        let register_type = p.register_type;
+        self.state = State::Read(ReadParams {
+            position,
+            register_type,
+            ..Default::default()
+        });
+    }
+
+    pub fn commit_label(&mut self) {
+        let (position, register_type, text) = {
+            let State::Label(p) = &self.state else { return };
+            (p.position, p.register_type, p.text.clone())
+        };
+
+        let key = (register_type, position);
+        let mut new_labels = self.labels.clone();
+        if text.is_empty() {
+            new_labels.remove(&key);
+        } else {
+            new_labels.insert(key, text);
+        }
+
+        let mut new_config = self.config.clone();
+        new_config.labels = (&new_labels).into();
+
+        if let Err(e) = save_config(&new_config) {
+            if let State::Label(p) = &mut self.state {
+                p.result = Some(format!("Save failed: {e}"));
+            }
+            return;
+        }
+
+        self.labels = new_labels;
+        self.config = new_config;
+        self.state = State::Read(ReadParams {
+            position,
+            register_type,
+            ..Default::default()
+        });
     }
 
     pub fn pin(&mut self) {
@@ -251,6 +349,7 @@ impl App {
                 params.position = params.start_position;
                 start_dump_run = true;
             }
+            State::Label(_) => {}
         }
 
         if start_dump_run {

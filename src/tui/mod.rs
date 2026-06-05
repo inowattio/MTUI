@@ -68,6 +68,7 @@ where
                 State::Dump(p) => draw_state::dump::draw(p, app, frame, outer, base_style, device),
                 State::Jump(p) => draw_state::jump::draw(p, frame, outer, base_style, device),
                 State::Write(p) => draw_state::write::draw(p, frame, outer, base_style, device),
+                State::Label(p) => draw_state::label::draw(p, frame, outer, base_style, device),
                 State::Help => draw_state::help::draw(frame, outer, base_style, device),
             }
         })?;
