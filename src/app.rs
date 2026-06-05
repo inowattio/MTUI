@@ -106,9 +106,13 @@ impl App {
         Self {
             interpreter: Interpretor::new(config.interpretations.clone(), config.device.word_order),
             pinned_registers: config.pinned_defaults.clone().into(),
+            state: State::Read(ReadParams {
+                position: config.startup.address,
+                register_type: config.startup.register_type,
+                ..Default::default()
+            }),
             config,
             device,
-            state: State::Read(Default::default()),
             running: true,
             background_task: None,
         }

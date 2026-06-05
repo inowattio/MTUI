@@ -2,16 +2,25 @@ use crate::app::PinnedRegisters;
 use crate::modbus::{
     DataBits, DeviceConfig, Interface, InterfaceWiredParams, Parity, StopBits, WordOrder,
 };
+use crate::register::RegisterType;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Config {
     pub device: DeviceConfig,
+    pub startup: Startup,
     pub interpretations: InterpretorConfig,
     pub registers_batch: u16,
     pub auto_update_interval_seconds: Option<u64>,
     pub dump_file: String,
     pub pinned_defaults: PinnedRegisters,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+pub struct Startup {
+    pub address: u16,
+    #[serde(rename = "type")]
+    pub register_type: RegisterType,
 }
 
 impl Config {
@@ -40,6 +49,10 @@ impl Default for Config {
                 timeout_command_ms: 2000,
                 time_between_commands_ms: 3,
                 word_order: WordOrder::default(),
+            },
+            startup: Startup {
+                address: 0,
+                register_type: RegisterType::Holding,
             },
             interpretations: InterpretorConfig {
                 hex: false,
