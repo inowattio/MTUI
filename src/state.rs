@@ -1,7 +1,7 @@
 use crate::app::WriteType;
 use crate::constants::keybind;
 use crate::register::RegisterType;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Default, PartialEq)]
 pub struct WriteParams {
@@ -37,6 +37,7 @@ pub struct ReadParams {
     pub pinned_data: String,
     pub refresh_timer: Instant,
     pub register_type: RegisterType,
+    pub read_duration: Option<Duration>,
 }
 
 impl Default for ReadParams {
@@ -47,6 +48,7 @@ impl Default for ReadParams {
             pinned_data: "".to_string(),
             refresh_timer: Instant::now(),
             register_type: Default::default(),
+            read_duration: None,
         }
     }
 }

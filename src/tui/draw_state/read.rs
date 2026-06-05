@@ -18,15 +18,19 @@ pub fn draw(
         .iter()
         .position(|(kind, address)| kind == &params.register_type && *address == params.position)
         .is_some();
-    let pinned_string = if is_pinned { "(Pinned)" } else { "" };
+    let pinned_string = if is_pinned { " (Pinned)" } else { "" };
 
     let outer_area = frame.area();
     let inner_area = outer.inner(outer_area);
     frame.render_widget(outer, outer_area);
 
+    let read_time = params
+        .read_duration
+        .map(|d| format!("(read in {d:.2?})"))
+        .unwrap_or_default();
     let info = format!(
-        "Device: {} at: {} on {:?} {}",
-        device, params.position, params.register_type, pinned_string
+        "Device: {} at: {}{} on {:?} {}",
+        device, params.position, pinned_string, params.register_type, read_time
     );
     let rows = Layout::default()
         .direction(Direction::Vertical)

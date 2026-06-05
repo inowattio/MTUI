@@ -7,7 +7,7 @@ use crate::state::{
     no_data_text, DumpParams, JumpParams, ReadParams, State, StateTransition, WriteParams,
 };
 use serde::{Deserialize, Serialize};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use std::{error, fs};
 use tokio::fs::OpenOptions;
 use tokio::io::AsyncWriteExt;
@@ -35,6 +35,7 @@ struct RefreshTaskResult {
     register_type: RegisterType,
     main_data: Result<Vec<RegisterCellValue>, String>,
     pinned_data: Result<Vec<RegisterCellValue>, String>,
+    read_duration: Duration,
 }
 
 #[derive(Debug)]
@@ -444,9 +445,11 @@ impl App {
         let amount = self.config.registers_batch;
 
         self.background_task = Some(BackgroundTask::Refresh(tokio::spawn(async move {
+            let read_start = Instant::now();
             let main_data = Self::aquire_data_with(&device, amount, position, register_type)
                 .await
                 .map_err(|e| e.to_string());
+            let read_duration = read_start.elapsed();
             let pinned_data = Self::aquire_pinned_data_with(&device, &pinned_registers)
                 .await
                 .map_err(|e| e.to_string());
@@ -456,6 +459,7 @@ impl App {
                 register_type,
                 main_data,
                 pinned_data,
+                read_duration,
             }
         })));
     }
@@ -540,6 +544,7 @@ impl App {
         if let State::Read(params) = &mut self.state {
             params.main_data = main_data;
             params.pinned_data = pinned_data;
+            params.read_duration = Some(result.read_duration);
         }
     }
 
@@ -610,6 +615,7 @@ impl App {
         match &mut self.state {
             State::Read(p) => {
                 p.main_data = no_data_text();
+                p.read_duration = None;
                 p.register_type.toggle()
             }
             State::Dump(p) => {
