@@ -38,6 +38,7 @@ pub struct ReadParams {
     pub refresh_timer: Instant,
     pub register_type: RegisterType,
     pub read_duration: Option<Duration>,
+    pub loading: bool,
 }
 
 impl Default for ReadParams {
@@ -49,6 +50,7 @@ impl Default for ReadParams {
             refresh_timer: Instant::now(),
             register_type: Default::default(),
             read_duration: None,
+            loading: false,
         }
     }
 }

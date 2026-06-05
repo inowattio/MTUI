@@ -434,7 +434,7 @@ impl App {
 
         let (position, register_type) = if let State::Read(p) = &mut self.state {
             p.refresh_timer = Instant::now();
-            p.main_data = "Loading...".to_string();
+            p.loading = true;
             (p.position, p.register_type)
         } else {
             return;
@@ -545,6 +545,7 @@ impl App {
             params.main_data = main_data;
             params.pinned_data = pinned_data;
             params.read_duration = Some(result.read_duration);
+            params.loading = false;
         }
     }
 
@@ -569,6 +570,7 @@ impl App {
                 Err(e) => {
                     if let State::Read(params) = &mut self.state {
                         params.main_data = e.to_string();
+                        params.loading = false;
                     }
                 }
             },

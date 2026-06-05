@@ -24,10 +24,14 @@ pub fn draw(
     let inner_area = outer.inner(outer_area);
     frame.render_widget(outer, outer_area);
 
-    let read_time = params
-        .read_duration
-        .map(|d| format!("(read in {d:.2?})"))
-        .unwrap_or_default();
+    let read_time = if params.loading {
+        "(loading)".to_string()
+    } else {
+        params
+            .read_duration
+            .map(|d| format!("({d:.2?})"))
+            .unwrap_or_default()
+    };
     let info = format!(
         "Device: {} at: {}{} on {:?} {}",
         device, params.position, pinned_string, params.register_type, read_time
