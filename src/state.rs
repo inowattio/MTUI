@@ -41,6 +41,8 @@ pub struct ReadParams {
     pub loading: bool,
     pub ascii_string: String,
     pub pinned_ascii_string: String,
+    pub main_changed: Vec<bool>,
+    pub pinned_changed: Vec<bool>,
 }
 
 impl Default for ReadParams {
@@ -55,6 +57,8 @@ impl Default for ReadParams {
             loading: false,
             ascii_string: String::new(),
             pinned_ascii_string: String::new(),
+            main_changed: Vec::new(),
+            pinned_changed: Vec::new(),
         }
     }
 }

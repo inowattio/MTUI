@@ -1,9 +1,37 @@
 use crate::app::App;
 use crate::state::{no_data_text, ReadParams};
 use ratatui::layout::{Alignment, Constraint, Direction, Layout};
-use ratatui::style::Style;
+use ratatui::style::{Color, Modifier, Style};
+use ratatui::text::{Line, Text};
 use ratatui::widgets::{Block, Paragraph, Wrap};
 use ratatui::Frame;
+
+/// Builds a panel's text, highlighting register rows whose value changed since the previous read.
+/// `changed` is aligned 1:1 with the register rows in `body`; the title/header rows are never highlighted.
+fn build_panel<'a>(
+    title: &str,
+    header: &str,
+    body: &str,
+    changed: &[bool],
+    base_style: Style,
+    changed_style: Style,
+) -> Text<'a> {
+    let mut lines = vec![
+        Line::styled(title.to_string(), base_style),
+        Line::styled(header.to_string(), base_style),
+    ];
+
+    for (i, row) in body.split('\n').enumerate() {
+        let style = if changed.get(i).copied().unwrap_or(false) {
+            changed_style
+        } else {
+            base_style
+        };
+        lines.push(Line::styled(row.to_string(), style));
+    }
+
+    Text::from(lines)
+}
 
 pub fn draw(
     params: &ReadParams,
@@ -60,11 +88,18 @@ pub fn draw(
         .split(rows[1]);
 
     let header = app.interpreter.header();
-    let main_text = format!("Main data\n{}\n{}", header, params.main_data);
+    let changed_style = base_style.fg(Color::Yellow).add_modifier(Modifier::BOLD);
+
     frame.render_widget(
-        Paragraph::new(main_text)
-            .style(base_style)
-            .alignment(Alignment::Left),
+        Paragraph::new(build_panel(
+            "Main data",
+            &header,
+            &params.main_data,
+            &params.main_changed,
+            base_style,
+            changed_style,
+        ))
+        .alignment(Alignment::Left),
         columns[0],
     );
 
@@ -77,11 +112,16 @@ pub fn draw(
     } else {
         params.pinned_data.clone()
     };
-    let pinned_text = format!("Pinned data\n{}\n{}", header, pinned_state);
     frame.render_widget(
-        Paragraph::new(pinned_text)
-            .style(base_style)
-            .alignment(Alignment::Left),
+        Paragraph::new(build_panel(
+            "Pinned data",
+            &header,
+            &pinned_state,
+            &params.pinned_changed,
+            base_style,
+            changed_style,
+        ))
+        .alignment(Alignment::Left),
         columns[1],
     );
 

@@ -7,6 +7,7 @@ use crate::state::{
     no_data_text, DumpParams, JumpParams, ReadParams, State, StateTransition, WriteParams,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 use std::{error, fs};
 use tokio::fs::OpenOptions;
@@ -54,6 +55,7 @@ pub struct App {
     pub device: ModbusDevice,
     pub interpreter: Interpretor,
     background_task: Option<BackgroundTask>,
+    previous_values: BTreeMap<RegisterCell, u16>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -116,6 +118,7 @@ impl App {
             device,
             running: true,
             background_task: None,
+            previous_values: BTreeMap::new(),
         }
     }
 
@@ -474,6 +477,25 @@ impl App {
             return;
         }
 
+        let changed_flags = |cells: &Result<Vec<RegisterCellValue>, String>| match cells {
+            Ok(data) => data
+                .iter()
+                .map(|&((kind, address), value)| {
+                    matches!(self.previous_values.get(&(kind, address)), Some(&prev) if prev != value)
+                })
+                .collect::<Vec<bool>>(),
+            Err(_) => Vec::new(),
+        };
+        let main_changed = changed_flags(&result.main_data);
+        let pinned_changed = changed_flags(&result.pinned_data);
+
+        let mut new_previous = BTreeMap::new();
+        for data in [&result.main_data, &result.pinned_data].into_iter().flatten() {
+            for &((kind, address), value) in data {
+                new_previous.insert((kind, address), value);
+            }
+        }
+
         let sfr = &self.pinned_registers;
         let fav_checker = |cell: RegisterCellValue| {
             let ((c_kind, c_address), _) = cell;
@@ -551,11 +573,15 @@ impl App {
             Err(e) => e.to_string(),
         };
 
+        self.previous_values = new_previous;
+
         if let State::Read(params) = &mut self.state {
             params.main_data = main_data;
             params.pinned_data = pinned_data;
             params.ascii_string = ascii_string;
             params.pinned_ascii_string = pinned_ascii_string;
+            params.main_changed = main_changed;
+            params.pinned_changed = pinned_changed;
             params.read_duration = Some(result.read_duration);
             params.loading = false;
         }
@@ -582,6 +608,7 @@ impl App {
                 Err(e) => {
                     if let State::Read(params) = &mut self.state {
                         params.main_data = e.to_string();
+                        params.main_changed = Vec::new();
                         params.loading = false;
                     }
                 }
@@ -631,6 +658,7 @@ impl App {
                 p.main_data = no_data_text();
                 p.read_duration = None;
                 p.ascii_string = String::new();
+                p.main_changed = Vec::new();
                 p.register_type.toggle()
             }
             State::Dump(p) => {
