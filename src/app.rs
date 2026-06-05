@@ -487,6 +487,16 @@ impl App {
             }
         };
 
+        let ascii_string = match &result.main_data {
+            Ok(data) => self.interpreter.ascii_string(data),
+            Err(_) => String::new(),
+        };
+
+        let pinned_ascii_string = match &result.pinned_data {
+            Ok(data) => self.interpreter.ascii_string(data),
+            Err(_) => String::new(),
+        };
+
         let main_data = match result.main_data {
             Ok(data) => self.interpreter.run(data, position, fav_checker).join("\n"),
             Err(e) => e.to_string(),
@@ -544,6 +554,8 @@ impl App {
         if let State::Read(params) = &mut self.state {
             params.main_data = main_data;
             params.pinned_data = pinned_data;
+            params.ascii_string = ascii_string;
+            params.pinned_ascii_string = pinned_ascii_string;
             params.read_duration = Some(result.read_duration);
             params.loading = false;
         }
@@ -618,6 +630,7 @@ impl App {
             State::Read(p) => {
                 p.main_data = no_data_text();
                 p.read_duration = None;
+                p.ascii_string = String::new();
                 p.register_type.toggle()
             }
             State::Dump(p) => {

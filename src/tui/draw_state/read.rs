@@ -2,7 +2,7 @@ use crate::app::App;
 use crate::state::{no_data_text, ReadParams};
 use ratatui::layout::{Alignment, Constraint, Direction, Layout};
 use ratatui::style::Style;
-use ratatui::widgets::{Block, Paragraph};
+use ratatui::widgets::{Block, Paragraph, Wrap};
 use ratatui::Frame;
 
 pub fn draw(
@@ -36,9 +36,15 @@ pub fn draw(
         "Device: {} at: {}{} on {:?} {}",
         device, params.position, pinned_string, params.register_type, read_time
     );
+    let show_ascii = app.interpreter.shows_ascii();
+    let row_constraints = if show_ascii {
+        vec![Constraint::Length(2), Constraint::Min(0), Constraint::Length(1)]
+    } else {
+        vec![Constraint::Length(2), Constraint::Min(0)]
+    };
     let rows = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(2), Constraint::Min(0)].as_ref())
+        .constraints(row_constraints)
         .split(inner_area);
 
     frame.render_widget(
@@ -78,4 +84,29 @@ pub fn draw(
             .alignment(Alignment::Left),
         columns[1],
     );
+
+    if show_ascii {
+        let ascii_columns = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
+            .split(rows[2]);
+
+        let main_ascii_text = format!("ASCII: '{}'", params.ascii_string);
+        frame.render_widget(
+            Paragraph::new(main_ascii_text)
+                .style(base_style)
+                .alignment(Alignment::Left)
+                .wrap(Wrap { trim: false }),
+            ascii_columns[0],
+        );
+
+        let pinned_ascii_text = format!("ASCII: '{}'", params.pinned_ascii_string);
+        frame.render_widget(
+            Paragraph::new(pinned_ascii_text)
+                .style(base_style)
+                .alignment(Alignment::Left)
+                .wrap(Wrap { trim: false }),
+            ascii_columns[1],
+        );
+    }
 }

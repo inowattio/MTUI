@@ -49,6 +49,24 @@ impl Interpretor {
         self.header.clone()
     }
 
+    pub fn shows_ascii(&self) -> bool {
+        self.config.ascii
+    }
+
+    pub fn ascii_string(&self, data: &[RegisterCellValue]) -> String {
+        data.iter()
+            .flat_map(|&(_, v)| [(v >> 8) as u8, (v & 0xFF) as u8])
+            .map(|b| {
+                let c = b as char;
+                if c.is_ascii_graphic() {
+                    c
+                } else {
+                    '·'
+                }
+            })
+            .collect()
+    }
+
     pub fn run(
         &self,
         data: Vec<RegisterCellValue>,

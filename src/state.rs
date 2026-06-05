@@ -39,6 +39,8 @@ pub struct ReadParams {
     pub register_type: RegisterType,
     pub read_duration: Option<Duration>,
     pub loading: bool,
+    pub ascii_string: String,
+    pub pinned_ascii_string: String,
 }
 
 impl Default for ReadParams {
@@ -51,6 +53,8 @@ impl Default for ReadParams {
             register_type: Default::default(),
             read_duration: None,
             loading: false,
+            ascii_string: String::new(),
+            pinned_ascii_string: String::new(),
         }
     }
 }
