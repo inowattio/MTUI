@@ -1,6 +1,6 @@
 use crate::app::AppResult;
 use crate::constants::EVENT_HANDLER_TICKRATE;
-use crossterm::event::{Event as CrosstermEvent, KeyEvent, MouseEvent};
+use crossterm::event::{Event as CrosstermEvent, KeyEvent};
 use futures::{FutureExt, StreamExt};
 use tokio::sync::mpsc;
 
@@ -8,7 +8,6 @@ use tokio::sync::mpsc;
 pub enum Event {
     Tick,
     Key(KeyEvent),
-    Mouse(MouseEvent),
     Resize(u16, u16),
     Paste(String),
 }

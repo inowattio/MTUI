@@ -8,7 +8,7 @@ use crate::state::State;
 use crate::tui::make_bottom_title::make_bottom_title;
 use crate::tui::make_top_title::make_top_title;
 use crossterm::event::{
-    DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture,
+    DisableBracketedPaste, EnableBracketedPaste,
 };
 use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
 use ratatui::backend::Backend;
@@ -33,7 +33,6 @@ where
         crossterm::execute!(
             io::stderr(),
             EnterAlternateScreen,
-            EnableMouseCapture,
             EnableBracketedPaste
         )?;
 
@@ -80,7 +79,6 @@ where
         crossterm::execute!(
             io::stderr(),
             LeaveAlternateScreen,
-            DisableMouseCapture,
             DisableBracketedPaste
         )?;
         Ok(())
