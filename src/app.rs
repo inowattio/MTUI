@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::config::{Config, Labels};
 use crate::constants::CONFIG_PATH;
 use crate::interpretator::Interpretor;
 use crate::modbus::ModbusDevice;
@@ -56,6 +56,7 @@ pub struct App {
     pub interpreter: Interpretor,
     background_task: Option<BackgroundTask>,
     previous_values: BTreeMap<RegisterCell, u16>,
+    labels: BTreeMap<RegisterCell, String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -77,6 +78,22 @@ impl From<PinnedRegisters> for Vec<RegisterCell> {
         }
 
         collection
+    }
+}
+
+impl From<Labels> for BTreeMap<RegisterCell, String> {
+    fn from(value: Labels) -> Self {
+        let mut map = BTreeMap::new();
+
+        for label in value.holdings {
+            map.insert((RegisterType::Holding, label.address), label.text);
+        }
+
+        for label in value.inputs {
+            map.insert((RegisterType::Input, label.address), label.text);
+        }
+
+        map
     }
 }
 
@@ -109,6 +126,7 @@ impl App {
         Self {
             interpreter: Interpretor::new(config.interpretations.clone(), config.device.word_order),
             pinned_registers: config.pinned_defaults.clone().into(),
+            labels: config.labels.clone().into(),
             state: State::Read(ReadParams {
                 position: config.startup.address,
                 register_type: config.startup.register_type,
@@ -497,16 +515,20 @@ impl App {
         }
 
         let sfr = &self.pinned_registers;
+        let labels = &self.labels;
         let fav_checker = |cell: RegisterCellValue| {
             let ((c_kind, c_address), _) = cell;
-            let is_pinned = sfr
-                .iter()
-                .any(|(kind, address)| *kind == c_kind && *address == c_address);
-            if is_pinned {
-                Some("Pinned".to_string())
-            } else {
-                None
+            let mut parts = Vec::new();
+            if let Some(text) = labels.get(&(c_kind, c_address)) {
+                parts.push(text.clone());
             }
+            if sfr
+                .iter()
+                .any(|(kind, address)| *kind == c_kind && *address == c_address)
+            {
+                parts.push("Pinned".to_string());
+            }
+            (!parts.is_empty()).then(|| parts.join(" "))
         };
 
         let ascii_string = match &result.main_data {
@@ -554,14 +576,15 @@ impl App {
                     let line = self
                         .interpreter
                         .run(batch, address, |c| {
-                            let ((kind, _), _) = c;
-                            Some(
-                                match kind {
-                                    RegisterType::Holding => "Holding",
-                                    RegisterType::Input => "Input",
-                                }
-                                .to_string(),
-                            )
+                            let ((kind, c_address), _) = c;
+                            let kind_str = match kind {
+                                RegisterType::Holding => "Holding",
+                                RegisterType::Input => "Input",
+                            };
+                            match labels.get(&(kind, c_address)) {
+                                Some(text) => Some(format!("{kind_str} {text}")),
+                                None => Some(kind_str.to_string()),
+                            }
                         })
                         .join("\n");
 

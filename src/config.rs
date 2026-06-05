@@ -14,6 +14,8 @@ pub struct Config {
     pub auto_update_interval_seconds: Option<u64>,
     pub dump_file: String,
     pub pinned_defaults: PinnedRegisters,
+    #[serde(default)]
+    pub labels: Labels,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
@@ -21,6 +23,20 @@ pub struct Startup {
     pub address: u16,
     #[serde(rename = "type")]
     pub register_type: RegisterType,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct Labels {
+    pub holdings: Vec<Label>,
+    pub inputs: Vec<Label>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Label {
+    #[serde(rename = "i")]
+    pub address: u16,
+    #[serde(rename = "t")]
+    pub text: String,
 }
 
 impl Config {
@@ -68,6 +84,7 @@ impl Default for Config {
             auto_update_interval_seconds: Some(1),
             dump_file: "dump.txt".into(),
             pinned_defaults: Default::default(),
+            labels: Default::default(),
         }
     }
 }
