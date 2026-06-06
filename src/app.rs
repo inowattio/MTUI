@@ -816,7 +816,7 @@ impl App {
         self.background_task = Some(BackgroundTask::Write(tokio::spawn(async move {
             let result = match write_type {
                 WriteType::Word => device.write_register(position, number as u16).await,
-                WriteType::DWord => device.write_register_word(position, number).await,
+                WriteType::DWord => device.write_register_word(position, number as i32).await,
             };
             match result {
                 Ok(()) => "Write OK".to_string(),
@@ -848,9 +848,22 @@ impl App {
             };
             w.bit_cursor = w.bit_cursor.min(bits - 1);
         }
+        // The narrower width may no longer fit the current value.
+        self.clamp_write_value();
     }
 
-    /// Move the bit cursor; `left` heads toward the most-significant bit.
+    pub fn clamp_write_value(&mut self) {
+        if let Some(Popup::Write(w)) = &mut self.read_mut().popup {
+            if let Some(value) = w.value {
+                let (lo, hi) = match w.write_type {
+                    WriteType::Word => (i16::MIN as i64, u16::MAX as i64),
+                    WriteType::DWord => (i32::MIN as i64, u32::MAX as i64),
+                };
+                w.value = Some(value.clamp(lo, hi));
+            }
+        }
+    }
+
     pub fn write_move_bit(&mut self, left: bool) {
         let bits = self.write_bit_count();
         if let Some(Popup::Write(w)) = &mut self.read_mut().popup {
@@ -866,7 +879,7 @@ impl App {
         if let Some(Popup::Write(w)) = &mut self.read_mut().popup {
             let mask = 1u32 << w.bit_cursor;
             let current = w.value.unwrap_or(0) as u32;
-            w.value = Some((current ^ mask) as i32);
+            w.value = Some((current ^ mask) as i64);
         }
     }
 

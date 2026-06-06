@@ -6,9 +6,8 @@ use std::time::{Duration, Instant};
 pub struct WriteParams {
     pub position: u16,
     pub result: Option<String>,
-    pub value: Option<i32>,
+    pub value: Option<i64>,
     pub write_type: WriteType,
-    /// Selected bit in the bit-toggle grid (0 = least-significant).
     pub bit_cursor: u16,
 }
 

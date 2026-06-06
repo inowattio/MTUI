@@ -204,38 +204,37 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
             keybind::ACTION => app.commit_write(),
             keybind::WRITE => app.write_toggle_type(),
             keybind::MOVE_UP => {
-                let p = app.read_mut();
-                if let Some(Popup::Write(w)) = &mut p.popup {
+                if let Some(Popup::Write(w)) = &mut app.read_mut().popup {
                     decrement_option_by(&mut w.value, 1);
                 }
+                app.clamp_write_value();
             }
             keybind::MOVE_DOWN => {
-                let p = app.read_mut();
-                if let Some(Popup::Write(w)) = &mut p.popup {
+                if let Some(Popup::Write(w)) = &mut app.read_mut().popup {
                     increment_option_by(&mut w.value, 1);
                 }
+                app.clamp_write_value();
             }
             KeyCode::Left => app.write_move_bit(true),
             KeyCode::Right => app.write_move_bit(false),
             keybind::PAUSE => app.write_toggle_bit(),
             keybind::NEGATOR => {
-                let p = app.read_mut();
-                if let Some(Popup::Write(w)) = &mut p.popup {
+                if let Some(Popup::Write(w)) = &mut app.read_mut().popup {
                     negate_opt_option(&mut w.value);
                 }
+                app.clamp_write_value();
             }
             KeyCode::Backspace => {
-                let p = app.read_mut();
-                if let Some(Popup::Write(w)) = &mut p.popup {
+                if let Some(Popup::Write(w)) = &mut app.read_mut().popup {
                     digit_remove_option(&mut w.value);
                 }
             }
             KeyCode::Char(c) if c.is_ascii_digit() => {
                 let digit = c as u8 - b'0';
-                let p = app.read_mut();
-                if let Some(Popup::Write(w)) = &mut p.popup {
+                if let Some(Popup::Write(w)) = &mut app.read_mut().popup {
                     digit_add_option(&mut w.value, digit);
                 }
+                app.clamp_write_value();
             }
             _ => {}
         },
@@ -308,6 +307,7 @@ pub fn handle_paste(data: String, app: &mut App) {
                     digit_add_option(&mut w.value, digit);
                 }
             }
+            app.clamp_write_value();
         }
         Some(PopupKind::Search) => {
             for digit in digits {

@@ -514,7 +514,11 @@ fn draw_write(frame: &mut Frame, area: Rect, theme: &Theme, write: &WriteParams)
     }
 
     lines.push(Line::from(Span::styled(
-        " enter write \u{b7} w word/dword \u{b7} \u{2190}/\u{2192} bit \u{b7} space toggle \u{b7} - negate \u{b7} esc",
+        " enter write \u{b7} esc exit \u{b7} w word/dword \u{b7} - negate",
+        theme.dim_style(),
+    )));
+    lines.push(Line::from(Span::styled(
+        " \u{2190}/\u{2192} bit \u{b7} space toggle",
         theme.dim_style(),
     )));
 
