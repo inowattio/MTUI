@@ -11,6 +11,7 @@ pub fn draw(frame: &mut Frame, area: Rect, theme: &Theme, device: &str) {
         (format!("{MOVE_UP}/{MOVE_DOWN}"), "Move cursor"),
         (format!("{REFRESH}"), "Refresh data"),
         (format!("{TOGGLE}"), "Switch register type"),
+        (format!("{SWITCH_VIEW}"), "Switch Main / Pinned (Read only)"),
         (format!("{WRITE}"), "Write"),
         (format!("{JUMP}"), "Jump"),
         (format!("{DUMP}"), "Dump"),

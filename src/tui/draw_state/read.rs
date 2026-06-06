@@ -1,5 +1,5 @@
 use crate::app::App;
-use crate::state::{no_data_text, ReadParams};
+use crate::state::{no_data_text, ReadPanel, ReadParams};
 use crate::tui::theme::{spinner_frame, Theme};
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::text::{Line, Span};
@@ -141,68 +141,43 @@ pub fn draw(
         rows[0],
     );
 
-    let columns = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
-        .split(rows[1]);
-
     let header = app.interpreter.header();
 
-    let visible = columns[0].height.saturating_sub(3).max(1);
-    app.visible_rows.set(visible);
-
-    frame.render_widget(
-        main_table(params, visible, header.clone(), theme),
-        columns[0],
-    );
-
-    let pinned_rows: Vec<String> = if params.pinned_rows.is_empty() {
-        if app.pinned_registers.is_empty() {
-            vec!["No pinned registers.".to_string()]
-        } else {
-            vec![no_data_text()]
+    let ascii_string = match params.panel {
+        ReadPanel::Main => {
+            let visible = rows[1].height.saturating_sub(3).max(1);
+            app.visible_rows.set(visible);
+            frame.render_widget(main_table(params, visible, header, theme), rows[1]);
+            &params.ascii_string
         }
-    } else {
-        params.pinned_rows.clone()
+        ReadPanel::Pinned => {
+            let pinned_rows: Vec<String> = if params.pinned_rows.is_empty() {
+                if app.pinned_registers.is_empty() {
+                    vec!["No pinned registers.".to_string()]
+                } else {
+                    vec![no_data_text()]
+                }
+            } else {
+                params.pinned_rows.clone()
+            };
+            frame.render_widget(
+                rows_to_table("Pinned", header, &pinned_rows, &params.pinned_changed, None, theme),
+                rows[1],
+            );
+            &params.pinned_ascii_string
+        }
     };
-    frame.render_widget(
-        rows_to_table(
-            "Pinned",
-            header,
-            &pinned_rows,
-            &params.pinned_changed,
-            None,
-            theme,
-        ),
-        columns[1],
-    );
 
     if show_ascii {
-        let ascii_columns = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
-            .split(rows[2]);
-
-        let main_ascii = Line::from(vec![
+        let ascii_line = Line::from(vec![
             Span::styled("ASCII: ", theme.dim_style()),
-            Span::styled(format!("'{}'", params.ascii_string), theme.base()),
+            Span::styled(format!("'{ascii_string}'"), theme.base()),
         ]);
         frame.render_widget(
-            Paragraph::new(main_ascii)
+            Paragraph::new(ascii_line)
                 .alignment(Alignment::Left)
                 .wrap(Wrap { trim: false }),
-            ascii_columns[0],
-        );
-
-        let pinned_ascii = Line::from(vec![
-            Span::styled("ASCII: ", theme.dim_style()),
-            Span::styled(format!("'{}'", params.pinned_ascii_string), theme.base()),
-        ]);
-        frame.render_widget(
-            Paragraph::new(pinned_ascii)
-                .alignment(Alignment::Left)
-                .wrap(Wrap { trim: false }),
-            ascii_columns[1],
+            rows[2],
         );
     }
 }

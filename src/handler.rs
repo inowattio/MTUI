@@ -31,6 +31,11 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
                 app.switch_focus_to(StateTransition::Label);
             }
         }
+        keybind::SWITCH_VIEW => {
+            if let State::Read(p) = &mut app.state {
+                p.toggle_panel();
+            }
+        }
         keybind::ACTION => app.do_action().await,
         keybind::WRITE => {
             if let State::Write(params) = &mut app.state {

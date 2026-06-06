@@ -38,11 +38,19 @@ pub struct LabelParams {
     pub result: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub enum ReadPanel {
+    #[default]
+    Main,
+    Pinned,
+}
+
 #[derive(Debug, PartialEq)]
 pub struct ReadParams {
     pub position: u16,
     pub window_start: u16,
     pub data_start: u16,
+    pub panel: ReadPanel,
     pub main_rows: Vec<String>,
     pub pinned_rows: Vec<String>,
     pub refresh_timer: Instant,
@@ -61,6 +69,7 @@ impl Default for ReadParams {
             position: 0,
             window_start: 0,
             data_start: 0,
+            panel: ReadPanel::Main,
             main_rows: no_data_rows(),
             pinned_rows: Vec::new(),
             refresh_timer: Instant::now(),
@@ -83,6 +92,13 @@ impl ReadParams {
         } else if self.position >= self.window_start.saturating_add(rows) {
             self.window_start = self.position.saturating_sub(rows - 1);
         }
+    }
+
+    pub fn toggle_panel(&mut self) {
+        self.panel = match self.panel {
+            ReadPanel::Main => ReadPanel::Pinned,
+            ReadPanel::Pinned => ReadPanel::Main,
+        };
     }
 }
 
