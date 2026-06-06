@@ -1,11 +1,12 @@
 use crate::app::{App, AppResult, WriteType};
 use crate::constants::keybind;
 use crate::num_ops::{decrement_by, decrement_option_by, digit_add, digit_add_option, digit_remove, digit_remove_option, increment_by, increment_option_by, negate_opt_option, set_option_to_zero, set_to_zero};
-use crate::state::{State, StateTransition};
+use crate::state::{ReadPanel, State, StateTransition};
 use crossterm::event::{KeyCode, KeyEvent};
 
 pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
     let rows = app.visible_rows.get();
+    let pinned_len = app.pinned_registers.len() as u16;
 
     if matches!(app.state, State::Label(_)) {
         match key_event.code {
@@ -34,6 +35,7 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         keybind::SWITCH_VIEW => {
             if let State::Read(p) = &mut app.state {
                 p.toggle_panel();
+                p.scroll_pinned(rows, pinned_len);
             }
         }
         keybind::ACTION => app.do_action().await,
@@ -48,20 +50,32 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
             }
         }
         keybind::MOVE_UP => match &mut app.state {
-            State::Read(p) => {
-                decrement_by(&mut p.position, 1);
-                p.scroll_to_cursor(rows);
-            }
+            State::Read(p) => match p.panel {
+                ReadPanel::Main => {
+                    decrement_by(&mut p.position, 1);
+                    p.scroll_to_cursor(rows);
+                }
+                ReadPanel::Pinned => {
+                    p.pinned_index = p.pinned_index.saturating_sub(1);
+                    p.scroll_pinned(rows, pinned_len);
+                }
+            },
             State::Jump(p) => decrement_by(&mut p.to, 1),
             State::Write(p) => decrement_option_by(&mut p.value, 1),
             State::Dump(p) => decrement_by(&mut p.start_position, 1),
             _ => {}
         },
         keybind::MOVE_DOWN => match &mut app.state {
-            State::Read(p) => {
-                increment_by(&mut p.position, 1);
-                p.scroll_to_cursor(rows);
-            }
+            State::Read(p) => match p.panel {
+                ReadPanel::Main => {
+                    increment_by(&mut p.position, 1);
+                    p.scroll_to_cursor(rows);
+                }
+                ReadPanel::Pinned => {
+                    p.pinned_index = p.pinned_index.saturating_add(1);
+                    p.scroll_pinned(rows, pinned_len);
+                }
+            },
             State::Jump(p) => increment_by(&mut p.to, 1),
             State::Write(p) => increment_option_by(&mut p.value, 1),
             State::Dump(p) => increment_by(&mut p.start_position, 1),

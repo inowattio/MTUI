@@ -51,6 +51,10 @@ pub struct ReadParams {
     pub window_start: u16,
     pub data_start: u16,
     pub panel: ReadPanel,
+    /// Cursor index into the pinned list, and the top visible index, mirroring
+    /// `position`/`window_start` but for the (scattered) Pinned panel.
+    pub pinned_index: u16,
+    pub pinned_top: u16,
     pub main_rows: Vec<String>,
     pub pinned_rows: Vec<String>,
     pub refresh_timer: Instant,
@@ -70,6 +74,8 @@ impl Default for ReadParams {
             window_start: 0,
             data_start: 0,
             panel: ReadPanel::Main,
+            pinned_index: 0,
+            pinned_top: 0,
             main_rows: no_data_rows(),
             pinned_rows: Vec::new(),
             refresh_timer: Instant::now(),
@@ -99,6 +105,26 @@ impl ReadParams {
             ReadPanel::Main => ReadPanel::Pinned,
             ReadPanel::Pinned => ReadPanel::Main,
         };
+    }
+
+    /// Clamp the pinned cursor to a list of `len` entries and scroll `pinned_top`
+    /// so the cursor stays within the visible `rows`.
+    pub fn scroll_pinned(&mut self, rows: u16, len: u16) {
+        let rows = rows.max(1);
+        if len == 0 {
+            self.pinned_index = 0;
+            self.pinned_top = 0;
+            return;
+        }
+        self.pinned_index = self.pinned_index.min(len - 1);
+        if self.pinned_index < self.pinned_top {
+            self.pinned_top = self.pinned_index;
+        } else if self.pinned_index >= self.pinned_top.saturating_add(rows) {
+            self.pinned_top = self.pinned_index.saturating_sub(rows - 1);
+        }
+        if self.pinned_top >= len {
+            self.pinned_top = len.saturating_sub(rows).min(self.pinned_index);
+        }
     }
 }
 

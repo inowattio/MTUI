@@ -84,6 +84,30 @@ fn main_table(params: &ReadParams, visible: u16, header: String, theme: &Theme) 
         .block(theme.panel("Main data"))
 }
 
+fn pinned_table(params: &ReadParams, visible: u16, header: String, theme: &Theme) -> Table<'static> {
+    let len = params.pinned_rows.len();
+    let top = (params.pinned_top as usize).min(len.saturating_sub(1));
+    let end = (top + visible as usize).min(len);
+
+    let mut table_rows = Vec::with_capacity(end - top);
+    for i in top..end {
+        let style = if i as u16 == params.pinned_index {
+            theme.selected_style()
+        } else if params.pinned_changed.get(i).copied().unwrap_or(false) {
+            theme.changed_style()
+        } else if (i - top) % 2 == 1 {
+            theme.zebra_style()
+        } else {
+            theme.base()
+        };
+        table_rows.push(Row::new([Cell::from(params.pinned_rows[i].clone())]).style(style));
+    }
+
+    Table::new(table_rows, [Constraint::Percentage(100)])
+        .header(Row::new([Cell::from(header)]).style(theme.header_style()))
+        .block(theme.panel("Pinned"))
+}
+
 pub fn draw(
     params: &ReadParams,
     app: &App,
@@ -148,27 +172,26 @@ pub fn draw(
 
     let header = app.interpreter.header();
 
+    let visible = rows[1].height.saturating_sub(3).max(1);
+    app.visible_rows.set(visible);
+
     let ascii_string = match params.panel {
         ReadPanel::Main => {
-            let visible = rows[1].height.saturating_sub(3).max(1);
-            app.visible_rows.set(visible);
             frame.render_widget(main_table(params, visible, header, theme), rows[1]);
             &params.ascii_string
         }
         ReadPanel::Pinned => {
-            let pinned_rows: Vec<String> = if params.pinned_rows.is_empty() {
-                if app.pinned_registers.is_empty() {
-                    vec!["No pinned registers.".to_string()]
+            let table = if params.pinned_rows.is_empty() {
+                let message = if app.pinned_registers.is_empty() {
+                    "No pinned registers.".to_string()
                 } else {
-                    vec![no_data_text()]
-                }
+                    no_data_text()
+                };
+                rows_to_table("Pinned", header, &[message], &[], None, theme)
             } else {
-                params.pinned_rows.clone()
+                pinned_table(params, visible, header, theme)
             };
-            frame.render_widget(
-                rows_to_table("Pinned", header, &pinned_rows, &params.pinned_changed, None, theme),
-                rows[1],
-            );
+            frame.render_widget(table, rows[1]);
             &params.pinned_ascii_string
         }
     };

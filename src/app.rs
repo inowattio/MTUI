@@ -4,8 +4,8 @@ use crate::interpretator::Interpretor;
 use crate::modbus::ModbusDevice;
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
 use crate::state::{
-    no_data_rows, ConnectionStatus, DumpParams, JumpParams, LabelParams, ReadParams, State,
-    StateTransition, WriteParams,
+    no_data_rows, ConnectionStatus, DumpParams, JumpParams, LabelParams, ReadPanel, ReadParams,
+    State, StateTransition, WriteParams,
 };
 use serde::{Deserialize, Serialize};
 use std::cell::Cell;
@@ -222,14 +222,22 @@ impl App {
             }),
             StateTransition::Help => State::Help,
             StateTransition::Label => {
+                let (label_type, label_pos) = match &self.state {
+                    State::Read(p) if p.panel == ReadPanel::Pinned => self
+                        .pinned_registers
+                        .get(p.pinned_index as usize)
+                        .map(|&(kind, address)| (kind, address))
+                        .unwrap_or((register_type, position)),
+                    _ => (register_type, position),
+                };
                 let text = self
                     .labels
-                    .get(&(register_type, position))
+                    .get(&(label_type, label_pos))
                     .cloned()
                     .unwrap_or_default();
                 State::Label(LabelParams {
-                    position,
-                    register_type,
+                    position: label_pos,
+                    register_type: label_type,
                     text,
                     result: None,
                 })
@@ -298,13 +306,19 @@ impl App {
     }
 
     pub fn pin(&mut self) {
-        let (position, register_display_type) = if let State::Read(p) = &self.state {
-            (p.position, p.register_type)
+        let (panel, register_type, position, pinned_index) = if let State::Read(p) = &self.state {
+            (p.panel, p.register_type, p.position, p.pinned_index)
         } else {
             return;
         };
 
-        let selection = (register_display_type, position);
+        let selection = match panel {
+            ReadPanel::Main => (register_type, position),
+            ReadPanel::Pinned => match self.pinned_registers.get(pinned_index as usize) {
+                Some(&cell) => cell,
+                None => return,
+            },
+        };
 
         if let Some(pos) = self.pinned_registers.iter().position(|x| *x == selection) {
             self.pinned_registers.remove(pos);
@@ -313,6 +327,13 @@ impl App {
         }
 
         self.pinned_registers.sort();
+
+        // The list changed — keep the pinned cursor in range.
+        let rows = self.visible_rows.get();
+        let len = self.pinned_registers.len() as u16;
+        if let State::Read(p) = &mut self.state {
+            p.scroll_pinned(rows, len);
+        }
     }
 
     pub async fn do_action(&mut self) {
