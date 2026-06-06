@@ -8,6 +8,8 @@ pub struct WriteParams {
     pub result: Option<String>,
     pub value: Option<i32>,
     pub write_type: WriteType,
+    /// Selected bit in the bit-toggle grid (0 = least-significant).
+    pub bit_cursor: u16,
 }
 
 #[derive(Debug, Default, PartialEq)]
@@ -80,6 +82,10 @@ pub enum Popup {
     /// Column picker; the value is the cursor index into `Column::ALL`.
     Columns(u16),
     Write(WriteParams),
+    /// Slave-ID entry; the value is the id being typed.
+    Slave(u16),
+    /// Confirm quitting with unsaved label/pin changes.
+    Quit,
 }
 
 /// Lightweight, copyable tag of which popup is open (so the handler can decide
@@ -93,6 +99,8 @@ pub enum PopupKind {
     Label,
     Columns,
     Write,
+    Slave,
+    Quit,
 }
 
 impl Popup {
@@ -105,6 +113,8 @@ impl Popup {
             Popup::Label(_) => PopupKind::Label,
             Popup::Columns(_) => PopupKind::Columns,
             Popup::Write(_) => PopupKind::Write,
+            Popup::Slave(_) => PopupKind::Slave,
+            Popup::Quit => PopupKind::Quit,
         }
     }
 }

@@ -19,9 +19,15 @@ pub mod keybind {
     pub const SAVE: KeyCode = KeyCode::Char('s');
     pub const COLUMNS: KeyCode = KeyCode::Char('c');
     pub const PAUSE: KeyCode = KeyCode::Char(' ');
+    pub const WORD_ORDER: KeyCode = KeyCode::Char('o');
+    pub const SLAVE: KeyCode = KeyCode::Char('i');
     pub const NEGATOR: KeyCode = KeyCode::Char('-');
     pub const SWITCH_VIEW: KeyCode = KeyCode::Tab;
     pub const ACTION: KeyCode = KeyCode::Enter;
     pub const MOVE_UP: KeyCode = KeyCode::Up;
     pub const MOVE_DOWN: KeyCode = KeyCode::Down;
+    pub const PAGE_UP: KeyCode = KeyCode::PageUp;
+    pub const PAGE_DOWN: KeyCode = KeyCode::PageDown;
+    pub const HOME: KeyCode = KeyCode::Home;
+    pub const END: KeyCode = KeyCode::End;
 }

@@ -64,6 +64,8 @@ pub struct App {
     /// When true, the auto-refresh timer is suspended so values hold still for
     /// inspection. Manual reads (Enter / refresh key) still work.
     pub paused: bool,
+    /// Labels/pins changed since the last save (drives the quit guard).
+    pub dirty: bool,
     /// Number of register rows the Read table can show; written by the draw layer
     /// each frame and used to size the read window to exactly the visible area.
     pub visible_rows: Cell<u16>,
@@ -180,6 +182,7 @@ impl App {
             connection: ConnectionStatus::Unknown,
             frame: 0,
             paused: false,
+            dirty: false,
             visible_rows: Cell::new(initial_rows),
             background_task: None,
             previous_values: BTreeMap::new(),
@@ -231,6 +234,43 @@ impl App {
             position,
             ..Default::default()
         }));
+    }
+
+    pub fn open_slave(&mut self) {
+        let current = self.config.device.slave_id as u16;
+        self.read_mut().popup = Some(Popup::Slave(current));
+    }
+
+    /// Commit the slave-ID popup: retarget the live connection (no reconnect).
+    pub async fn commit_slave(&mut self) {
+        let id = match &self.read().popup {
+            Some(Popup::Slave(value)) => Some((*value).min(u8::MAX as u16) as u8),
+            _ => None,
+        };
+        if let Some(id) = id {
+            self.device.set_slave(id).await;
+            self.config.device.slave_id = id;
+            self.read_mut().popup = None;
+            self.refresh().await;
+        }
+    }
+
+    /// Cycle the word order (ABCD → BADC → CDAB → DCBA) and re-render in place.
+    pub fn toggle_word_order(&mut self) {
+        let next = self.config.device.word_order.next();
+        self.config.device.word_order = next;
+        self.interpreter.set_word_order(next);
+        self.device.set_word_order(next);
+        self.rebuild_read_rows();
+    }
+
+    /// Quit, but guard against losing unsaved label/pin changes.
+    pub fn request_quit(&mut self) {
+        if self.dirty {
+            self.read_mut().popup = Some(Popup::Quit);
+        } else {
+            self.running = false;
+        }
     }
 
     pub fn open_search(&mut self) {
@@ -368,6 +408,7 @@ impl App {
         } else {
             self.labels.insert(key, text);
         }
+        self.dirty = true;
 
         self.read_mut().popup = None;
         // Re-render so the new label shows immediately in the label column.
@@ -439,6 +480,7 @@ impl App {
         }
 
         self.pinned_registers.sort();
+        self.dirty = true;
 
         let rows = self.visible_rows.get();
         let len = self.pinned_registers.len() as u16;
@@ -448,6 +490,9 @@ impl App {
     /// Commit the Save popup: write config to disk and show the outcome.
     pub fn commit_save(&mut self) {
         let result = self.persist_config();
+        if result.starts_with("Saved") {
+            self.dirty = false;
+        }
         if let Some(Popup::Save(s)) = &mut self.read_mut().popup {
             s.result = Some(result);
         }
@@ -778,6 +823,51 @@ impl App {
                 Err(e) => format!("Write failed: {e}"),
             }
         })));
+    }
+
+    /// Number of editable bits for the open write popup (16 for word, 32 dword).
+    fn write_bit_count(&self) -> u16 {
+        match &self.read().popup {
+            Some(Popup::Write(w)) => match w.write_type {
+                WriteType::Word => 16,
+                WriteType::DWord => 32,
+            },
+            _ => 16,
+        }
+    }
+
+    pub fn write_toggle_type(&mut self) {
+        if let Some(Popup::Write(w)) = &mut self.read_mut().popup {
+            w.write_type = match w.write_type {
+                WriteType::Word => WriteType::DWord,
+                WriteType::DWord => WriteType::Word,
+            };
+            let bits = match w.write_type {
+                WriteType::Word => 16,
+                WriteType::DWord => 32,
+            };
+            w.bit_cursor = w.bit_cursor.min(bits - 1);
+        }
+    }
+
+    /// Move the bit cursor; `left` heads toward the most-significant bit.
+    pub fn write_move_bit(&mut self, left: bool) {
+        let bits = self.write_bit_count();
+        if let Some(Popup::Write(w)) = &mut self.read_mut().popup {
+            w.bit_cursor = if left {
+                (w.bit_cursor + 1).min(bits - 1)
+            } else {
+                w.bit_cursor.saturating_sub(1)
+            };
+        }
+    }
+
+    pub fn write_toggle_bit(&mut self) {
+        if let Some(Popup::Write(w)) = &mut self.read_mut().popup {
+            let mask = 1u32 << w.bit_cursor;
+            let current = w.value.unwrap_or(0) as u32;
+            w.value = Some((current ^ mask) as i32);
+        }
     }
 
     pub async fn complete_background_task(&mut self) {

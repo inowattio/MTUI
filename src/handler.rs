@@ -1,4 +1,4 @@
-use crate::app::{App, AppResult, WriteType};
+use crate::app::{App, AppResult};
 use crate::config::Column;
 use crate::constants::keybind;
 use crate::num_ops::{
@@ -15,12 +15,12 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
 
     // A popup is modal: while one is open it consumes every key.
     if let Some(kind) = app.popup_kind() {
-        handle_popup_key(kind, key_event, app);
+        handle_popup_key(kind, key_event, app).await;
         return Ok(());
     }
 
     match key_event.code {
-        keybind::EXIT => app.quit(),
+        keybind::EXIT => app.request_quit(),
         keybind::PIN => app.pin(),
         keybind::DUMP => app.open_dump(),
         keybind::HELP => app.open_help(),
@@ -29,6 +29,8 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         keybind::JUMP => app.open_search(),
         keybind::WRITE => app.open_write(),
         keybind::LABEL => app.open_label(),
+        keybind::SLAVE => app.open_slave(),
+        keybind::WORD_ORDER => app.toggle_word_order(),
         keybind::REFRESH => app.refresh().await,
         keybind::TOGGLE => app.toggle_type(),
         keybind::PAUSE => app.toggle_pause(),
@@ -70,6 +72,58 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
                 }
             }
         }
+        keybind::PAGE_UP => {
+            let p = app.read_mut();
+            match p.panel {
+                ReadPanel::Main => {
+                    p.position = p.position.saturating_sub(rows);
+                    p.scroll_to_cursor(rows);
+                }
+                ReadPanel::Pinned => {
+                    p.pinned_index = p.pinned_index.saturating_sub(rows);
+                    p.scroll_pinned(rows, pinned_len);
+                }
+            }
+        }
+        keybind::PAGE_DOWN => {
+            let p = app.read_mut();
+            match p.panel {
+                ReadPanel::Main => {
+                    p.position = p.position.saturating_add(rows);
+                    p.scroll_to_cursor(rows);
+                }
+                ReadPanel::Pinned => {
+                    p.pinned_index = p.pinned_index.saturating_add(rows);
+                    p.scroll_pinned(rows, pinned_len);
+                }
+            }
+        }
+        keybind::HOME => {
+            let p = app.read_mut();
+            match p.panel {
+                ReadPanel::Main => {
+                    p.position = 0;
+                    p.scroll_to_cursor(rows);
+                }
+                ReadPanel::Pinned => {
+                    p.pinned_index = 0;
+                    p.scroll_pinned(rows, pinned_len);
+                }
+            }
+        }
+        keybind::END => {
+            let p = app.read_mut();
+            match p.panel {
+                ReadPanel::Main => {
+                    p.position = u16::MAX;
+                    p.scroll_to_cursor(rows);
+                }
+                ReadPanel::Pinned => {
+                    p.pinned_index = pinned_len.saturating_sub(1);
+                    p.scroll_pinned(rows, pinned_len);
+                }
+            }
+        }
         KeyCode::Char(c) => {
             if !c.is_ascii_digit() {
                 return Ok(());
@@ -95,7 +149,7 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
 
 /// Route a key to the currently-open popup. Data-only edits are done inline;
 /// actions that touch the wider app (reads, writes, saves, toggles) call methods.
-fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
+async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
     match kind {
         // Any key dismisses Help.
         PopupKind::Help => app.close_popup(),
@@ -148,56 +202,39 @@ fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
         PopupKind::Write => match key_event.code {
             KeyCode::Esc => app.close_popup(),
             keybind::ACTION => app.commit_write(),
-            keybind::WRITE => {
-                {
-                let p = app.read_mut();
-                    if let Some(Popup::Write(w)) = &mut p.popup {
-                        w.write_type = match w.write_type {
-                            WriteType::Word => WriteType::DWord,
-                            WriteType::DWord => WriteType::Word,
-                        };
-                    }
-                }
-            }
+            keybind::WRITE => app.write_toggle_type(),
             keybind::MOVE_UP => {
-                {
                 let p = app.read_mut();
-                    if let Some(Popup::Write(w)) = &mut p.popup {
-                        decrement_option_by(&mut w.value, 1);
-                    }
+                if let Some(Popup::Write(w)) = &mut p.popup {
+                    decrement_option_by(&mut w.value, 1);
                 }
             }
             keybind::MOVE_DOWN => {
-                {
                 let p = app.read_mut();
-                    if let Some(Popup::Write(w)) = &mut p.popup {
-                        increment_option_by(&mut w.value, 1);
-                    }
+                if let Some(Popup::Write(w)) = &mut p.popup {
+                    increment_option_by(&mut w.value, 1);
                 }
             }
+            KeyCode::Left => app.write_move_bit(true),
+            KeyCode::Right => app.write_move_bit(false),
+            keybind::PAUSE => app.write_toggle_bit(),
             keybind::NEGATOR => {
-                {
                 let p = app.read_mut();
-                    if let Some(Popup::Write(w)) = &mut p.popup {
-                        negate_opt_option(&mut w.value);
-                    }
+                if let Some(Popup::Write(w)) = &mut p.popup {
+                    negate_opt_option(&mut w.value);
                 }
             }
             KeyCode::Backspace => {
-                {
                 let p = app.read_mut();
-                    if let Some(Popup::Write(w)) = &mut p.popup {
-                        digit_remove_option(&mut w.value);
-                    }
+                if let Some(Popup::Write(w)) = &mut p.popup {
+                    digit_remove_option(&mut w.value);
                 }
             }
             KeyCode::Char(c) if c.is_ascii_digit() => {
                 let digit = c as u8 - b'0';
-                {
                 let p = app.read_mut();
-                    if let Some(Popup::Write(w)) = &mut p.popup {
-                        digit_add_option(&mut w.value, digit);
-                    }
+                if let Some(Popup::Write(w)) = &mut p.popup {
+                    digit_add_option(&mut w.value, digit);
                 }
             }
             _ => {}
@@ -218,6 +255,31 @@ fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
             keybind::ACTION => app.commit_label(),
             KeyCode::Backspace => app.label_backspace(),
             KeyCode::Char(c) => app.label_input(c),
+            _ => {}
+        },
+
+        PopupKind::Slave => match key_event.code {
+            KeyCode::Esc | keybind::SLAVE => app.close_popup(),
+            keybind::ACTION => app.commit_slave().await,
+            KeyCode::Backspace => {
+                let p = app.read_mut();
+                if let Some(Popup::Slave(value)) = &mut p.popup {
+                    digit_remove(value);
+                }
+            }
+            KeyCode::Char(c) if c.is_ascii_digit() => {
+                let digit = c as u8 - b'0';
+                let p = app.read_mut();
+                if let Some(Popup::Slave(value)) = &mut p.popup {
+                    digit_add(value, digit);
+                }
+            }
+            _ => {}
+        },
+
+        PopupKind::Quit => match key_event.code {
+            keybind::ACTION | keybind::EXIT => app.quit(),
+            KeyCode::Esc => app.close_popup(),
             _ => {}
         },
     }

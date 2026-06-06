@@ -9,7 +9,8 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
 use tokio_modbus::client::{rtu, tcp, Context, Reader, Writer};
-use tokio_modbus::slave::Slave;
+use tokio_modbus::prelude::SlaveContext;
+use tokio_modbus::slave::{Slave, SlaveId};
 use tokio_serial::SerialStream;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -263,6 +264,16 @@ impl WordOrder {
             Self::DCBA => DCBA::split_word(data),
         }
     }
+
+    /// Cycle to the next word order (wraps).
+    pub fn next(self) -> Self {
+        match self {
+            Self::ABCD => Self::BADC,
+            Self::BADC => Self::CDAB,
+            Self::CDAB => Self::DCBA,
+            Self::DCBA => Self::ABCD,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -350,6 +361,16 @@ impl ModbusDevice {
             context: Arc::new(Mutex::new(context)),
             config: config.clone(),
         })
+    }
+
+    /// Change the target slave on the live connection (no reconnect).
+    pub async fn set_slave(&self, slave_id: SlaveId) {
+        self.context.lock().await.set_slave(Slave(slave_id));
+    }
+
+    /// Change the word order used for multi-register writes.
+    pub fn set_word_order(&mut self, word_order: WordOrder) {
+        self.config.word_order = word_order;
     }
 
     pub async fn inputs(&self, address: u16, quantity: u16) -> Result<Vec<u16>> {

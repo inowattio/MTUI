@@ -164,6 +164,8 @@ pub fn draw(
     let mut info_spans = vec![
         Span::styled("Device: ", theme.dim_style()),
         Span::styled(device.to_string(), theme.base()),
+        Span::styled("  slave ", theme.dim_style()),
+        Span::styled(app.config.device.slave_id.to_string(), theme.base()),
         Span::styled("   @ ", theme.dim_style()),
         Span::styled(params.position.to_string(), theme.accent_style()),
     ];
@@ -262,20 +264,52 @@ fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup: &P
         Popup::Label(l) => draw_label(frame, area, theme, l),
         Popup::Columns(selected) => draw_picker(frame, area, theme, app, *selected),
         Popup::Write(write) => draw_write(frame, area, theme, write),
+        Popup::Slave(value) => draw_slave(frame, area, theme, *value),
+        Popup::Quit => draw_confirm(
+            frame,
+            area,
+            theme,
+            "Unsaved changes",
+            "Unsaved labels/pins. Quit anyway?",
+            &None,
+        ),
     }
+}
+
+fn draw_slave(frame: &mut Frame, area: Rect, theme: &Theme, value: u16) {
+    let lines = vec![
+        Line::from(vec![
+            Span::styled("Slave ID: ", theme.dim_style()),
+            Span::styled(value.min(u8::MAX as u16).to_string(), theme.accent_style()),
+            Span::styled("_", theme.accent_style()),
+        ]),
+        Line::from(Span::styled(
+            " enter \u{b7} set   esc \u{b7} cancel",
+            theme.dim_style(),
+        )),
+    ];
+
+    let height = lines.len() as u16 + 2;
+    let rect = centered_rect(36, height, area);
+
+    frame.render_widget(Clear, rect);
+    frame.render_widget(Paragraph::new(lines).block(theme.panel("Slave")), rect);
 }
 
 fn draw_help(frame: &mut Frame, area: Rect, theme: &Theme) {
     use keybind::*;
-    let entries: [(String, &str); 12] = [
+    let entries: [(String, &str); 15] = [
         (format!("{MOVE_UP}/{MOVE_DOWN}"), "Move cursor"),
+        ("PgUp/Dn Home/End".to_string(), "Page / jump to ends"),
         (format!("{ACTION}"), "Read at cursor"),
         (format!("{REFRESH}"), "Refresh"),
         ("space".to_string(), "Pause / resume auto-refresh"),
         (format!("{TOGGLE}"), "Switch register type"),
+        (format!("{WORD_ORDER}"), "Cycle word order"),
         (format!("{SWITCH_VIEW}"), "Switch Main / Pinned"),
         (format!("{JUMP}"), "Go to address / label"),
         (format!("{WRITE}"), "Write register"),
+        (format!("{SLAVE}"), "Set slave id"),
         (format!("{PIN}"), "Add / Remove pin"),
         (format!("{LABEL}"), "Label register"),
         (format!("{COLUMNS}"), "Toggle columns"),
@@ -426,6 +460,29 @@ fn draw_write(frame: &mut Frame, area: Rect, theme: &Theme, write: &WriteParams)
         .value
         .map_or_else(|| "(none)".to_string(), |n| n.to_string());
 
+    let bits: u16 = match write.write_type {
+        crate::app::WriteType::Word => 16,
+        crate::app::WriteType::DWord => 32,
+    };
+    let raw = write.value.unwrap_or(0) as u32;
+
+    // Bit grid, MSB on the left, grouped in nibbles; the cursor bit is highlighted.
+    let mut bit_spans = vec![Span::styled("Bits:  ", theme.dim_style())];
+    for i in (0..bits).rev() {
+        let set = (raw >> i) & 1 == 1;
+        let style = if i == write.bit_cursor {
+            theme.selected_style()
+        } else if set {
+            theme.accent_style()
+        } else {
+            theme.dim_style()
+        };
+        bit_spans.push(Span::styled(if set { "1" } else { "0" }, style));
+        if i % 4 == 0 && i != 0 {
+            bit_spans.push(Span::raw(" "));
+        }
+    }
+
     let mut lines = vec![
         Line::from(vec![
             Span::styled("Write to ", theme.dim_style()),
@@ -437,6 +494,11 @@ fn draw_write(frame: &mut Frame, area: Rect, theme: &Theme, write: &WriteParams)
             Span::styled(value, theme.base()),
             Span::styled("_", theme.accent_style()),
         ]),
+        Line::from(bit_spans),
+        Line::from(Span::styled(
+            format!("       bit {}", write.bit_cursor),
+            theme.dim_style(),
+        )),
     ];
 
     if let Some(result) = &write.result {
@@ -452,7 +514,7 @@ fn draw_write(frame: &mut Frame, area: Rect, theme: &Theme, write: &WriteParams)
     }
 
     lines.push(Line::from(Span::styled(
-        " enter \u{b7} write   w \u{b7} word/dword   - \u{b7} negate   esc \u{b7} close",
+        " enter write \u{b7} w word/dword \u{b7} \u{2190}/\u{2192} bit \u{b7} space toggle \u{b7} - negate \u{b7} esc",
         theme.dim_style(),
     )));
 
