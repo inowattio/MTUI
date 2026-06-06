@@ -7,6 +7,7 @@ use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Cell, Clear, Paragraph, Row, Table, Wrap};
 use ratatui::Frame;
+use crate::register::RegisterType;
 
 fn rows_to_table(
     title: &str,
@@ -173,9 +174,14 @@ pub fn draw(
         info_spans.push(Span::styled(" (pinned)", theme.changed_style()));
     }
     info_spans.push(Span::styled(
-        format!("   {:?}", params.register_type),
+        format!("   {:?} ", params.register_type),
         theme.base(),
     ));
+    let (access, access_style) = match params.register_type {
+        RegisterType::Holding => ("RW", theme.ok_style()),
+        RegisterType::Input => ("RO", theme.warn_style()),
+    };
+    info_spans.push(Span::styled(access, access_style));
     info_spans.push(Span::styled("   order ", theme.dim_style()));
     info_spans.push(Span::styled(
         format!("{:?}   ", app.config.device.word_order),

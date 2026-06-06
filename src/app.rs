@@ -232,6 +232,10 @@ impl App {
         let position = self.read().position;
         let register_type = self.read().register_type;
 
+        if register_type == RegisterType::Input {
+            return;
+        }
+
         let value = self
             .previous_values
             .get(&(register_type, position))
