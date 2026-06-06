@@ -98,32 +98,6 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
                 }
             }
         }
-        keybind::HOME => {
-            let p = app.read_mut();
-            match p.panel {
-                ReadPanel::Main => {
-                    p.position = 0;
-                    p.scroll_to_cursor(rows);
-                }
-                ReadPanel::Pinned => {
-                    p.pinned_index = 0;
-                    p.scroll_pinned(rows, pinned_len);
-                }
-            }
-        }
-        keybind::END => {
-            let p = app.read_mut();
-            match p.panel {
-                ReadPanel::Main => {
-                    p.position = u16::MAX;
-                    p.scroll_to_cursor(rows);
-                }
-                ReadPanel::Pinned => {
-                    p.pinned_index = pinned_len.saturating_sub(1);
-                    p.scroll_pinned(rows, pinned_len);
-                }
-            }
-        }
         KeyCode::Char(c) => {
             if !c.is_ascii_digit() {
                 return Ok(());

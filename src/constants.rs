@@ -28,6 +28,4 @@ pub mod keybind {
     pub const MOVE_DOWN: KeyCode = KeyCode::Down;
     pub const PAGE_UP: KeyCode = KeyCode::PageUp;
     pub const PAGE_DOWN: KeyCode = KeyCode::PageDown;
-    pub const HOME: KeyCode = KeyCode::Home;
-    pub const END: KeyCode = KeyCode::End;
 }
