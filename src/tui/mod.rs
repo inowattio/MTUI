@@ -80,6 +80,7 @@ where
                 State::Jump(p) => draw_state::jump::draw(p, frame, inner, &theme, &device),
                 State::Write(p) => draw_state::write::draw(p, frame, inner, &theme, &device),
                 State::Label(p) => draw_state::label::draw(p, frame, inner, &theme, &device),
+                State::Save(p) => draw_state::save::draw(p, frame, inner, &theme, &device),
                 State::Help => draw_state::help::draw(frame, inner, &theme, &device),
             }
         })?;

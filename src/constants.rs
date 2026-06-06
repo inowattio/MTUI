@@ -2,9 +2,6 @@ use std::time::Duration;
 
 pub const CONFIG_PATH: &str = "config.json";
 
-// Drives both auto-refresh checks (gated by elapsed whole seconds, so the
-// cadence is unaffected) and the loading-spinner / countdown animation, which
-// needs sub-second redraws to look smooth.
 pub const EVENT_HANDLER_TICKRATE: Duration = Duration::from_millis(150);
 
 pub mod keybind {
@@ -19,6 +16,7 @@ pub mod keybind {
     pub const WRITE: KeyCode = KeyCode::Char('w');
     pub const JUMP: KeyCode = KeyCode::Char('j');
     pub const LABEL: KeyCode = KeyCode::Char('l');
+    pub const SAVE: KeyCode = KeyCode::Char('s');
     pub const NEGATOR: KeyCode = KeyCode::Char('-');
     pub const SWITCH_VIEW: KeyCode = KeyCode::Tab;
     pub const ACTION: KeyCode = KeyCode::Enter;

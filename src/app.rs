@@ -5,7 +5,7 @@ use crate::modbus::ModbusDevice;
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
 use crate::state::{
     no_data_rows, ConnectionStatus, DumpParams, JumpParams, LabelParams, ReadPanel, ReadParams,
-    State, StateTransition, WriteParams,
+    SaveParams, State, StateTransition, WriteParams,
 };
 use serde::{Deserialize, Serialize};
 use std::cell::Cell;
@@ -160,7 +160,7 @@ impl App {
 
         Self {
             interpreter: Interpretor::new(config.interpretations.clone(), config.device.word_order),
-            pinned_registers: config.pinned_defaults.clone().into(),
+            pinned_registers: config.pinned_registers.clone().into(),
             labels: config.labels.clone().into(),
             state: State::Read(ReadParams {
                 position: config.startup.address,
@@ -186,7 +186,7 @@ impl App {
             State::Write(p) => p.position,
             State::Dump(p) => p.position,
             State::Label(p) => p.position,
-            State::Help => 0,
+            State::Help | State::Save(_) => 0,
         }
     }
 
@@ -242,6 +242,7 @@ impl App {
                     result: None,
                 })
             }
+            StateTransition::Save => State::Save(SaveParams::default()),
         };
     }
 
@@ -278,31 +279,36 @@ impl App {
         };
 
         let key = (register_type, position);
-        let mut new_labels = self.labels.clone();
         if text.is_empty() {
-            new_labels.remove(&key);
+            self.labels.remove(&key);
         } else {
-            new_labels.insert(key, text);
+            self.labels.insert(key, text);
         }
 
-        let mut new_config = self.config.clone();
-        new_config.labels = (&new_labels).into();
-
-        if let Err(e) = save_config(&new_config) {
-            if let State::Label(p) = &mut self.state {
-                p.result = Some(format!("Save failed: {e}"));
-            }
-            return;
-        }
-
-        self.labels = new_labels;
-        self.config = new_config;
         self.state = State::Read(ReadParams {
             position,
             window_start: position,
             register_type,
             ..Default::default()
         });
+    }
+
+    fn persist_config(&mut self) -> String {
+        self.config.labels = (&self.labels).into();
+
+        let mut pinned = PinnedRegisters::default();
+        for (kind, address) in &self.pinned_registers {
+            match kind {
+                RegisterType::Holding => pinned.holdings.push(*address),
+                RegisterType::Input => pinned.inputs.push(*address),
+            }
+        }
+        self.config.pinned_registers = pinned;
+
+        match save_config(&self.config) {
+            Ok(()) => format!("Saved to {CONFIG_PATH}"),
+            Err(e) => format!("Save failed: {e}"),
+        }
     }
 
     pub fn pin(&mut self) {
@@ -328,7 +334,6 @@ impl App {
 
         self.pinned_registers.sort();
 
-        // The list changed — keep the pinned cursor in range.
         let rows = self.visible_rows.get();
         let len = self.pinned_registers.len() as u16;
         if let State::Read(p) = &mut self.state {
@@ -339,6 +344,7 @@ impl App {
     pub async fn do_action(&mut self) {
         let mut start_dump_run = false;
         let mut read_now = false;
+        let mut save_now = false;
 
         match &mut self.state {
             State::Read(_) => read_now = true,
@@ -388,14 +394,20 @@ impl App {
                 start_dump_run = true;
             }
             State::Label(_) => {}
+            State::Save(_) => save_now = true,
         }
 
         if start_dump_run {
             self.start_dump_batch();
         }
         if read_now {
-            // Enter reads the visible window immediately.
             self.refresh().await;
+        }
+        if save_now {
+            let result = self.persist_config();
+            if let State::Save(p) = &mut self.state {
+                p.result = Some(result);
+            }
         }
     }
 

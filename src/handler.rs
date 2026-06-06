@@ -24,6 +24,7 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         keybind::PIN => app.pin(),
         keybind::DUMP => app.switch_focus_to(StateTransition::Dump),
         keybind::HELP => app.switch_focus_to(StateTransition::Help),
+        keybind::SAVE => app.switch_focus_to(StateTransition::Save),
         keybind::REFRESH => app.refresh().await,
         keybind::TOGGLE => app.toggle_type(),
         keybind::JUMP => app.switch_focus_to(StateTransition::Jump),

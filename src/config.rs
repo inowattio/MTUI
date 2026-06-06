@@ -13,8 +13,7 @@ pub struct Config {
     pub registers_batch: u16,
     pub auto_update_interval_seconds: Option<u64>,
     pub dump_file: String,
-    pub pinned_defaults: PinnedRegisters,
-    #[serde(default)]
+    pub pinned_registers: PinnedRegisters,
     pub labels: Labels,
 }
 
@@ -84,7 +83,7 @@ impl Default for Config {
             registers_batch: 4,
             auto_update_interval_seconds: Some(1),
             dump_file: "dump.txt".into(),
-            pinned_defaults: Default::default(),
+            pinned_registers: Default::default(),
             labels: Default::default(),
         }
     }

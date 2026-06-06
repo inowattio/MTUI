@@ -38,6 +38,11 @@ pub struct LabelParams {
     pub result: Option<String>,
 }
 
+#[derive(Debug, Default, PartialEq)]
+pub struct SaveParams {
+    pub result: Option<String>,
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub enum ReadPanel {
     #[default]
@@ -154,6 +159,7 @@ pub enum State {
     Help,
     Dump(DumpParams),
     Label(LabelParams),
+    Save(SaveParams),
 }
 
 pub enum StateTransition {
@@ -163,4 +169,5 @@ pub enum StateTransition {
     Help,
     Dump,
     Label,
+    Save,
 }
