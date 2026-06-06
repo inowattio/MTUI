@@ -4,8 +4,8 @@ use crate::interpretator::Interpretor;
 use crate::modbus::ModbusDevice;
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
 use crate::state::{
-    no_data_rows, ConnectionStatus, DumpParams, LabelParams, ReadPanel, ReadParams, SaveParams,
-    SearchParams, State, StateTransition,
+    no_data_rows, ConnectionStatus, DumpParams, LabelParams, Popup, PopupKind, ReadPanel,
+    ReadParams, SaveParams, SearchParams, State, WriteParams,
 };
 use chrono::{DateTime, Local, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
@@ -184,113 +184,142 @@ impl App {
         }
     }
 
-    pub fn get_current_position(&self) -> u16 {
+    pub fn read(&self) -> &ReadParams {
         match &self.state {
-            State::Read(p) => p.position,
-            State::Label(p) => p.position,
-            State::Help | State::Save(_) | State::Search(_) | State::Dump(_) => 0,
+            State::Read(p) => p,
         }
     }
 
-    pub fn switch_focus_to(&mut self, focus: StateTransition) {
-        let position = self.get_current_position();
-        let register_type = match &self.state {
-            State::Read(p) => p.register_type,
-            _ => Default::default(),
-        };
+    pub fn read_mut(&mut self) -> &mut ReadParams {
+        match &mut self.state {
+            State::Read(p) => p,
+        }
+    }
 
-        self.state = match focus {
-            StateTransition::Read => State::Read(ReadParams {
-                position,
-                window_start: position,
-                register_type,
-                ..Default::default()
-            }),
-            StateTransition::Help => State::Help,
-            StateTransition::Label => {
-                let (label_type, label_pos) = match &self.state {
-                    State::Read(p) if p.panel == ReadPanel::Pinned => self
-                        .pinned_registers
-                        .get(p.pinned_index as usize)
-                        .map(|&(kind, address)| (kind, address))
-                        .unwrap_or((register_type, position)),
-                    _ => (register_type, position),
-                };
-                let text = self
-                    .labels
-                    .get(&(label_type, label_pos))
-                    .cloned()
-                    .unwrap_or_default();
-                State::Label(LabelParams {
-                    position: label_pos,
-                    register_type: label_type,
-                    text,
-                    result: None,
-                })
-            }
-            StateTransition::Save => State::Save(SaveParams::default()),
-            StateTransition::Dump => State::Dump(DumpParams::default()),
-            StateTransition::Search => {
-                let matches = self
-                    .labels
-                    .iter()
-                    .map(|(&cell, text)| (cell, text.clone()))
-                    .collect();
-                State::Search(SearchParams {
-                    matches,
-                    ..Default::default()
-                })
-            }
+    /// Which popup (if any) is currently open.
+    pub fn popup_kind(&self) -> Option<PopupKind> {
+        self.read().popup.as_ref().map(Popup::kind)
+    }
+
+    pub fn close_popup(&mut self) {
+        self.read_mut().popup = None;
+    }
+
+    pub fn open_help(&mut self) {
+        self.read_mut().popup = Some(Popup::Help);
+    }
+
+    pub fn open_save(&mut self) {
+        self.read_mut().popup = Some(Popup::Save(SaveParams::default()));
+    }
+
+    pub fn open_dump(&mut self) {
+        self.read_mut().popup = Some(Popup::Dump(DumpParams::default()));
+    }
+
+    pub fn open_columns(&mut self) {
+        self.read_mut().popup = Some(Popup::Columns(0));
+    }
+
+    pub fn open_jump(&mut self) {
+        self.read_mut().popup = Some(Popup::Jump(0));
+    }
+
+    pub fn open_write(&mut self) {
+        let position = self.read().position;
+        self.read_mut().popup = Some(Popup::Write(WriteParams {
+            position,
+            ..Default::default()
+        }));
+    }
+
+    pub fn open_search(&mut self) {
+        let matches = self
+            .labels
+            .iter()
+            .map(|(&cell, text)| (cell, text.clone()))
+            .collect();
+        self.read_mut().popup = Some(Popup::Search(SearchParams {
+            matches,
+            ..Default::default()
+        }));
+    }
+
+    pub fn open_label(&mut self) {
+        let (panel, register_type, position, pinned_index) = {
+            let p = self.read();
+            (p.panel, p.register_type, p.position, p.pinned_index)
         };
+        // On the Pinned panel, label the selected pin rather than the Main cursor.
+        let (label_type, label_pos) = if panel == ReadPanel::Pinned {
+            self.pinned_registers
+                .get(pinned_index as usize)
+                .map(|&(kind, address)| (kind, address))
+                .unwrap_or((register_type, position))
+        } else {
+            (register_type, position)
+        };
+        let text = self
+            .labels
+            .get(&(label_type, label_pos))
+            .cloned()
+            .unwrap_or_default();
+        self.read_mut().popup = Some(Popup::Label(LabelParams {
+            position: label_pos,
+            register_type: label_type,
+            text,
+            result: None,
+        }));
     }
 
     pub fn search_input(&mut self, c: char) {
-        if let State::Search(p) = &mut self.state {
-            p.query.push(c);
+        if let Some(Popup::Search(s)) = &mut self.read_mut().popup {
+            s.query.push(c);
         }
         self.recompute_search();
     }
 
     pub fn search_backspace(&mut self) {
-        if let State::Search(p) = &mut self.state {
-            p.query.pop();
+        if let Some(Popup::Search(s)) = &mut self.read_mut().popup {
+            s.query.pop();
         }
         self.recompute_search();
     }
 
     pub fn search_move(&mut self, down: bool) {
         let rows = self.visible_rows.get();
-        if let State::Search(p) = &mut self.state {
-            p.selected = if down {
-                p.selected.saturating_add(1)
+        if let Some(Popup::Search(s)) = &mut self.read_mut().popup {
+            s.selected = if down {
+                s.selected.saturating_add(1)
             } else {
-                p.selected.saturating_sub(1)
+                s.selected.saturating_sub(1)
             };
-            p.scroll(rows);
+            s.scroll(rows);
         }
     }
 
+    /// Jump the Read view to the selected matching label and close the popup.
     pub fn search_commit(&mut self) {
-        let target = if let State::Search(p) = &self.state {
-            p.matches.get(p.selected as usize).map(|(cell, _)| *cell)
-        } else {
-            return;
+        let target = match &self.read().popup {
+            Some(Popup::Search(s)) => s.matches.get(s.selected as usize).map(|(cell, _)| *cell),
+            _ => None,
         };
         if let Some((register_type, position)) = target {
-            self.state = State::Read(ReadParams {
-                position,
-                window_start: position,
-                register_type,
-                ..Default::default()
-            });
+            let p = self.read_mut();
+            p.position = position;
+            p.register_type = register_type;
+            p.window_start = position;
+            p.data_start = position;
+            p.main_rows = no_data_rows();
+            p.main_changed = Vec::new();
+            p.popup = None;
         }
     }
 
     fn recompute_search(&mut self) {
-        let query = if let State::Search(p) = &self.state {
-            p.query.to_lowercase()
-        } else {
-            return;
+        let query = match &self.read().popup {
+            Some(Popup::Search(s)) => s.query.to_lowercase(),
+            _ => return,
         };
         let matches: Vec<_> = self
             .labels
@@ -299,44 +328,32 @@ impl App {
             .map(|(&cell, text)| (cell, text.clone()))
             .collect();
         let rows = self.visible_rows.get();
-        if let State::Search(p) = &mut self.state {
-            p.matches = matches;
-            p.selected = 0;
-            p.top = 0;
-            p.scroll(rows);
+        if let Some(Popup::Search(s)) = &mut self.read_mut().popup {
+            s.matches = matches;
+            s.selected = 0;
+            s.top = 0;
+            s.scroll(rows);
         }
     }
 
     pub fn label_input(&mut self, c: char) {
-        if let State::Label(p) = &mut self.state {
-            p.result = None;
-            p.text.push(c);
+        if let Some(Popup::Label(l)) = &mut self.read_mut().popup {
+            l.result = None;
+            l.text.push(c);
         }
     }
 
     pub fn label_backspace(&mut self) {
-        if let State::Label(p) = &mut self.state {
-            p.result = None;
-            p.text.pop();
+        if let Some(Popup::Label(l)) = &mut self.read_mut().popup {
+            l.result = None;
+            l.text.pop();
         }
     }
 
-    pub fn cancel_label(&mut self) {
-        let State::Label(p) = &self.state else { return };
-        let position = p.position;
-        let register_type = p.register_type;
-        self.state = State::Read(ReadParams {
-            position,
-            window_start: position,
-            register_type,
-            ..Default::default()
-        });
-    }
-
     pub fn commit_label(&mut self) {
-        let (position, register_type, text) = {
-            let State::Label(p) = &self.state else { return };
-            (p.position, p.register_type, p.text.clone())
+        let (position, register_type, text) = match &self.read().popup {
+            Some(Popup::Label(l)) => (l.position, l.register_type, l.text.clone()),
+            _ => return,
         };
 
         let key = (register_type, position);
@@ -346,12 +363,9 @@ impl App {
             self.labels.insert(key, text);
         }
 
-        self.state = State::Read(ReadParams {
-            position,
-            window_start: position,
-            register_type,
-            ..Default::default()
-        });
+        self.read_mut().popup = None;
+        // Re-render so the new label shows immediately in the label column.
+        self.rebuild_read_rows();
     }
 
     fn persist_config(&mut self) -> String {
@@ -399,10 +413,9 @@ impl App {
     }
 
     pub fn pin(&mut self) {
-        let (panel, register_type, position, pinned_index) = if let State::Read(p) = &self.state {
+        let (panel, register_type, position, pinned_index) = {
+            let p = self.read();
             (p.panel, p.register_type, p.position, p.pinned_index)
-        } else {
-            return;
         };
 
         let selection = match panel {
@@ -423,39 +436,22 @@ impl App {
 
         let rows = self.visible_rows.get();
         let len = self.pinned_registers.len() as u16;
-        if let State::Read(p) = &mut self.state {
-            p.scroll_pinned(rows, len);
+        self.read_mut().scroll_pinned(rows, len);
+    }
+
+    /// Commit the Save popup: write config to disk and show the outcome.
+    pub fn commit_save(&mut self) {
+        let result = self.persist_config();
+        if let Some(Popup::Save(s)) = &mut self.read_mut().popup {
+            s.result = Some(result);
         }
     }
 
-    pub async fn do_action(&mut self) {
-        let mut read_now = false;
-        let mut save_now = false;
-        let mut dump_now = false;
-
-        match &mut self.state {
-            State::Read(_) => read_now = true,
-            State::Help => self.quit(),
-            State::Label(_) => {}
-            State::Save(_) => save_now = true,
-            State::Search(_) => {}
-            State::Dump(_) => dump_now = true,
-        }
-
-        if read_now {
-            self.refresh().await;
-        }
-        if save_now {
-            let result = self.persist_config();
-            if let State::Save(p) = &mut self.state {
-                p.result = Some(result);
-            }
-        }
-        if dump_now {
-            let result = self.dump_read_log();
-            if let State::Dump(p) = &mut self.state {
-                p.result = Some(result);
-            }
+    /// Commit the Dump popup: write the read log to a file and show the outcome.
+    pub fn commit_dump(&mut self) {
+        let result = self.dump_read_log();
+        if let Some(Popup::Dump(d)) = &mut self.read_mut().popup {
+            d.result = Some(result);
         }
     }
 
@@ -479,23 +475,7 @@ impl App {
     }
 
     pub fn quit(&mut self) {
-        match &self.state {
-            State::Read(_) => self.running = false,
-            _ => self.state = State::Read(Default::default()),
-        }
-    }
-
-    pub async fn aquire_data(
-        &self,
-        register_type: RegisterType,
-    ) -> Result<Vec<RegisterCellValue>, anyhow::Error> {
-        Self::aquire_data_with(
-            &self.device,
-            self.config.registers_batch,
-            self.get_current_position(),
-            register_type,
-        )
-        .await
+        self.running = false;
     }
 
     async fn aquire_data_with(
@@ -567,12 +547,11 @@ impl App {
             return;
         }
 
-        let (window_start, register_type) = if let State::Read(p) = &mut self.state {
+        let (window_start, register_type) = {
+            let p = self.read_mut();
             p.refresh_timer = Instant::now();
             p.loading = true;
             (p.window_start, p.register_type)
-        } else {
-            return;
         };
         self.connection = ConnectionStatus::Reading;
 
@@ -657,7 +636,8 @@ impl App {
             Err(e) => ConnectionStatus::Error(e.clone()),
         };
 
-        if let State::Read(params) = &mut self.state {
+        {
+            let params = self.read_mut();
             params.ascii_string = ascii_string;
             params.pinned_ascii_string = pinned_ascii_string;
             params.main_changed = main_changed;
@@ -698,11 +678,10 @@ impl App {
         });
         let pinned_rows = Self::format_pinned(&self.interpreter, &pinned_data, read_at, labels);
 
-        if let State::Read(params) = &mut self.state {
-            params.main_rows = main_rows;
-            params.pinned_rows = pinned_rows;
-            params.data_start = window_start;
-        }
+        let params = self.read_mut();
+        params.main_rows = main_rows;
+        params.pinned_rows = pinned_rows;
+        params.data_start = window_start;
     }
 
     /// Format the (scattered) pinned register list, grouping consecutive cells so
@@ -759,29 +738,28 @@ impl App {
 
     pub fn commit_jump(&mut self) {
         let rows = self.visible_rows.get();
-        if let State::Read(p) = &mut self.state {
-            if let Some(target) = p.jump.take() {
-                p.position = target;
-                p.scroll_to_cursor(rows);
-            }
+        let target = match &self.read().popup {
+            Some(Popup::Jump(target)) => Some(*target),
+            _ => None,
+        };
+        if let Some(target) = target {
+            let p = self.read_mut();
+            p.position = target;
+            p.scroll_to_cursor(rows);
+            p.popup = None;
         }
     }
 
     pub fn commit_write(&mut self) {
         if self.background_task.is_some() {
-            if let State::Read(p) = &mut self.state {
-                if let Some(w) = &mut p.write {
-                    w.result = Some("Device is busy.".to_string());
-                }
+            if let Some(Popup::Write(w)) = &mut self.read_mut().popup {
+                w.result = Some("Device is busy.".to_string());
             }
             return;
         }
 
         let (position, number, write_type) = {
-            let State::Read(p) = &mut self.state else {
-                return;
-            };
-            let Some(w) = &mut p.write else {
+            let Some(Popup::Write(w)) = &mut self.read_mut().popup else {
                 return;
             };
             let Some(number) = w.value else {
@@ -824,7 +802,8 @@ impl App {
                 Ok(result) => self.apply_refresh_result(result),
                 Err(e) => {
                     let message = e.to_string();
-                    if let State::Read(params) = &mut self.state {
+                    {
+                        let params = self.read_mut();
                         params.main_rows = vec![message.clone()];
                         params.main_changed = Vec::new();
                         params.loading = false;
@@ -834,22 +813,19 @@ impl App {
             },
             BackgroundTask::Write(handle) => {
                 let result = handle.await.unwrap_or_else(|e| e.to_string());
-                if let State::Read(p) = &mut self.state {
-                    if let Some(w) = &mut p.write {
-                        w.result = Some(result);
-                    }
+                if let Some(Popup::Write(w)) = &mut self.read_mut().popup {
+                    w.result = Some(result);
                 }
             }
         }
     }
 
     pub fn toggle_type(&mut self) {
-        if let State::Read(p) = &mut self.state {
-            p.main_rows = no_data_rows();
-            p.read_duration = None;
-            p.ascii_string = String::new();
-            p.main_changed = Vec::new();
-            p.register_type.toggle();
-        }
+        let p = self.read_mut();
+        p.main_rows = no_data_rows();
+        p.read_duration = None;
+        p.ascii_string = String::new();
+        p.main_changed = Vec::new();
+        p.register_type.toggle();
     }
 }

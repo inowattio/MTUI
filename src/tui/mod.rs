@@ -76,11 +76,6 @@ where
 
             match &app.state {
                 State::Read(p) => draw_state::read::draw(p, app, frame, inner, &theme, &device),
-                State::Label(p) => draw_state::label::draw(p, frame, inner, &theme, &device),
-                State::Save(p) => draw_state::save::draw(p, frame, inner, &theme, &device),
-                State::Dump(p) => draw_state::dump::draw(p, app, frame, inner, &theme, &device),
-                State::Search(p) => draw_state::search::draw(p, app, frame, inner, &theme, &device),
-                State::Help => draw_state::help::draw(frame, inner, &theme, &device),
             }
         })?;
         Ok(())

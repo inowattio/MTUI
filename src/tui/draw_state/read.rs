@@ -1,6 +1,7 @@
 use crate::app::App;
 use crate::config::Column;
-use crate::state::{no_data_text, ReadPanel, ReadParams, WriteParams};
+use crate::constants::keybind;
+use crate::state::{no_data_text, LabelParams, Popup, ReadPanel, ReadParams, SearchParams, WriteParams};
 use crate::tui::theme::{spinner_frame, Theme};
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::text::{Line, Span};
@@ -217,15 +218,189 @@ pub fn draw(
         );
     }
 
-    if let Some(selected) = params.picker {
-        draw_picker(frame, area, theme, app, selected);
+    if let Some(popup) = &params.popup {
+        draw_popup(frame, area, theme, app, popup);
     }
-    if let Some(target) = params.jump {
-        draw_jump(frame, area, theme, target);
+}
+
+fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup: &Popup) {
+    match popup {
+        Popup::Help => draw_help(frame, area, theme),
+        Popup::Save(s) => draw_confirm(
+            frame,
+            area,
+            theme,
+            "Save",
+            "Save configuration (labels & pins) to file?",
+            &s.result,
+        ),
+        Popup::Dump(d) => draw_confirm(
+            frame,
+            area,
+            theme,
+            "Dump",
+            &format!("Dump {} read register(s) to a file?", app.read_count()),
+            &d.result,
+        ),
+        Popup::Search(s) => draw_search(frame, area, theme, s),
+        Popup::Label(l) => draw_label(frame, area, theme, l),
+        Popup::Columns(selected) => draw_picker(frame, area, theme, app, *selected),
+        Popup::Jump(target) => draw_jump(frame, area, theme, *target),
+        Popup::Write(write) => draw_write(frame, area, theme, write),
     }
-    if let Some(write) = &params.write {
-        draw_write(frame, area, theme, write);
+}
+
+fn draw_help(frame: &mut Frame, area: Rect, theme: &Theme) {
+    use keybind::*;
+    let entries: [(String, &str); 12] = [
+        (format!("{MOVE_UP}/{MOVE_DOWN}"), "Move cursor"),
+        (format!("{ACTION}"), "Read at cursor"),
+        (format!("{REFRESH}"), "Refresh"),
+        (format!("{TOGGLE}"), "Switch register type"),
+        (format!("{SWITCH_VIEW}"), "Switch Main / Pinned"),
+        (format!("{JUMP}"), "Jump to address"),
+        (format!("{SEARCH}"), "Search labels"),
+        (format!("{WRITE}"), "Write register"),
+        (format!("{PIN}"), "Add / Remove pin"),
+        (format!("{LABEL}"), "Label register"),
+        (format!("{COLUMNS}"), "Toggle columns"),
+        (format!("{DUMP}"), "Dump read data"),
+    ];
+
+    let mut lines: Vec<Line> = entries
+        .iter()
+        .map(|(key, desc)| {
+            Line::from(vec![
+                Span::styled(format!(" {key:<8}"), theme.accent_style()),
+                Span::styled(*desc, theme.base()),
+            ])
+        })
+        .collect();
+    lines.push(Line::default());
+    lines.push(Line::from(Span::styled(
+        format!(" {SAVE} \u{b7} save config to file   {EXIT} \u{b7} quit"),
+        theme.dim_style(),
+    )));
+
+    let height = lines.len() as u16 + 2;
+    let rect = centered_rect(40, height, area);
+
+    frame.render_widget(Clear, rect);
+    frame.render_widget(Paragraph::new(lines).block(theme.panel("Help")), rect);
+}
+
+fn draw_confirm(
+    frame: &mut Frame,
+    area: Rect,
+    theme: &Theme,
+    title: &str,
+    prompt: &str,
+    result: &Option<String>,
+) {
+    let mut lines = vec![
+        Line::from(Span::styled(prompt.to_string(), theme.base())),
+        Line::from(Span::styled(
+            " enter \u{b7} confirm   esc \u{b7} cancel",
+            theme.dim_style(),
+        )),
+    ];
+
+    if let Some(result) = result {
+        let style = if result.starts_with("Saved") || result.starts_with("Dumped") {
+            theme.ok_style()
+        } else if result.contains("failed") {
+            theme.err_style()
+        } else {
+            theme.dim_style()
+        };
+        lines.push(Line::default());
+        lines.push(Line::from(Span::styled(result.clone(), style)));
     }
+
+    let height = lines.len() as u16 + 2;
+    let rect = centered_rect(60, height, area);
+
+    frame.render_widget(Clear, rect);
+    frame.render_widget(Paragraph::new(lines).block(theme.panel(title)), rect);
+}
+
+fn draw_label(frame: &mut Frame, area: Rect, theme: &Theme, label: &LabelParams) {
+    let (text, text_style) = if label.text.is_empty() {
+        ("(empty - will remove)".to_string(), theme.dim_style())
+    } else {
+        (label.text.clone(), theme.base())
+    };
+
+    let mut lines = vec![
+        Line::from(vec![
+            Span::styled("Label ", theme.dim_style()),
+            Span::styled(label.position.to_string(), theme.accent_style()),
+            Span::styled(format!("  ({:?})", label.register_type), theme.dim_style()),
+        ]),
+        Line::from(vec![
+            Span::styled("Text: ", theme.dim_style()),
+            Span::styled(text, text_style),
+            Span::styled("_", theme.accent_style()),
+        ]),
+        Line::from(Span::styled(
+            " enter \u{b7} set (empty removes)   esc \u{b7} cancel",
+            theme.dim_style(),
+        )),
+    ];
+
+    if let Some(result) = &label.result {
+        lines.push(Line::from(Span::styled(result.clone(), theme.err_style())));
+    }
+
+    let height = lines.len() as u16 + 2;
+    let rect = centered_rect(48, height, area);
+
+    frame.render_widget(Clear, rect);
+    frame.render_widget(Paragraph::new(lines).block(theme.panel("Label")), rect);
+}
+
+fn draw_search(frame: &mut Frame, area: Rect, theme: &Theme, search: &SearchParams) {
+    // Cap the visible match list so the popup stays compact.
+    let visible = 10usize;
+    let len = search.matches.len();
+    let top = (search.top as usize).min(len.saturating_sub(1));
+    let end = (top + visible).min(len);
+
+    let query_line = Line::from(vec![
+        Span::styled("Search: ", theme.dim_style()),
+        Span::styled(search.query.clone(), theme.accent_style()),
+        Span::styled("_", theme.accent_style()),
+        Span::styled(format!("   ({len})"), theme.dim_style()),
+    ]);
+
+    let mut lines = vec![query_line, Line::default()];
+
+    if search.matches.is_empty() {
+        lines.push(Line::from(Span::styled("No matching labels.", theme.dim_style())));
+    } else {
+        for i in top..end {
+            let ((kind, address), text) = &search.matches[i];
+            let row = format!("{address:>5}  {:<8} {text}", format!("{kind:?}"));
+            let style = if i as u16 == search.selected {
+                theme.selected_style()
+            } else {
+                theme.base()
+            };
+            lines.push(Line::from(Span::styled(row, style)));
+        }
+    }
+
+    lines.push(Line::default());
+    lines.push(Line::from(Span::styled(
+        " type to filter \u{b7} \u{2191}/\u{2193} select \u{b7} enter jump \u{b7} esc close",
+        theme.dim_style(),
+    )));
+
+    let height = lines.len() as u16 + 2;
+    let rect = centered_rect(54, height, area);
+
+    frame.render_widget(Clear, rect);
+    frame.render_widget(Paragraph::new(lines).block(theme.panel("Search")), rect);
 }
 
 fn draw_write(frame: &mut Frame, area: Rect, theme: &Theme, write: &WriteParams) {

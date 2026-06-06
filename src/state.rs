@@ -69,6 +69,51 @@ pub enum ReadPanel {
     Pinned,
 }
 
+/// A modal overlay shown over the Read screen. Only one is open at a time, held
+/// in `ReadParams.popup`.
+#[derive(Debug, PartialEq)]
+pub enum Popup {
+    Help,
+    Save(SaveParams),
+    Dump(DumpParams),
+    Search(SearchParams),
+    Label(LabelParams),
+    /// Column picker; the value is the cursor index into `Column::ALL`.
+    Columns(u16),
+    /// Jump-to-address; the value is the address being typed.
+    Jump(u16),
+    Write(WriteParams),
+}
+
+/// Lightweight, copyable tag of which popup is open (so the handler can decide
+/// how to route a key without holding a borrow on the popup data).
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum PopupKind {
+    Help,
+    Save,
+    Dump,
+    Search,
+    Label,
+    Columns,
+    Jump,
+    Write,
+}
+
+impl Popup {
+    pub fn kind(&self) -> PopupKind {
+        match self {
+            Popup::Help => PopupKind::Help,
+            Popup::Save(_) => PopupKind::Save,
+            Popup::Dump(_) => PopupKind::Dump,
+            Popup::Search(_) => PopupKind::Search,
+            Popup::Label(_) => PopupKind::Label,
+            Popup::Columns(_) => PopupKind::Columns,
+            Popup::Jump(_) => PopupKind::Jump,
+            Popup::Write(_) => PopupKind::Write,
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub struct ReadParams {
     pub position: u16,
@@ -77,9 +122,8 @@ pub struct ReadParams {
     pub panel: ReadPanel,
     pub pinned_index: u16,
     pub pinned_top: u16,
-    pub picker: Option<u16>,
-    pub jump: Option<u16>,
-    pub write: Option<WriteParams>,
+    /// The open modal overlay, if any.
+    pub popup: Option<Popup>,
     pub main_rows: Vec<String>,
     pub pinned_rows: Vec<String>,
     pub refresh_timer: Instant,
@@ -101,9 +145,7 @@ impl Default for ReadParams {
             panel: ReadPanel::Main,
             pinned_index: 0,
             pinned_top: 0,
-            picker: None,
-            jump: None,
-            write: None,
+            popup: None,
             main_rows: no_data_rows(),
             pinned_rows: Vec::new(),
             refresh_timer: Instant::now(),
@@ -157,21 +199,8 @@ pub enum ConnectionStatus {
     Error(String),
 }
 
+/// The app is always on the Read screen; everything else is a `Popup` over it.
 #[derive(Debug, PartialEq)]
 pub enum State {
     Read(ReadParams),
-    Help,
-    Label(LabelParams),
-    Save(SaveParams),
-    Search(SearchParams),
-    Dump(DumpParams),
-}
-
-pub enum StateTransition {
-    Read,
-    Help,
-    Label,
-    Save,
-    Search,
-    Dump,
 }
