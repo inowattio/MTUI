@@ -230,8 +230,16 @@ impl App {
 
     pub fn open_write(&mut self) {
         let position = self.read().position;
+        let register_type = self.read().register_type;
+
+        let value = self
+            .previous_values
+            .get(&(register_type, position))
+            .map(|&v| v as i64);
+
         self.read_mut().popup = Some(Popup::Write(WriteParams {
             position,
+            value,
             ..Default::default()
         }));
     }
