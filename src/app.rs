@@ -4,16 +4,14 @@ use crate::interpretator::Interpretor;
 use crate::modbus::ModbusDevice;
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
 use crate::state::{
-    no_data_rows, ConnectionStatus, DumpParams, JumpParams, LabelParams, ReadPanel, ReadParams,
-    SaveParams, SearchParams, State, StateTransition, WriteParams,
+    no_data_rows, ConnectionStatus, JumpParams, LabelParams, ReadPanel, ReadParams, SaveParams,
+    SearchParams, State, StateTransition, WriteParams,
 };
 use serde::{Deserialize, Serialize};
 use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 use std::{error, fs};
-use tokio::fs::OpenOptions;
-use tokio::io::AsyncWriteExt;
 use tokio::task::JoinHandle;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -29,7 +27,6 @@ pub type AppResult<T> = Result<T, Box<dyn error::Error>>;
 enum BackgroundTask {
     Refresh(JoinHandle<RefreshTaskResult>),
     Write(JoinHandle<String>),
-    DumpBatch(JoinHandle<DumpBatchTaskResult>),
 }
 
 #[derive(Debug)]
@@ -39,13 +36,6 @@ struct RefreshTaskResult {
     main_data: Result<Vec<RegisterCellValue>, String>,
     pinned_data: Result<Vec<RegisterCellValue>, String>,
     read_duration: Duration,
-}
-
-#[derive(Debug)]
-struct DumpBatchTaskResult {
-    starting_index: u16,
-    total_batches: u16,
-    result: Result<Option<String>, String>,
 }
 
 #[derive(Debug)]
@@ -184,7 +174,6 @@ impl App {
             State::Read(p) => p.position,
             State::Jump(p) => p.to,
             State::Write(p) => p.position,
-            State::Dump(p) => p.position,
             State::Label(p) => p.position,
             State::Help | State::Save(_) | State::Search(_) => 0,
         }
@@ -194,17 +183,11 @@ impl App {
         let position = self.get_current_position();
         let register_type = match &self.state {
             State::Read(p) => p.register_type,
-            State::Dump(p) => p.register_type,
             State::Jump(p) => p.register_type,
             _ => Default::default(),
         };
 
         self.state = match focus {
-            StateTransition::Dump => State::Dump(DumpParams {
-                start_position: position,
-                register_type,
-                ..Default::default()
-            }),
             StateTransition::Write => State::Write(WriteParams {
                 position,
                 ..Default::default()
@@ -416,7 +399,6 @@ impl App {
     }
 
     pub async fn do_action(&mut self) {
-        let mut start_dump_run = false;
         let mut read_now = false;
         let mut save_now = false;
 
@@ -445,36 +427,11 @@ impl App {
                 }
             }
             State::Help => self.quit(),
-            State::Dump(params) => {
-                if params.started {
-                    return;
-                }
-
-                let Some(total_batches) = params.total_batches else {
-                    params.error = Some("Set a batch count before starting.".to_string());
-                    return;
-                };
-
-                if total_batches < 1 {
-                    params.error = Some("Batch count must be greater than 0.".to_string());
-                    return;
-                }
-
-                params.started = true;
-                params.completed_batches = 0;
-                params.header_written = false;
-                params.error = None;
-                params.position = params.start_position;
-                start_dump_run = true;
-            }
             State::Label(_) => {}
             State::Save(_) => save_now = true,
             State::Search(_) => {}
         }
 
-        if start_dump_run {
-            self.start_dump_batch();
-        }
         if read_now {
             self.refresh().await;
         }
@@ -484,91 +441,6 @@ impl App {
                 p.result = Some(result);
             }
         }
-    }
-
-    fn start_dump_batch(&mut self) {
-        if self.background_task.is_some() {
-            return;
-        }
-
-        let (header_needed, starting_index, total_batches, dump_file, register_type) = {
-            let State::Dump(params) = &mut self.state else {
-                return;
-            };
-
-            let Some(total_batches) = params.total_batches else {
-                return;
-            };
-
-            if params.completed_batches >= total_batches {
-                params.started = false;
-                return;
-            }
-
-            (
-                !params.header_written,
-                params.position,
-                total_batches,
-                self.config.dump_file.clone(),
-                params.register_type,
-            )
-        };
-
-        let device = self.device.clone();
-        let interpreter = self.interpreter.clone();
-        let amount = self.config.registers_batch;
-
-        self.background_task = Some(BackgroundTask::DumpBatch(tokio::spawn(async move {
-            let result = async {
-                let mut file = OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open(&dump_file)
-                    .await
-                    .map_err(|e| e.to_string())?;
-
-                if header_needed {
-                    file.write_all(interpreter.header().as_bytes())
-                        .await
-                        .map_err(|e| e.to_string())?;
-                    file.write_all(b"\n").await.map_err(|e| e.to_string())?;
-                }
-
-                let data_result =
-                    Self::aquire_data_with(&device, amount, starting_index, register_type).await;
-                let mut error_message = None;
-
-                match data_result {
-                    Ok(data) => {
-                        file.write_all(
-                            interpreter
-                                .run(data, starting_index, |_| None)
-                                .join("\n")
-                                .as_bytes(),
-                        )
-                        .await
-                        .map_err(|e| e.to_string())?;
-                        file.write_all(b"\n").await.map_err(|e| e.to_string())?;
-                    }
-                    Err(e) => {
-                        error_message = Some(e.to_string());
-                        let line = format!("{starting_index}: error");
-                        file.write_all(line.as_bytes())
-                            .await
-                            .map_err(|e| e.to_string())?;
-                    }
-                }
-
-                Ok(error_message)
-            }
-            .await;
-
-            DumpBatchTaskResult {
-                starting_index,
-                total_batches,
-                result,
-            }
-        })));
     }
 
     pub async fn tick(&mut self) {
@@ -587,8 +459,6 @@ impl App {
 
         if should_refresh {
             self.refresh().await;
-        } else if matches!(&self.state, State::Dump(p) if p.started) {
-            self.start_dump_batch();
         }
     }
 
@@ -833,7 +703,6 @@ impl App {
         if !match task {
             BackgroundTask::Refresh(handle) => handle.is_finished(),
             BackgroundTask::Write(handle) => handle.is_finished(),
-            BackgroundTask::DumpBatch(handle) => handle.is_finished(),
         } {
             return;
         }
@@ -859,54 +728,16 @@ impl App {
                     params.result = Some(result);
                 }
             }
-            BackgroundTask::DumpBatch(handle) => match handle.await {
-                Ok(result) => self.apply_dump_batch_result(result),
-                Err(e) => {
-                    if let State::Dump(params) = &mut self.state {
-                        params.started = false;
-                        params.error = Some(e.to_string());
-                    }
-                }
-            },
-        }
-    }
-
-    fn apply_dump_batch_result(&mut self, result: DumpBatchTaskResult) {
-        if let State::Dump(params) = &mut self.state {
-            match result.result {
-                Ok(error_message) => {
-                    params.header_written = true;
-                    params.completed_batches += 1;
-                    params.position = result.starting_index + self.config.registers_batch;
-                    params.error = error_message;
-
-                    if params.completed_batches >= result.total_batches {
-                        params.started = false;
-                    }
-                }
-                Err(error) => {
-                    params.started = false;
-                    params.error = Some(error);
-                }
-            }
         }
     }
 
     pub fn toggle_type(&mut self) {
-        match &mut self.state {
-            State::Read(p) => {
-                p.main_rows = no_data_rows();
-                p.read_duration = None;
-                p.ascii_string = String::new();
-                p.main_changed = Vec::new();
-                p.register_type.toggle()
-            }
-            State::Dump(p) => {
-                if !p.started {
-                    p.register_type.toggle()
-                }
-            }
-            _ => {}
+        if let State::Read(p) = &mut self.state {
+            p.main_rows = no_data_rows();
+            p.read_duration = None;
+            p.ascii_string = String::new();
+            p.main_changed = Vec::new();
+            p.register_type.toggle();
         }
     }
 }

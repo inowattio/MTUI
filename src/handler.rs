@@ -35,7 +35,6 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
     match key_event.code {
         keybind::EXIT => app.quit(),
         keybind::PIN => app.pin(),
-        keybind::DUMP => app.switch_focus_to(StateTransition::Dump),
         keybind::HELP => app.switch_focus_to(StateTransition::Help),
         keybind::SAVE => app.switch_focus_to(StateTransition::Save),
         keybind::SEARCH => app.switch_focus_to(StateTransition::Search),
@@ -77,7 +76,6 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
             },
             State::Jump(p) => decrement_by(&mut p.to, 1),
             State::Write(p) => decrement_option_by(&mut p.value, 1),
-            State::Dump(p) => decrement_by(&mut p.start_position, 1),
             _ => {}
         },
         keybind::MOVE_DOWN => match &mut app.state {
@@ -93,7 +91,6 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
             },
             State::Jump(p) => increment_by(&mut p.to, 1),
             State::Write(p) => increment_option_by(&mut p.value, 1),
-            State::Dump(p) => increment_by(&mut p.start_position, 1),
             _ => {}
         },
         keybind::NEGATOR => match &mut app.state {
@@ -114,15 +111,6 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
                 }
                 State::Jump(params) => digit_add(&mut params.to, digit),
                 State::Write(params) => digit_add_option(&mut params.value, digit),
-                State::Dump(params) => {
-                    if params.started {
-                        return Ok(());
-                    }
-
-                    params.error = None;
-
-                    digit_add_option(&mut params.total_batches, digit)
-                }
                 _ => {}
             };
         }
@@ -133,15 +121,6 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
             }
             State::Jump(params) => digit_remove(&mut params.to),
             State::Write(params) => digit_remove_option(&mut params.value),
-            State::Dump(params) => {
-                if params.started {
-                    return Ok(());
-                }
-
-                params.error = None;
-
-                digit_remove_option(&mut params.total_batches)
-            }
             _ => {}
         },
         _ => {}
@@ -169,15 +148,6 @@ pub fn handle_paste(data: String, app: &mut App) {
             State::Read(params) => digit_add(&mut params.position, digit),
             State::Jump(params) => digit_add(&mut params.to, digit),
             State::Write(params) => digit_add_option(&mut params.value, digit),
-            State::Dump(params) => {
-                if params.started {
-                    return;
-                }
-
-                params.error = None;
-
-                digit_add_option(&mut params.total_batches, digit)
-            }
             _ => {}
         };
     }

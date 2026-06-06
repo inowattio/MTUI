@@ -11,18 +11,6 @@ pub struct WriteParams {
     pub write_type: WriteType,
 }
 
-#[derive(Debug, PartialEq, Default)]
-pub struct DumpParams {
-    pub started: bool,
-    pub total_batches: Option<u16>,
-    pub completed_batches: u16,
-    pub start_position: u16,
-    pub position: u16,
-    pub header_written: bool,
-    pub error: Option<String>,
-    pub register_type: RegisterType,
-}
-
 #[derive(Debug, Default, PartialEq)]
 pub struct JumpParams {
     pub from: u16,
@@ -171,7 +159,6 @@ pub enum State {
     Jump(JumpParams),
     Write(WriteParams),
     Help,
-    Dump(DumpParams),
     Label(LabelParams),
     Save(SaveParams),
     Search(SearchParams),
@@ -182,7 +169,6 @@ pub enum StateTransition {
     Jump,
     Write,
     Help,
-    Dump,
     Label,
     Save,
     Search,
