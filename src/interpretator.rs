@@ -117,7 +117,12 @@ impl Interpretor {
                 let formatted = read_at.format("%H:%M:%S:%3f").to_string();
                 row.push_str(&format!("{formatted: <12} "));
             }
-            row.push_str(&format!("{0: >5}: ", index + i as u16));
+            let address = index + i as u16;
+            if self.config.index_hex {
+                row.push_str(&format!("{address: >5X}: "));
+            } else {
+                row.push_str(&format!("{address: >5}: "));
+            }
             if self.config.u16 {
                 row.push_str(&format!("{byte: <5} "))
             }

@@ -123,6 +123,7 @@ macro_rules! interpretation_columns {
 }
 
 interpretation_columns! {
+    IndexHex => index_hex : "index (hex)" = false,
     U16 => u16 : "u16" = true,
     I16 => i16 : "i16" = true,
     Hex => hex : "hex" = true,
