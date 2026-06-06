@@ -96,6 +96,59 @@ impl Interpretor {
             .collect()
     }
 
+    pub fn placeholder(&self, index: u16, label: Option<&str>) -> String {
+        let dash = "--";
+        let mut row = String::new();
+
+        if self.config.time {
+            row.push_str(&format!("{dash: <12} "));
+        }
+        if self.config.index_hex {
+            row.push_str(&format!("{index: >5X}: "));
+        } else {
+            row.push_str(&format!("{index: >5}: "));
+        }
+        if self.config.u16 {
+            row.push_str(&format!("{dash: <5} "));
+        }
+        if self.config.i16 {
+            row.push_str(&format!("{dash: <6} "));
+        }
+        if self.config.hex {
+            row.push_str(&format!("{dash: <4} "));
+        }
+        if self.config.u32 {
+            row.push_str(&format!("{dash: <10} "));
+        }
+        if self.config.i32 {
+            row.push_str(&format!("{dash: <11} "));
+        }
+        if self.config.u64 {
+            row.push_str(&format!("{dash: <20} "));
+        }
+        if self.config.i64 {
+            row.push_str(&format!("{dash: <21} "));
+        }
+        if self.config.f32 {
+            row.push_str(&format!("{dash: <10} "));
+        }
+        if self.config.ascii {
+            row.push_str(&format!("{dash: <5} "));
+        }
+        if self.config.bits {
+            row.push_str(&format!("{dash: <8} "));
+        }
+
+        if self.config.label {
+            match label {
+                Some(text) => row.push_str(text),
+                None => row.push_str(""),
+            }
+        }
+
+        row
+    }
+
     pub fn run(
         &self,
         data: Vec<RegisterCellValue>,

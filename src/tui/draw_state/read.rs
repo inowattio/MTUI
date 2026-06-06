@@ -37,7 +37,13 @@ fn rows_to_table(
         .block(theme.panel(title))
 }
 
-fn main_table(params: &ReadParams, visible: u16, header: String, theme: &Theme) -> Table<'static> {
+fn main_table(
+    params: &ReadParams,
+    app: &App,
+    visible: u16,
+    header: String,
+    theme: &Theme,
+) -> Table<'static> {
     let mut table_rows = Vec::with_capacity(visible as usize);
 
     for i in 0..visible {
@@ -73,7 +79,8 @@ fn main_table(params: &ReadParams, visible: u16, header: String, theme: &Theme) 
                 } else {
                     theme.dim_style()
                 };
-                (format!("{addr: >5}:  --"), style)
+                let label = app.label_text(params.register_type, addr);
+                (app.interpreter.placeholder(addr, label.as_deref()), style)
             }
         };
 
@@ -178,7 +185,7 @@ pub fn draw(
 
     let ascii_string = match params.panel {
         ReadPanel::Main => {
-            frame.render_widget(main_table(params, visible, header, theme), rows[1]);
+            frame.render_widget(main_table(params, app, visible, header, theme), rows[1]);
             &params.ascii_string
         }
         ReadPanel::Pinned => {

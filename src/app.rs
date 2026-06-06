@@ -793,6 +793,10 @@ impl App {
         self.rebuild_read_rows();
     }
 
+    pub fn label_text(&self, register_type: RegisterType, address: u16) -> Option<String> {
+        self.labels.get(&(register_type, address)).cloned()
+    }
+
     pub async fn complete_background_task(&mut self) {
         let Some(task) = self.background_task.as_ref() else {
             return;
