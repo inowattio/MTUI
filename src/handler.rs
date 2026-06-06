@@ -2,7 +2,7 @@ use crate::app::{App, AppResult, WriteType};
 use crate::config::Column;
 use crate::constants::keybind;
 use crate::num_ops::{decrement_by, decrement_option_by, digit_add, digit_add_option, digit_remove, digit_remove_option, increment_by, increment_option_by, negate_opt_option, set_option_to_zero, set_to_zero};
-use crate::state::{ReadPanel, State, StateTransition};
+use crate::state::{ReadPanel, State, StateTransition, WriteParams};
 use crossterm::event::{KeyCode, KeyEvent};
 
 pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
@@ -97,6 +97,65 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         return Ok(());
     }
 
+    if matches!(&app.state, State::Read(p) if p.write.is_some()) {
+        match key_event.code {
+            KeyCode::Esc => {
+                if let State::Read(p) = &mut app.state {
+                    p.write = None;
+                }
+            }
+            keybind::WRITE => {
+                if let State::Read(p) = &mut app.state {
+                    if let Some(w) = &mut p.write {
+                        w.write_type = match w.write_type {
+                            WriteType::Word => WriteType::DWord,
+                            WriteType::DWord => WriteType::Word,
+                        };
+                    }
+                }
+            }
+            keybind::ACTION => app.commit_write(),
+            keybind::MOVE_UP => {
+                if let State::Read(p) = &mut app.state {
+                    if let Some(w) = &mut p.write {
+                        decrement_option_by(&mut w.value, 1);
+                    }
+                }
+            }
+            keybind::MOVE_DOWN => {
+                if let State::Read(p) = &mut app.state {
+                    if let Some(w) = &mut p.write {
+                        increment_option_by(&mut w.value, 1);
+                    }
+                }
+            }
+            keybind::NEGATOR => {
+                if let State::Read(p) = &mut app.state {
+                    if let Some(w) = &mut p.write {
+                        negate_opt_option(&mut w.value);
+                    }
+                }
+            }
+            KeyCode::Backspace => {
+                if let State::Read(p) = &mut app.state {
+                    if let Some(w) = &mut p.write {
+                        digit_remove_option(&mut w.value);
+                    }
+                }
+            }
+            KeyCode::Char(c) if c.is_ascii_digit() => {
+                let digit = c as u8 - b'0';
+                if let State::Read(p) = &mut app.state {
+                    if let Some(w) = &mut p.write {
+                        digit_add_option(&mut w.value, digit);
+                    }
+                }
+            }
+            _ => {}
+        }
+        return Ok(());
+    }
+
     match key_event.code {
         keybind::EXIT => app.quit(),
         keybind::PIN => app.pin(),
@@ -133,71 +192,59 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         }
         keybind::ACTION => app.do_action().await,
         keybind::WRITE => {
-            if let State::Write(params) = &mut app.state {
-                params.write_type = match params.write_type {
-                    WriteType::Word => WriteType::DWord,
-                    WriteType::DWord => WriteType::Word,
-                }
-            } else {
-                app.switch_focus_to(StateTransition::Write);
+            if let State::Read(p) = &mut app.state {
+                p.write = Some(WriteParams {
+                    position: p.position,
+                    ..Default::default()
+                });
             }
         }
-        keybind::MOVE_UP => match &mut app.state {
-            State::Read(p) => match p.panel {
-                ReadPanel::Main => {
-                    decrement_by(&mut p.position, 1);
-                    p.scroll_to_cursor(rows);
+        keybind::MOVE_UP => {
+            if let State::Read(p) = &mut app.state {
+                match p.panel {
+                    ReadPanel::Main => {
+                        decrement_by(&mut p.position, 1);
+                        p.scroll_to_cursor(rows);
+                    }
+                    ReadPanel::Pinned => {
+                        p.pinned_index = p.pinned_index.saturating_sub(1);
+                        p.scroll_pinned(rows, pinned_len);
+                    }
                 }
-                ReadPanel::Pinned => {
-                    p.pinned_index = p.pinned_index.saturating_sub(1);
-                    p.scroll_pinned(rows, pinned_len);
+            }
+        }
+        keybind::MOVE_DOWN => {
+            if let State::Read(p) = &mut app.state {
+                match p.panel {
+                    ReadPanel::Main => {
+                        increment_by(&mut p.position, 1);
+                        p.scroll_to_cursor(rows);
+                    }
+                    ReadPanel::Pinned => {
+                        p.pinned_index = p.pinned_index.saturating_add(1);
+                        p.scroll_pinned(rows, pinned_len);
+                    }
                 }
-            },
-            State::Write(p) => decrement_option_by(&mut p.value, 1),
-            _ => {}
-        },
-        keybind::MOVE_DOWN => match &mut app.state {
-            State::Read(p) => match p.panel {
-                ReadPanel::Main => {
-                    increment_by(&mut p.position, 1);
-                    p.scroll_to_cursor(rows);
-                }
-                ReadPanel::Pinned => {
-                    p.pinned_index = p.pinned_index.saturating_add(1);
-                    p.scroll_pinned(rows, pinned_len);
-                }
-            },
-            State::Write(p) => increment_option_by(&mut p.value, 1),
-            _ => {}
-        },
-        keybind::NEGATOR => match &mut app.state {
-            State::Write(params) => negate_opt_option(&mut params.value),
-            _ => {}
-        },
+            }
+        }
         KeyCode::Char(c) => {
             if !c.is_ascii_digit() {
                 return Ok(());
             }
 
-            let digit = c as u8 - '0' as u8;
+            let digit = c as u8 - b'0';
 
-            match &mut app.state {
-                State::Read(params) => {
-                    digit_add(&mut params.position, digit);
-                    params.scroll_to_cursor(rows);
-                }
-                State::Write(params) => digit_add_option(&mut params.value, digit),
-                _ => {}
-            };
+            if let State::Read(params) = &mut app.state {
+                digit_add(&mut params.position, digit);
+                params.scroll_to_cursor(rows);
+            }
         }
-        KeyCode::Backspace => match &mut app.state {
-            State::Read(params) => {
+        KeyCode::Backspace => {
+            if let State::Read(params) = &mut app.state {
                 digit_remove(&mut params.position);
                 params.scroll_to_cursor(rows);
             }
-            State::Write(params) => digit_remove_option(&mut params.value),
-            _ => {}
-        },
+        }
         _ => {}
     }
     Ok(())
@@ -211,22 +258,22 @@ pub fn handle_paste(data: String, app: &mut App) {
         return;
     }
 
-    match &mut app.state {
-        State::Read(params) => set_to_zero(&mut params.position),
-        State::Write(params) => set_option_to_zero(&mut params.value),
-        _ => {}
+    let rows = app.visible_rows.get();
+    let State::Read(params) = &mut app.state else {
+        return;
     };
 
-    for digit in digits {
-        match &mut app.state {
-            State::Read(params) => digit_add(&mut params.position, digit),
-            State::Write(params) => digit_add_option(&mut params.value, digit),
-            _ => {}
-        };
+    if let Some(w) = &mut params.write {
+        set_option_to_zero(&mut w.value);
+        for digit in digits {
+            digit_add_option(&mut w.value, digit);
+        }
+        return;
     }
 
-    let rows = app.visible_rows.get();
-    if let State::Read(params) = &mut app.state {
-        params.scroll_to_cursor(rows);
+    set_to_zero(&mut params.position);
+    for digit in digits {
+        digit_add(&mut params.position, digit);
     }
+    params.scroll_to_cursor(rows);
 }

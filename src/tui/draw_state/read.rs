@@ -1,6 +1,6 @@
 use crate::app::App;
 use crate::config::Column;
-use crate::state::{no_data_text, ReadPanel, ReadParams};
+use crate::state::{no_data_text, ReadPanel, ReadParams, WriteParams};
 use crate::tui::theme::{spinner_frame, Theme};
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::text::{Line, Span};
@@ -223,6 +223,51 @@ pub fn draw(
     if let Some(target) = params.jump {
         draw_jump(frame, area, theme, target);
     }
+    if let Some(write) = &params.write {
+        draw_write(frame, area, theme, write);
+    }
+}
+
+fn draw_write(frame: &mut Frame, area: Rect, theme: &Theme, write: &WriteParams) {
+    let value = write
+        .value
+        .map_or_else(|| "(none)".to_string(), |n| n.to_string());
+
+    let mut lines = vec![
+        Line::from(vec![
+            Span::styled("Write to ", theme.dim_style()),
+            Span::styled(write.position.to_string(), theme.accent_style()),
+            Span::styled(format!("  [{:?}]", write.write_type), theme.dim_style()),
+        ]),
+        Line::from(vec![
+            Span::styled("Value: ", theme.dim_style()),
+            Span::styled(value, theme.base()),
+            Span::styled("_", theme.accent_style()),
+        ]),
+    ];
+
+    if let Some(result) = &write.result {
+        let style = if result.starts_with("Write OK") {
+            theme.ok_style()
+        } else if result.starts_with("Write failed") {
+            theme.err_style()
+        } else {
+            theme.dim_style()
+        };
+        lines.push(Line::default());
+        lines.push(Line::from(Span::styled(result.clone(), style)));
+    }
+
+    lines.push(Line::from(Span::styled(
+        " enter \u{b7} write   w \u{b7} word/dword   - \u{b7} negate   esc \u{b7} close",
+        theme.dim_style(),
+    )));
+
+    let height = lines.len() as u16 + 2;
+    let rect = centered_rect(58, height, area);
+
+    frame.render_widget(Clear, rect);
+    frame.render_widget(Paragraph::new(lines).block(theme.panel("Write")), rect);
 }
 
 fn draw_jump(frame: &mut Frame, area: Rect, theme: &Theme, target: u16) {

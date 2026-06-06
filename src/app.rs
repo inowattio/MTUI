@@ -5,7 +5,7 @@ use crate::modbus::ModbusDevice;
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
 use crate::state::{
     no_data_rows, ConnectionStatus, DumpParams, LabelParams, ReadPanel, ReadParams, SaveParams,
-    SearchParams, State, StateTransition, WriteParams,
+    SearchParams, State, StateTransition,
 };
 use chrono::{DateTime, Local, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
@@ -187,7 +187,6 @@ impl App {
     pub fn get_current_position(&self) -> u16 {
         match &self.state {
             State::Read(p) => p.position,
-            State::Write(p) => p.position,
             State::Label(p) => p.position,
             State::Help | State::Save(_) | State::Search(_) | State::Dump(_) => 0,
         }
@@ -201,10 +200,6 @@ impl App {
         };
 
         self.state = match focus {
-            StateTransition::Write => State::Write(WriteParams {
-                position,
-                ..Default::default()
-            }),
             StateTransition::Read => State::Read(ReadParams {
                 position,
                 window_start: position,
@@ -440,27 +435,6 @@ impl App {
 
         match &mut self.state {
             State::Read(_) => read_now = true,
-            State::Write(params) => {
-                if let Some(number) = params.value {
-                    if self.background_task.is_some() {
-                        params.result = Some("Device is busy.".to_string());
-                    } else {
-                        let device = self.device.clone();
-                        let position = params.position;
-                        let write_type = params.write_type;
-
-                        params.result = Some("Writing...".to_string());
-                        self.background_task = Some(BackgroundTask::Write(tokio::spawn(async move {
-                            let result = match write_type {
-                                WriteType::Word => device.write_register(position, number as u16).await,
-                                WriteType::DWord => device.write_register_word(position, number).await,
-                            };
-
-                            format!("{result:#?}")
-                        })));
-                    }
-                }
-            }
             State::Help => self.quit(),
             State::Label(_) => {}
             State::Save(_) => save_now = true,
@@ -507,12 +481,6 @@ impl App {
     pub fn quit(&mut self) {
         match &self.state {
             State::Read(_) => self.running = false,
-            State::Write(params) => self.state = State::Read(ReadParams {
-                window_start: params.position,
-                data_start: params.position,
-                position: params.position,
-                ..Default::default()
-            }),
             _ => self.state = State::Read(Default::default()),
         }
     }
@@ -799,6 +767,44 @@ impl App {
         }
     }
 
+    pub fn commit_write(&mut self) {
+        if self.background_task.is_some() {
+            if let State::Read(p) = &mut self.state {
+                if let Some(w) = &mut p.write {
+                    w.result = Some("Device is busy.".to_string());
+                }
+            }
+            return;
+        }
+
+        let (position, number, write_type) = {
+            let State::Read(p) = &mut self.state else {
+                return;
+            };
+            let Some(w) = &mut p.write else {
+                return;
+            };
+            let Some(number) = w.value else {
+                w.result = Some("Enter a value first.".to_string());
+                return;
+            };
+            w.result = Some("Writing...".to_string());
+            (w.position, number, w.write_type)
+        };
+
+        let device = self.device.clone();
+        self.background_task = Some(BackgroundTask::Write(tokio::spawn(async move {
+            let result = match write_type {
+                WriteType::Word => device.write_register(position, number as u16).await,
+                WriteType::DWord => device.write_register_word(position, number).await,
+            };
+            match result {
+                Ok(()) => "Write OK".to_string(),
+                Err(e) => format!("Write failed: {e}"),
+            }
+        })));
+    }
+
     pub async fn complete_background_task(&mut self) {
         let Some(task) = self.background_task.as_ref() else {
             return;
@@ -828,8 +834,10 @@ impl App {
             },
             BackgroundTask::Write(handle) => {
                 let result = handle.await.unwrap_or_else(|e| e.to_string());
-                if let State::Write(params) = &mut self.state {
-                    params.result = Some(result);
+                if let State::Read(p) = &mut self.state {
+                    if let Some(w) = &mut p.write {
+                        w.result = Some(result);
+                    }
                 }
             }
         }

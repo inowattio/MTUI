@@ -79,6 +79,7 @@ pub struct ReadParams {
     pub pinned_top: u16,
     pub picker: Option<u16>,
     pub jump: Option<u16>,
+    pub write: Option<WriteParams>,
     pub main_rows: Vec<String>,
     pub pinned_rows: Vec<String>,
     pub refresh_timer: Instant,
@@ -102,6 +103,7 @@ impl Default for ReadParams {
             pinned_top: 0,
             picker: None,
             jump: None,
+            write: None,
             main_rows: no_data_rows(),
             pinned_rows: Vec::new(),
             refresh_timer: Instant::now(),
@@ -158,7 +160,6 @@ pub enum ConnectionStatus {
 #[derive(Debug, PartialEq)]
 pub enum State {
     Read(ReadParams),
-    Write(WriteParams),
     Help,
     Label(LabelParams),
     Save(SaveParams),
@@ -168,7 +169,6 @@ pub enum State {
 
 pub enum StateTransition {
     Read,
-    Write,
     Help,
     Label,
     Save,
