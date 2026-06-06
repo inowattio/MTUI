@@ -251,6 +251,8 @@ fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup: &P
             "Save",
             "Save configuration (labels & pins) to file?",
             &s.result,
+            None,
+            Some("esc"),
         ),
         Popup::Dump(d) => draw_confirm(
             frame,
@@ -259,6 +261,8 @@ fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup: &P
             "Dump",
             &format!("Dump {} read register(s) to a file?", app.read_count()),
             &d.result,
+            None,
+            Some("esc"),
         ),
         Popup::Search(s) => draw_search(frame, area, theme, s),
         Popup::Label(l) => draw_label(frame, area, theme, l),
@@ -272,6 +276,8 @@ fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup: &P
             "Unsaved changes",
             "Unsaved labels/pins. Quit anyway?",
             &None,
+            Some("esc"),
+            None
         ),
     }
 }
@@ -345,11 +351,24 @@ fn draw_confirm(
     title: &str,
     prompt: &str,
     result: &Option<String>,
+    additional_confirm: Option<&str>,
+    additional_cancel: Option<&str>,
 ) {
+    let mut info_line = String::new();
+    info_line.push_str(" enter");
+    if let Some(key) = additional_confirm {
+        info_line.push_str(&format!("/{key}"));
+    }
+    info_line.push_str(" \u{b7} confirm   backspace");
+    if let Some(key) = additional_cancel {
+        info_line.push_str(&format!("/{key}"));
+    }
+    info_line.push_str(" cancel");
+
     let mut lines = vec![
         Line::from(Span::styled(prompt.to_string(), theme.base())),
         Line::from(Span::styled(
-            " enter/esc \u{b7} confirm   backspace \u{b7} cancel",
+            info_line,
             theme.dim_style(),
         )),
     ];
