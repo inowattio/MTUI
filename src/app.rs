@@ -1,4 +1,4 @@
-use crate::config::{Column, Config, Label, Labels};
+use crate::config::{Column, Config, Label, Labels, Startup};
 use crate::constants::CONFIG_PATH;
 use crate::interpretator::Interpretor;
 use crate::modbus::ModbusDevice;
@@ -426,6 +426,12 @@ impl App {
             }
         }
         self.config.pinned_registers = pinned;
+
+        self.config.interpretations = self.interpreter.config();
+        self.config.startup = Startup {
+            address: self.read().position,
+            register_type: self.read().register_type,
+        };
 
         match save_config(&self.config) {
             Ok(()) => format!("Saved to {CONFIG_PATH}"),

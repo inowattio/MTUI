@@ -74,6 +74,10 @@ impl Interpretor {
         self.config.get(column)
     }
 
+    pub fn config(&self) -> InterpretorConfig {
+        self.config.clone()
+    }
+
     pub fn set_word_order(&mut self, word_order: WordOrder) {
         self.word_order = word_order;
     }
