@@ -4,9 +4,10 @@ use crate::interpretator::Interpretor;
 use crate::modbus::ModbusDevice;
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
 use crate::state::{
-    no_data_rows, ConnectionStatus, JumpParams, LabelParams, ReadPanel, ReadParams, SaveParams,
-    SearchParams, State, StateTransition, WriteParams,
+    no_data_rows, ConnectionStatus, DumpParams, JumpParams, LabelParams, ReadPanel, ReadParams,
+    SaveParams, SearchParams, State, StateTransition, WriteParams,
 };
+use chrono::{DateTime, Local, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 use std::cell::Cell;
 use std::collections::BTreeMap;
@@ -55,6 +56,7 @@ pub struct App {
     pub visible_rows: Cell<u16>,
     background_task: Option<BackgroundTask>,
     previous_values: BTreeMap<RegisterCell, u16>,
+    read_log: BTreeMap<RegisterCell, (u16, DateTime<Utc>)>,
     labels: BTreeMap<RegisterCell, String>,
 }
 
@@ -166,6 +168,7 @@ impl App {
             visible_rows: Cell::new(initial_rows),
             background_task: None,
             previous_values: BTreeMap::new(),
+            read_log: BTreeMap::new(),
         }
     }
 
@@ -175,7 +178,7 @@ impl App {
             State::Jump(p) => p.to,
             State::Write(p) => p.position,
             State::Label(p) => p.position,
-            State::Help | State::Save(_) | State::Search(_) => 0,
+            State::Help | State::Save(_) | State::Search(_) | State::Dump(_) => 0,
         }
     }
 
@@ -226,6 +229,7 @@ impl App {
                 })
             }
             StateTransition::Save => State::Save(SaveParams::default()),
+            StateTransition::Dump => State::Dump(DumpParams::default()),
             StateTransition::Search => {
                 let matches = self
                     .labels
@@ -368,6 +372,32 @@ impl App {
         }
     }
 
+    pub fn read_count(&self) -> usize {
+        self.read_log.len()
+    }
+
+    fn dump_read_log(&self) -> String {
+        if self.read_log.is_empty() {
+            return "Nothing read yet to dump.".to_string();
+        }
+
+        let filename = format!("dump_{}.txt", Local::now().format("%Y%m%d_%H%M%S"));
+
+        let mut out = String::from("read_at\ttype\taddress\thex\tdecimal\tlabel\n");
+        for (&(kind, address), &(value, read_at)) in &self.read_log {
+            let label = self.labels.get(&(kind, address)).cloned().unwrap_or_default();
+            out.push_str(&format!(
+                "{}\t{kind:?}\t{address}\t{value:04X}\t{value}\t{label}\n",
+                read_at.to_rfc3339_opts(SecondsFormat::Millis, true),
+            ));
+        }
+
+        match fs::write(&filename, out) {
+            Ok(()) => format!("Dumped {} registers to {filename}", self.read_log.len()),
+            Err(e) => format!("Dump failed: {e}"),
+        }
+    }
+
     pub fn pin(&mut self) {
         let (panel, register_type, position, pinned_index) = if let State::Read(p) = &self.state {
             (p.panel, p.register_type, p.position, p.pinned_index)
@@ -401,6 +431,7 @@ impl App {
     pub async fn do_action(&mut self) {
         let mut read_now = false;
         let mut save_now = false;
+        let mut dump_now = false;
 
         match &mut self.state {
             State::Read(_) => read_now = true,
@@ -430,6 +461,7 @@ impl App {
             State::Label(_) => {}
             State::Save(_) => save_now = true,
             State::Search(_) => {}
+            State::Dump(_) => dump_now = true,
         }
 
         if read_now {
@@ -438,6 +470,12 @@ impl App {
         if save_now {
             let result = self.persist_config();
             if let State::Save(p) = &mut self.state {
+                p.result = Some(result);
+            }
+        }
+        if dump_now {
+            let result = self.dump_read_log();
+            if let State::Dump(p) = &mut self.state {
                 p.result = Some(result);
             }
         }
@@ -611,9 +649,11 @@ impl App {
         let pinned_changed = changed_flags(&result.pinned_data);
 
         let mut new_previous = BTreeMap::new();
+        let read_at = Utc::now();
         for data in [&result.main_data, &result.pinned_data].into_iter().flatten() {
             for &((kind, address), value) in data {
                 new_previous.insert((kind, address), value);
+                self.read_log.insert((kind, address), (value, read_at));
             }
         }
 

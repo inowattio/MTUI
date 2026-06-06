@@ -9,6 +9,7 @@ pub mod keybind {
 
     pub const EXIT: KeyCode = KeyCode::Char('q');
     pub const PIN: KeyCode = KeyCode::Char('p');
+    pub const DUMP: KeyCode = KeyCode::Char('d');
     pub const HELP: KeyCode = KeyCode::Char('h');
     pub const REFRESH: KeyCode = KeyCode::Char('r');
     pub const TOGGLE: KeyCode = KeyCode::Char('t');

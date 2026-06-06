@@ -32,6 +32,11 @@ pub struct SaveParams {
 }
 
 #[derive(Debug, Default, PartialEq)]
+pub struct DumpParams {
+    pub result: Option<String>,
+}
+
+#[derive(Debug, Default, PartialEq)]
 pub struct SearchParams {
     pub query: String,
     pub matches: Vec<(RegisterCell, String)>,
@@ -162,6 +167,7 @@ pub enum State {
     Label(LabelParams),
     Save(SaveParams),
     Search(SearchParams),
+    Dump(DumpParams),
 }
 
 pub enum StateTransition {
@@ -172,4 +178,5 @@ pub enum StateTransition {
     Label,
     Save,
     Search,
+    Dump,
 }

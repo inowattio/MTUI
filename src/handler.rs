@@ -35,6 +35,11 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
     match key_event.code {
         keybind::EXIT => app.quit(),
         keybind::PIN => app.pin(),
+        keybind::DUMP => {
+            if matches!(app.state, State::Read(_)) {
+                app.switch_focus_to(StateTransition::Dump);
+            }
+        }
         keybind::HELP => app.switch_focus_to(StateTransition::Help),
         keybind::SAVE => app.switch_focus_to(StateTransition::Save),
         keybind::SEARCH => app.switch_focus_to(StateTransition::Search),

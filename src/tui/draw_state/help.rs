@@ -14,6 +14,7 @@ pub fn draw(frame: &mut Frame, area: Rect, theme: &Theme, device: &str) {
         (format!("{SWITCH_VIEW}"), "Switch Main / Pinned (Read only)"),
         (format!("{WRITE}"), "Write"),
         (format!("{JUMP}"), "Jump"),
+        (format!("{DUMP}"), "Dump read data to file (Read only)"),
         (format!("{HELP}"), "Help"),
         (format!("{PIN}"), "Add / Remove pin (Read only)"),
         (format!("{LABEL}"), "Label register (Read only)"),
