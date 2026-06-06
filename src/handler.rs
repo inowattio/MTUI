@@ -69,6 +69,34 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         return Ok(());
     }
 
+    if matches!(&app.state, State::Read(p) if p.jump.is_some()) {
+        match key_event.code {
+            KeyCode::Esc | keybind::JUMP => {
+                if let State::Read(p) = &mut app.state {
+                    p.jump = None;
+                }
+            }
+            keybind::ACTION => app.commit_jump(),
+            KeyCode::Backspace => {
+                if let State::Read(p) = &mut app.state {
+                    if let Some(value) = &mut p.jump {
+                        digit_remove(value);
+                    }
+                }
+            }
+            KeyCode::Char(c) if c.is_ascii_digit() => {
+                let digit = c as u8 - b'0';
+                if let State::Read(p) = &mut app.state {
+                    if let Some(value) = &mut p.jump {
+                        digit_add(value, digit);
+                    }
+                }
+            }
+            _ => {}
+        }
+        return Ok(());
+    }
+
     match key_event.code {
         keybind::EXIT => app.quit(),
         keybind::PIN => app.pin(),
@@ -87,7 +115,11 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         }
         keybind::REFRESH => app.refresh().await,
         keybind::TOGGLE => app.toggle_type(),
-        keybind::JUMP => app.switch_focus_to(StateTransition::Jump),
+        keybind::JUMP => {
+            if let State::Read(p) = &mut app.state {
+                p.jump = Some(0);
+            }
+        }
         keybind::LABEL => {
             if matches!(app.state, State::Read(_)) {
                 app.switch_focus_to(StateTransition::Label);
@@ -121,7 +153,6 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
                     p.scroll_pinned(rows, pinned_len);
                 }
             },
-            State::Jump(p) => decrement_by(&mut p.to, 1),
             State::Write(p) => decrement_option_by(&mut p.value, 1),
             _ => {}
         },
@@ -136,7 +167,6 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
                     p.scroll_pinned(rows, pinned_len);
                 }
             },
-            State::Jump(p) => increment_by(&mut p.to, 1),
             State::Write(p) => increment_option_by(&mut p.value, 1),
             _ => {}
         },
@@ -156,7 +186,6 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
                     digit_add(&mut params.position, digit);
                     params.scroll_to_cursor(rows);
                 }
-                State::Jump(params) => digit_add(&mut params.to, digit),
                 State::Write(params) => digit_add_option(&mut params.value, digit),
                 _ => {}
             };
@@ -166,7 +195,6 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
                 digit_remove(&mut params.position);
                 params.scroll_to_cursor(rows);
             }
-            State::Jump(params) => digit_remove(&mut params.to),
             State::Write(params) => digit_remove_option(&mut params.value),
             _ => {}
         },
@@ -185,7 +213,6 @@ pub fn handle_paste(data: String, app: &mut App) {
 
     match &mut app.state {
         State::Read(params) => set_to_zero(&mut params.position),
-        State::Jump(params) => set_to_zero(&mut params.to),
         State::Write(params) => set_option_to_zero(&mut params.value),
         _ => {}
     };
@@ -193,7 +220,6 @@ pub fn handle_paste(data: String, app: &mut App) {
     for digit in digits {
         match &mut app.state {
             State::Read(params) => digit_add(&mut params.position, digit),
-            State::Jump(params) => digit_add(&mut params.to, digit),
             State::Write(params) => digit_add_option(&mut params.value, digit),
             _ => {}
         };

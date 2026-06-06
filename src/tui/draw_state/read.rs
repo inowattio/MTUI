@@ -220,9 +220,31 @@ pub fn draw(
     if let Some(selected) = params.picker {
         draw_picker(frame, area, theme, app, selected);
     }
+    if let Some(target) = params.jump {
+        draw_jump(frame, area, theme, target);
+    }
 }
 
-/// Centered column-picker popup drawn over the Read table.
+fn draw_jump(frame: &mut Frame, area: Rect, theme: &Theme, target: u16) {
+    let lines = vec![
+        Line::from(vec![
+            Span::styled("Address: ", theme.dim_style()),
+            Span::styled(target.to_string(), theme.accent_style()),
+            Span::styled("_", theme.accent_style()),
+        ]),
+        Line::from(Span::styled(
+            " enter \u{b7} go   esc \u{b7} cancel",
+            theme.dim_style(),
+        )),
+    ];
+
+    let height = lines.len() as u16 + 2;
+    let rect = centered_rect(36, height, area);
+
+    frame.render_widget(Clear, rect);
+    frame.render_widget(Paragraph::new(lines).block(theme.panel("Jump")), rect);
+}
+
 fn draw_picker(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, selected: u16) {
     let mut lines: Vec<Line> = Column::ALL
         .iter()

@@ -4,8 +4,8 @@ use crate::interpretator::Interpretor;
 use crate::modbus::ModbusDevice;
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
 use crate::state::{
-    no_data_rows, ConnectionStatus, DumpParams, JumpParams, LabelParams, ReadPanel, ReadParams,
-    SaveParams, SearchParams, State, StateTransition, WriteParams,
+    no_data_rows, ConnectionStatus, DumpParams, LabelParams, ReadPanel, ReadParams, SaveParams,
+    SearchParams, State, StateTransition, WriteParams,
 };
 use chrono::{DateTime, Local, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
@@ -187,7 +187,6 @@ impl App {
     pub fn get_current_position(&self) -> u16 {
         match &self.state {
             State::Read(p) => p.position,
-            State::Jump(p) => p.to,
             State::Write(p) => p.position,
             State::Label(p) => p.position,
             State::Help | State::Save(_) | State::Search(_) | State::Dump(_) => 0,
@@ -198,18 +197,12 @@ impl App {
         let position = self.get_current_position();
         let register_type = match &self.state {
             State::Read(p) => p.register_type,
-            State::Jump(p) => p.register_type,
             _ => Default::default(),
         };
 
         self.state = match focus {
             StateTransition::Write => State::Write(WriteParams {
                 position,
-                ..Default::default()
-            }),
-            StateTransition::Jump => State::Jump(JumpParams {
-                from: position,
-                register_type,
                 ..Default::default()
             }),
             StateTransition::Read => State::Read(ReadParams {
@@ -447,7 +440,6 @@ impl App {
 
         match &mut self.state {
             State::Read(_) => read_now = true,
-            State::Jump(_) => self.switch_focus_to(StateTransition::Read),
             State::Write(params) => {
                 if let Some(number) = params.value {
                     if self.background_task.is_some() {
@@ -795,6 +787,16 @@ impl App {
 
     pub fn label_text(&self, register_type: RegisterType, address: u16) -> Option<String> {
         self.labels.get(&(register_type, address)).cloned()
+    }
+
+    pub fn commit_jump(&mut self) {
+        let rows = self.visible_rows.get();
+        if let State::Read(p) = &mut self.state {
+            if let Some(target) = p.jump.take() {
+                p.position = target;
+                p.scroll_to_cursor(rows);
+            }
+        }
     }
 
     pub async fn complete_background_task(&mut self) {

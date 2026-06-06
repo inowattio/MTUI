@@ -6,7 +6,6 @@ pub fn make_bottom_title(state: &State) -> String {
         State::Read(_) => {
             format!("{ACTION} - Read; {HELP} - Help")
         }
-        State::Jump(_) => format!("{ACTION} - Go; {EXIT} - Back"),
         State::Write(_) => format!("{ACTION} - Write; {EXIT} - Back"),
         State::Help => format!("{EXIT}/{ACTION} - Back"),
         State::Label(_) => format!("{ACTION} - Set (empty to remove); Esc - Cancel"),

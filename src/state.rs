@@ -12,13 +12,6 @@ pub struct WriteParams {
 }
 
 #[derive(Debug, Default, PartialEq)]
-pub struct JumpParams {
-    pub from: u16,
-    pub to: u16,
-    pub register_type: RegisterType,
-}
-
-#[derive(Debug, Default, PartialEq)]
 pub struct LabelParams {
     pub position: u16,
     pub register_type: RegisterType,
@@ -85,6 +78,7 @@ pub struct ReadParams {
     pub pinned_index: u16,
     pub pinned_top: u16,
     pub picker: Option<u16>,
+    pub jump: Option<u16>,
     pub main_rows: Vec<String>,
     pub pinned_rows: Vec<String>,
     pub refresh_timer: Instant,
@@ -107,6 +101,7 @@ impl Default for ReadParams {
             pinned_index: 0,
             pinned_top: 0,
             picker: None,
+            jump: None,
             main_rows: no_data_rows(),
             pinned_rows: Vec::new(),
             refresh_timer: Instant::now(),
@@ -163,7 +158,6 @@ pub enum ConnectionStatus {
 #[derive(Debug, PartialEq)]
 pub enum State {
     Read(ReadParams),
-    Jump(JumpParams),
     Write(WriteParams),
     Help,
     Label(LabelParams),
@@ -174,7 +168,6 @@ pub enum State {
 
 pub enum StateTransition {
     Read,
-    Jump,
     Write,
     Help,
     Label,
