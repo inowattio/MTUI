@@ -1,6 +1,7 @@
 use crate::config::InterpretorConfig;
 use crate::modbus::WordOrder;
 use crate::register::RegisterCellValue;
+use chrono::{DateTime, Local};
 
 #[derive(Debug, Clone)]
 pub struct Interpretor {
@@ -11,7 +12,12 @@ pub struct Interpretor {
 
 impl Interpretor {
     pub fn new(interpretation: InterpretorConfig, word_order: WordOrder) -> Self {
-        let mut header = format!("{0: >5}: {1: <5} {2: <6} ", "index", "u16", "i16");
+        let mut header = String::new();
+
+        if interpretation.time {
+            header.push_str(&format!("{0: <12} ", "time"))
+        }
+        header.push_str(&format!("{0: >5}: {1: <5} {2: <6} ", "index", "u16", "i16"));
 
         if interpretation.hex {
             header.push_str(&format!("{0: <4} ", "hex"))
@@ -74,6 +80,7 @@ impl Interpretor {
         &self,
         data: Vec<RegisterCellValue>,
         index: u16,
+        read_at: DateTime<Local>,
         label: impl Fn(RegisterCellValue) -> Option<String>,
     ) -> Vec<String> {
         let mut lines = Vec::with_capacity(data.len());
@@ -85,12 +92,17 @@ impl Interpretor {
             let next_byte_2nd = data.get(i + 2).map(|(_, v)| *v).unwrap_or(0);
             let next_byte_3rd = data.get(i + 3).map(|(_, v)| *v).unwrap_or(0);
 
-            let mut row = format!(
+            let mut row = String::new();
+            if self.config.time {
+                let formatted = read_at.format("%H:%M:%S:%3f").to_string();
+                row.push_str(&format!("{formatted: <12} "));
+            }
+            row.push_str(&format!(
                 "{0: >5}: {1: <5} {2: <6} ",
                 index + i as u16,
                 byte,
                 byte as i16
-            );
+            ));
 
             let word = self.word_order.make_word(byte, next_byte_1st);
             let second_word = self.word_order.make_word(next_byte_2nd, next_byte_3rd);

@@ -4,7 +4,7 @@ use crate::state::State;
 pub fn make_bottom_title(state: &State) -> String {
     match state {
         State::Read(_) => {
-            format!("{ACTION} - Read; {SWITCH_VIEW} - Main/Pinned; {SEARCH} - Search; {REFRESH} - Refresh; {PIN} - Pin; {LABEL} - Label; {DUMP} - Dump; {SAVE} - Save; {HELP} - Help")
+            format!("{ACTION} - Read; {HELP} - Help")
         }
         State::Jump(_) => format!("{ACTION} - Go; {EXIT} - Back"),
         State::Write(_) => format!("{ACTION} - Write; {EXIT} - Back"),

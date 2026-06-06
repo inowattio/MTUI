@@ -650,6 +650,7 @@ impl App {
 
         let mut new_previous = BTreeMap::new();
         let read_at = Utc::now();
+        let read_at_local = read_at.with_timezone(&Local);
         for data in [&result.main_data, &result.pinned_data].into_iter().flatten() {
             for &((kind, address), value) in data {
                 new_previous.insert((kind, address), value);
@@ -675,7 +676,7 @@ impl App {
 
         let (main_rows, connection) = match result.main_data {
             Ok(data) => (
-                self.interpreter.run(data, result.window_start, labeler),
+                self.interpreter.run(data, result.window_start, read_at_local, labeler),
                 ConnectionStatus::Connected,
             ),
             Err(e) => (vec![e.clone()], ConnectionStatus::Error(e)),
@@ -708,7 +709,7 @@ impl App {
                     };
                     let ((_, address), _) = c;
 
-                    rows.extend(self.interpreter.run(batch, address, |c| {
+                    rows.extend(self.interpreter.run(batch, address, read_at_local, |c| {
                         let ((kind, c_address), _) = c;
                         labels.get(&(kind, c_address)).cloned()
                     }));
