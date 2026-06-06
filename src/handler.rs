@@ -5,6 +5,8 @@ use crate::state::{State, StateTransition};
 use crossterm::event::{KeyCode, KeyEvent};
 
 pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
+    let rows = app.visible_rows.get();
+
     if matches!(app.state, State::Label(_)) {
         match key_event.code {
             KeyCode::Esc => app.cancel_label(),
@@ -21,7 +23,7 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         keybind::PIN => app.pin(),
         keybind::DUMP => app.switch_focus_to(StateTransition::Dump),
         keybind::HELP => app.switch_focus_to(StateTransition::Help),
-        keybind::REFRESH => app.refresh(false).await,
+        keybind::REFRESH => app.refresh().await,
         keybind::TOGGLE => app.toggle_type(),
         keybind::JUMP => app.switch_focus_to(StateTransition::Jump),
         keybind::LABEL => {
@@ -41,14 +43,20 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
             }
         }
         keybind::MOVE_UP => match &mut app.state {
-            State::Read(p) => decrement_by(&mut p.position, 1),
+            State::Read(p) => {
+                decrement_by(&mut p.position, 1);
+                p.scroll_to_cursor(rows);
+            }
             State::Jump(p) => decrement_by(&mut p.to, 1),
             State::Write(p) => decrement_option_by(&mut p.value, 1),
             State::Dump(p) => decrement_by(&mut p.start_position, 1),
             _ => {}
         },
         keybind::MOVE_DOWN => match &mut app.state {
-            State::Read(p) => increment_by(&mut p.position, 1),
+            State::Read(p) => {
+                increment_by(&mut p.position, 1);
+                p.scroll_to_cursor(rows);
+            }
             State::Jump(p) => increment_by(&mut p.to, 1),
             State::Write(p) => increment_option_by(&mut p.value, 1),
             State::Dump(p) => increment_by(&mut p.start_position, 1),
@@ -66,7 +74,10 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
             let digit = c as u8 - '0' as u8;
 
             match &mut app.state {
-                State::Read(params) => digit_add(&mut params.position, digit),
+                State::Read(params) => {
+                    digit_add(&mut params.position, digit);
+                    params.scroll_to_cursor(rows);
+                }
                 State::Jump(params) => digit_add(&mut params.to, digit),
                 State::Write(params) => digit_add_option(&mut params.value, digit),
                 State::Dump(params) => {
@@ -82,7 +93,10 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
             };
         }
         KeyCode::Backspace => match &mut app.state {
-            State::Read(params) => digit_remove(&mut params.position),
+            State::Read(params) => {
+                digit_remove(&mut params.position);
+                params.scroll_to_cursor(rows);
+            }
             State::Jump(params) => digit_remove(&mut params.to),
             State::Write(params) => digit_remove_option(&mut params.value),
             State::Dump(params) => {
@@ -132,5 +146,10 @@ pub fn handle_paste(data: String, app: &mut App) {
             }
             _ => {}
         };
+    }
+
+    let rows = app.visible_rows.get();
+    if let State::Read(params) = &mut app.state {
+        params.scroll_to_cursor(rows);
     }
 }

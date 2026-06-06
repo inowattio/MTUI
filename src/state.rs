@@ -41,9 +41,8 @@ pub struct LabelParams {
 #[derive(Debug, PartialEq)]
 pub struct ReadParams {
     pub position: u16,
-    /// Address of the first main-panel row. The selected row is the one whose
-    /// address (`window_start + index`) equals `position`.
     pub window_start: u16,
+    pub data_start: u16,
     pub main_rows: Vec<String>,
     pub pinned_rows: Vec<String>,
     pub refresh_timer: Instant,
@@ -61,6 +60,7 @@ impl Default for ReadParams {
         Self {
             position: 0,
             window_start: 0,
+            data_start: 0,
             main_rows: no_data_rows(),
             pinned_rows: Vec::new(),
             refresh_timer: Instant::now(),
@@ -71,6 +71,17 @@ impl Default for ReadParams {
             pinned_ascii_string: String::new(),
             main_changed: Vec::new(),
             pinned_changed: Vec::new(),
+        }
+    }
+}
+
+impl ReadParams {
+    pub fn scroll_to_cursor(&mut self, rows: u16) {
+        let rows = rows.max(1);
+        if self.position < self.window_start {
+            self.window_start = self.position;
+        } else if self.position >= self.window_start.saturating_add(rows) {
+            self.window_start = self.position.saturating_sub(rows - 1);
         }
     }
 }

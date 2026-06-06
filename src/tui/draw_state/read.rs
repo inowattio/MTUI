@@ -6,10 +6,6 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Cell, Paragraph, Row, Table, Wrap};
 use ratatui::Frame;
 
-/// Builds a bordered, header-topped table for a register panel.
-///
-/// `changed` is aligned 1:1 with `rows`. Style precedence per row is
-/// selected (the cursor bar) > changed > zebra > base.
 fn rows_to_table(
     title: &str,
     header: String,
@@ -40,6 +36,54 @@ fn rows_to_table(
         .block(theme.panel(title))
 }
 
+fn main_table(params: &ReadParams, visible: u16, header: String, theme: &Theme) -> Table<'static> {
+    let mut table_rows = Vec::with_capacity(visible as usize);
+
+    for i in 0..visible {
+        let addr = params.window_start.saturating_add(i);
+        let selected = addr == params.position;
+        let zebra = i % 2 == 1;
+
+        let cached = (addr >= params.data_start)
+            .then(|| (addr - params.data_start) as usize)
+            .and_then(|idx| {
+                params
+                    .main_rows
+                    .get(idx)
+                    .map(|text| (text.clone(), params.main_changed.get(idx).copied().unwrap_or(false)))
+            });
+
+        let (text, style) = match cached {
+            Some((text, changed)) => {
+                let style = if selected {
+                    theme.selected_style()
+                } else if changed {
+                    theme.changed_style()
+                } else if zebra {
+                    theme.zebra_style()
+                } else {
+                    theme.base()
+                };
+                (text, style)
+            }
+            None => {
+                let style = if selected {
+                    theme.selected_style()
+                } else {
+                    theme.dim_style()
+                };
+                (format!("{addr: >5}:  --"), style)
+            }
+        };
+
+        table_rows.push(Row::new([Cell::from(text)]).style(style));
+    }
+
+    Table::new(table_rows, [Constraint::Percentage(100)])
+        .header(Row::new([Cell::from(header)]).style(theme.header_style()))
+        .block(theme.panel("Main data"))
+}
+
 pub fn draw(
     params: &ReadParams,
     app: &App,
@@ -64,8 +108,6 @@ pub fn draw(
         .constraints(row_constraints)
         .split(area);
 
-    // Info line: device, active address, register type, read time / spinner,
-    // and a live auto-refresh countdown.
     let read_time = if params.loading {
         format!("{} reading", spinner_frame(app.frame))
     } else {
@@ -106,28 +148,11 @@ pub fn draw(
 
     let header = app.interpreter.header();
 
-    // Cursor only when we have register data (changed is non-empty on a
-    // successful read; empty for the placeholder / error states) AND the active
-    // register falls within the displayed block. Navigating the cursor off the
-    // last-read block hides the bar until the next read re-anchors it.
-    let selected = if !params.main_changed.is_empty()
-        && params.position >= params.window_start
-        && ((params.position - params.window_start) as usize) < params.main_rows.len()
-    {
-        Some((params.position - params.window_start) as usize)
-    } else {
-        None
-    };
+    let visible = columns[0].height.saturating_sub(3).max(1);
+    app.visible_rows.set(visible);
 
     frame.render_widget(
-        rows_to_table(
-            "Main data",
-            header.clone(),
-            &params.main_rows,
-            &params.main_changed,
-            selected,
-            theme,
-        ),
+        main_table(params, visible, header.clone(), theme),
         columns[0],
     );
 

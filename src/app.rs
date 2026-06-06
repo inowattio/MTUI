@@ -8,6 +8,7 @@ use crate::state::{
     StateTransition, WriteParams,
 };
 use serde::{Deserialize, Serialize};
+use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 use std::{error, fs};
@@ -59,6 +60,9 @@ pub struct App {
     pub connection: ConnectionStatus,
     /// Monotonic tick counter used to advance the loading spinner.
     pub frame: u64,
+    /// Number of register rows the Read table can show; written by the draw layer
+    /// each frame and used to size the read window to exactly the visible area.
+    pub visible_rows: Cell<u16>,
     background_task: Option<BackgroundTask>,
     previous_values: BTreeMap<RegisterCell, u16>,
     labels: BTreeMap<RegisterCell, String>,
@@ -152,6 +156,7 @@ impl App {
             .await
             .inspect_err(|e| println!("Could not initialize device: {e}"))
             .unwrap();
+        let initial_rows = config.registers_batch.max(1);
 
         Self {
             interpreter: Interpretor::new(config.interpretations.clone(), config.device.word_order),
@@ -168,6 +173,7 @@ impl App {
             running: true,
             connection: ConnectionStatus::Unknown,
             frame: 0,
+            visible_rows: Cell::new(initial_rows),
             background_task: None,
             previous_values: BTreeMap::new(),
         }
@@ -367,8 +373,8 @@ impl App {
             self.start_dump_batch();
         }
         if read_now {
-            // Enter commits a new read point at the cursor.
-            self.refresh(true).await;
+            // Enter reads the visible window immediately.
+            self.refresh().await;
         }
     }
 
@@ -464,8 +470,6 @@ impl App {
             return;
         }
 
-        // Auto-refresh re-reads the last committed window in place (no cursor
-        // move); Enter is what moves the read point. The tick also drives dumps.
         let should_refresh = matches!(
             &self.state,
             State::Read(p)
@@ -474,7 +478,7 @@ impl App {
         );
 
         if should_refresh {
-            self.refresh(false).await;
+            self.refresh().await;
         } else if matches!(&self.state, State::Dump(p) if p.started) {
             self.start_dump_batch();
         }
@@ -564,7 +568,7 @@ impl App {
         Ok(collection)
     }
 
-    pub async fn refresh(&mut self, anchor_to_cursor: bool) {
+    pub async fn refresh(&mut self) {
         if self.background_task.is_some() {
             return;
         }
@@ -572,12 +576,6 @@ impl App {
         let (window_start, register_type) = if let State::Read(p) = &mut self.state {
             p.refresh_timer = Instant::now();
             p.loading = true;
-            // `anchor_to_cursor` (Enter) moves the read point to the cursor; a
-            // plain refresh (timer / refresh key) re-reads the existing window so
-            // the cursor and view stay put and only the values update.
-            if anchor_to_cursor {
-                p.window_start = p.position;
-            }
             (p.window_start, p.register_type)
         } else {
             return;
@@ -586,7 +584,7 @@ impl App {
 
         let device = self.device.clone();
         let pinned_registers = self.pinned_registers.clone();
-        let amount = self.config.registers_batch;
+        let amount = self.visible_rows.get().max(1);
 
         self.background_task = Some(BackgroundTask::Refresh(tokio::spawn(async move {
             let read_start = Instant::now();
@@ -609,13 +607,9 @@ impl App {
     }
 
     fn apply_refresh_result(&mut self, result: RefreshTaskResult) {
-        // Match on the fetched window + register type, not the cursor: the data
-        // belongs to `window_start` regardless of where the cursor has since moved.
         if !matches!(
             &self.state,
-            State::Read(params)
-                if params.window_start == result.window_start
-                    && params.register_type == result.register_type
+            State::Read(params) if params.register_type == result.register_type
         ) {
             return;
         }
@@ -710,7 +704,7 @@ impl App {
             params.pinned_ascii_string = pinned_ascii_string;
             params.main_changed = main_changed;
             params.pinned_changed = pinned_changed;
-            params.window_start = result.window_start;
+            params.data_start = result.window_start;
             params.read_duration = Some(result.read_duration);
             params.loading = false;
         }
