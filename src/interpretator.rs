@@ -27,8 +27,13 @@ impl Interpretor {
         if self.config.time {
             header.push_str(&format!("{0: <12} ", "time"))
         }
-        header.push_str(&format!("{0: >5}: {1: <5} {2: <6} ", "index", "u16", "i16"));
-
+        header.push_str(&format!("{0: >5}: ", "index"));
+        if self.config.u16 {
+            header.push_str(&format!("{0: <5} ", "u16"))
+        }
+        if self.config.i16 {
+            header.push_str(&format!("{0: <6} ", "i16"))
+        }
         if self.config.hex {
             header.push_str(&format!("{0: <4} ", "hex"))
         }
@@ -112,12 +117,13 @@ impl Interpretor {
                 let formatted = read_at.format("%H:%M:%S:%3f").to_string();
                 row.push_str(&format!("{formatted: <12} "));
             }
-            row.push_str(&format!(
-                "{0: >5}: {1: <5} {2: <6} ",
-                index + i as u16,
-                byte,
-                byte as i16
-            ));
+            row.push_str(&format!("{0: >5}: ", index + i as u16));
+            if self.config.u16 {
+                row.push_str(&format!("{byte: <5} "))
+            }
+            if self.config.i16 {
+                row.push_str(&format!("{: <6} ", byte as i16))
+            }
 
             let word = self.word_order.make_word(byte, next_byte_1st);
             let second_word = self.word_order.make_word(next_byte_2nd, next_byte_3rd);

@@ -68,18 +68,7 @@ impl Default for Config {
                 address: 0,
                 register_type: RegisterType::Holding,
             },
-            interpretations: InterpretorConfig {
-                hex: true,
-                u32: true,
-                i32: true,
-                f32: true,
-                time: true,
-                u64: false,
-                i64: false,
-                ascii: true,
-                bits: true,
-                label: true,
-            },
+            interpretations: InterpretorConfig::default(),
             registers_batch: 4,
             auto_update_interval_seconds: Some(1),
             pinned_registers: Default::default(),
@@ -88,16 +77,18 @@ impl Default for Config {
     }
 }
 
-/// Single source of truth for the toggleable interpretation columns. From one
-/// list this generates `InterpretorConfig` (the serialized on/off flags), the
-/// `Column` enum (everything except the always-shown index / u16 / i16), and the
-/// `name`/`get`/`toggle` mappings — so a new column is added in exactly one place.
 macro_rules! interpretation_columns {
-    ($($variant:ident => $field:ident : $name:literal),+ $(,)?) => {
-        #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+    ($($variant:ident => $field:ident : $name:literal = $default:literal),+ $(,)?) => {
+        #[derive(Clone, Debug, Deserialize, Serialize)]
         #[serde(default)]
         pub struct InterpretorConfig {
             $(pub $field: bool,)+
+        }
+
+        impl Default for InterpretorConfig {
+            fn default() -> Self {
+                Self { $($field: $default,)+ }
+            }
         }
 
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -132,14 +123,16 @@ macro_rules! interpretation_columns {
 }
 
 interpretation_columns! {
-    Hex => hex : "hex",
-    U32 => u32 : "u32",
-    I32 => i32 : "i32",
-    F32 => f32 : "f32",
-    Time => time : "time (read at)",
-    U64 => u64 : "u64",
-    I64 => i64 : "i64",
-    Ascii => ascii : "ascii",
-    Bits => bits : "bits",
-    Label => label : "label",
+    U16 => u16 : "u16" = true,
+    I16 => i16 : "i16" = true,
+    Hex => hex : "hex" = true,
+    U32 => u32 : "u32" = true,
+    I32 => i32 : "i32" = true,
+    F32 => f32 : "f32" = true,
+    Time => time : "time (read at)" = true,
+    U64 => u64 : "u64" = false,
+    I64 => i64 : "i64" = false,
+    Ascii => ascii : "ascii" = true,
+    Bits => bits : "bits" = true,
+    Label => label : "label" = true,
 }
