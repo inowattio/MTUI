@@ -1,5 +1,4 @@
 use crate::app::WriteType;
-use crate::constants::keybind;
 use crate::register::{RegisterCell, RegisterType};
 use std::time::{Duration, Instant};
 
@@ -142,7 +141,7 @@ impl Default for ReadParams {
             pinned_index: 0,
             pinned_top: 0,
             popup: None,
-            main_rows: no_data_rows(),
+            main_rows: Vec::new(),
             pinned_rows: Vec::new(),
             refresh_timer: Instant::now(),
             register_type: Default::default(),
@@ -176,14 +175,6 @@ impl ReadParams {
     pub fn scroll_pinned(&mut self, rows: u16, len: u16) {
         scroll_window(&mut self.pinned_index, &mut self.pinned_top, rows, len);
     }
-}
-
-pub fn no_data_text() -> String {
-    format!("No data, press '{}' to refresh.", keybind::REFRESH)
-}
-
-pub fn no_data_rows() -> Vec<String> {
-    vec![no_data_text()]
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]

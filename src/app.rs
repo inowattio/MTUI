@@ -4,7 +4,7 @@ use crate::interpretator::Interpretor;
 use crate::modbus::ModbusDevice;
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
 use crate::state::{
-    no_data_rows, ConnectionStatus, DumpParams, LabelParams, Popup, PopupKind, ReadPanel,
+    ConnectionStatus, DumpParams, LabelParams, Popup, PopupKind, ReadPanel,
     ReadParams, SaveParams, SearchParams, State, WriteParams,
 };
 use chrono::{DateTime, Local, SecondsFormat, Utc};
@@ -303,7 +303,7 @@ impl App {
             p.register_type = register_type;
             p.window_start = position;
             p.data_start = position;
-            p.main_rows = no_data_rows();
+            p.main_rows = Vec::new();
             p.main_changed = Vec::new();
             p.popup = None;
         }
@@ -819,7 +819,7 @@ impl App {
 
     pub fn toggle_type(&mut self) {
         let p = self.read_mut();
-        p.main_rows = no_data_rows();
+        p.main_rows = Vec::new();
         p.read_duration = None;
         p.ascii_string = String::new();
         p.main_changed = Vec::new();

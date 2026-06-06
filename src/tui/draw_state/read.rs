@@ -1,7 +1,7 @@
 use crate::app::App;
 use crate::config::Column;
 use crate::constants::keybind;
-use crate::state::{no_data_text, LabelParams, Popup, ReadPanel, ReadParams, SearchParams, WriteParams};
+use crate::state::{LabelParams, Popup, ReadPanel, ReadParams, SearchParams, WriteParams};
 use crate::tui::theme::{spinner_frame, Theme};
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::text::{Line, Span};
@@ -93,23 +93,35 @@ fn main_table(
         .block(theme.panel("Main data"))
 }
 
-fn pinned_table(params: &ReadParams, visible: u16, header: String, theme: &Theme) -> Table<'static> {
-    let len = params.pinned_rows.len();
+fn pinned_table(params: &ReadParams, app: &App, visible: u16, header: String, theme: &Theme) -> Table<'static> {
+    // Always one row per pinned register; rows not yet read show a placeholder.
+    let pins = &app.pinned_registers;
+    let len = pins.len();
     let top = (params.pinned_top as usize).min(len.saturating_sub(1));
     let end = (top + visible as usize).min(len);
 
     let mut table_rows = Vec::with_capacity(end - top);
-    for i in top..end {
+    for (i, &(kind, address)) in pins.iter().enumerate().take(end).skip(top) {
+        let (text, changed) = if i < params.pinned_rows.len() {
+            (
+                params.pinned_rows[i].clone(),
+                params.pinned_changed.get(i).copied().unwrap_or(false),
+            )
+        } else {
+            let label = app.label_text(kind, address);
+            (app.interpreter.placeholder(address, label.as_deref()), false)
+        };
+
         let style = if i as u16 == params.pinned_index {
             theme.selected_style()
-        } else if params.pinned_changed.get(i).copied().unwrap_or(false) {
+        } else if changed {
             theme.changed_style()
         } else if (i - top) % 2 == 1 {
             theme.zebra_style()
         } else {
             theme.base()
         };
-        table_rows.push(Row::new([Cell::from(params.pinned_rows[i].clone())]).style(style));
+        table_rows.push(Row::new([Cell::from(text)]).style(style));
     }
 
     Table::new(table_rows, [Constraint::Percentage(100)])
@@ -192,15 +204,17 @@ pub fn draw(
             &params.ascii_string
         }
         ReadPanel::Pinned => {
-            let table = if params.pinned_rows.is_empty() {
-                let message = if app.pinned_registers.is_empty() {
-                    "No pinned registers.".to_string()
-                } else {
-                    no_data_text()
-                };
-                rows_to_table("Pinned", header, &[message], &[], None, theme)
+            let table = if app.pinned_registers.is_empty() {
+                rows_to_table(
+                    "Pinned",
+                    header,
+                    &["No pinned registers.".to_string()],
+                    &[],
+                    None,
+                    theme,
+                )
             } else {
-                pinned_table(params, visible, header, theme)
+                pinned_table(params, app, visible, header, theme)
             };
             frame.render_widget(table, rows[1]);
             &params.pinned_ascii_string
