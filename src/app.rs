@@ -372,7 +372,13 @@ impl App {
         let mut matches: Vec<(RegisterCell, String)> = Vec::new();
 
         // If the query is a valid address, offer to jump straight to it.
-        if let Ok(address) = query.trim().parse::<u16>() {
+        if let Ok(parsed_address) = query.trim().parse::<u32>() {
+            let address = if parsed_address > u16::MAX as u32 {
+                u16::MAX
+            } else {
+                parsed_address as u16
+            };
+
             matches.push(((register_type, address), "jump to this address".to_string()));
         }
 
