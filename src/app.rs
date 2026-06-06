@@ -5,7 +5,7 @@ use crate::modbus::ModbusDevice;
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
 use crate::state::{
     no_data_rows, ConnectionStatus, DumpParams, JumpParams, LabelParams, ReadPanel, ReadParams,
-    SaveParams, State, StateTransition, WriteParams,
+    SaveParams, SearchParams, State, StateTransition, WriteParams,
 };
 use serde::{Deserialize, Serialize};
 use std::cell::Cell;
@@ -186,7 +186,7 @@ impl App {
             State::Write(p) => p.position,
             State::Dump(p) => p.position,
             State::Label(p) => p.position,
-            State::Help | State::Save(_) => 0,
+            State::Help | State::Save(_) | State::Search(_) => 0,
         }
     }
 
@@ -243,7 +243,81 @@ impl App {
                 })
             }
             StateTransition::Save => State::Save(SaveParams::default()),
+            StateTransition::Search => {
+                let matches = self
+                    .labels
+                    .iter()
+                    .map(|(&cell, text)| (cell, text.clone()))
+                    .collect();
+                State::Search(SearchParams {
+                    matches,
+                    ..Default::default()
+                })
+            }
         };
+    }
+
+    pub fn search_input(&mut self, c: char) {
+        if let State::Search(p) = &mut self.state {
+            p.query.push(c);
+        }
+        self.recompute_search();
+    }
+
+    pub fn search_backspace(&mut self) {
+        if let State::Search(p) = &mut self.state {
+            p.query.pop();
+        }
+        self.recompute_search();
+    }
+
+    pub fn search_move(&mut self, down: bool) {
+        let rows = self.visible_rows.get();
+        if let State::Search(p) = &mut self.state {
+            p.selected = if down {
+                p.selected.saturating_add(1)
+            } else {
+                p.selected.saturating_sub(1)
+            };
+            p.scroll(rows);
+        }
+    }
+
+    pub fn search_commit(&mut self) {
+        let target = if let State::Search(p) = &self.state {
+            p.matches.get(p.selected as usize).map(|(cell, _)| *cell)
+        } else {
+            return;
+        };
+        if let Some((register_type, position)) = target {
+            self.state = State::Read(ReadParams {
+                position,
+                window_start: position,
+                register_type,
+                ..Default::default()
+            });
+        }
+    }
+
+    fn recompute_search(&mut self) {
+        let query = if let State::Search(p) = &self.state {
+            p.query.to_lowercase()
+        } else {
+            return;
+        };
+        let matches: Vec<_> = self
+            .labels
+            .iter()
+            .filter(|(_, text)| query.is_empty() || text.to_lowercase().contains(&query))
+            .map(|(&cell, text)| (cell, text.clone()))
+            .collect();
+        let rows = self.visible_rows.get();
+        if let State::Search(p) = &mut self.state {
+            p.matches = matches;
+            p.selected = 0;
+            p.top = 0;
+            p.scroll(rows);
+        }
     }
 
     pub fn label_input(&mut self, c: char) {
@@ -395,6 +469,7 @@ impl App {
             }
             State::Label(_) => {}
             State::Save(_) => save_now = true,
+            State::Search(_) => {}
         }
 
         if start_dump_run {

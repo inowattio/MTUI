@@ -1,6 +1,6 @@
 use crate::app::WriteType;
 use crate::constants::keybind;
-use crate::register::RegisterType;
+use crate::register::{RegisterCell, RegisterType};
 use std::time::{Duration, Instant};
 
 #[derive(Debug, Default, PartialEq)]
@@ -43,6 +43,39 @@ pub struct SaveParams {
     pub result: Option<String>,
 }
 
+#[derive(Debug, Default, PartialEq)]
+pub struct SearchParams {
+    pub query: String,
+    pub matches: Vec<(RegisterCell, String)>,
+    pub selected: u16,
+    pub top: u16,
+}
+
+impl SearchParams {
+    pub fn scroll(&mut self, rows: u16) {
+        let len = self.matches.len() as u16;
+        scroll_window(&mut self.selected, &mut self.top, rows, len);
+    }
+}
+
+fn scroll_window(cursor: &mut u16, top: &mut u16, rows: u16, len: u16) {
+    let rows = rows.max(1);
+    if len == 0 {
+        *cursor = 0;
+        *top = 0;
+        return;
+    }
+    *cursor = (*cursor).min(len - 1);
+    if *cursor < *top {
+        *top = *cursor;
+    } else if *cursor >= top.saturating_add(rows) {
+        *top = cursor.saturating_sub(rows - 1);
+    }
+    if *top >= len {
+        *top = len.saturating_sub(rows).min(*cursor);
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub enum ReadPanel {
     #[default]
@@ -56,8 +89,6 @@ pub struct ReadParams {
     pub window_start: u16,
     pub data_start: u16,
     pub panel: ReadPanel,
-    /// Cursor index into the pinned list, and the top visible index, mirroring
-    /// `position`/`window_start` but for the (scattered) Pinned panel.
     pub pinned_index: u16,
     pub pinned_top: u16,
     pub main_rows: Vec<String>,
@@ -112,24 +143,8 @@ impl ReadParams {
         };
     }
 
-    /// Clamp the pinned cursor to a list of `len` entries and scroll `pinned_top`
-    /// so the cursor stays within the visible `rows`.
     pub fn scroll_pinned(&mut self, rows: u16, len: u16) {
-        let rows = rows.max(1);
-        if len == 0 {
-            self.pinned_index = 0;
-            self.pinned_top = 0;
-            return;
-        }
-        self.pinned_index = self.pinned_index.min(len - 1);
-        if self.pinned_index < self.pinned_top {
-            self.pinned_top = self.pinned_index;
-        } else if self.pinned_index >= self.pinned_top.saturating_add(rows) {
-            self.pinned_top = self.pinned_index.saturating_sub(rows - 1);
-        }
-        if self.pinned_top >= len {
-            self.pinned_top = len.saturating_sub(rows).min(self.pinned_index);
-        }
+        scroll_window(&mut self.pinned_index, &mut self.pinned_top, rows, len);
     }
 }
 
@@ -141,7 +156,6 @@ pub fn no_data_rows() -> Vec<String> {
     vec![no_data_text()]
 }
 
-/// Truthful device reachability derived from the most recent read.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub enum ConnectionStatus {
     #[default]
@@ -160,6 +174,7 @@ pub enum State {
     Dump(DumpParams),
     Label(LabelParams),
     Save(SaveParams),
+    Search(SearchParams),
 }
 
 pub enum StateTransition {
@@ -170,4 +185,5 @@ pub enum StateTransition {
     Dump,
     Label,
     Save,
+    Search,
 }

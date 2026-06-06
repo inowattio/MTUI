@@ -18,6 +18,7 @@ pub fn draw(frame: &mut Frame, area: Rect, theme: &Theme, device: &str) {
         (format!("{HELP}"), "Help"),
         (format!("{PIN}"), "Add / Remove pin (Read only)"),
         (format!("{LABEL}"), "Label register (Read only)"),
+        (format!("{SEARCH}"), "Search labels / jump"),
         (format!("{SAVE}"), "Save config to file"),
         (format!("{ACTION}"), "Action"),
     ];

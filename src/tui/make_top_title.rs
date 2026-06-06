@@ -9,5 +9,6 @@ pub fn make_top_title(state: &State) -> &str {
         State::Dump(_) => "Dump",
         State::Label(_) => "Label",
         State::Save(_) => "Save",
+        State::Search(_) => "Search",
     }
 }

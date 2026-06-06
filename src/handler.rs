@@ -19,12 +19,26 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         return Ok(());
     }
 
+    if matches!(app.state, State::Search(_)) {
+        match key_event.code {
+            KeyCode::Esc => app.switch_focus_to(StateTransition::Read),
+            keybind::ACTION => app.search_commit(),
+            keybind::MOVE_UP => app.search_move(false),
+            keybind::MOVE_DOWN => app.search_move(true),
+            KeyCode::Backspace => app.search_backspace(),
+            KeyCode::Char(c) => app.search_input(c),
+            _ => {}
+        }
+        return Ok(());
+    }
+
     match key_event.code {
         keybind::EXIT => app.quit(),
         keybind::PIN => app.pin(),
         keybind::DUMP => app.switch_focus_to(StateTransition::Dump),
         keybind::HELP => app.switch_focus_to(StateTransition::Help),
         keybind::SAVE => app.switch_focus_to(StateTransition::Save),
+        keybind::SEARCH => app.switch_focus_to(StateTransition::Search),
         keybind::REFRESH => app.refresh().await,
         keybind::TOGGLE => app.toggle_type(),
         keybind::JUMP => app.switch_focus_to(StateTransition::Jump),

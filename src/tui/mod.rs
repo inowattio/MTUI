@@ -59,9 +59,6 @@ where
             let mode = make_top_title(&app.state);
             let key_hints = make_bottom_title(&app.state);
 
-            // The outer frame, mode title, live status indicator and key-hint
-            // footer are identical across every screen, so build and render them
-            // once here and hand each screen only its inner drawing area.
             let outer = Block::default()
                 .title_top(Line::styled(format!(" {mode} "), theme.accent_style()))
                 .title_top(Line::from(status_span(&app.connection, &theme)).right_aligned())
@@ -81,6 +78,7 @@ where
                 State::Write(p) => draw_state::write::draw(p, frame, inner, &theme, &device),
                 State::Label(p) => draw_state::label::draw(p, frame, inner, &theme, &device),
                 State::Save(p) => draw_state::save::draw(p, frame, inner, &theme, &device),
+                State::Search(p) => draw_state::search::draw(p, app, frame, inner, &theme, &device),
                 State::Help => draw_state::help::draw(frame, inner, &theme, &device),
             }
         })?;
