@@ -363,16 +363,27 @@ impl App {
 
     fn recompute_search(&mut self) {
         let read = self.read();
-        let register_type = read.register_type;
         let query = match &read.popup {
             Some(Popup::Search(s)) => s.query.clone(),
             _ => return,
         };
 
+        let (register_type, has_explicit_type) = match query.chars().next() {
+            Some('h') | Some('H') => (RegisterType::Holding, true),
+            Some('i') | Some('I') => (RegisterType::Input, true),
+            _ => (read.register_type, false),
+        };
+
         let mut matches: Vec<(RegisterCell, String)> = Vec::new();
 
+        let numeric_query = if has_explicit_type {
+            query.chars().skip(1).collect()
+        } else {
+            query.clone()
+        };
+
         // If the query is a valid address, offer to jump straight to it.
-        if let Ok(parsed_address) = query.trim().parse::<u32>() {
+        if let Ok(parsed_address) = numeric_query.trim().parse::<u32>() {
             let address = if parsed_address > u16::MAX as u32 {
                 u16::MAX
             } else {
