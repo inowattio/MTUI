@@ -485,8 +485,14 @@ impl App {
     }
 
     pub fn quit(&mut self) {
-        match self.state {
+        match &self.state {
             State::Read(_) => self.running = false,
+            State::Write(params) => self.state = State::Read(ReadParams {
+                window_start: params.position,
+                data_start: params.position,
+                position: params.position,
+                ..Default::default()
+            }),
             _ => self.state = State::Read(Default::default()),
         }
     }
