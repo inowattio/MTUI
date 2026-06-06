@@ -80,6 +80,10 @@ impl Theme {
         Style::default().fg(self.err)
     }
 
+    pub fn warn_style(&self) -> Style {
+        Style::default().fg(self.warn)
+    }
+
     pub fn panel(&self, title: &str) -> Block<'static> {
         Block::default()
             .title_top(Line::styled(format!(" {title} "), self.accent_style()))

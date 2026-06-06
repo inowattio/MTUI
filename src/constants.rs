@@ -19,6 +19,7 @@ pub mod keybind {
     pub const SAVE: KeyCode = KeyCode::Char('s');
     pub const SEARCH: KeyCode = KeyCode::Char('/');
     pub const COLUMNS: KeyCode = KeyCode::Char('c');
+    pub const PAUSE: KeyCode = KeyCode::Char(' ');
     pub const NEGATOR: KeyCode = KeyCode::Char('-');
     pub const SWITCH_VIEW: KeyCode = KeyCode::Tab;
     pub const ACTION: KeyCode = KeyCode::Enter;

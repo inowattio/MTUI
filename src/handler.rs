@@ -32,6 +32,7 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         keybind::LABEL => app.open_label(),
         keybind::REFRESH => app.refresh().await,
         keybind::TOGGLE => app.toggle_type(),
+        keybind::PAUSE => app.toggle_pause(),
         keybind::ACTION => app.refresh().await,
         keybind::SWITCH_VIEW => {
             {

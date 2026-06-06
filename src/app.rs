@@ -61,6 +61,9 @@ pub struct App {
     pub connection: ConnectionStatus,
     /// Monotonic tick counter used to advance the loading spinner.
     pub frame: u64,
+    /// When true, the auto-refresh timer is suspended so values hold still for
+    /// inspection. Manual reads (Enter / refresh key) still work.
+    pub paused: bool,
     /// Number of register rows the Read table can show; written by the draw layer
     /// each frame and used to size the read window to exactly the visible area.
     pub visible_rows: Cell<u16>,
@@ -176,6 +179,7 @@ impl App {
             running: true,
             connection: ConnectionStatus::Unknown,
             frame: 0,
+            paused: false,
             visible_rows: Cell::new(initial_rows),
             background_task: None,
             previous_values: BTreeMap::new(),
@@ -462,16 +466,21 @@ impl App {
             return;
         }
 
-        let should_refresh = matches!(
-            &self.state,
-            State::Read(p)
-                if self.config.auto_update_interval_seconds
-                    .is_some_and(|seconds| p.refresh_timer.elapsed().as_secs() > seconds)
-        );
+        let should_refresh = !self.paused
+            && matches!(
+                &self.state,
+                State::Read(p)
+                    if self.config.auto_update_interval_seconds
+                        .is_some_and(|seconds| p.refresh_timer.elapsed().as_secs() > seconds)
+            );
 
         if should_refresh {
             self.refresh().await;
         }
+    }
+
+    pub fn toggle_pause(&mut self) {
+        self.paused = !self.paused;
     }
 
     pub fn quit(&mut self) {

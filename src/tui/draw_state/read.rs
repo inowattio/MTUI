@@ -168,7 +168,9 @@ pub fn draw(
         theme.base(),
     ));
     info_spans.push(Span::styled(read_time, theme.dim_style()));
-    if let Some(interval) = app.config.auto_update_interval_seconds {
+    if app.paused {
+        info_spans.push(Span::styled("   \u{23f8} paused", theme.warn_style()));
+    } else if let Some(interval) = app.config.auto_update_interval_seconds {
         if !params.loading {
             let remaining = interval.saturating_sub(params.refresh_timer.elapsed().as_secs());
             info_spans.push(Span::styled(format!("   ⟳ {remaining}s"), theme.ok_style()));
@@ -252,10 +254,11 @@ fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup: &P
 
 fn draw_help(frame: &mut Frame, area: Rect, theme: &Theme) {
     use keybind::*;
-    let entries: [(String, &str); 12] = [
+    let entries: [(String, &str); 13] = [
         (format!("{MOVE_UP}/{MOVE_DOWN}"), "Move cursor"),
         (format!("{ACTION}"), "Read at cursor"),
         (format!("{REFRESH}"), "Refresh"),
+        ("space".to_string(), "Pause / resume auto-refresh"),
         (format!("{TOGGLE}"), "Switch register type"),
         (format!("{SWITCH_VIEW}"), "Switch Main / Pinned"),
         (format!("{JUMP}"), "Jump to address"),
