@@ -247,22 +247,20 @@ fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup: &P
         Popup::Search(s) => draw_search(frame, area, theme, s),
         Popup::Label(l) => draw_label(frame, area, theme, l),
         Popup::Columns(selected) => draw_picker(frame, area, theme, app, *selected),
-        Popup::Jump(target) => draw_jump(frame, area, theme, *target),
         Popup::Write(write) => draw_write(frame, area, theme, write),
     }
 }
 
 fn draw_help(frame: &mut Frame, area: Rect, theme: &Theme) {
     use keybind::*;
-    let entries: [(String, &str); 13] = [
+    let entries: [(String, &str); 12] = [
         (format!("{MOVE_UP}/{MOVE_DOWN}"), "Move cursor"),
         (format!("{ACTION}"), "Read at cursor"),
         (format!("{REFRESH}"), "Refresh"),
         ("space".to_string(), "Pause / resume auto-refresh"),
         (format!("{TOGGLE}"), "Switch register type"),
         (format!("{SWITCH_VIEW}"), "Switch Main / Pinned"),
-        (format!("{JUMP}"), "Jump to address"),
-        (format!("{SEARCH}"), "Search labels"),
+        (format!("{JUMP}"), "Go to address / label"),
         (format!("{WRITE}"), "Write register"),
         (format!("{PIN}"), "Add / Remove pin"),
         (format!("{LABEL}"), "Label register"),
@@ -370,7 +368,7 @@ fn draw_search(frame: &mut Frame, area: Rect, theme: &Theme, search: &SearchPara
     let end = (top + visible).min(len);
 
     let query_line = Line::from(vec![
-        Span::styled("Search: ", theme.dim_style()),
+        Span::styled("Go to: ", theme.dim_style()),
         Span::styled(search.query.clone(), theme.accent_style()),
         Span::styled("_", theme.accent_style()),
         Span::styled(format!("   ({len})"), theme.dim_style()),
@@ -379,7 +377,10 @@ fn draw_search(frame: &mut Frame, area: Rect, theme: &Theme, search: &SearchPara
     let mut lines = vec![query_line, Line::default()];
 
     if search.matches.is_empty() {
-        lines.push(Line::from(Span::styled("No matching labels.", theme.dim_style())));
+        lines.push(Line::from(Span::styled(
+            "Type an address or a label.",
+            theme.dim_style(),
+        )));
     } else {
         for i in top..end {
             let ((kind, address), text) = &search.matches[i];
@@ -395,7 +396,7 @@ fn draw_search(frame: &mut Frame, area: Rect, theme: &Theme, search: &SearchPara
 
     lines.push(Line::default());
     lines.push(Line::from(Span::styled(
-        " type to filter \u{b7} \u{2191}/\u{2193} select \u{b7} enter jump \u{b7} esc close",
+        " address or label \u{b7} \u{2191}/\u{2193} select \u{b7} enter go \u{b7} esc close",
         theme.dim_style(),
     )));
 
@@ -403,7 +404,7 @@ fn draw_search(frame: &mut Frame, area: Rect, theme: &Theme, search: &SearchPara
     let rect = centered_rect(54, height, area);
 
     frame.render_widget(Clear, rect);
-    frame.render_widget(Paragraph::new(lines).block(theme.panel("Search")), rect);
+    frame.render_widget(Paragraph::new(lines).block(theme.panel("Go to")), rect);
 }
 
 fn draw_write(frame: &mut Frame, area: Rect, theme: &Theme, write: &WriteParams) {
@@ -448,25 +449,6 @@ fn draw_write(frame: &mut Frame, area: Rect, theme: &Theme, write: &WriteParams)
     frame.render_widget(Paragraph::new(lines).block(theme.panel("Write")), rect);
 }
 
-fn draw_jump(frame: &mut Frame, area: Rect, theme: &Theme, target: u16) {
-    let lines = vec![
-        Line::from(vec![
-            Span::styled("Address: ", theme.dim_style()),
-            Span::styled(target.to_string(), theme.accent_style()),
-            Span::styled("_", theme.accent_style()),
-        ]),
-        Line::from(Span::styled(
-            " enter \u{b7} go   esc \u{b7} cancel",
-            theme.dim_style(),
-        )),
-    ];
-
-    let height = lines.len() as u16 + 2;
-    let rect = centered_rect(36, height, area);
-
-    frame.render_widget(Clear, rect);
-    frame.render_widget(Paragraph::new(lines).block(theme.panel("Jump")), rect);
-}
 
 fn draw_picker(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, selected: u16) {
     let mut lines: Vec<Line> = Column::ALL

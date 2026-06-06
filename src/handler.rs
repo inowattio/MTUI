@@ -25,9 +25,8 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         keybind::DUMP => app.open_dump(),
         keybind::HELP => app.open_help(),
         keybind::SAVE => app.open_save(),
-        keybind::SEARCH => app.open_search(),
         keybind::COLUMNS => app.open_columns(),
-        keybind::JUMP => app.open_jump(),
+        keybind::JUMP => app.open_search(),
         keybind::WRITE => app.open_write(),
         keybind::LABEL => app.open_label(),
         keybind::REFRESH => app.refresh().await,
@@ -146,29 +145,6 @@ fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
             }
         }
 
-        PopupKind::Jump => match key_event.code {
-            KeyCode::Esc | keybind::JUMP => app.close_popup(),
-            keybind::ACTION => app.commit_jump(),
-            KeyCode::Backspace => {
-                {
-                let p = app.read_mut();
-                    if let Some(Popup::Jump(value)) = &mut p.popup {
-                        digit_remove(value);
-                    }
-                }
-            }
-            KeyCode::Char(c) if c.is_ascii_digit() => {
-                let digit = c as u8 - b'0';
-                {
-                let p = app.read_mut();
-                    if let Some(Popup::Jump(value)) = &mut p.popup {
-                        digit_add(value, digit);
-                    }
-                }
-            }
-            _ => {}
-        },
-
         PopupKind::Write => match key_event.code {
             KeyCode::Esc => app.close_popup(),
             keybind::ACTION => app.commit_write(),
@@ -260,23 +236,24 @@ pub fn handle_paste(data: String, app: &mut App) {
     }
 
     let rows = app.visible_rows.get();
-    let p = app.read_mut();
 
-    // Paste into the numeric popup that's open, otherwise the cursor address.
-    match &mut p.popup {
-        Some(Popup::Write(w)) => {
-            set_option_to_zero(&mut w.value);
-            for digit in digits {
-                digit_add_option(&mut w.value, digit);
+    // Paste into the popup that's open, otherwise the cursor address.
+    match app.popup_kind() {
+        Some(PopupKind::Write) => {
+            if let Some(Popup::Write(w)) = &mut app.read_mut().popup {
+                set_option_to_zero(&mut w.value);
+                for digit in digits {
+                    digit_add_option(&mut w.value, digit);
+                }
             }
         }
-        Some(Popup::Jump(value)) => {
-            set_to_zero(value);
+        Some(PopupKind::Search) => {
             for digit in digits {
-                digit_add(value, digit);
+                app.search_input((b'0' + digit) as char);
             }
         }
         None => {
+            let p = app.read_mut();
             set_to_zero(&mut p.position);
             for digit in digits {
                 digit_add(&mut p.position, digit);

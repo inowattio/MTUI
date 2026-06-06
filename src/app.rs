@@ -225,10 +225,6 @@ impl App {
         self.read_mut().popup = Some(Popup::Columns(0));
     }
 
-    pub fn open_jump(&mut self) {
-        self.read_mut().popup = Some(Popup::Jump(0));
-    }
-
     pub fn open_write(&mut self) {
         let position = self.read().position;
         self.read_mut().popup = Some(Popup::Write(WriteParams {
@@ -238,15 +234,8 @@ impl App {
     }
 
     pub fn open_search(&mut self) {
-        let matches = self
-            .labels
-            .iter()
-            .map(|(&cell, text)| (cell, text.clone()))
-            .collect();
-        self.read_mut().popup = Some(Popup::Search(SearchParams {
-            matches,
-            ..Default::default()
-        }));
+        self.read_mut().popup = Some(Popup::Search(SearchParams::default()));
+        self.recompute_search();
     }
 
     pub fn open_label(&mut self) {
@@ -321,16 +310,29 @@ impl App {
     }
 
     fn recompute_search(&mut self) {
-        let query = match &self.read().popup {
-            Some(Popup::Search(s)) => s.query.to_lowercase(),
+        let read = self.read();
+        let register_type = read.register_type;
+        let query = match &read.popup {
+            Some(Popup::Search(s)) => s.query.clone(),
             _ => return,
         };
-        let matches: Vec<_> = self
-            .labels
-            .iter()
-            .filter(|(_, text)| query.is_empty() || text.to_lowercase().contains(&query))
-            .map(|(&cell, text)| (cell, text.clone()))
-            .collect();
+
+        let mut matches: Vec<(RegisterCell, String)> = Vec::new();
+
+        // If the query is a valid address, offer to jump straight to it.
+        if let Ok(address) = query.trim().parse::<u16>() {
+            matches.push(((register_type, address), "jump to this address".to_string()));
+        }
+
+        // Then label matches (case-insensitive substring).
+        let lower = query.to_lowercase();
+        matches.extend(
+            self.labels
+                .iter()
+                .filter(|(_, text)| lower.is_empty() || text.to_lowercase().contains(&lower))
+                .map(|(&cell, text)| (cell, text.clone())),
+        );
+
         let rows = self.visible_rows.get();
         if let Some(Popup::Search(s)) = &mut self.read_mut().popup {
             s.matches = matches;
@@ -743,20 +745,6 @@ impl App {
 
     pub fn label_text(&self, register_type: RegisterType, address: u16) -> Option<String> {
         self.labels.get(&(register_type, address)).cloned()
-    }
-
-    pub fn commit_jump(&mut self) {
-        let rows = self.visible_rows.get();
-        let target = match &self.read().popup {
-            Some(Popup::Jump(target)) => Some(*target),
-            _ => None,
-        };
-        if let Some(target) = target {
-            let p = self.read_mut();
-            p.position = target;
-            p.scroll_to_cursor(rows);
-            p.popup = None;
-        }
     }
 
     pub fn commit_write(&mut self) {

@@ -80,8 +80,6 @@ pub enum Popup {
     Label(LabelParams),
     /// Column picker; the value is the cursor index into `Column::ALL`.
     Columns(u16),
-    /// Jump-to-address; the value is the address being typed.
-    Jump(u16),
     Write(WriteParams),
 }
 
@@ -95,7 +93,6 @@ pub enum PopupKind {
     Search,
     Label,
     Columns,
-    Jump,
     Write,
 }
 
@@ -108,7 +105,6 @@ impl Popup {
             Popup::Search(_) => PopupKind::Search,
             Popup::Label(_) => PopupKind::Label,
             Popup::Columns(_) => PopupKind::Columns,
-            Popup::Jump(_) => PopupKind::Jump,
             Popup::Write(_) => PopupKind::Write,
         }
     }

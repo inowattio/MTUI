@@ -17,7 +17,6 @@ pub mod keybind {
     pub const JUMP: KeyCode = KeyCode::Char('j');
     pub const LABEL: KeyCode = KeyCode::Char('l');
     pub const SAVE: KeyCode = KeyCode::Char('s');
-    pub const SEARCH: KeyCode = KeyCode::Char('/');
     pub const COLUMNS: KeyCode = KeyCode::Char('c');
     pub const PAUSE: KeyCode = KeyCode::Char(' ');
     pub const NEGATOR: KeyCode = KeyCode::Char('-');
