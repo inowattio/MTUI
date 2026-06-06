@@ -416,7 +416,7 @@ fn draw_search(frame: &mut Frame, area: Rect, theme: &Theme, search: &SearchPara
     let end = (top + visible).min(len);
 
     let query_line = Line::from(vec![
-        Span::styled("Go to: ", theme.dim_style()),
+        Span::styled(" index/label: ", theme.dim_style()),
         Span::styled(search.query.clone(), theme.accent_style()),
         Span::styled("_", theme.accent_style()),
         Span::styled(format!("   ({len})"), theme.dim_style()),
@@ -485,9 +485,9 @@ fn draw_write(frame: &mut Frame, area: Rect, theme: &Theme, write: &WriteParams)
 
     let mut lines = vec![
         Line::from(vec![
-            Span::styled("Write to ", theme.dim_style()),
+            Span::styled(format!("[{:?}] ", write.write_type), theme.dim_style()),
+            Span::styled("to ", theme.dim_style()),
             Span::styled(write.position.to_string(), theme.accent_style()),
-            Span::styled(format!("  [{:?}]", write.write_type), theme.dim_style()),
         ]),
         Line::from(vec![
             Span::styled("Value: ", theme.dim_style()),
