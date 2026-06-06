@@ -7,7 +7,7 @@ pub const EVENT_HANDLER_TICKRATE: Duration = Duration::from_millis(150);
 pub mod keybind {
     use crossterm::event::KeyCode;
 
-    pub const EXIT: KeyCode = KeyCode::Char('q');
+    pub const EXIT: KeyCode = KeyCode::Esc;
     pub const PIN: KeyCode = KeyCode::Char('p');
     pub const DUMP: KeyCode = KeyCode::Char('d');
     pub const HELP: KeyCode = KeyCode::Char('h');

@@ -349,7 +349,7 @@ fn draw_confirm(
     let mut lines = vec![
         Line::from(Span::styled(prompt.to_string(), theme.base())),
         Line::from(Span::styled(
-            " enter \u{b7} confirm   esc \u{b7} cancel",
+            " enter/esc \u{b7} confirm   backspace \u{b7} cancel",
             theme.dim_style(),
         )),
     ];

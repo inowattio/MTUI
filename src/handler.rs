@@ -156,20 +156,20 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
 
         PopupKind::Save => match key_event.code {
             keybind::ACTION => app.commit_save(),
-            KeyCode::Esc | keybind::EXIT | keybind::SAVE => app.close_popup(),
+            keybind::EXIT | keybind::SAVE => app.close_popup(),
             _ => {}
         },
 
         PopupKind::Dump => match key_event.code {
             keybind::ACTION => app.commit_dump(),
-            KeyCode::Esc | keybind::EXIT | keybind::DUMP => app.close_popup(),
+            keybind::EXIT | keybind::DUMP => app.close_popup(),
             _ => {}
         },
 
         PopupKind::Columns => {
             let count = Column::ALL.len() as u16;
             match key_event.code {
-                KeyCode::Esc | keybind::EXIT | keybind::COLUMNS => app.close_popup(),
+                keybind::EXIT | keybind::COLUMNS => app.close_popup(),
                 keybind::MOVE_UP => {
                     {
                 let p = app.read_mut();
@@ -200,7 +200,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
         }
 
         PopupKind::Write => match key_event.code {
-            KeyCode::Esc => app.close_popup(),
+            keybind::EXIT => app.close_popup(),
             keybind::ACTION => app.commit_write(),
             keybind::WRITE => app.write_toggle_type(),
             keybind::MOVE_UP => {
@@ -240,7 +240,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
         },
 
         PopupKind::Search => match key_event.code {
-            KeyCode::Esc => app.close_popup(),
+            keybind::EXIT => app.close_popup(),
             keybind::ACTION => app.search_commit(),
             keybind::MOVE_UP => app.search_move(false),
             keybind::MOVE_DOWN => app.search_move(true),
@@ -250,7 +250,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
         },
 
         PopupKind::Label => match key_event.code {
-            KeyCode::Esc => app.close_popup(),
+            keybind::EXIT => app.close_popup(),
             keybind::ACTION => app.commit_label(),
             KeyCode::Backspace => app.label_backspace(),
             KeyCode::Char(c) => app.label_input(c),
@@ -258,7 +258,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
         },
 
         PopupKind::Slave => match key_event.code {
-            KeyCode::Esc | keybind::SLAVE => app.close_popup(),
+            keybind::EXIT | keybind::SLAVE => app.close_popup(),
             keybind::ACTION => app.commit_slave().await,
             KeyCode::Backspace => {
                 let p = app.read_mut();
@@ -278,7 +278,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
 
         PopupKind::Quit => match key_event.code {
             keybind::ACTION | keybind::EXIT => app.quit(),
-            KeyCode::Esc => app.close_popup(),
+            KeyCode::Backspace => app.close_popup(),
             _ => {}
         },
     }
