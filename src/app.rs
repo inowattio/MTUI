@@ -1,4 +1,4 @@
-use crate::config::{Config, Label, Labels};
+use crate::config::{Column, Config, Label, Labels};
 use crate::constants::CONFIG_PATH;
 use crate::interpretator::Interpretor;
 use crate::modbus::ModbusDevice;
@@ -39,6 +39,16 @@ struct RefreshTaskResult {
     read_duration: Duration,
 }
 
+/// The raw data of the last successful read, kept so the visible rows can be
+/// re-formatted instantly when the interpretation columns change at runtime.
+#[derive(Debug)]
+struct LastRead {
+    window_start: u16,
+    main_data: Vec<RegisterCellValue>,
+    pinned_data: Vec<RegisterCellValue>,
+    read_at: DateTime<Local>,
+}
+
 #[derive(Debug)]
 pub struct App {
     pub config: Config,
@@ -57,6 +67,7 @@ pub struct App {
     background_task: Option<BackgroundTask>,
     previous_values: BTreeMap<RegisterCell, u16>,
     read_log: BTreeMap<RegisterCell, (u16, DateTime<Utc>)>,
+    last_read: Option<LastRead>,
     labels: BTreeMap<RegisterCell, String>,
 }
 
@@ -169,6 +180,7 @@ impl App {
             background_task: None,
             previous_values: BTreeMap::new(),
             read_log: BTreeMap::new(),
+            last_read: None,
         }
     }
 
@@ -658,11 +670,7 @@ impl App {
             }
         }
 
-        let labels = &self.labels;
-        let labeler = |cell: RegisterCellValue| {
-            let ((c_kind, c_address), _) = cell;
-            labels.get(&(c_kind, c_address)).cloned()
-        };
+        self.previous_values = new_previous;
 
         let ascii_string = match &result.main_data {
             Ok(data) => self.interpreter.ascii_string(data),
@@ -674,66 +682,115 @@ impl App {
             Err(_) => String::new(),
         };
 
-        let (main_rows, connection) = match result.main_data {
-            Ok(data) => (
-                self.interpreter.run(data, result.window_start, read_at_local, labeler),
-                ConnectionStatus::Connected,
-            ),
-            Err(e) => (vec![e.clone()], ConnectionStatus::Error(e)),
-        };
-
-        let pinned_rows = match result.pinned_data {
-            Ok(data) => {
-                let mut rows = Vec::new();
-                let mut skip = false;
-
-                for i in 0..data.len() {
-                    if skip {
-                        skip = false;
-                        continue;
-                    }
-
-                    let c = data[i];
-                    let batch = match data.get(i + 1) {
-                        None => vec![c],
-                        Some(&n) => {
-                            let ((c_kind, c_address), _) = c;
-                            let ((n_kind, n_address), _) = n;
-                            if n_kind == c_kind && n_address == c_address + 1 {
-                                skip = true;
-                                vec![c, n]
-                            } else {
-                                vec![c]
-                            }
-                        }
-                    };
-                    let ((_, address), _) = c;
-
-                    rows.extend(self.interpreter.run(batch, address, read_at_local, |c| {
-                        let ((kind, c_address), _) = c;
-                        labels.get(&(kind, c_address)).cloned()
-                    }));
-                }
-
-                rows
+        // Cache the raw read so the rows can be re-formatted instantly when the
+        // visible columns change (see `rebuild_read_rows`).
+        let connection = match &result.main_data {
+            Ok(main_data) => {
+                self.last_read = Some(LastRead {
+                    window_start: result.window_start,
+                    main_data: main_data.clone(),
+                    pinned_data: result.pinned_data.clone().unwrap_or_default(),
+                    read_at: read_at_local,
+                });
+                ConnectionStatus::Connected
             }
-            Err(e) => vec![e.to_string()],
+            Err(e) => ConnectionStatus::Error(e.clone()),
         };
-
-        self.previous_values = new_previous;
 
         if let State::Read(params) = &mut self.state {
-            params.main_rows = main_rows;
-            params.pinned_rows = pinned_rows;
             params.ascii_string = ascii_string;
             params.pinned_ascii_string = pinned_ascii_string;
             params.main_changed = main_changed;
             params.pinned_changed = pinned_changed;
-            params.data_start = result.window_start;
             params.read_duration = Some(result.read_duration);
             params.loading = false;
+            if let Err(e) = &result.main_data {
+                params.main_rows = vec![e.clone()];
+                params.pinned_rows = Vec::new();
+                params.data_start = result.window_start;
+            }
+        }
+
+        if result.main_data.is_ok() {
+            self.rebuild_read_rows();
         }
         self.connection = connection;
+    }
+
+    /// Re-format the Read rows from the cached last read using the current
+    /// interpreter columns. Cheap, and used both after a read and after a
+    /// runtime column toggle so the table updates without re-reading the device.
+    fn rebuild_read_rows(&mut self) {
+        let (window_start, main_data, pinned_data, read_at) = match &self.last_read {
+            Some(lr) => (
+                lr.window_start,
+                lr.main_data.clone(),
+                lr.pinned_data.clone(),
+                lr.read_at,
+            ),
+            None => return,
+        };
+
+        let labels = &self.labels;
+        let main_rows = self.interpreter.run(main_data, window_start, read_at, |cell| {
+            let ((kind, address), _) = cell;
+            labels.get(&(kind, address)).cloned()
+        });
+        let pinned_rows = Self::format_pinned(&self.interpreter, &pinned_data, read_at, labels);
+
+        if let State::Read(params) = &mut self.state {
+            params.main_rows = main_rows;
+            params.pinned_rows = pinned_rows;
+            params.data_start = window_start;
+        }
+    }
+
+    /// Format the (scattered) pinned register list, grouping consecutive cells so
+    /// multi-word interpretations read across pin boundaries.
+    fn format_pinned(
+        interpreter: &Interpretor,
+        data: &[RegisterCellValue],
+        read_at: DateTime<Local>,
+        labels: &BTreeMap<RegisterCell, String>,
+    ) -> Vec<String> {
+        let mut rows = Vec::new();
+        let mut skip = false;
+
+        for i in 0..data.len() {
+            if skip {
+                skip = false;
+                continue;
+            }
+
+            let c = data[i];
+            let batch = match data.get(i + 1) {
+                None => vec![c],
+                Some(&n) => {
+                    let ((c_kind, c_address), _) = c;
+                    let ((n_kind, n_address), _) = n;
+                    if n_kind == c_kind && n_address == c_address + 1 {
+                        skip = true;
+                        vec![c, n]
+                    } else {
+                        vec![c]
+                    }
+                }
+            };
+            let ((_, address), _) = c;
+
+            rows.extend(interpreter.run(batch, address, read_at, |cell| {
+                let ((kind, c_address), _) = cell;
+                labels.get(&(kind, c_address)).cloned()
+            }));
+        }
+
+        rows
+    }
+
+    /// Toggle an interpretation column at runtime and re-render the cached rows.
+    pub fn toggle_column(&mut self, column: Column) {
+        self.interpreter.toggle(column);
+        self.rebuild_read_rows();
     }
 
     pub async fn complete_background_task(&mut self) {

@@ -1,9 +1,10 @@
 use crate::app::App;
+use crate::config::Column;
 use crate::state::{no_data_text, ReadPanel, ReadParams};
 use crate::tui::theme::{spinner_frame, Theme};
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Cell, Paragraph, Row, Table, Wrap};
+use ratatui::widgets::{Cell, Clear, Paragraph, Row, Table, Wrap};
 use ratatui::Frame;
 
 fn rows_to_table(
@@ -207,5 +208,50 @@ pub fn draw(
                 .wrap(Wrap { trim: false }),
             rows[2],
         );
+    }
+
+    if let Some(selected) = params.picker {
+        draw_picker(frame, area, theme, app, selected);
+    }
+}
+
+/// Centered column-picker popup drawn over the Read table.
+fn draw_picker(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, selected: u16) {
+    let mut lines: Vec<Line> = Column::ALL
+        .iter()
+        .enumerate()
+        .map(|(i, &column)| {
+            let on = app.interpreter.is_enabled(column);
+            let mark = if on { "[x]" } else { "[ ]" };
+            let style = if i as u16 == selected {
+                theme.selected_style()
+            } else if on {
+                theme.base()
+            } else {
+                theme.dim_style()
+            };
+            Line::from(Span::styled(format!(" {mark} {}", column.name()), style))
+        })
+        .collect();
+    lines.push(Line::from(Span::styled(
+        " \u{2191}/\u{2193} move \u{b7} space toggle \u{b7} esc close",
+        theme.dim_style(),
+    )));
+
+    let height = lines.len() as u16 + 2;
+    let rect = centered_rect(42, height, area);
+
+    frame.render_widget(Clear, rect);
+    frame.render_widget(Paragraph::new(lines).block(theme.panel("Columns")), rect);
+}
+
+fn centered_rect(width: u16, height: u16, area: Rect) -> Rect {
+    let w = width.min(area.width);
+    let h = height.min(area.height);
+    Rect {
+        x: area.x + (area.width.saturating_sub(w)) / 2,
+        y: area.y + (area.height.saturating_sub(h)) / 2,
+        width: w,
+        height: h,
     }
 }

@@ -22,6 +22,7 @@ pub fn draw(frame: &mut Frame, area: Rect, theme: &Theme, device: &str) {
         (format!("{LABEL}"), "Label register"),
         (format!("{DUMP}"), "Dump read data to file"),
         (format!("{SWITCH_VIEW}"), "Switch Main / Pinned"),
+        (format!("{COLUMNS}"), "Toggle columns"),
     ];
 
     let mut lines = vec![

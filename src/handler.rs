@@ -1,4 +1,5 @@
 use crate::app::{App, AppResult, WriteType};
+use crate::config::Column;
 use crate::constants::keybind;
 use crate::num_ops::{decrement_by, decrement_option_by, digit_add, digit_add_option, digit_remove, digit_remove_option, increment_by, increment_option_by, negate_opt_option, set_option_to_zero, set_to_zero};
 use crate::state::{ReadPanel, State, StateTransition};
@@ -32,6 +33,42 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         return Ok(());
     }
 
+    if matches!(&app.state, State::Read(p) if p.picker.is_some()) {
+        let count = Column::ALL.len() as u16;
+        match key_event.code {
+            KeyCode::Esc | keybind::EXIT | keybind::COLUMNS => {
+                if let State::Read(p) = &mut app.state {
+                    p.picker = None;
+                }
+            }
+            keybind::MOVE_UP => {
+                if let State::Read(p) = &mut app.state {
+                    if let Some(selected) = &mut p.picker {
+                        *selected = selected.saturating_sub(1);
+                    }
+                }
+            }
+            keybind::MOVE_DOWN => {
+                if let State::Read(p) = &mut app.state {
+                    if let Some(selected) = &mut p.picker {
+                        *selected = (*selected + 1).min(count - 1);
+                    }
+                }
+            }
+            keybind::ACTION | KeyCode::Char(' ') => {
+                let selected = match &app.state {
+                    State::Read(p) => p.picker.unwrap_or(0) as usize,
+                    _ => 0,
+                };
+                if let Some(&column) = Column::ALL.get(selected) {
+                    app.toggle_column(column);
+                }
+            }
+            _ => {}
+        }
+        return Ok(());
+    }
+
     match key_event.code {
         keybind::EXIT => app.quit(),
         keybind::PIN => app.pin(),
@@ -43,6 +80,11 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         keybind::HELP => app.switch_focus_to(StateTransition::Help),
         keybind::SAVE => app.switch_focus_to(StateTransition::Save),
         keybind::SEARCH => app.switch_focus_to(StateTransition::Search),
+        keybind::COLUMNS => {
+            if let State::Read(p) = &mut app.state {
+                p.picker = Some(0);
+            }
+        }
         keybind::REFRESH => app.refresh().await,
         keybind::TOGGLE => app.toggle_type(),
         keybind::JUMP => app.switch_focus_to(StateTransition::Jump),

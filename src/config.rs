@@ -88,16 +88,58 @@ impl Default for Config {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct InterpretorConfig {
-    pub hex: bool,
-    pub u32: bool,
-    pub i32: bool,
-    pub f32: bool,
-    pub time: bool,
-    pub u64: bool,
-    pub i64: bool,
-    pub ascii: bool,
-    pub bits: bool,
-    pub label: bool,
+/// Single source of truth for the toggleable interpretation columns. From one
+/// list this generates `InterpretorConfig` (the serialized on/off flags), the
+/// `Column` enum (everything except the always-shown index / u16 / i16), and the
+/// `name`/`get`/`toggle` mappings — so a new column is added in exactly one place.
+macro_rules! interpretation_columns {
+    ($($variant:ident => $field:ident : $name:literal),+ $(,)?) => {
+        #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+        #[serde(default)]
+        pub struct InterpretorConfig {
+            $(pub $field: bool,)+
+        }
+
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        pub enum Column {
+            $($variant,)+
+        }
+
+        impl Column {
+            pub const ALL: &'static [Column] = &[$(Column::$variant),+];
+
+            pub fn name(self) -> &'static str {
+                match self {
+                    $(Column::$variant => $name,)+
+                }
+            }
+        }
+
+        impl InterpretorConfig {
+            pub fn get(&self, column: Column) -> bool {
+                match column {
+                    $(Column::$variant => self.$field,)+
+                }
+            }
+
+            pub fn toggle(&mut self, column: Column) {
+                match column {
+                    $(Column::$variant => self.$field = !self.$field,)+
+                }
+            }
+        }
+    };
+}
+
+interpretation_columns! {
+    Hex => hex : "hex",
+    U32 => u32 : "u32",
+    I32 => i32 : "i32",
+    F32 => f32 : "f32",
+    Time => time : "time (read at)",
+    U64 => u64 : "u64",
+    I64 => i64 : "i64",
+    Ascii => ascii : "ascii",
+    Bits => bits : "bits",
+    Label => label : "label",
 }

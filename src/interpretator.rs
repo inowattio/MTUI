@@ -1,4 +1,4 @@
-use crate::config::InterpretorConfig;
+use crate::config::{Column, InterpretorConfig};
 use crate::modbus::WordOrder;
 use crate::register::RegisterCellValue;
 use chrono::{DateTime, Local};
@@ -12,46 +12,61 @@ pub struct Interpretor {
 
 impl Interpretor {
     pub fn new(interpretation: InterpretorConfig, word_order: WordOrder) -> Self {
+        let mut interpretor = Self {
+            config: interpretation,
+            word_order,
+            header: String::new(),
+        };
+        interpretor.rebuild_header();
+        interpretor
+    }
+
+    fn rebuild_header(&mut self) {
         let mut header = String::new();
 
-        if interpretation.time {
+        if self.config.time {
             header.push_str(&format!("{0: <12} ", "time"))
         }
         header.push_str(&format!("{0: >5}: {1: <5} {2: <6} ", "index", "u16", "i16"));
 
-        if interpretation.hex {
+        if self.config.hex {
             header.push_str(&format!("{0: <4} ", "hex"))
         }
-        if interpretation.u32 {
+        if self.config.u32 {
             header.push_str(&format!("{0: <10} ", "u32"))
         }
-        if interpretation.i32 {
+        if self.config.i32 {
             header.push_str(&format!("{0: <11} ", "i32"))
         }
-        if interpretation.u64 {
+        if self.config.u64 {
             header.push_str(&format!("{0: <20} ", "u64"))
         }
-        if interpretation.i64 {
+        if self.config.i64 {
             header.push_str(&format!("{0: <21} ", "i64"))
         }
-        if interpretation.f32 {
+        if self.config.f32 {
             header.push_str(&format!("{0: <10} ", "f32"))
         }
-        if interpretation.ascii {
+        if self.config.ascii {
             header.push_str(&format!("{0: <5} ", "ascii"))
         }
-        if interpretation.bits {
+        if self.config.bits {
             header.push_str(&format!("{0: <8} ", "bits"))
         }
-        if interpretation.label {
+        if self.config.label {
             header.push_str("label");
         }
 
-        Self {
-            config: interpretation,
-            word_order,
-            header,
-        }
+        self.header = header;
+    }
+
+    pub fn toggle(&mut self, column: Column) {
+        self.config.toggle(column);
+        self.rebuild_header();
+    }
+
+    pub fn is_enabled(&self, column: Column) -> bool {
+        self.config.get(column)
     }
 
     pub fn header(&self) -> String {
