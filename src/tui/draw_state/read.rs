@@ -126,7 +126,12 @@ pub fn draw(
         info_spans.push(Span::styled(" (pinned)", theme.changed_style()));
     }
     info_spans.push(Span::styled(
-        format!("   {:?}   ", params.register_type),
+        format!("   {:?}", params.register_type),
+        theme.base(),
+    ));
+    info_spans.push(Span::styled("   order ", theme.dim_style()));
+    info_spans.push(Span::styled(
+        format!("{:?}   ", app.config.device.word_order),
         theme.base(),
     ));
     info_spans.push(Span::styled(read_time, theme.dim_style()));
