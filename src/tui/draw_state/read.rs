@@ -1,69 +1,58 @@
 use crate::app::App;
 use crate::state::{no_data_text, ReadParams};
-use ratatui::layout::{Alignment, Constraint, Direction, Layout};
-use ratatui::style::{Color, Modifier, Style};
-use ratatui::text::{Line, Text};
-use ratatui::widgets::{Block, Paragraph, Wrap};
+use crate::tui::theme::{spinner_frame, Theme};
+use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
+use ratatui::text::{Line, Span};
+use ratatui::widgets::{Cell, Paragraph, Row, Table, Wrap};
 use ratatui::Frame;
 
-/// Builds a panel's text, highlighting register rows whose value changed since the previous read.
-/// `changed` is aligned 1:1 with the register rows in `body`; the title/header rows are never highlighted.
-fn build_panel<'a>(
+/// Builds a bordered, header-topped table for a register panel.
+///
+/// `changed` is aligned 1:1 with `rows`. Style precedence per row is
+/// selected (the cursor bar) > changed > zebra > base.
+fn rows_to_table(
     title: &str,
-    header: &str,
-    body: &str,
+    header: String,
+    rows: &[String],
     changed: &[bool],
-    base_style: Style,
-    changed_style: Style,
-) -> Text<'a> {
-    let mut lines = vec![
-        Line::styled(title.to_string(), base_style),
-        Line::styled(header.to_string(), base_style),
-    ];
+    selected: Option<usize>,
+    theme: &Theme,
+) -> Table<'static> {
+    let table_rows: Vec<Row> = rows
+        .iter()
+        .enumerate()
+        .map(|(i, text)| {
+            let style = if selected == Some(i) {
+                theme.selected_style()
+            } else if changed.get(i).copied().unwrap_or(false) {
+                theme.changed_style()
+            } else if i % 2 == 1 {
+                theme.zebra_style()
+            } else {
+                theme.base()
+            };
+            Row::new([Cell::from(text.clone())]).style(style)
+        })
+        .collect();
 
-    for (i, row) in body.split('\n').enumerate() {
-        let style = if changed.get(i).copied().unwrap_or(false) {
-            changed_style
-        } else {
-            base_style
-        };
-        lines.push(Line::styled(row.to_string(), style));
-    }
-
-    Text::from(lines)
+    Table::new(table_rows, [Constraint::Percentage(100)])
+        .header(Row::new([Cell::from(header)]).style(theme.header_style()))
+        .block(theme.panel(title))
 }
 
 pub fn draw(
     params: &ReadParams,
     app: &App,
     frame: &mut Frame,
-    outer: Block,
-    base_style: Style,
-    device: String,
+    area: Rect,
+    theme: &Theme,
+    device: &str,
 ) {
     let is_pinned = app
         .pinned_registers
         .iter()
-        .position(|(kind, address)| kind == &params.register_type && *address == params.position)
-        .is_some();
-    let pinned_string = if is_pinned { " (Pinned)" } else { "" };
+        .any(|(kind, address)| kind == &params.register_type && *address == params.position);
 
-    let outer_area = frame.area();
-    let inner_area = outer.inner(outer_area);
-    frame.render_widget(outer, outer_area);
-
-    let read_time = if params.loading {
-        "(loading)".to_string()
-    } else {
-        params
-            .read_duration
-            .map(|d| format!("({d:.2?})"))
-            .unwrap_or_default()
-    };
-    let info = format!(
-        "Device: {} at: {}{} on {:?} {}",
-        device, params.position, pinned_string, params.register_type, read_time
-    );
     let show_ascii = app.interpreter.shows_ascii();
     let row_constraints = if show_ascii {
         vec![Constraint::Length(2), Constraint::Min(0), Constraint::Length(1)]
@@ -73,12 +62,40 @@ pub fn draw(
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints(row_constraints)
-        .split(inner_area);
+        .split(area);
 
+    // Info line: device, active address, register type, read time / spinner,
+    // and a live auto-refresh countdown.
+    let read_time = if params.loading {
+        format!("{} reading", spinner_frame(app.frame))
+    } else {
+        params
+            .read_duration
+            .map(|d| format!("({d:.2?})"))
+            .unwrap_or_default()
+    };
+    let mut info_spans = vec![
+        Span::styled("Device: ", theme.dim_style()),
+        Span::styled(device.to_string(), theme.base()),
+        Span::styled("   @ ", theme.dim_style()),
+        Span::styled(params.position.to_string(), theme.accent_style()),
+    ];
+    if is_pinned {
+        info_spans.push(Span::styled(" (pinned)", theme.changed_style()));
+    }
+    info_spans.push(Span::styled(
+        format!("   {:?}   ", params.register_type),
+        theme.base(),
+    ));
+    info_spans.push(Span::styled(read_time, theme.dim_style()));
+    if let Some(interval) = app.config.auto_update_interval_seconds {
+        if !params.loading {
+            let remaining = interval.saturating_sub(params.refresh_timer.elapsed().as_secs());
+            info_spans.push(Span::styled(format!("   ⟳ {remaining}s"), theme.ok_style()));
+        }
+    }
     frame.render_widget(
-        Paragraph::new(info)
-            .style(base_style)
-            .alignment(Alignment::Left),
+        Paragraph::new(Line::from(info_spans)).alignment(Alignment::Left),
         rows[0],
     );
 
@@ -88,40 +105,50 @@ pub fn draw(
         .split(rows[1]);
 
     let header = app.interpreter.header();
-    let changed_style = base_style.fg(Color::Yellow).add_modifier(Modifier::BOLD);
+
+    // Cursor only when we have register data (changed is non-empty on a
+    // successful read; empty for the placeholder / error states) AND the active
+    // register falls within the displayed block. Navigating the cursor off the
+    // last-read block hides the bar until the next read re-anchors it.
+    let selected = if !params.main_changed.is_empty()
+        && params.position >= params.window_start
+        && ((params.position - params.window_start) as usize) < params.main_rows.len()
+    {
+        Some((params.position - params.window_start) as usize)
+    } else {
+        None
+    };
 
     frame.render_widget(
-        Paragraph::new(build_panel(
+        rows_to_table(
             "Main data",
-            &header,
-            &params.main_data,
+            header.clone(),
+            &params.main_rows,
             &params.main_changed,
-            base_style,
-            changed_style,
-        ))
-        .alignment(Alignment::Left),
+            selected,
+            theme,
+        ),
         columns[0],
     );
 
-    let pinned_state = if params.pinned_data.is_empty() {
+    let pinned_rows: Vec<String> = if params.pinned_rows.is_empty() {
         if app.pinned_registers.is_empty() {
-            "No pinned registers.".into()
+            vec!["No pinned registers.".to_string()]
         } else {
-            no_data_text()
+            vec![no_data_text()]
         }
     } else {
-        params.pinned_data.clone()
+        params.pinned_rows.clone()
     };
     frame.render_widget(
-        Paragraph::new(build_panel(
-            "Pinned data",
-            &header,
-            &pinned_state,
+        rows_to_table(
+            "Pinned",
+            header,
+            &pinned_rows,
             &params.pinned_changed,
-            base_style,
-            changed_style,
-        ))
-        .alignment(Alignment::Left),
+            None,
+            theme,
+        ),
         columns[1],
     );
 
@@ -131,19 +158,23 @@ pub fn draw(
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
             .split(rows[2]);
 
-        let main_ascii_text = format!("ASCII: '{}'", params.ascii_string);
+        let main_ascii = Line::from(vec![
+            Span::styled("ASCII: ", theme.dim_style()),
+            Span::styled(format!("'{}'", params.ascii_string), theme.base()),
+        ]);
         frame.render_widget(
-            Paragraph::new(main_ascii_text)
-                .style(base_style)
+            Paragraph::new(main_ascii)
                 .alignment(Alignment::Left)
                 .wrap(Wrap { trim: false }),
             ascii_columns[0],
         );
 
-        let pinned_ascii_text = format!("ASCII: '{}'", params.pinned_ascii_string);
+        let pinned_ascii = Line::from(vec![
+            Span::styled("ASCII: ", theme.dim_style()),
+            Span::styled(format!("'{}'", params.pinned_ascii_string), theme.base()),
+        ]);
         frame.render_widget(
-            Paragraph::new(pinned_ascii_text)
-                .style(base_style)
+            Paragraph::new(pinned_ascii)
                 .alignment(Alignment::Left)
                 .wrap(Wrap { trim: false }),
             ascii_columns[1],

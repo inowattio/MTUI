@@ -4,8 +4,8 @@ use crate::interpretator::Interpretor;
 use crate::modbus::ModbusDevice;
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
 use crate::state::{
-    no_data_text, DumpParams, JumpParams, LabelParams, ReadParams, State, StateTransition,
-    WriteParams,
+    no_data_rows, ConnectionStatus, DumpParams, JumpParams, LabelParams, ReadParams, State,
+    StateTransition, WriteParams,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -33,7 +33,7 @@ enum BackgroundTask {
 
 #[derive(Debug)]
 struct RefreshTaskResult {
-    position: u16,
+    window_start: u16,
     register_type: RegisterType,
     main_data: Result<Vec<RegisterCellValue>, String>,
     pinned_data: Result<Vec<RegisterCellValue>, String>,
@@ -55,6 +55,10 @@ pub struct App {
     pub pinned_registers: Vec<RegisterCell>,
     pub device: ModbusDevice,
     pub interpreter: Interpretor,
+    /// Truthful device reachability, derived from the latest read result.
+    pub connection: ConnectionStatus,
+    /// Monotonic tick counter used to advance the loading spinner.
+    pub frame: u64,
     background_task: Option<BackgroundTask>,
     previous_values: BTreeMap<RegisterCell, u16>,
     labels: BTreeMap<RegisterCell, String>,
@@ -155,12 +159,15 @@ impl App {
             labels: config.labels.clone().into(),
             state: State::Read(ReadParams {
                 position: config.startup.address,
+                window_start: config.startup.address,
                 register_type: config.startup.register_type,
                 ..Default::default()
             }),
             config,
             device,
             running: true,
+            connection: ConnectionStatus::Unknown,
+            frame: 0,
             background_task: None,
             previous_values: BTreeMap::new(),
         }
@@ -203,6 +210,7 @@ impl App {
             }),
             StateTransition::Read => State::Read(ReadParams {
                 position,
+                window_start: position,
                 register_type,
                 ..Default::default()
             }),
@@ -243,6 +251,7 @@ impl App {
         let register_type = p.register_type;
         self.state = State::Read(ReadParams {
             position,
+            window_start: position,
             register_type,
             ..Default::default()
         });
@@ -276,6 +285,7 @@ impl App {
         self.config = new_config;
         self.state = State::Read(ReadParams {
             position,
+            window_start: position,
             register_type,
             ..Default::default()
         });
@@ -301,9 +311,10 @@ impl App {
 
     pub async fn do_action(&mut self) {
         let mut start_dump_run = false;
+        let mut read_now = false;
 
         match &mut self.state {
-            State::Read(p) => p.position += self.config.registers_batch,
+            State::Read(_) => read_now = true,
             State::Jump(_) => self.switch_focus_to(StateTransition::Read),
             State::Write(params) => {
                 if let Some(number) = params.value {
@@ -354,6 +365,10 @@ impl App {
 
         if start_dump_run {
             self.start_dump_batch();
+        }
+        if read_now {
+            // Enter commits a new read point at the cursor.
+            self.refresh(true).await;
         }
     }
 
@@ -443,12 +458,14 @@ impl App {
     }
 
     pub async fn tick(&mut self) {
+        self.frame = self.frame.wrapping_add(1);
         self.complete_background_task().await;
         if self.background_task.is_some() {
             return;
         }
 
-        let should_perform_dump = matches!(&self.state, State::Dump(p) if p.started);
+        // Auto-refresh re-reads the last committed window in place (no cursor
+        // move); Enter is what moves the read point. The tick also drives dumps.
         let should_refresh = matches!(
             &self.state,
             State::Read(p)
@@ -457,8 +474,8 @@ impl App {
         );
 
         if should_refresh {
-            self.refresh().await;
-        } else if should_perform_dump {
+            self.refresh(false).await;
+        } else if matches!(&self.state, State::Dump(p) if p.started) {
             self.start_dump_batch();
         }
     }
@@ -547,18 +564,25 @@ impl App {
         Ok(collection)
     }
 
-    pub async fn refresh(&mut self) {
+    pub async fn refresh(&mut self, anchor_to_cursor: bool) {
         if self.background_task.is_some() {
             return;
         }
 
-        let (position, register_type) = if let State::Read(p) = &mut self.state {
+        let (window_start, register_type) = if let State::Read(p) = &mut self.state {
             p.refresh_timer = Instant::now();
             p.loading = true;
-            (p.position, p.register_type)
+            // `anchor_to_cursor` (Enter) moves the read point to the cursor; a
+            // plain refresh (timer / refresh key) re-reads the existing window so
+            // the cursor and view stay put and only the values update.
+            if anchor_to_cursor {
+                p.window_start = p.position;
+            }
+            (p.window_start, p.register_type)
         } else {
             return;
         };
+        self.connection = ConnectionStatus::Reading;
 
         let device = self.device.clone();
         let pinned_registers = self.pinned_registers.clone();
@@ -566,7 +590,7 @@ impl App {
 
         self.background_task = Some(BackgroundTask::Refresh(tokio::spawn(async move {
             let read_start = Instant::now();
-            let main_data = Self::aquire_data_with(&device, amount, position, register_type)
+            let main_data = Self::aquire_data_with(&device, amount, window_start, register_type)
                 .await
                 .map_err(|e| e.to_string());
             let read_duration = read_start.elapsed();
@@ -575,7 +599,7 @@ impl App {
                 .map_err(|e| e.to_string());
 
             RefreshTaskResult {
-                position,
+                window_start,
                 register_type,
                 main_data,
                 pinned_data,
@@ -585,11 +609,13 @@ impl App {
     }
 
     fn apply_refresh_result(&mut self, result: RefreshTaskResult) {
-        let position = result.position;
+        // Match on the fetched window + register type, not the cursor: the data
+        // belongs to `window_start` regardless of where the cursor has since moved.
         if !matches!(
             &self.state,
             State::Read(params)
-                if params.position == position && params.register_type == result.register_type
+                if params.window_start == result.window_start
+                    && params.register_type == result.register_type
         ) {
             return;
         }
@@ -629,14 +655,17 @@ impl App {
             Err(_) => String::new(),
         };
 
-        let main_data = match result.main_data {
-            Ok(data) => self.interpreter.run(data, position, labeler).join("\n"),
-            Err(e) => e.to_string(),
+        let (main_rows, connection) = match result.main_data {
+            Ok(data) => (
+                self.interpreter.run(data, result.window_start, labeler),
+                ConnectionStatus::Connected,
+            ),
+            Err(e) => (vec![e.clone()], ConnectionStatus::Error(e)),
         };
 
-        let pinned_data = match result.pinned_data {
+        let pinned_rows = match result.pinned_data {
             Ok(data) => {
-                let mut lines = Vec::new();
+                let mut rows = Vec::new();
                 let mut skip = false;
 
                 for i in 0..data.len() {
@@ -661,34 +690,31 @@ impl App {
                     };
                     let ((_, address), _) = c;
 
-                    let line = self
-                        .interpreter
-                        .run(batch, address, |c| {
-                            let ((kind, c_address), _) = c;
-                            labels.get(&(kind, c_address)).cloned()
-                        })
-                        .join("\n");
-
-                    lines.push(line);
+                    rows.extend(self.interpreter.run(batch, address, |c| {
+                        let ((kind, c_address), _) = c;
+                        labels.get(&(kind, c_address)).cloned()
+                    }));
                 }
 
-                lines.join("\n")
+                rows
             }
-            Err(e) => e.to_string(),
+            Err(e) => vec![e.to_string()],
         };
 
         self.previous_values = new_previous;
 
         if let State::Read(params) = &mut self.state {
-            params.main_data = main_data;
-            params.pinned_data = pinned_data;
+            params.main_rows = main_rows;
+            params.pinned_rows = pinned_rows;
             params.ascii_string = ascii_string;
             params.pinned_ascii_string = pinned_ascii_string;
             params.main_changed = main_changed;
             params.pinned_changed = pinned_changed;
+            params.window_start = result.window_start;
             params.read_duration = Some(result.read_duration);
             params.loading = false;
         }
+        self.connection = connection;
     }
 
     pub async fn complete_background_task(&mut self) {
@@ -710,11 +736,13 @@ impl App {
             BackgroundTask::Refresh(handle) => match handle.await {
                 Ok(result) => self.apply_refresh_result(result),
                 Err(e) => {
+                    let message = e.to_string();
                     if let State::Read(params) = &mut self.state {
-                        params.main_data = e.to_string();
+                        params.main_rows = vec![message.clone()];
                         params.main_changed = Vec::new();
                         params.loading = false;
                     }
+                    self.connection = ConnectionStatus::Error(message);
                 }
             },
             BackgroundTask::Write(handle) => {
@@ -759,7 +787,7 @@ impl App {
     pub fn toggle_type(&mut self) {
         match &mut self.state {
             State::Read(p) => {
-                p.main_data = no_data_text();
+                p.main_rows = no_data_rows();
                 p.read_duration = None;
                 p.ascii_string = String::new();
                 p.main_changed = Vec::new();

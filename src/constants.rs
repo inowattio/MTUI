@@ -2,7 +2,10 @@ use std::time::Duration;
 
 pub const CONFIG_PATH: &str = "config.json";
 
-pub const EVENT_HANDLER_TICKRATE: Duration = Duration::from_millis(1000);
+// Drives both auto-refresh checks (gated by elapsed whole seconds, so the
+// cadence is unaffected) and the loading-spinner / countdown animation, which
+// needs sub-second redraws to look smooth.
+pub const EVENT_HANDLER_TICKRATE: Duration = Duration::from_millis(150);
 
 pub mod keybind {
     use crossterm::event::KeyCode;

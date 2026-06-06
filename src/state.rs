@@ -41,8 +41,11 @@ pub struct LabelParams {
 #[derive(Debug, PartialEq)]
 pub struct ReadParams {
     pub position: u16,
-    pub main_data: String,
-    pub pinned_data: String,
+    /// Address of the first main-panel row. The selected row is the one whose
+    /// address (`window_start + index`) equals `position`.
+    pub window_start: u16,
+    pub main_rows: Vec<String>,
+    pub pinned_rows: Vec<String>,
     pub refresh_timer: Instant,
     pub register_type: RegisterType,
     pub read_duration: Option<Duration>,
@@ -57,8 +60,9 @@ impl Default for ReadParams {
     fn default() -> Self {
         Self {
             position: 0,
-            main_data: no_data_text(),
-            pinned_data: "".to_string(),
+            window_start: 0,
+            main_rows: no_data_rows(),
+            pinned_rows: Vec::new(),
             refresh_timer: Instant::now(),
             register_type: Default::default(),
             read_duration: None,
@@ -73,6 +77,20 @@ impl Default for ReadParams {
 
 pub fn no_data_text() -> String {
     format!("No data, press '{}' to refresh.", keybind::REFRESH)
+}
+
+pub fn no_data_rows() -> Vec<String> {
+    vec![no_data_text()]
+}
+
+/// Truthful device reachability derived from the most recent read.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub enum ConnectionStatus {
+    #[default]
+    Unknown,
+    Reading,
+    Connected,
+    Error(String),
 }
 
 #[derive(Debug, PartialEq)]
