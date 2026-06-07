@@ -50,7 +50,9 @@ fn main_table(
     let mut table_rows = Vec::with_capacity(visible as usize);
 
     for i in 0..visible {
-        let addr = params.window_start.saturating_add(i);
+        let Some(addr) = params.window_start.checked_add(i) else {
+            break;
+        };
         let selected = addr == params.position;
         let zebra = i % 2 == 1;
 

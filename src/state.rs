@@ -278,11 +278,8 @@ impl Default for ReadParams {
 impl ReadParams {
     pub fn scroll_to_cursor(&mut self, rows: u16) {
         let rows = rows.max(1);
-        if self.position < self.window_start {
-            self.window_start = self.position;
-        } else if self.position >= self.window_start.saturating_add(rows) {
-            self.window_start = self.position.saturating_sub(rows - 1);
-        }
+        let max_start = u16::MAX - (rows - 1);
+        self.window_start = self.position.saturating_sub(rows / 2).min(max_start);
     }
 
     pub fn toggle_panel(&mut self) {

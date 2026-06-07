@@ -611,16 +611,16 @@ impl App {
         };
         self.previous_position = Some(from);
 
+        let rows = self.visible_rows.get();
         let p = self.read_mut();
         let type_changed = register_type != p.register_type;
         p.panel = ReadPanel::Main;
         p.position = position;
         p.register_type = register_type;
-        p.window_start = position;
+        p.scroll_to_cursor(rows);
         if type_changed {
             p.main_rows = Vec::new();
             p.main_changed = Vec::new();
-            p.data_start = position;
         }
         p.popup = None;
         self.rebuild_read_rows();
@@ -637,11 +637,12 @@ impl App {
         };
         self.previous_position = Some(current);
 
+        let rows = self.visible_rows.get();
         let p = self.read_mut();
         p.panel = ReadPanel::Main;
         p.register_type = register_type;
         p.position = position;
-        p.window_start = position;
+        p.scroll_to_cursor(rows);
         self.rebuild_read_rows();
     }
 
@@ -831,6 +832,16 @@ impl App {
             return;
         }
 
+        if matches!(self.state, State::Read(_)) {
+            let rows = self.visible_rows.get();
+            let p = self.read_mut();
+            let before = p.window_start;
+            p.scroll_to_cursor(rows);
+            if p.window_start != before {
+                self.rebuild_read_rows();
+            }
+        }
+
         let should_refresh = !self.paused
             && matches!(
                 &self.state,
@@ -922,16 +933,17 @@ impl App {
             return;
         };
 
+        let amount = self.visible_rows.get().max(1);
         let (panel, window_start, register_type) = {
             let p = self.read_mut();
             p.refresh_timer = Instant::now();
             p.loading = true;
+            p.scroll_to_cursor(amount);
             (p.panel, p.window_start, p.register_type)
         };
         self.connection = ConnectionStatus::Reading;
 
         let pinned_registers = self.pinned_registers.clone();
-        let amount = self.visible_rows.get().max(1);
 
         self.background_task = Some(BackgroundTask::Refresh(tokio::spawn(async move {
             let read_start = Instant::now();
