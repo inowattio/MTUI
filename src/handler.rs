@@ -30,7 +30,6 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
             keybind::COLUMNS
             | keybind::SLAVE
             | keybind::SWITCH_VIEW
-            | keybind::WORD_ORDER
             | keybind::TOGGLE => return Ok(()),
             _ => {}
         }
