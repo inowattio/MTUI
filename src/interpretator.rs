@@ -40,6 +40,9 @@ impl Interpretor {
         if self.config.hex {
             header.push_str(&format!("{0: <4} ", "hex"))
         }
+        if self.config.hex32 {
+            header.push_str(&format!("{0: <9} ", "hex32"))
+        }
         if self.config.f16 {
             header.push_str(&format!("{0: <10} ", "f16"))
         }
@@ -139,6 +142,9 @@ impl Interpretor {
         }
         if self.config.hex {
             row.push_str(&format!("{dash: <4} "));
+        }
+        if self.config.hex32 {
+            row.push_str(&format!("{dash: <9} "));
         }
         if self.config.f16 {
             row.push_str(&format!("{dash: <10} "));
@@ -245,6 +251,14 @@ impl Interpretor {
         let dword = self.word_order.make_dword(word, second_word);
         if self.config.hex {
             row.push_str(&format!("{byte:<04X} "))
+        }
+        if self.config.hex32 {
+            if next1.is_none() {
+                row.push_str(&format!("{: <9} ", "-"))
+            } else {
+                let s = format!("{word:08X}");
+                row.push_str(&format!("{s: <9} "))
+            }
         }
         if self.config.f16 {
             let x = f16_to_f32(byte);
