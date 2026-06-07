@@ -69,7 +69,6 @@ fn render_field(
     ])
 }
 
-/// (label, current value, is it cycled with left/right?)
 fn field_view(p: &DiscoveryParams, field: DiscoveryField) -> (&'static str, String, bool) {
     match field {
         DiscoveryField::Interface => {

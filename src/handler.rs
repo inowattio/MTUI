@@ -51,6 +51,8 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         keybind::WRITE => app.open_write(),
         keybind::LABEL => app.open_label(),
         keybind::SLAVE => app.open_slave(),
+        keybind::CLEAR_PINS => app.open_clear_pins(),
+        keybind::CLEAR_LABELS => app.open_clear_labels(),
         keybind::DISCOVERY => app.open_discovery(),
         keybind::GRAPH => app.toggle_graph(),
         keybind::CYCLE_POSITION => app.cycle_position(),
@@ -282,6 +284,12 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
                     digit_add(value, digit);
                 }
             }
+            _ => {}
+        },
+
+        PopupKind::ClearConfirm => match key_event.code {
+            keybind::ACTION => app.commit_clear(),
+            keybind::EXIT => app.close_popup(),
             _ => {}
         },
 

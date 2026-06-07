@@ -10,8 +10,6 @@ pub enum InterfaceKind {
     Network,
 }
 
-/// One editable row on the discovery form. The active set depends on the chosen
-/// interface (see `DiscoveryParams::fields`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DiscoveryField {
     Interface,
@@ -74,7 +72,6 @@ impl Default for DiscoveryParams {
 }
 
 impl DiscoveryParams {
-    /// Ordered list of the fields currently shown (interface-specific rows in the middle).
     pub fn fields(&self) -> Vec<DiscoveryField> {
         use DiscoveryField::*;
         let mut fields = vec![Interface];
@@ -168,6 +165,12 @@ pub enum ReadPanel {
     Pinned,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClearKind {
+    Pins,
+    Labels,
+}
+
 #[derive(Debug, PartialEq)]
 pub enum Popup {
     Help,
@@ -178,6 +181,7 @@ pub enum Popup {
     Columns(u16),
     Write(WriteParams),
     Slave(u16),
+    ClearConfirm(ClearKind),
     Quit,
 }
 
@@ -191,6 +195,7 @@ pub enum PopupKind {
     Columns,
     Write,
     Slave,
+    ClearConfirm,
     Quit,
 }
 
@@ -205,6 +210,7 @@ impl Popup {
             Popup::Columns(_) => PopupKind::Columns,
             Popup::Write(_) => PopupKind::Write,
             Popup::Slave(_) => PopupKind::Slave,
+            Popup::ClearConfirm(_) => PopupKind::ClearConfirm,
             Popup::Quit => PopupKind::Quit,
         }
     }

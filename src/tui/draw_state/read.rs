@@ -1,7 +1,7 @@
 use crate::app::App;
 use crate::config::Column;
 use crate::constants::keybind;
-use crate::state::{LabelParams, Popup, ReadPanel, ReadParams, SearchParams, WriteParams};
+use crate::state::{ClearKind, LabelParams, Popup, ReadPanel, ReadParams, SearchParams, WriteParams};
 use crate::tui::theme::{spinner_frame, Theme};
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::symbols;
@@ -301,6 +301,13 @@ fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup: &P
         Popup::Columns(selected) => draw_picker(frame, area, theme, app, *selected),
         Popup::Write(write) => draw_write(frame, area, theme, write),
         Popup::Slave(value) => draw_slave(frame, area, theme, *value),
+        Popup::ClearConfirm(kind) => {
+            let (title, prompt) = match kind {
+                ClearKind::Pins => ("Clear pins", format!(" Delete all {} pins?", app.pinned_registers.len())),
+                ClearKind::Labels => ("Clear labels", format!(" Delete all {} labels?", app.label_count())),
+            };
+            draw_confirm(frame, area, theme, title, &prompt, &None, (Some("esc"), None));
+        }
         Popup::Quit => draw_confirm(
             frame,
             area,
@@ -352,6 +359,8 @@ fn draw_help(frame: &mut Frame, area: Rect, theme: &Theme) {
         (format!("{DISCOVERY}"), "Discover / switch device"),
         (format!("{PIN}"), "Add / Remove pin"),
         (format!("{LABEL}"), "Label register"),
+        (format!("{CLEAR_PINS}"), "Clear all pins"),
+        (format!("{CLEAR_LABELS}"), "Clear all labels"),
         (format!("{COLUMNS}"), "Toggle columns"),
         (format!("{DUMP}"), "Dump read data"),
     ];
@@ -588,8 +597,7 @@ fn draw_write(frame: &mut Frame, area: Rect, theme: &Theme, write: &WriteParams)
 fn draw_picker(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, selected: u16) {
     let columns = Column::ALL;
     let count = columns.len();
-    // Column-major two-column grid so linear up/down reads down the left column,
-    // then the right — keeps the popup short with ~20 interpretations.
+
     let rows = count.div_ceil(2);
     const CELL: usize = 14;
 

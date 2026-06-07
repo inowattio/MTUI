@@ -6,8 +6,8 @@ use crate::modbus::{
 };
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
 use crate::state::{
-    ConnectionStatus, DiscoveryParams, DumpParams, InterfaceKind, LabelParams, Popup, PopupKind,
-    ReadPanel, ReadParams, SaveParams, SearchParams, State, WriteParams,
+    ClearKind, ConnectionStatus, DiscoveryParams, DumpParams, InterfaceKind, LabelParams, Popup,
+    PopupKind, ReadPanel, ReadParams, SaveParams, SearchParams, State, WriteParams,
 };
 use chrono::{DateTime, Local, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
@@ -282,8 +282,6 @@ impl App {
         });
     }
 
-    /// Build a full DeviceConfig from the discovery form, connect, and on success
-    /// switch to Read (applying the chosen word order to the interpreter too).
     pub async fn discovery_connect(&mut self) {
         let device_config = {
             let Some(d) = self.discovery() else {
@@ -366,6 +364,28 @@ impl App {
 
     pub fn open_columns(&mut self) {
         self.read_mut().popup = Some(Popup::Columns(0));
+    }
+
+    pub fn open_clear_pins(&mut self) {
+        self.read_mut().popup = Some(Popup::ClearConfirm(ClearKind::Pins));
+    }
+
+    pub fn open_clear_labels(&mut self) {
+        self.read_mut().popup = Some(Popup::ClearConfirm(ClearKind::Labels));
+    }
+
+    pub fn commit_clear(&mut self) {
+        let kind = match &self.read().popup {
+            Some(Popup::ClearConfirm(kind)) => *kind,
+            _ => return,
+        };
+        match kind {
+            ClearKind::Pins => self.pinned_registers.clear(),
+            ClearKind::Labels => self.labels.clear(),
+        }
+        self.dirty = true;
+        self.read_mut().popup = None;
+        self.rebuild_read_rows();
     }
 
     pub fn toggle_graph(&mut self) {
@@ -666,6 +686,10 @@ impl App {
 
     pub fn read_count(&self) -> usize {
         self.read_log.len()
+    }
+
+    pub fn label_count(&self) -> usize {
+        self.labels.len()
     }
 
     fn dump_read_log(&self) -> String {

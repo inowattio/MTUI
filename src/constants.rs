@@ -24,6 +24,8 @@ pub mod keybind {
     pub const CYCLE_POSITION: KeyCode = KeyCode::Char('b');
     pub const GRAPH: KeyCode = KeyCode::Char('g');
     pub const DISCOVERY: KeyCode = KeyCode::Char('n');
+    pub const CLEAR_PINS: KeyCode = KeyCode::Char('P');
+    pub const CLEAR_LABELS: KeyCode = KeyCode::Char('L');
     pub const NEGATOR: KeyCode = KeyCode::Char('-');
     pub const SWITCH_VIEW: KeyCode = KeyCode::Tab;
     pub const ACTION: KeyCode = KeyCode::Enter;
