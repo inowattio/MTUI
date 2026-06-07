@@ -43,6 +43,12 @@ impl Interpretor {
         if self.config.f16 {
             header.push_str(&format!("{0: <10} ", "f16"))
         }
+        if self.config.bcd {
+            header.push_str(&format!("{0: <6} ", "bcd"))
+        }
+        if self.config.bcd32 {
+            header.push_str(&format!("{0: <10} ", "bcd32"))
+        }
         if self.config.u32 {
             header.push_str(&format!("{0: <10} ", "u32"))
         }
@@ -135,6 +141,12 @@ impl Interpretor {
             row.push_str(&format!("{dash: <4} "));
         }
         if self.config.f16 {
+            row.push_str(&format!("{dash: <10} "));
+        }
+        if self.config.bcd {
+            row.push_str(&format!("{dash: <6} "));
+        }
+        if self.config.bcd32 {
             row.push_str(&format!("{dash: <10} "));
         }
         if self.config.u32 {
@@ -242,6 +254,18 @@ impl Interpretor {
             }
             row.push_str(&format!("{s: <10} "))
         }
+        if self.config.bcd {
+            let s = bcd_to_decimal(byte).map_or_else(|| "--".to_string(), |n| n.to_string());
+            row.push_str(&format!("{s: <6} "))
+        }
+        if self.config.bcd32 {
+            if next1.is_none() {
+                row.push_str(&format!("{: <10} ", "-"))
+            } else {
+                let s = bcd_to_decimal_u32(word).map_or_else(|| "--".to_string(), |n| n.to_string());
+                row.push_str(&format!("{s: <10} "))
+            }
+        }
         if self.config.u32 {
             if next1.is_none() {
                 row.push_str(&format!("{: <10} ", "-"))
@@ -325,6 +349,30 @@ fn format_ago(elapsed: chrono::Duration) -> String {
     } else {
         ">1h ago".to_string()
     }
+}
+
+fn bcd_to_decimal(value: u16) -> Option<u16> {
+    let mut result = 0u16;
+    for shift in [12, 8, 4, 0] {
+        let nibble = (value >> shift) & 0xF;
+        if nibble > 9 {
+            return None;
+        }
+        result = result * 10 + nibble;
+    }
+    Some(result)
+}
+
+fn bcd_to_decimal_u32(value: u32) -> Option<u32> {
+    let mut result = 0u32;
+    for shift in [28, 24, 20, 16, 12, 8, 4, 0] {
+        let nibble = (value >> shift) & 0xF;
+        if nibble > 9 {
+            return None;
+        }
+        result = result * 10 + nibble;
+    }
+    Some(result)
 }
 
 fn f16_to_f32(bits: u16) -> f32 {
