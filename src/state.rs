@@ -69,8 +69,6 @@ pub enum ReadPanel {
     Pinned,
 }
 
-/// A modal overlay shown over the Read screen. Only one is open at a time, held
-/// in `ReadParams.popup`.
 #[derive(Debug, PartialEq)]
 pub enum Popup {
     Help,
@@ -78,17 +76,12 @@ pub enum Popup {
     Dump(DumpParams),
     Search(SearchParams),
     Label(LabelParams),
-    /// Column picker; the value is the cursor index into `Column::ALL`.
     Columns(u16),
     Write(WriteParams),
-    /// Slave-ID entry; the value is the id being typed.
     Slave(u16),
-    /// Confirm quitting with unsaved label/pin changes.
     Quit,
 }
 
-/// Lightweight, copyable tag of which popup is open (so the handler can decide
-/// how to route a key without holding a borrow on the popup data).
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum PopupKind {
     Help,
@@ -126,11 +119,8 @@ pub struct ReadParams {
     pub panel: ReadPanel,
     pub pinned_index: u16,
     pub pinned_top: u16,
-    /// The open modal overlay, if any.
     pub popup: Option<Popup>,
-    /// When true, the main panel shows the value-over-time graph instead of the table.
     pub graph: bool,
-    /// In graph view, plot the 32-bit DWord (this + next register) instead of the 16-bit value.
     pub graph_dword: bool,
     pub main_rows: Vec<String>,
     pub pinned_rows: Vec<String>,
@@ -201,7 +191,6 @@ pub enum ConnectionStatus {
     Error(String),
 }
 
-/// The app is always on the Read screen; everything else is a `Popup` over it.
 #[derive(Debug, PartialEq)]
 pub enum State {
     Read(ReadParams),

@@ -34,7 +34,6 @@ enum BackgroundTask {
 struct RefreshTaskResult {
     window_start: u16,
     register_type: RegisterType,
-    /// `None` for a panel that wasn't read this cycle (only the active panel is).
     main_data: Option<Result<Vec<RegisterCellValue>, String>>,
     pinned_data: Option<Result<Vec<RegisterCellValue>, String>>,
     read_duration: Duration,
@@ -54,27 +53,16 @@ pub struct App {
     pub pinned_registers: Vec<RegisterCell>,
     pub device: ModbusDevice,
     pub interpreter: Interpretor,
-    /// Truthful device reachability, derived from the latest read result.
     pub connection: ConnectionStatus,
-    /// Monotonic tick counter used to advance the loading spinner.
     pub frame: u64,
-    /// When true, the auto-refresh timer is suspended so values hold still for
-    /// inspection. Manual reads (Enter / refresh key) still work.
     pub paused: bool,
-    /// Labels/pins changed since the last save (drives the quit guard).
     pub dirty: bool,
-    /// Number of register rows the Read table can show; written by the draw layer
-    /// each frame and used to size the read window to exactly the visible area.
     pub visible_rows: Cell<u16>,
-    /// The position before the last jump, so the cycle key can toggle back to it.
     previous_position: Option<RegisterCell>,
     background_task: Option<BackgroundTask>,
     previous_values: BTreeMap<RegisterCell, u16>,
-    /// Per-cell "changed on its last read" flag, persisted alongside `read_log`
-    /// so the highlight survives jumps the same way the values do.
     changed: BTreeMap<RegisterCell, bool>,
     read_log: BTreeMap<RegisterCell, (u16, DateTime<Utc>)>,
-    /// Per-cell value history (oldest first, capped) for the value-over-time graph.
     value_history: BTreeMap<RegisterCell, VecDeque<u16>>,
     last_read: Option<LastRead>,
     labels: BTreeMap<RegisterCell, String>,
@@ -210,7 +198,6 @@ impl App {
         }
     }
 
-    /// Which popup (if any) is currently open.
     pub fn popup_kind(&self) -> Option<PopupKind> {
         self.read().popup.as_ref().map(Popup::kind)
     }
@@ -245,7 +232,6 @@ impl App {
         p.graph_dword = !p.graph_dword;
     }
 
-    /// Recorded value history for a register (oldest first), for the graph.
     pub fn value_history(&self, cell: RegisterCell) -> Option<&VecDeque<u16>> {
         self.value_history.get(&cell)
     }
@@ -259,7 +245,6 @@ impl App {
             let p = self.read();
             (p.panel, p.register_type, p.position, p.pinned_index)
         };
-        // On the Pinned panel, write the selected pin rather than the Main cursor.
         let (write_type, write_pos) = if panel == ReadPanel::Pinned {
             self.pinned_registers
                 .get(pinned_index as usize)
@@ -269,7 +254,6 @@ impl App {
             (register_type, position)
         };
 
-        // Input registers are read-only in Modbus; there's nothing to write.
         if write_type == RegisterType::Input {
             return;
         }
@@ -291,7 +275,6 @@ impl App {
         self.read_mut().popup = Some(Popup::Slave(current));
     }
 
-    /// Commit the slave-ID popup: retarget the live connection (no reconnect).
     pub async fn commit_slave(&mut self) {
         let id = match &self.read().popup {
             Some(Popup::Slave(value)) => Some((*value).min(u8::MAX as u16) as u8),
@@ -305,7 +288,6 @@ impl App {
         }
     }
 
-    /// Cycle the word order (ABCD → BADC → CDAB → DCBA) and re-render in place.
     pub fn toggle_word_order(&mut self) {
         let next = self.config.device.word_order.next();
         self.config.device.word_order = next;
@@ -314,7 +296,6 @@ impl App {
         self.rebuild_read_rows();
     }
 
-    /// Quit, but guard against losing unsaved label/pin changes.
     pub fn request_quit(&mut self) {
         if self.dirty {
             self.read_mut().popup = Some(Popup::Quit);
@@ -333,7 +314,6 @@ impl App {
             let p = self.read();
             (p.panel, p.register_type, p.position, p.pinned_index)
         };
-        // On the Pinned panel, label the selected pin rather than the Main cursor.
         let (label_type, label_pos) = if panel == ReadPanel::Pinned {
             self.pinned_registers
                 .get(pinned_index as usize)
@@ -381,8 +361,6 @@ impl App {
         }
     }
 
-    /// Jump the Read view to the selected matching label and close the popup.
-    /// Jump to the selected search result. Returns whether a jump happened.
     pub fn search_commit(&mut self) -> bool {
         let target = match &self.read().popup {
             Some(Popup::Search(s)) => s.matches.get(s.selected as usize).map(|(cell, _)| *cell),
@@ -392,7 +370,6 @@ impl App {
             return false;
         };
 
-        // Remember where we jumped from so the cycle key can toggle back.
         let from = {
             let p = self.read();
             (p.register_type, p.position)
@@ -405,18 +382,12 @@ impl App {
         p.position = position;
         p.register_type = register_type;
         p.window_start = position;
-        // Keep the cached rows so the view doesn't blank on a jump; only drop
-        // them when the register type changes (they'd belong to the other type).
-        // Addresses outside the old window show placeholders until the refresh
-        // below lands.
         if type_changed {
             p.main_rows = Vec::new();
             p.main_changed = Vec::new();
             p.data_start = position;
         }
         p.popup = None;
-        // Re-render the new window from the read log so previously-read addresses
-        // show immediately (no device read needed).
         self.rebuild_read_rows();
         true
     }
@@ -460,7 +431,6 @@ impl App {
             query.clone()
         };
 
-        // If the query is a valid address, offer to jump straight to it.
         if let Ok(parsed_address) = numeric_query.trim().parse::<u32>() {
             let address = if parsed_address > u16::MAX as u32 {
                 u16::MAX
@@ -471,7 +441,6 @@ impl App {
             matches.push(((register_type, address), "jump to this address".to_string()));
         }
 
-        // Then label matches (case-insensitive substring).
         let lower = query.to_lowercase();
         matches.extend(
             self.labels
@@ -518,7 +487,6 @@ impl App {
         self.dirty = true;
 
         self.read_mut().popup = None;
-        // Re-render so the new label shows immediately in the label column.
         self.rebuild_read_rows();
     }
 
@@ -600,7 +568,6 @@ impl App {
         self.read_mut().scroll_pinned(rows, len);
     }
 
-    /// Commit the Save popup: write config to disk and show the outcome.
     pub fn commit_save(&mut self) {
         let result = self.persist_config();
         if result.starts_with("Saved") {
@@ -611,7 +578,6 @@ impl App {
         }
     }
 
-    /// Commit the Dump popup: write the read log to a file and show the outcome.
     pub fn commit_dump(&mut self) {
         let result = self.dump_read_log();
         if let Some(Popup::Dump(d)) = &mut self.read_mut().popup {
@@ -728,7 +694,6 @@ impl App {
 
         self.background_task = Some(BackgroundTask::Refresh(tokio::spawn(async move {
             let read_start = Instant::now();
-            // Only read the panel the user is actually looking at.
             let (main_data, pinned_data) = match panel {
                 ReadPanel::Main => {
                     let main = Self::aquire_data_with(&device, amount, window_start, register_type)
@@ -756,8 +721,6 @@ impl App {
     }
 
     fn apply_refresh_result(&mut self, result: RefreshTaskResult) {
-        // Drop a stale Main read if the register type changed while it was in flight.
-        // (A Pinned read carries its own per-cell types, so it isn't affected.)
         if result.main_data.is_some()
             && !matches!(
                 &self.state,
@@ -773,8 +736,8 @@ impl App {
 
         for data in [result.main_data.as_ref(), result.pinned_data.as_ref()]
             .into_iter()
-            .flatten() // Option -> &Result
-            .flatten() // &Result -> &Vec (Ok only)
+            .flatten()
+            .flatten()
         {
             for &(cell, value) in data {
                 let did_change = matches!(self.previous_values.get(&cell), Some(&prev) if prev != value);
@@ -807,7 +770,6 @@ impl App {
             });
         }
 
-        // Connection reflects whichever panel was read this cycle.
         let connection = match (&result.main_data, &result.pinned_data) {
             (Some(Ok(_)), _) | (_, Some(Ok(_))) => ConnectionStatus::Connected,
             (Some(Err(e)), _) | (_, Some(Err(e))) => ConnectionStatus::Error(e.clone()),
@@ -833,8 +795,6 @@ impl App {
             }
         }
 
-        // Re-format from the (now partially updated) cache; the unread panel just
-        // re-renders its previous data unchanged.
         if read_ok {
             self.rebuild_read_rows();
         }
@@ -906,8 +866,6 @@ impl App {
         params.data_start = window_start;
     }
 
-    /// Format the (scattered) pinned register list, grouping consecutive cells so
-    /// multi-word interpretations read across pin boundaries.
     fn format_pinned(
         interpreter: &Interpretor,
         data: &[RegisterCellValue],
@@ -949,7 +907,6 @@ impl App {
         rows
     }
 
-    /// Toggle an interpretation column at runtime and re-render the cached rows.
     pub fn toggle_column(&mut self, column: Column) {
         self.interpreter.toggle(column);
         self.rebuild_read_rows();
@@ -998,7 +955,6 @@ impl App {
         })));
     }
 
-    /// Number of editable bits for the open write popup (16 for word, 32 dword).
     fn write_bit_count(&self) -> u16 {
         match &self.read().popup {
             Some(Popup::Write(w)) => match w.write_type {
@@ -1021,7 +977,6 @@ impl App {
             };
             w.bit_cursor = w.bit_cursor.min(bits - 1);
         }
-        // The narrower width may no longer fit the current value.
         self.clamp_write_value();
     }
 

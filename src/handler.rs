@@ -13,14 +13,11 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
     let rows = app.visible_rows.get();
     let pinned_len = app.pinned_registers.len() as u16;
 
-    // A popup is modal: while one is open it consumes every key.
     if let Some(kind) = app.popup_kind() {
         handle_popup_key(kind, key_event, app).await;
         return Ok(());
     }
 
-    // In the graph view some keys don't apply (they act on the table display).
-    // `d` is repurposed to toggle the plotted value width (Word / DWord).
     if app.read().graph {
         match key_event.code {
             keybind::DUMP => {
@@ -59,7 +56,6 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
                 p.toggle_panel();
                 p.scroll_pinned(rows, pinned_len);
             }
-            // Immediately read the panel we just switched to (pause still holds).
             if !app.paused {
                 app.refresh().await;
             }
@@ -140,17 +136,12 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         }
         _ => {}
     }
-    // Re-render the (possibly moved) window from the read log so scrolling shows
-    // previously-read addresses instead of blanking to placeholders.
     app.rebuild_read_rows();
     Ok(())
 }
 
-/// Route a key to the currently-open popup. Data-only edits are done inline;
-/// actions that touch the wider app (reads, writes, saves, toggles) call methods.
 async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
     match kind {
-        // Any key dismisses Help.
         PopupKind::Help => app.close_popup(),
 
         PopupKind::Save => match key_event.code {
@@ -299,7 +290,6 @@ pub fn handle_paste(data: String, app: &mut App) {
 
     let rows = app.visible_rows.get();
 
-    // Paste into the popup that's open, otherwise the cursor address.
     match app.popup_kind() {
         Some(PopupKind::Write) => {
             if let Some(Popup::Write(w)) = &mut app.read_mut().popup {

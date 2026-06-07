@@ -96,13 +96,11 @@ fn main_table(
 }
 
 fn pinned_table(params: &ReadParams, app: &App, visible: u16, header: String, theme: &Theme) -> Table<'static> {
-    // Always one row per pinned register; rows not yet read show a placeholder.
     let pins = &app.pinned_registers;
     let len = pins.len();
     let top = (params.pinned_top as usize).min(len.saturating_sub(1));
     let end = (top + visible as usize).min(len);
 
-    // Pins can mix Holding/Input, so prefix each row with a type marker.
     let header = format!("{:<2}{header}", "T");
 
     let mut table_rows = Vec::with_capacity(end - top);
@@ -148,7 +146,6 @@ pub fn draw(
     theme: &Theme,
     device: &str,
 ) {
-    // On the Pinned panel the focus is the selected pin, not the Main cursor.
     let (info_type, info_addr) = if params.panel == ReadPanel::Pinned {
         app.pinned_registers
             .get(params.pinned_index as usize)
@@ -468,7 +465,6 @@ fn draw_label(frame: &mut Frame, area: Rect, theme: &Theme, label: &LabelParams)
 }
 
 fn draw_search(frame: &mut Frame, area: Rect, theme: &Theme, search: &SearchParams) {
-    // Cap the visible match list so the popup stays compact.
     let visible = 10usize;
     let len = search.matches.len();
     let top = (search.top as usize).min(len.saturating_sub(1));
@@ -525,7 +521,6 @@ fn draw_write(frame: &mut Frame, area: Rect, theme: &Theme, write: &WriteParams)
     };
     let raw = write.value.unwrap_or(0) as u32;
 
-    // Bit grid, MSB on the left, grouped in nibbles; the cursor bit is highlighted.
     let mut bit_spans = vec![Span::styled("Bits:  ", theme.dim_style())];
     for i in (0..bits).rev() {
         let set = (raw >> i) & 1 == 1;
@@ -634,8 +629,6 @@ fn draw_graph(
         None => format!(" Graph [{width}] "),
     };
 
-    // Word: the 16-bit value history. DWord: combine each sample with the next
-    // register's sample using the configured word order.
     let points: Vec<(f64, f64)> = if dword {
         let order = app.config.device.word_order;
         match (
@@ -677,7 +670,6 @@ fn draw_graph(
         .constraints([Constraint::Min(0), Constraint::Length(1)])
         .split(inner);
 
-    // Stats.
     let count = points.len();
     let last = points[count - 1].1;
     let prev = points[count - 2].1;
@@ -700,7 +692,6 @@ fn draw_graph(
     };
     let x_hi = (count - 1) as f64;
 
-    // Y labels: five evenly spaced ticks, bottom -> top.
     let y_labels: Vec<Span> = (0..=4)
         .map(|i| {
             let v = y_lo + (y_hi - y_lo) * (i as f64 / 4.0);
@@ -736,7 +727,6 @@ fn draw_graph(
         );
     frame.render_widget(chart, chunks[0]);
 
-    // Footer: live stats.
     let delta_style = if delta > 0.0 {
         theme.ok_style()
     } else if delta < 0.0 {

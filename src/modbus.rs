@@ -270,7 +270,6 @@ impl WordOrder {
         }
     }
 
-    /// Cycle to the next word order (wraps).
     pub fn next(self) -> Self {
         match self {
             Self::ABCD => Self::BADC,
@@ -355,7 +354,6 @@ impl ModbusDevice {
                 let context = timeout(connection, timeout_connect, Duration::default()).await??;
 
                 tokio::time::sleep(Duration::from_secs(2)).await;
-                // TODO: hmmm
 
                 context
             }
@@ -368,12 +366,10 @@ impl ModbusDevice {
         })
     }
 
-    /// Change the target slave on the live connection (no reconnect).
     pub async fn set_slave(&self, slave_id: SlaveId) {
         self.context.lock().await.set_slave(Slave(slave_id));
     }
 
-    /// Change the word order used for multi-register writes.
     pub fn set_word_order(&mut self, word_order: WordOrder) {
         self.config.word_order = word_order;
     }
