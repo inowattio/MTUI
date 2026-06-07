@@ -101,6 +101,9 @@ fn pinned_table(params: &ReadParams, app: &App, visible: u16, header: String, th
     let top = (params.pinned_top as usize).min(len.saturating_sub(1));
     let end = (top + visible as usize).min(len);
 
+    // Pins can mix Holding/Input, so prefix each row with a type marker.
+    let header = format!("{:<2}{header}", "T");
+
     let mut table_rows = Vec::with_capacity(end - top);
     for (i, &(kind, address)) in pins.iter().enumerate().take(end).skip(top) {
         let (text, changed) = if i < params.pinned_rows.len() {
@@ -112,6 +115,12 @@ fn pinned_table(params: &ReadParams, app: &App, visible: u16, header: String, th
             let label = app.label_text(kind, address);
             (app.interpreter.placeholder(address, label.as_deref()), false)
         };
+
+        let marker = match kind {
+            RegisterType::Holding => "H",
+            RegisterType::Input => "I",
+        };
+        let text = format!("{marker:<2}{text}");
 
         let style = if i as u16 == params.pinned_index {
             theme.selected_style()
@@ -138,10 +147,19 @@ pub fn draw(
     theme: &Theme,
     device: &str,
 ) {
+    // On the Pinned panel the focus is the selected pin, not the Main cursor.
+    let (info_type, info_addr) = if params.panel == ReadPanel::Pinned {
+        app.pinned_registers
+            .get(params.pinned_index as usize)
+            .copied()
+            .unwrap_or((params.register_type, params.position))
+    } else {
+        (params.register_type, params.position)
+    };
     let is_pinned = app
         .pinned_registers
         .iter()
-        .any(|(kind, address)| kind == &params.register_type && *address == params.position);
+        .any(|&(kind, address)| kind == info_type && address == info_addr);
 
     let show_ascii = app.interpreter.shows_ascii();
     let row_constraints = if show_ascii {
@@ -168,16 +186,16 @@ pub fn draw(
         Span::styled("  slave ", theme.dim_style()),
         Span::styled(app.config.device.slave_id.to_string(), theme.base()),
         Span::styled("   @ ", theme.dim_style()),
-        Span::styled(params.position.to_string(), theme.accent_style()),
+        Span::styled(info_addr.to_string(), theme.accent_style()),
     ];
     if is_pinned {
         info_spans.push(Span::styled(" (pinned)", theme.changed_style()));
     }
     info_spans.push(Span::styled(
-        format!("   {:?} ", params.register_type),
+        format!("   {info_type:?} "),
         theme.base(),
     ));
-    let (access, access_style) = match params.register_type {
+    let (access, access_style) = match info_type {
         RegisterType::Holding => ("RW", theme.ok_style()),
         RegisterType::Input => ("RO", theme.warn_style()),
     };

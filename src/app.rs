@@ -229,20 +229,32 @@ impl App {
     }
 
     pub fn open_write(&mut self) {
-        let position = self.read().position;
-        let register_type = self.read().register_type;
+        let (panel, register_type, position, pinned_index) = {
+            let p = self.read();
+            (p.panel, p.register_type, p.position, p.pinned_index)
+        };
+        // On the Pinned panel, write the selected pin rather than the Main cursor.
+        let (write_type, write_pos) = if panel == ReadPanel::Pinned {
+            self.pinned_registers
+                .get(pinned_index as usize)
+                .map(|&(kind, address)| (kind, address))
+                .unwrap_or((register_type, position))
+        } else {
+            (register_type, position)
+        };
 
-        if register_type == RegisterType::Input {
+        // Input registers are read-only in Modbus; there's nothing to write.
+        if write_type == RegisterType::Input {
             return;
         }
 
         let value = self
             .previous_values
-            .get(&(register_type, position))
+            .get(&(write_type, write_pos))
             .map(|&v| v as i64);
 
         self.read_mut().popup = Some(Popup::Write(WriteParams {
-            position,
+            position: write_pos,
             value,
             ..Default::default()
         }));
