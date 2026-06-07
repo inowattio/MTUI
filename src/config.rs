@@ -129,6 +129,7 @@ interpretation_columns! {
     U16 => u16 : "u16" = true,
     I16 => i16 : "i16" = true,
     Hex => hex : "hex" = true,
+    F16 => f16 : "f16" = false,
     U32 => u32 : "u32" = true,
     I32 => i32 : "i32" = true,
     F32 => f32 : "f32" = true,

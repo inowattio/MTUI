@@ -40,6 +40,9 @@ impl Interpretor {
         if self.config.hex {
             header.push_str(&format!("{0: <4} ", "hex"))
         }
+        if self.config.f16 {
+            header.push_str(&format!("{0: <10} ", "f16"))
+        }
         if self.config.u32 {
             header.push_str(&format!("{0: <10} ", "u32"))
         }
@@ -130,6 +133,9 @@ impl Interpretor {
         }
         if self.config.hex {
             row.push_str(&format!("{dash: <4} "));
+        }
+        if self.config.f16 {
+            row.push_str(&format!("{dash: <10} "));
         }
         if self.config.u32 {
             row.push_str(&format!("{dash: <10} "));
@@ -228,6 +234,14 @@ impl Interpretor {
         if self.config.hex {
             row.push_str(&format!("{byte:<04X} "))
         }
+        if self.config.f16 {
+            let x = f16_to_f32(byte);
+            let mut s = format!("{x}");
+            if s.len() > 10 {
+                s = format!("{x:.3e}");
+            }
+            row.push_str(&format!("{s: <10} "))
+        }
         if self.config.u32 {
             if next1.is_none() {
                 row.push_str(&format!("{: <10} ", "-"))
@@ -262,10 +276,8 @@ impl Interpretor {
             } else {
                 let x = f32::from_bits(word);
                 let mut s = format!("{x}");
-
-                let max_len = 10;
-                if s.len() > max_len {
-                    s.truncate(max_len);
+                if s.len() > 10 {
+                    s = format!("{x:.3e}");
                 }
                 row.push_str(&format!("{s: <10} "))
             }
@@ -311,4 +323,24 @@ fn format_ago(elapsed: chrono::Duration) -> String {
     } else {
         ">1h ago".to_string()
     }
+}
+
+fn f16_to_f32(bits: u16) -> f32 {
+    let sign = if bits & 0x8000 != 0 { -1.0 } else { 1.0 };
+    let exponent = (bits >> 10) & 0x1f;
+    let mantissa = bits & 0x3ff;
+
+    let magnitude = match exponent {
+        0 => (mantissa as f32) * 2f32.powi(-24),
+        0x1f => {
+            if mantissa == 0 {
+                f32::INFINITY
+            } else {
+                f32::NAN
+            }
+        }
+        _ => (1.0 + (mantissa as f32) / 1024.0) * 2f32.powi(exponent as i32 - 15),
+    };
+
+    sign * magnitude
 }
