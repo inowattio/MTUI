@@ -933,23 +933,29 @@ impl App {
             return;
         };
 
-        let amount = self.visible_rows.get().max(1);
-        let (panel, window_start, register_type) = {
+        // The display window follows the viewport (cursor stays centered), but
+        // the read fetches exactly `registers_batch` registers centered on the
+        // cursor so the focused register always has fresh data.
+        let amount = self.config.registers_batch.max(1);
+        let visible = self.visible_rows.get().max(1);
+        let (panel, window_start, position, register_type) = {
             let p = self.read_mut();
             p.refresh_timer = Instant::now();
             p.loading = true;
-            p.scroll_to_cursor(amount);
-            (p.panel, p.window_start, p.register_type)
+            p.scroll_to_cursor(visible);
+            (p.panel, p.window_start, p.position, p.register_type)
         };
+        let max_read_start = u16::MAX - (amount - 1);
+        let read_start = position.saturating_sub(amount / 2).min(max_read_start);
         self.connection = ConnectionStatus::Reading;
 
         let pinned_registers = self.pinned_registers.clone();
 
         self.background_task = Some(BackgroundTask::Refresh(tokio::spawn(async move {
-            let read_start = Instant::now();
+            let read_began = Instant::now();
             let (main_data, pinned_data) = match panel {
                 ReadPanel::Main => {
-                    let main = Self::aquire_data_with(&device, amount, window_start, register_type)
+                    let main = Self::aquire_data_with(&device, amount, read_start, register_type)
                         .await
                         .map_err(|e| e.to_string());
                     (Some(main), None)
@@ -961,7 +967,7 @@ impl App {
                     (None, Some(pinned))
                 }
             };
-            let read_duration = read_start.elapsed();
+            let read_duration = read_began.elapsed();
 
             RefreshTaskResult {
                 window_start,
