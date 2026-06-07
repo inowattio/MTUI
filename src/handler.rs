@@ -470,11 +470,15 @@ fn handle_settings_key(key_event: KeyEvent, app: &mut App) {
         }
         KeyCode::Left => app.settings_adjust(field, -1),
         KeyCode::Right => app.settings_adjust(field, 1),
-        keybind::PAUSE if field == SettingsField::ReadOnly => app.settings_adjust(field, 1),
+        keybind::PAUSE
+            if matches!(field, SettingsField::ReadOnly | SettingsField::LogWrites) =>
+        {
+            app.settings_adjust(field, 1)
+        }
         keybind::ACTION => match field {
             SettingsField::ClearPins => app.clear_pins(),
             SettingsField::ClearLabels => app.clear_labels(),
-            SettingsField::ReadOnly => app.settings_adjust(field, 1),
+            SettingsField::ReadOnly | SettingsField::LogWrites => app.settings_adjust(field, 1),
             SettingsField::Save => app.settings_save(),
             _ => {}
         },

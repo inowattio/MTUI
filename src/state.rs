@@ -166,17 +166,19 @@ pub enum SettingsField {
     AutoUpdate,
     HistoryCap,
     ReadOnly,
+    LogWrites,
     ClearPins,
     ClearLabels,
     Save,
 }
 
 impl SettingsField {
-    pub const ALL: [SettingsField; 7] = [
+    pub const ALL: [SettingsField; 8] = [
         SettingsField::RegistersBatch,
         SettingsField::AutoUpdate,
         SettingsField::HistoryCap,
         SettingsField::ReadOnly,
+        SettingsField::LogWrites,
         SettingsField::ClearPins,
         SettingsField::ClearLabels,
         SettingsField::Save,

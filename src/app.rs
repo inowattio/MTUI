@@ -29,7 +29,21 @@ pub type AppResult<T> = Result<T, Box<dyn error::Error>>;
 #[derive(Debug)]
 enum BackgroundTask {
     Refresh(JoinHandle<RefreshTaskResult>),
-    Write(JoinHandle<String>),
+    Write(JoinHandle<WriteOutcome>),
+}
+
+#[derive(Debug)]
+struct WriteOutcome {
+    ok: bool,
+    message: String,
+}
+
+#[derive(Debug)]
+struct PendingWrite {
+    address: u16,
+    write_type: WriteType,
+    previous: Option<u64>,
+    new_value: u64,
 }
 
 #[derive(Debug)]
@@ -61,6 +75,7 @@ pub struct App {
     read_log: BTreeMap<RegisterCell, (u16, DateTime<Utc>)>,
     value_history: BTreeMap<RegisterCell, VecDeque<u16>>,
     labels: BTreeMap<RegisterCell, String>,
+    pending_write: Option<PendingWrite>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -183,6 +198,7 @@ impl App {
             changed: BTreeMap::new(),
             read_log: BTreeMap::new(),
             value_history: BTreeMap::new(),
+            pending_write: None,
         }
     }
 
@@ -381,6 +397,52 @@ impl App {
         self.dirty = true;
     }
 
+    pub fn writes_log_path(&self) -> std::path::PathBuf {
+        let kind = match &self.config.device.interface {
+            Interface::Mock => "mock",
+            Interface::Wired(_) => "wired",
+            Interface::Network(_) => "network",
+        };
+        let name = format!("writes_{kind}_{}.txt", self.config.device.slave_id);
+        std::env::temp_dir().join(name)
+    }
+
+    pub fn writes_log_path_string(&self) -> String {
+        self.writes_log_path().display().to_string()
+    }
+
+    fn log_write(&self) {
+        use std::io::Write as _;
+
+        if !self.config.log_writes {
+            return;
+        }
+        let Some(pending) = self.pending_write.as_ref() else {
+            return;
+        };
+
+        let timestamp = Local::now().format("%Y-%m-%dT%H:%M:%S%.3f");
+        let kind = match pending.write_type {
+            WriteType::Word => "word",
+            WriteType::DWord => "dword",
+        };
+        let previous = pending
+            .previous
+            .map_or_else(|| "?".to_string(), |v| v.to_string());
+        let line = format!(
+            "{timestamp} | {} | {kind} | {previous} | {}\n",
+            pending.address, pending.new_value
+        );
+
+        if let Ok(mut file) = fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(self.writes_log_path())
+        {
+            let _ = file.write_all(line.as_bytes());
+        }
+    }
+
     pub fn settings_adjust(&mut self, field: SettingsField, delta: i64) {
         match field {
             SettingsField::RegistersBatch => {
@@ -397,6 +459,7 @@ impl App {
                 self.config.graph_history_cap = n as u16;
             }
             SettingsField::ReadOnly => self.config.read_only = !self.config.read_only,
+            SettingsField::LogWrites => self.config.log_writes = !self.config.log_writes,
             SettingsField::ClearPins | SettingsField::ClearLabels | SettingsField::Save => return,
         }
         self.dirty = true;
@@ -1180,14 +1243,47 @@ impl App {
         let Some(device) = self.device.clone() else {
             return;
         };
+
+        let cell = (RegisterType::Holding, position);
+        let (previous, new_value) = match write_type {
+            WriteType::Word => (
+                self.previous_values.get(&cell).map(|&v| v as u64),
+                (number as u16) as u64,
+            ),
+            WriteType::DWord => {
+                let order = self.config.device.word_order;
+                let lo = self.previous_values.get(&cell);
+                let hi = self
+                    .previous_values
+                    .get(&(RegisterType::Holding, position.wrapping_add(1)));
+                let previous = match (lo, hi) {
+                    (Some(&a), Some(&b)) => Some(order.make_word(a, b) as u64),
+                    _ => None,
+                };
+                (previous, (number as u32) as u64)
+            }
+        };
+        self.pending_write = Some(PendingWrite {
+            address: position,
+            write_type,
+            previous,
+            new_value,
+        });
+
         self.background_task = Some(BackgroundTask::Write(tokio::spawn(async move {
             let result = match write_type {
                 WriteType::Word => device.write_register(position, number as u16).await,
                 WriteType::DWord => device.write_register_word(position, number as i32).await,
             };
             match result {
-                Ok(()) => "Write OK".to_string(),
-                Err(e) => format!("Write failed: {e}"),
+                Ok(()) => WriteOutcome {
+                    ok: true,
+                    message: "Write OK".to_string(),
+                },
+                Err(e) => WriteOutcome {
+                    ok: false,
+                    message: format!("Write failed: {e}"),
+                },
             }
         })));
     }
@@ -1277,9 +1373,16 @@ impl App {
                 }
             },
             BackgroundTask::Write(handle) => {
-                let result = handle.await.unwrap_or_else(|e| e.to_string());
+                let outcome = handle.await.unwrap_or_else(|e| WriteOutcome {
+                    ok: false,
+                    message: e.to_string(),
+                });
+                if outcome.ok {
+                    self.log_write();
+                }
+                self.pending_write = None;
                 if let Some(Popup::Write(w)) = &mut self.read_mut().popup {
-                    w.result = Some(result);
+                    w.result = Some(outcome.message);
                 }
             }
         }

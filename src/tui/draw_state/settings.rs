@@ -23,6 +23,12 @@ pub fn draw(params: &SettingsParams, app: &App, frame: &mut Frame, area: Rect, t
             lines.push(Line::default());
         }
         lines.push(render_field(app, field, i as u16 == params.selected, theme));
+        if field == SettingsField::LogWrites {
+            lines.push(Line::from(Span::styled(
+                format!("  {:<24} {}", "", app.writes_log_path_string()),
+                theme.dim_style(),
+            )));
+        }
     }
 
     if let Some(status) = &params.status {
@@ -84,6 +90,11 @@ fn field_view(app: &App, field: SettingsField) -> (&'static str, String, Kind) {
         SettingsField::ReadOnly => (
             "Read-only",
             if device.read_only { "on" } else { "off" }.to_string(),
+            Kind::Toggle,
+        ),
+        SettingsField::LogWrites => (
+            "Log writes to file",
+            if device.log_writes { "on" } else { "off" }.to_string(),
             Kind::Toggle,
         ),
         SettingsField::ClearPins => (
