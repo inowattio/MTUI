@@ -938,8 +938,6 @@ impl App {
         self.config.pinned_registers = pinned;
 
         self.config.interpretations = self.interpreter.config();
-        // Capture the live cursor as the new startup point, but only when a read
-        // view exists (Save is reachable from the Settings state, where it does not).
         if let State::Read(p) = &self.state {
             self.config.startup = Startup {
                 address: p.position,
@@ -1144,9 +1142,6 @@ impl App {
             return;
         };
 
-        // The display window follows the viewport (cursor stays centered), but
-        // the read fetches exactly `registers_batch` registers centered on the
-        // cursor so the focused register always has fresh data.
         let amount = self.config.registers_batch.max(1);
         let visible = self.visible_rows.get().max(1);
         let (panel, window_start, position, register_type) = {
@@ -1160,8 +1155,6 @@ impl App {
         let read_start = position.saturating_sub(amount / 2).min(max_read_start);
         self.connection = ConnectionStatus::Reading;
 
-        // On the pinned panel, refresh only the `registers_batch` pins centered
-        // on the pinned cursor (like the main window) instead of every pin.
         let pinned_registers = {
             let pins = &self.pinned_registers;
             let total = pins.len();

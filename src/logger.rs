@@ -4,8 +4,6 @@ use std::collections::VecDeque;
 use std::sync::Mutex;
 
 const CAP: usize = 1000;
-/// Only keep records from this crate; dependencies (tokio-modbus, etc.) are
-/// dropped so they can't flood the in-app log view.
 const TARGET_PREFIX: &str = "modbus_viewer";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
