@@ -176,7 +176,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
                             if *i == 0 {
                                 *i = count - 1;
                             } else {
-                                *i = *i - 1;
+                                *i -= 1;
                             }
                         }
                     }
@@ -188,7 +188,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
                             if *i == count - 1 {
                                 *i = 0;
                             } else {
-                                *i = *i + 1;
+                                *i += 1;
                             }
                         }
                     }

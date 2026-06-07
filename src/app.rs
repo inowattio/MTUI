@@ -322,6 +322,7 @@ impl App {
                 self.device = Some(device);
                 self.interpreter.set_word_order(device_config.word_order);
                 self.config.device = device_config;
+                self.dirty = true;
                 self.previous_values.clear();
                 self.changed.clear();
                 self.read_log.clear();
