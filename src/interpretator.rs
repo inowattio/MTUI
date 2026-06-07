@@ -164,90 +164,99 @@ impl Interpretor {
         read_at: DateTime<Local>,
         label: impl Fn(RegisterCellValue) -> Option<String>,
     ) -> Vec<String> {
-        let mut lines = Vec::with_capacity(data.len());
+        (0..data.len())
+            .map(|i| {
+                let value = data[i].1;
+                let next1 = data.get(i + 1).map(|(_, v)| *v).unwrap_or(0);
+                let next2 = data.get(i + 2).map(|(_, v)| *v).unwrap_or(0);
+                let next3 = data.get(i + 3).map(|(_, v)| *v).unwrap_or(0);
+                let lbl = label(data[i]);
+                self.format_row(index + i as u16, value, [next1, next2, next3], read_at, lbl.as_deref())
+            })
+            .collect()
+    }
 
-        for i in 0..data.len() {
-            let current = data[i];
-            let byte = current.1;
-            let next_byte_1st = data.get(i + 1).map(|(_, v)| *v).unwrap_or(0);
-            let next_byte_2nd = data.get(i + 2).map(|(_, v)| *v).unwrap_or(0);
-            let next_byte_3rd = data.get(i + 3).map(|(_, v)| *v).unwrap_or(0);
-
-            let mut row = String::new();
-            if self.config.time {
-                let formatted = read_at.format("%H:%M:%S:%3f").to_string();
-                row.push_str(&format!("{formatted: <12} "));
-            }
-            let address = index + i as u16;
-            if self.config.index_hex {
-                row.push_str(&format!("{address: >5X}: "));
-            } else {
-                row.push_str(&format!("{address: >5}: "));
-            }
-            if self.config.u16 {
-                row.push_str(&format!("{byte: <5} "))
-            }
-            if self.config.i16 {
-                row.push_str(&format!("{: <6} ", byte as i16))
-            }
-
-            let word = self.word_order.make_word(byte, next_byte_1st);
-            let second_word = self.word_order.make_word(next_byte_2nd, next_byte_3rd);
-            let dword = self.word_order.make_dword(word, second_word);
-            if self.config.hex {
-                row.push_str(&format!("{byte:<04X} "))
-            }
-            if self.config.u32 {
-                row.push_str(&format!("{word: <10} "))
-            }
-            if self.config.i32 {
-                row.push_str(&format!("{: <11} ", word as i32))
-            }
-            if self.config.u64 {
-                row.push_str(&format!("{dword: <20} "))
-            }
-            if self.config.i64 {
-                row.push_str(&format!("{: <21} ", dword as i64))
-            }
-            if self.config.f32 {
-                let x = f32::from_bits(word);
-                let mut s = format!("{x}");
-
-                let max_len = 10;
-                if s.len() > max_len {
-                    s.truncate(max_len);
-                }
-                row.push_str(&format!("{s: <10} "))
-            }
-            if self.config.ascii {
-                let s: String = [byte, next_byte_1st]
-                    .iter()
-                    .flat_map(|n| [(n >> 8) as u8, (n & 0xFF) as u8])
-                    .map(|b| {
-                        let c = b as char;
-                        if c.is_ascii_graphic() {
-                            c
-                        } else {
-                            '·'
-                        }
-                    })
-                    .collect();
-
-                row.push_str(&format!("{s:<5} "))
-            }
-            if self.config.bits {
-                row.push_str(&format!("{byte:<08b} "))
-            }
-
-            if self.config.label {
-                if let Some(t) = label(current) {
-                    row.push_str(&t);
-                }
-            }
-
-            lines.push(row);
+    pub fn format_row(
+        &self,
+        address: u16,
+        value: u16,
+        next: [u16; 3],
+        read_at: DateTime<Local>,
+        label: Option<&str>,
+    ) -> String {
+        let byte = value;
+        let [next1, next2, next3] = next;
+        let mut row = String::new();
+        if self.config.time {
+            let formatted = read_at.format("%H:%M:%S:%3f").to_string();
+            row.push_str(&format!("{formatted: <12} "));
+        }
+        if self.config.index_hex {
+            row.push_str(&format!("{address: >5X}: "));
+        } else {
+            row.push_str(&format!("{address: >5}: "));
+        }
+        if self.config.u16 {
+            row.push_str(&format!("{byte: <5} "))
+        }
+        if self.config.i16 {
+            row.push_str(&format!("{: <6} ", byte as i16))
         }
 
-        lines
+        let word = self.word_order.make_word(byte, next1);
+        let second_word = self.word_order.make_word(next2, next3);
+        let dword = self.word_order.make_dword(word, second_word);
+        if self.config.hex {
+            row.push_str(&format!("{byte:<04X} "))
+        }
+        if self.config.u32 {
+            row.push_str(&format!("{word: <10} "))
+        }
+        if self.config.i32 {
+            row.push_str(&format!("{: <11} ", word as i32))
+        }
+        if self.config.u64 {
+            row.push_str(&format!("{dword: <20} "))
+        }
+        if self.config.i64 {
+            row.push_str(&format!("{: <21} ", dword as i64))
+        }
+        if self.config.f32 {
+            let x = f32::from_bits(word);
+            let mut s = format!("{x}");
+
+            let max_len = 10;
+            if s.len() > max_len {
+                s.truncate(max_len);
+            }
+            row.push_str(&format!("{s: <10} "))
+        }
+        if self.config.ascii {
+            let s: String = [byte, next1]
+                .iter()
+                .flat_map(|n| [(n >> 8) as u8, (n & 0xFF) as u8])
+                .map(|b| {
+                    let c = b as char;
+                    if c.is_ascii_graphic() {
+                        c
+                    } else {
+                        '·'
+                    }
+                })
+                .collect();
+
+            row.push_str(&format!("{s:<5} "))
+        }
+        if self.config.bits {
+            row.push_str(&format!("{byte:<08b} "))
+        }
+
+        if self.config.label {
+            if let Some(t) = label {
+                row.push_str(t);
+            }
+        }
+
+        row
     }
 }

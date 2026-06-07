@@ -122,6 +122,9 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         }
         _ => {}
     }
+    // Re-render the (possibly moved) window from the read log so scrolling shows
+    // previously-read addresses instead of blanking to placeholders.
+    app.rebuild_read_rows();
     Ok(())
 }
 
@@ -219,7 +222,9 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
 
         PopupKind::Search => match key_event.code {
             keybind::EXIT => app.close_popup(),
-            keybind::ACTION => app.search_commit(),
+            keybind::ACTION => {
+                let _ = app.search_commit();
+            },
             keybind::MOVE_UP => app.search_move(false),
             keybind::MOVE_DOWN => app.search_move(true),
             KeyCode::Backspace => app.search_backspace(),
