@@ -7,7 +7,6 @@ use ratatui::Frame;
 
 pub fn draw(params: &DiscoveryParams, frame: &mut Frame, area: Rect, theme: &Theme) {
     let mut lines: Vec<Line> = vec![
-        Line::from(Span::styled("Configure connection:", theme.dim_style())),
         Line::default(),
     ];
 
