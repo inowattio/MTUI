@@ -332,8 +332,16 @@ pub enum ConnectionStatus {
 }
 
 #[derive(Debug, PartialEq)]
+pub struct LogViewParams {
+    pub top: u16,
+    pub follow: bool,
+    pub previous: ReadParams,
+}
+
+#[derive(Debug, PartialEq)]
 pub enum State {
     Read(ReadParams),
     Discovery(DiscoveryParams),
     Settings(SettingsParams),
+    Logs(LogViewParams),
 }

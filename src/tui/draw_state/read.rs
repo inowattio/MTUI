@@ -350,6 +350,7 @@ fn draw_help(frame: &mut Frame, area: Rect, theme: &Theme) {
         (format!("{DUMP}"), "Dump read data"),
         (format!("{SETTINGS}"), "Settings"),
         (format!("{LOGS}"), "View write log"),
+        (format!("{APP_LOGS}"), "App log"),
     ];
 
     const COLS: usize = 3;

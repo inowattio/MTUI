@@ -6,9 +6,9 @@ use crate::modbus::{
 };
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
 use crate::state::{
-    ConnectionStatus, DiscoveryParams, DumpParams, InterfaceKind, LabelParams, LogsParams, Popup,
-    PopupKind, ReadPanel, ReadParams, SearchParams, SettingsField, SettingsParams, State,
-    WriteParams,
+    ConnectionStatus, DiscoveryParams, DumpParams, InterfaceKind, LabelParams, LogViewParams,
+    LogsParams, Popup, PopupKind, ReadPanel, ReadParams, SearchParams, SettingsField,
+    SettingsParams, State, WriteParams,
 };
 use chrono::{DateTime, Local, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
@@ -47,6 +47,20 @@ struct PendingWrite {
     new_value: u64,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LogLevel {
+    Info,
+    Warn,
+    Error,
+}
+
+#[derive(Clone, Debug)]
+pub struct LogEntry {
+    pub time: DateTime<Local>,
+    pub level: LogLevel,
+    pub message: String,
+}
+
 #[derive(Debug)]
 struct RefreshTaskResult {
     window_start: u16,
@@ -77,6 +91,8 @@ pub struct App {
     value_history: BTreeMap<RegisterCell, VecDeque<u16>>,
     labels: BTreeMap<RegisterCell, String>,
     pending_write: Option<PendingWrite>,
+    logs: VecDeque<LogEntry>,
+    logged_connection: ConnectionStatus,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -180,7 +196,7 @@ impl App {
             State::Discovery(Self::discovery_params(&config))
         };
 
-        Self {
+        let mut app = Self {
             interpreter: Interpretor::new(config.interpretations.clone(), config.device.word_order),
             pinned_registers: config.pinned_registers.clone().into(),
             labels: config.labels.clone().into(),
@@ -200,7 +216,18 @@ impl App {
             read_log: BTreeMap::new(),
             value_history: BTreeMap::new(),
             pending_write: None,
+            logs: VecDeque::new(),
+            logged_connection: ConnectionStatus::Unknown,
+        };
+
+        if app.device.is_some() {
+            let device = app.config.display_device();
+            app.log_info(format!("Started \u{b7} {device}"));
+        } else {
+            app.log_warn("Started \u{b7} no device, opened Discovery");
         }
+
+        app
     }
 
     pub fn read(&self) -> &ReadParams {
@@ -301,6 +328,7 @@ impl App {
             return;
         }
         self.connection = ConnectionStatus::Unknown;
+        self.logged_connection = ConnectionStatus::Unknown;
         self.state = State::Read(ReadParams {
             position: self.config.startup.address,
             window_start: self.config.startup.address,
@@ -353,6 +381,9 @@ impl App {
                 self.read_log.clear();
                 self.value_history.clear();
                 self.connection = ConnectionStatus::Unknown;
+                self.logged_connection = ConnectionStatus::Unknown;
+                let device = self.config.display_device();
+                self.log_info(format!("Switched device \u{b7} {device}"));
                 self.state = State::Read(ReadParams {
                     position: self.config.startup.address,
                     window_start: self.config.startup.address,
@@ -361,6 +392,7 @@ impl App {
                 });
             }
             Err(e) => {
+                self.log_error(format!("Connect failed \u{b7} {e}"));
                 if let Some(d) = self.discovery_mut() {
                     d.status = Some(format!("Connection failed: {e}"));
                 }
@@ -389,13 +421,17 @@ impl App {
     }
 
     pub fn clear_pins(&mut self) {
+        let n = self.pinned_registers.len();
         self.pinned_registers.clear();
         self.dirty = true;
+        self.log_info(format!("Cleared {n} pinned register(s)"));
     }
 
     pub fn clear_labels(&mut self) {
+        let n = self.labels.len();
         self.labels.clear();
         self.dirty = true;
+        self.log_info(format!("Cleared {n} label(s)"));
     }
 
     pub fn writes_log_path(&self) -> std::path::PathBuf {
@@ -433,6 +469,77 @@ impl App {
     pub fn logs_scroll(&mut self, delta: i32) {
         if let Some(Popup::Logs(l)) = &mut self.read_mut().popup {
             l.scroll(delta);
+        }
+    }
+
+    fn push_log(&mut self, level: LogLevel, message: impl Into<String>) {
+        const LOG_CAP: usize = 1000;
+        self.logs.push_back(LogEntry {
+            time: Local::now(),
+            level,
+            message: message.into(),
+        });
+        while self.logs.len() > LOG_CAP {
+            self.logs.pop_front();
+        }
+    }
+
+    fn log_info(&mut self, message: impl Into<String>) {
+        self.push_log(LogLevel::Info, message);
+    }
+
+    fn log_warn(&mut self, message: impl Into<String>) {
+        self.push_log(LogLevel::Warn, message);
+    }
+
+    fn log_error(&mut self, message: impl Into<String>) {
+        self.push_log(LogLevel::Error, message);
+    }
+
+    pub fn activity_logs(&self) -> &VecDeque<LogEntry> {
+        &self.logs
+    }
+
+    pub fn log_view(&self) -> Option<&LogViewParams> {
+        match &self.state {
+            State::Logs(l) => Some(l),
+            _ => None,
+        }
+    }
+
+    pub fn log_view_mut(&mut self) -> Option<&mut LogViewParams> {
+        match &mut self.state {
+            State::Logs(l) => Some(l),
+            _ => None,
+        }
+    }
+
+    pub fn open_log_view(&mut self) {
+        let previous = std::mem::take(self.read_mut());
+        self.state = State::Logs(LogViewParams {
+            top: 0,
+            follow: true,
+            previous,
+        });
+        self.log_view_scroll(i32::MAX);
+    }
+
+    pub fn close_log_view(&mut self) {
+        let previous = match &mut self.state {
+            State::Logs(l) => std::mem::take(&mut l.previous),
+            _ => return,
+        };
+        self.state = State::Read(previous);
+    }
+
+    pub fn log_view_scroll(&mut self, delta: i32) {
+        let len = self.logs.len() as i32;
+        let visible = self.visible_rows.get().max(1) as i32;
+        let max_top = (len - visible).max(0);
+        if let Some(l) = self.log_view_mut() {
+            let new = (l.top as i32 + delta).clamp(0, max_top);
+            l.top = new as u16;
+            l.follow = new >= max_top;
         }
     }
 
@@ -606,6 +713,7 @@ impl App {
                 device.set_slave(id).await;
             }
             self.config.device.slave_id = id;
+            self.log_info(format!("Slave id set to {id}"));
             self.read_mut().popup = None;
             self.refresh().await;
         }
@@ -829,10 +937,14 @@ impl App {
         self.config.pinned_registers = pinned;
 
         self.config.interpretations = self.interpreter.config();
-        self.config.startup = Startup {
-            address: self.read().position,
-            register_type: self.read().register_type,
-        };
+        // Capture the live cursor as the new startup point, but only when a read
+        // view exists (Save is reachable from the Settings state, where it does not).
+        if let State::Read(p) = &self.state {
+            self.config.startup = Startup {
+                address: p.position,
+                register_type: p.register_type,
+            };
+        }
 
         match save_config(&self.config) {
             Ok(()) => format!("Saved to {CONFIG_PATH}"),
@@ -902,6 +1014,9 @@ impl App {
         let result = self.persist_config();
         if result.starts_with("Saved") {
             self.dirty = false;
+            self.log_info("Configuration saved");
+        } else {
+            self.log_error(format!("Save failed \u{b7} {result}"));
         }
         if let Some(s) = self.settings_mut() {
             s.status = Some(result);
@@ -949,6 +1064,11 @@ impl App {
 
     pub fn toggle_pause(&mut self) {
         self.paused = !self.paused;
+        self.log_info(if self.paused {
+            "Auto-refresh paused"
+        } else {
+            "Auto-refresh resumed"
+        });
     }
 
     pub fn quit(&mut self) {
@@ -1139,6 +1259,15 @@ impl App {
 
         if read_ok {
             self.rebuild_read_rows();
+        }
+
+        if connection != self.logged_connection {
+            match &connection {
+                ConnectionStatus::Connected => self.log_info("Connected"),
+                ConnectionStatus::Error(e) => self.log_error(format!("Read error \u{b7} {e}")),
+                _ => {}
+            }
+            self.logged_connection = connection.clone();
         }
         self.connection = connection;
     }
@@ -1388,12 +1517,13 @@ impl App {
                 Ok(result) => self.apply_refresh_result(result),
                 Err(e) => {
                     let message = e.to_string();
-                    {
+                    if self.is_reading() {
                         let params = self.read_mut();
                         params.main_rows = vec![message.clone()];
                         params.main_changed = Vec::new();
                         params.loading = false;
                     }
+                    self.log_error(format!("Read task failed \u{b7} {message}"));
                     self.connection = ConnectionStatus::Error(message);
                 }
             },
@@ -1402,12 +1532,27 @@ impl App {
                     ok: false,
                     message: e.to_string(),
                 });
-                if outcome.ok {
-                    self.log_write();
+                if let Some(pending) = &self.pending_write {
+                    let detail = format!(
+                        "@{} = {} (was {})",
+                        pending.address,
+                        pending.new_value,
+                        pending
+                            .previous
+                            .map_or_else(|| "?".to_string(), |v| v.to_string()),
+                    );
+                    if outcome.ok {
+                        self.log_write();
+                        self.log_info(format!("Write {detail}"));
+                    } else {
+                        self.log_error(format!("Write failed \u{b7} {detail} \u{b7} {}", outcome.message));
+                    }
                 }
                 self.pending_write = None;
-                if let Some(Popup::Write(w)) = &mut self.read_mut().popup {
-                    w.result = Some(outcome.message);
+                if self.is_reading() {
+                    if let Some(Popup::Write(w)) = &mut self.read_mut().popup {
+                        w.result = Some(outcome.message);
+                    }
                 }
             }
         }

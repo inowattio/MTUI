@@ -27,6 +27,11 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         return Ok(());
     }
 
+    if app.log_view().is_some() {
+        handle_logs_view_key(key_event, app);
+        return Ok(());
+    }
+
     if let Some(kind) = app.popup_kind() {
         handle_popup_key(kind, key_event, app).await;
         return Ok(());
@@ -62,6 +67,7 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         keybind::CYCLE_POSITION => app.cycle_position(),
         keybind::COPY_ADDRESS => app.copy_address(),
         keybind::LOGS => app.open_logs(),
+        keybind::APP_LOGS => app.open_log_view(),
         keybind::WORD_ORDER => app.toggle_word_order(),
         keybind::REFRESH => app.refresh().await,
         keybind::TOGGLE => app.toggle_type(),
@@ -458,6 +464,17 @@ fn cycle_field(d: &mut DiscoveryParams, field: DiscoveryField, forward: bool) {
         DiscoveryField::Parity => d.parity = cycle(&PARITY, d.parity, forward),
         DiscoveryField::StopBits => d.stop_bits = cycle(&STOP_BITS, d.stop_bits, forward),
         DiscoveryField::WordOrder => d.word_order = cycle(&ORDERS, d.word_order, forward),
+        _ => {}
+    }
+}
+
+fn handle_logs_view_key(key_event: KeyEvent, app: &mut App) {
+    match key_event.code {
+        keybind::EXIT | keybind::APP_LOGS => app.close_log_view(),
+        keybind::MOVE_UP => app.log_view_scroll(-1),
+        keybind::MOVE_DOWN => app.log_view_scroll(1),
+        keybind::PAGE_UP => app.log_view_scroll(-(app.visible_rows.get() as i32)),
+        keybind::PAGE_DOWN => app.log_view_scroll(app.visible_rows.get() as i32),
         _ => {}
     }
 }
