@@ -1,18 +1,38 @@
 use crate::app::WriteType;
-use crate::modbus::{DataBits, Parity, StopBits};
+use crate::modbus::{DataBits, Parity, StopBits, WordOrder};
 use crate::register::{RegisterCell, RegisterType};
 use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DiscoveryStage {
-    Select,
+pub enum InterfaceKind {
+    Mock,
     Wired,
     Network,
 }
 
+/// One editable row on the discovery form. The active set depends on the chosen
+/// interface (see `DiscoveryParams::fields`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DiscoveryField {
+    Interface,
+    Port,
+    Baud,
+    DataBits,
+    Parity,
+    StopBits,
+    Ip,
+    NetPort,
+    SlaveId,
+    ConnectTimeout,
+    CommandTimeout,
+    BetweenCommands,
+    WordOrder,
+    Connect,
+}
+
 #[derive(Debug, PartialEq)]
 pub struct DiscoveryParams {
-    pub stage: DiscoveryStage,
+    pub interface: InterfaceKind,
     pub selected: u16,
     pub ports: Vec<String>,
     pub port_index: u16,
@@ -21,14 +41,19 @@ pub struct DiscoveryParams {
     pub parity: Parity,
     pub stop_bits: StopBits,
     pub ip: String,
-    pub port: String,
+    pub net_port: u16,
+    pub slave_id: u16,
+    pub connect_timeout_ms: u64,
+    pub command_timeout_ms: u64,
+    pub between_commands_ms: u64,
+    pub word_order: WordOrder,
     pub status: Option<String>,
 }
 
 impl Default for DiscoveryParams {
     fn default() -> Self {
         Self {
-            stage: DiscoveryStage::Select,
+            interface: InterfaceKind::Mock,
             selected: 0,
             ports: Vec::new(),
             port_index: 0,
@@ -37,9 +62,42 @@ impl Default for DiscoveryParams {
             parity: Parity::None,
             stop_bits: StopBits::One,
             ip: "127.0.0.1".to_string(),
-            port: "502".to_string(),
+            net_port: 502,
+            slave_id: 1,
+            connect_timeout_ms: 1000,
+            command_timeout_ms: 2000,
+            between_commands_ms: 3,
+            word_order: WordOrder::default(),
             status: None,
         }
+    }
+}
+
+impl DiscoveryParams {
+    /// Ordered list of the fields currently shown (interface-specific rows in the middle).
+    pub fn fields(&self) -> Vec<DiscoveryField> {
+        use DiscoveryField::*;
+        let mut fields = vec![Interface];
+        match self.interface {
+            InterfaceKind::Mock => {}
+            InterfaceKind::Wired => fields.extend([Port, Baud, DataBits, Parity, StopBits]),
+            InterfaceKind::Network => fields.extend([Ip, NetPort]),
+        }
+        fields.extend([
+            SlaveId,
+            ConnectTimeout,
+            CommandTimeout,
+            BetweenCommands,
+            WordOrder,
+            Connect,
+        ]);
+        fields
+    }
+
+    pub fn current_field(&self) -> DiscoveryField {
+        let fields = self.fields();
+        let i = (self.selected as usize).min(fields.len() - 1);
+        fields[i]
     }
 }
 

@@ -6,8 +6,10 @@ use crate::num_ops::{
     digit_remove_option, increment_by, increment_option_by, negate_opt_option, set_option_to_zero,
     set_to_zero,
 };
-use crate::modbus::{DataBits, Parity, StopBits};
-use crate::state::{DiscoveryParams, DiscoveryStage, Popup, PopupKind, ReadPanel};
+use crate::modbus::{DataBits, Parity, StopBits, WordOrder};
+use crate::state::{
+    DiscoveryField, DiscoveryParams, InterfaceKind, Popup, PopupKind, ReadPanel,
+};
 use crossterm::event::{KeyCode, KeyEvent};
 
 pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
@@ -328,100 +330,76 @@ pub fn handle_paste(data: String, app: &mut App) {
 }
 
 async fn handle_discovery_key(key_event: KeyEvent, app: &mut App) {
-    let Some(stage) = app.discovery().map(|d| d.stage) else {
-        return;
+    let (field, count) = match app.discovery() {
+        Some(d) => (d.current_field(), d.fields().len() as u16),
+        None => return,
     };
-    match stage {
-        DiscoveryStage::Select => match key_event.code {
-            keybind::EXIT => {
-                if app.device.is_some() {
-                    app.return_to_read();
-                } else {
-                    app.quit();
-                }
-            }
-            keybind::MOVE_UP => {
-                if let Some(d) = app.discovery_mut() {
-                    d.selected = if d.selected == 0 { 2 } else { d.selected - 1 };
-                }
-            }
-            keybind::MOVE_DOWN => {
-                if let Some(d) = app.discovery_mut() {
-                    d.selected = (d.selected + 1) % 3;
-                }
-            }
-            keybind::ACTION => match app.discovery().map(|d| d.selected).unwrap_or(0) {
-                0 => app.discovery_connect().await,
-                1 => app.discovery_to_wired(),
-                2 => app.discovery_to_network(),
-                _ => {}
-            },
-            _ => {}
-        },
 
-        DiscoveryStage::Wired => match key_event.code {
-            keybind::EXIT => app.discovery_back(),
-            keybind::ACTION => app.discovery_connect().await,
-            keybind::MOVE_UP => {
-                if let Some(d) = app.discovery_mut() {
-                    d.selected = if d.selected == 0 { 5 } else { d.selected - 1 };
-                }
+    match key_event.code {
+        keybind::EXIT => {
+            if app.device.is_some() {
+                app.return_to_read();
+            } else {
+                app.quit();
             }
-            keybind::MOVE_DOWN => {
-                if let Some(d) = app.discovery_mut() {
-                    d.selected = (d.selected + 1) % 6;
-                }
+        }
+        keybind::ACTION => app.discovery_connect().await,
+        keybind::MOVE_UP => {
+            if let Some(d) = app.discovery_mut() {
+                d.selected = if d.selected == 0 { count - 1 } else { d.selected - 1 };
             }
-            KeyCode::Left => {
-                if let Some(d) = app.discovery_mut() {
-                    cycle_wired_field(d, false);
-                }
+        }
+        keybind::MOVE_DOWN => {
+            if let Some(d) = app.discovery_mut() {
+                d.selected = (d.selected + 1) % count;
             }
-            KeyCode::Right => {
-                if let Some(d) = app.discovery_mut() {
-                    cycle_wired_field(d, true);
-                }
+        }
+        KeyCode::Left => {
+            if let Some(d) = app.discovery_mut() {
+                cycle_field(d, field, false);
             }
-            _ => {}
-        },
-
-        DiscoveryStage::Network => match key_event.code {
-            keybind::EXIT => app.discovery_back(),
-            keybind::ACTION => app.discovery_connect().await,
-            keybind::MOVE_UP => {
-                if let Some(d) = app.discovery_mut() {
-                    d.selected = if d.selected == 0 { 2 } else { d.selected - 1 };
-                }
+        }
+        KeyCode::Right => {
+            if let Some(d) = app.discovery_mut() {
+                cycle_field(d, field, true);
             }
-            keybind::MOVE_DOWN => {
-                if let Some(d) = app.discovery_mut() {
-                    d.selected = (d.selected + 1) % 3;
-                }
-            }
-            KeyCode::Backspace => {
-                if let Some(d) = app.discovery_mut() {
-                    match d.selected {
-                        0 => {
-                            d.ip.pop();
-                        }
-                        1 => {
-                            d.port.pop();
-                        }
-                        _ => {}
+        }
+        KeyCode::Backspace => {
+            if let Some(d) = app.discovery_mut() {
+                match field {
+                    DiscoveryField::Ip => {
+                        d.ip.pop();
                     }
+                    DiscoveryField::NetPort => digit_remove(&mut d.net_port),
+                    DiscoveryField::SlaveId => digit_remove(&mut d.slave_id),
+                    DiscoveryField::ConnectTimeout => digit_remove(&mut d.connect_timeout_ms),
+                    DiscoveryField::CommandTimeout => digit_remove(&mut d.command_timeout_ms),
+                    DiscoveryField::BetweenCommands => digit_remove(&mut d.between_commands_ms),
+                    _ => {}
                 }
             }
-            KeyCode::Char(c) => {
-                if let Some(d) = app.discovery_mut() {
-                    match d.selected {
-                        0 if c.is_ascii_digit() || c == '.' => d.ip.push(c),
-                        1 if c.is_ascii_digit() => d.port.push(c),
-                        _ => {}
+        }
+        KeyCode::Char(c) => {
+            if let Some(d) = app.discovery_mut() {
+                let digit = c as u8 - b'0';
+                match field {
+                    DiscoveryField::Ip if c.is_ascii_digit() || c == '.' => d.ip.push(c),
+                    DiscoveryField::NetPort if c.is_ascii_digit() => digit_add(&mut d.net_port, digit),
+                    DiscoveryField::SlaveId if c.is_ascii_digit() => digit_add(&mut d.slave_id, digit),
+                    DiscoveryField::ConnectTimeout if c.is_ascii_digit() => {
+                        digit_add(&mut d.connect_timeout_ms, digit)
                     }
+                    DiscoveryField::CommandTimeout if c.is_ascii_digit() => {
+                        digit_add(&mut d.command_timeout_ms, digit)
+                    }
+                    DiscoveryField::BetweenCommands if c.is_ascii_digit() => {
+                        digit_add(&mut d.between_commands_ms, digit)
+                    }
+                    _ => {}
                 }
             }
-            _ => {}
-        },
+        }
+        _ => {}
     }
 }
 
@@ -435,15 +413,23 @@ fn cycle<T: Copy + PartialEq>(items: &[T], current: T, forward: bool) -> T {
     items[j]
 }
 
-fn cycle_wired_field(d: &mut DiscoveryParams, forward: bool) {
+fn cycle_field(d: &mut DiscoveryParams, field: DiscoveryField, forward: bool) {
+    const KINDS: [InterfaceKind; 3] =
+        [InterfaceKind::Mock, InterfaceKind::Wired, InterfaceKind::Network];
     const BAUDS: [u32; 6] = [9600, 19200, 38400, 57600, 115200, 230400];
     const DATA_BITS: [DataBits; 4] =
         [DataBits::Five, DataBits::Six, DataBits::Seven, DataBits::Eight];
     const PARITY: [Parity; 3] = [Parity::None, Parity::Odd, Parity::Even];
     const STOP_BITS: [StopBits; 2] = [StopBits::One, StopBits::Two];
+    const ORDERS: [WordOrder; 4] =
+        [WordOrder::ABCD, WordOrder::BADC, WordOrder::CDAB, WordOrder::DCBA];
 
-    match d.selected {
-        0 => {
+    match field {
+        DiscoveryField::Interface => {
+            d.interface = cycle(&KINDS, d.interface, forward);
+            d.selected = 0;
+        }
+        DiscoveryField::Port => {
             if !d.ports.is_empty() {
                 let n = d.ports.len() as u16;
                 d.port_index = if forward {
@@ -453,10 +439,11 @@ fn cycle_wired_field(d: &mut DiscoveryParams, forward: bool) {
                 };
             }
         }
-        1 => d.baud_rate = cycle(&BAUDS, d.baud_rate, forward),
-        2 => d.data_bits = cycle(&DATA_BITS, d.data_bits, forward),
-        3 => d.parity = cycle(&PARITY, d.parity, forward),
-        4 => d.stop_bits = cycle(&STOP_BITS, d.stop_bits, forward),
+        DiscoveryField::Baud => d.baud_rate = cycle(&BAUDS, d.baud_rate, forward),
+        DiscoveryField::DataBits => d.data_bits = cycle(&DATA_BITS, d.data_bits, forward),
+        DiscoveryField::Parity => d.parity = cycle(&PARITY, d.parity, forward),
+        DiscoveryField::StopBits => d.stop_bits = cycle(&STOP_BITS, d.stop_bits, forward),
+        DiscoveryField::WordOrder => d.word_order = cycle(&ORDERS, d.word_order, forward),
         _ => {}
     }
 }

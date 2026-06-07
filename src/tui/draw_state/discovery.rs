@@ -1,4 +1,4 @@
-use crate::state::{DiscoveryParams, DiscoveryStage};
+use crate::state::{DiscoveryField, DiscoveryParams, InterfaceKind};
 use crate::tui::theme::Theme;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
@@ -6,56 +6,23 @@ use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
 pub fn draw(params: &DiscoveryParams, frame: &mut Frame, area: Rect, theme: &Theme) {
-    let mut lines: Vec<Line> = Vec::new();
+    let mut lines: Vec<Line> = vec![
+        Line::from(Span::styled("Configure connection:", theme.dim_style())),
+        Line::default(),
+    ];
 
-    match params.stage {
-        DiscoveryStage::Select => {
-            lines.push(heading("Select an interface:", theme));
+    for (i, &field) in params.fields().iter().enumerate() {
+        if field == DiscoveryField::Connect {
             lines.push(Line::default());
-            for (i, name) in ["Mock", "Wired (serial)", "Network (TCP)"].iter().enumerate() {
-                lines.push(choice(i as u16 == params.selected, name, theme));
-            }
-            lines.push(Line::default());
-            lines.push(hint(
-                " \u{2191}/\u{2193} select \u{b7} enter choose \u{b7} esc back/quit",
-                theme,
-            ));
         }
-        DiscoveryStage::Wired => {
-            let port = params
-                .ports
-                .get(params.port_index as usize)
-                .map(String::as_str)
-                .unwrap_or("(no ports found)");
-            lines.push(heading("Wired (serial):", theme));
-            lines.push(Line::default());
-            lines.push(field(params.selected == 0, "Port", port, theme));
-            lines.push(field(params.selected == 1, "Baud", &params.baud_rate.to_string(), theme));
-            lines.push(field(params.selected == 2, "Data bits", &format!("{:?}", params.data_bits), theme));
-            lines.push(field(params.selected == 3, "Parity", &format!("{:?}", params.parity), theme));
-            lines.push(field(params.selected == 4, "Stop bits", &format!("{:?}", params.stop_bits), theme));
-            lines.push(Line::default());
-            lines.push(choice(params.selected == 5, "Connect", theme));
-            lines.push(Line::default());
-            lines.push(hint(
-                " \u{2191}/\u{2193} field \u{b7} \u{2190}/\u{2192} change \u{b7} enter connect \u{b7} esc back",
-                theme,
-            ));
-        }
-        DiscoveryStage::Network => {
-            lines.push(heading("Network (TCP):", theme));
-            lines.push(Line::default());
-            lines.push(text_field(params.selected == 0, "IP", &params.ip, theme));
-            lines.push(text_field(params.selected == 1, "Port", &params.port, theme));
-            lines.push(Line::default());
-            lines.push(choice(params.selected == 2, "Connect", theme));
-            lines.push(Line::default());
-            lines.push(hint(
-                " \u{2191}/\u{2193} field \u{b7} type to edit \u{b7} enter connect \u{b7} esc back",
-                theme,
-            ));
-        }
+        lines.push(render_field(params, field, i as u16 == params.selected, theme));
     }
+
+    lines.push(Line::default());
+    lines.push(Line::from(Span::styled(
+        " \u{2191}/\u{2193} field \u{b7} \u{2190}/\u{2192} change \u{b7} type to edit \u{b7} enter connect \u{b7} esc back",
+        theme.dim_style(),
+    )));
 
     if let Some(status) = &params.status {
         lines.push(Line::default());
@@ -70,43 +37,74 @@ pub fn draw(params: &DiscoveryParams, frame: &mut Frame, area: Rect, theme: &The
     frame.render_widget(Paragraph::new(lines), area);
 }
 
-fn heading(text: &str, theme: &Theme) -> Line<'static> {
-    Line::from(Span::styled(text.to_string(), theme.dim_style()))
-}
-
-fn hint(text: &str, theme: &Theme) -> Line<'static> {
-    Line::from(Span::styled(text.to_string(), theme.dim_style()))
-}
-
-fn choice(selected: bool, name: &str, theme: &Theme) -> Line<'static> {
+fn render_field(
+    params: &DiscoveryParams,
+    field: DiscoveryField,
+    selected: bool,
+    theme: &Theme,
+) -> Line<'static> {
     let marker = if selected { "> " } else { "  " };
     let style = if selected {
         theme.selected_style()
     } else {
         theme.base()
     };
-    Line::from(Span::styled(format!("{marker}{name}"), style))
-}
 
-fn field(selected: bool, name: &str, value: &str, theme: &Theme) -> Line<'static> {
-    let marker = if selected { "> " } else { "  " };
-    let value_style = if selected {
-        theme.selected_style()
+    if field == DiscoveryField::Connect {
+        return Line::from(Span::styled(format!("{marker}[ Connect ]"), style));
+    }
+
+    let (name, value, cyclable) = field_view(params, field);
+    let value_text = if selected && cyclable {
+        format!("\u{2039} {value} \u{203a}")
+    } else if selected {
+        format!("{value}_")
     } else {
-        theme.base()
+        value
     };
+
     Line::from(vec![
-        Span::styled(format!("{marker}{name:<10} "), theme.dim_style()),
-        Span::styled(value.to_string(), value_style),
+        Span::styled(format!("{marker}{name:<22} "), theme.dim_style()),
+        Span::styled(value_text, style),
     ])
 }
 
-fn text_field(selected: bool, name: &str, value: &str, theme: &Theme) -> Line<'static> {
-    let marker = if selected { "> " } else { "  " };
-    let cursor = if selected { "_" } else { "" };
-    Line::from(vec![
-        Span::styled(format!("{marker}{name:<10} "), theme.dim_style()),
-        Span::styled(value.to_string(), theme.accent_style()),
-        Span::styled(cursor.to_string(), theme.accent_style()),
-    ])
+/// (label, current value, is it cycled with left/right?)
+fn field_view(p: &DiscoveryParams, field: DiscoveryField) -> (&'static str, String, bool) {
+    match field {
+        DiscoveryField::Interface => {
+            let v = match p.interface {
+                InterfaceKind::Mock => "Mock",
+                InterfaceKind::Wired => "Wired (serial)",
+                InterfaceKind::Network => "Network (TCP)",
+            };
+            ("Interface", v.to_string(), true)
+        }
+        DiscoveryField::Port => (
+            "Port",
+            p.ports
+                .get(p.port_index as usize)
+                .cloned()
+                .unwrap_or_else(|| "(no ports found)".to_string()),
+            true,
+        ),
+        DiscoveryField::Baud => ("Baud", p.baud_rate.to_string(), true),
+        DiscoveryField::DataBits => ("Data bits", format!("{:?}", p.data_bits), true),
+        DiscoveryField::Parity => ("Parity", format!("{:?}", p.parity), true),
+        DiscoveryField::StopBits => ("Stop bits", format!("{:?}", p.stop_bits), true),
+        DiscoveryField::Ip => ("IP", p.ip.clone(), false),
+        DiscoveryField::NetPort => ("Port", p.net_port.to_string(), false),
+        DiscoveryField::SlaveId => ("Slave ID", p.slave_id.to_string(), false),
+        DiscoveryField::ConnectTimeout => {
+            ("Connect timeout (ms)", p.connect_timeout_ms.to_string(), false)
+        }
+        DiscoveryField::CommandTimeout => {
+            ("Command timeout (ms)", p.command_timeout_ms.to_string(), false)
+        }
+        DiscoveryField::BetweenCommands => {
+            ("Between commands (ms)", p.between_commands_ms.to_string(), false)
+        }
+        DiscoveryField::WordOrder => ("Word order", format!("{:?}", p.word_order), true),
+        DiscoveryField::Connect => ("Connect", String::new(), false),
+    }
 }

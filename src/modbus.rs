@@ -283,11 +283,10 @@ impl WordOrder {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct DeviceConfig {
     pub interface: Interface,
-    pub slave_id: tokio_modbus::slave::SlaveId,
+    pub slave_id: SlaveId,
     pub timeout_connect_ms: u64,
     pub timeout_command_ms: u64,
     pub time_between_commands_ms: u64,
-    #[serde(default)]
     pub word_order: WordOrder,
 }
 

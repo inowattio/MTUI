@@ -1,10 +1,12 @@
 use crate::config::{Column, Config, Label, Labels, Startup};
 use crate::constants::CONFIG_PATH;
 use crate::interpretator::Interpretor;
-use crate::modbus::{Interface, InterfaceNetworkParams, InterfaceWiredParams, ModbusDevice};
+use crate::modbus::{
+    DeviceConfig, Interface, InterfaceNetworkParams, InterfaceWiredParams, ModbusDevice,
+};
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
 use crate::state::{
-    ConnectionStatus, DiscoveryParams, DiscoveryStage, DumpParams, LabelParams, Popup, PopupKind,
+    ConnectionStatus, DiscoveryParams, DumpParams, InterfaceKind, LabelParams, Popup, PopupKind,
     ReadPanel, ReadParams, SaveParams, SearchParams, State, WriteParams,
 };
 use chrono::{DateTime, Local, SecondsFormat, Utc};
@@ -231,13 +233,19 @@ impl App {
     }
 
     fn discovery_params(config: &Config) -> DiscoveryParams {
+        let device = &config.device;
         let mut d = DiscoveryParams {
             ports: Self::available_ports(),
+            slave_id: device.slave_id as u16,
+            connect_timeout_ms: device.timeout_connect_ms,
+            command_timeout_ms: device.timeout_command_ms,
+            between_commands_ms: device.time_between_commands_ms,
+            word_order: device.word_order,
             ..Default::default()
         };
-        match &config.device.interface {
+        match &device.interface {
             Interface::Wired(w) => {
-                d.selected = 1;
+                d.interface = InterfaceKind::Wired;
                 d.baud_rate = w.baud_rate;
                 d.data_bits = w.data_bits;
                 d.parity = w.parity;
@@ -247,11 +255,11 @@ impl App {
                 }
             }
             Interface::Network(n) => {
-                d.selected = 2;
+                d.interface = InterfaceKind::Network;
                 d.ip = n.ip.clone();
-                d.port = n.port.to_string();
+                d.net_port = n.port;
             }
-            Interface::Mock => d.selected = 0,
+            Interface::Mock => d.interface = InterfaceKind::Mock,
         }
         d
     }
@@ -274,50 +282,34 @@ impl App {
         });
     }
 
-    pub fn discovery_to_wired(&mut self) {
-        let ports = Self::available_ports();
-        if let Some(d) = self.discovery_mut() {
-            d.port_index = d.port_index.min(ports.len().saturating_sub(1) as u16);
-            d.ports = ports;
-            d.stage = DiscoveryStage::Wired;
-            d.selected = 0;
-            d.status = None;
-        }
-    }
-
-    pub fn discovery_to_network(&mut self) {
-        if let Some(d) = self.discovery_mut() {
-            d.stage = DiscoveryStage::Network;
-            d.selected = 0;
-            d.status = None;
-        }
-    }
-
-    pub fn discovery_back(&mut self) {
-        if let Some(d) = self.discovery_mut() {
-            d.stage = DiscoveryStage::Select;
-            d.status = None;
-        }
-    }
-
+    /// Build a full DeviceConfig from the discovery form, connect, and on success
+    /// switch to Read (applying the chosen word order to the interpreter too).
     pub async fn discovery_connect(&mut self) {
-        let interface = {
+        let device_config = {
             let Some(d) = self.discovery() else {
                 return;
             };
-            match d.stage {
-                DiscoveryStage::Select => Interface::Mock,
-                DiscoveryStage::Wired => Interface::Wired(InterfaceWiredParams {
+            let interface = match d.interface {
+                InterfaceKind::Mock => Interface::Mock,
+                InterfaceKind::Wired => Interface::Wired(InterfaceWiredParams {
                     path: d.ports.get(d.port_index as usize).cloned().unwrap_or_default(),
                     baud_rate: d.baud_rate,
                     data_bits: d.data_bits,
                     parity: d.parity,
                     stop_bits: d.stop_bits,
                 }),
-                DiscoveryStage::Network => Interface::Network(InterfaceNetworkParams {
+                InterfaceKind::Network => Interface::Network(InterfaceNetworkParams {
                     ip: d.ip.clone(),
-                    port: d.port.parse().unwrap_or(502),
+                    port: d.net_port,
                 }),
+            };
+            DeviceConfig {
+                interface,
+                slave_id: d.slave_id.min(u8::MAX as u16) as u8,
+                timeout_connect_ms: d.connect_timeout_ms,
+                timeout_command_ms: d.command_timeout_ms,
+                time_between_commands_ms: d.between_commands_ms,
+                word_order: d.word_order,
             }
         };
 
@@ -325,12 +317,10 @@ impl App {
             d.status = Some("Connecting\u{2026}".to_string());
         }
 
-        let mut device_config = self.config.device.clone();
-        device_config.interface = interface;
-
         match ModbusDevice::new(&device_config).await {
             Ok(device) => {
                 self.device = Some(device);
+                self.interpreter.set_word_order(device_config.word_order);
                 self.config.device = device_config;
                 self.previous_values.clear();
                 self.changed.clear();
