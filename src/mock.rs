@@ -2,11 +2,12 @@ use async_trait::async_trait;
 use std::collections::HashMap;
 use tokio_modbus::client::{Client, Context};
 use tokio_modbus::slave::SlaveContext;
-use tokio_modbus::{Request, Response, Slave};
+use tokio_modbus::{Request, Response, Slave, SlaveId};
 
 #[derive(Debug, Default)]
 pub struct MockContext {
     holdings: HashMap<u16, u16>,
+    slave_id: SlaveId,
 }
 
 impl MockContext {
@@ -18,7 +19,9 @@ impl MockContext {
 
 #[async_trait]
 impl SlaveContext for MockContext {
-    fn set_slave(&mut self, _: Slave) {}
+    fn set_slave(&mut self, slave: Slave) {
+        self.slave_id = slave.0
+    }
 }
 
 #[async_trait]
@@ -37,7 +40,7 @@ impl Client for MockContext {
             }
 
             Request::ReadInputRegisters(a, b) => Ok(Ok(Response::ReadInputRegisters(vec![
-                    a + b + 1;
+                    a + b + self.slave_id as u16;
                     b as usize
                 ]))),
 
