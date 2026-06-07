@@ -6,8 +6,8 @@ use crate::modbus::{
 };
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
 use crate::state::{
-    ClearKind, ConnectionStatus, DiscoveryParams, DumpParams, InterfaceKind, LabelParams, Popup,
-    PopupKind, ReadPanel, ReadParams, SaveParams, SearchParams, State, WriteParams,
+    ConnectionStatus, DiscoveryParams, DumpParams, InterfaceKind, LabelParams, Popup, PopupKind,
+    ReadPanel, ReadParams, SearchParams, SettingsField, SettingsParams, State, WriteParams,
 };
 use chrono::{DateTime, Local, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
@@ -197,29 +197,47 @@ impl App {
     pub fn read(&self) -> &ReadParams {
         match &self.state {
             State::Read(p) => p,
-            State::Discovery(_) => unreachable!("read() called in Discovery state"),
+            _ => unreachable!("read() called outside the Read state"),
         }
     }
 
     pub fn read_mut(&mut self) -> &mut ReadParams {
         match &mut self.state {
             State::Read(p) => p,
-            State::Discovery(_) => unreachable!("read_mut() called in Discovery state"),
+            _ => unreachable!("read_mut() called outside the Read state"),
         }
     }
 
     pub fn discovery(&self) -> Option<&DiscoveryParams> {
         match &self.state {
             State::Discovery(d) => Some(d),
-            State::Read(_) => None,
+            _ => None,
         }
     }
 
     pub fn discovery_mut(&mut self) -> Option<&mut DiscoveryParams> {
         match &mut self.state {
             State::Discovery(d) => Some(d),
-            State::Read(_) => None,
+            _ => None,
         }
+    }
+
+    pub fn settings(&self) -> Option<&SettingsParams> {
+        match &self.state {
+            State::Settings(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub fn settings_mut(&mut self) -> Option<&mut SettingsParams> {
+        match &mut self.state {
+            State::Settings(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub fn open_settings(&mut self) {
+        self.state = State::Settings(SettingsParams::default());
     }
 
     fn is_reading(&self) -> bool {
@@ -354,10 +372,6 @@ impl App {
         self.read_mut().popup = Some(Popup::Help);
     }
 
-    pub fn open_save(&mut self) {
-        self.read_mut().popup = Some(Popup::Save(SaveParams::default()));
-    }
-
     pub fn open_dump(&mut self) {
         self.read_mut().popup = Some(Popup::Dump(DumpParams::default()));
     }
@@ -366,26 +380,62 @@ impl App {
         self.read_mut().popup = Some(Popup::Columns(0));
     }
 
-    pub fn open_clear_pins(&mut self) {
-        self.read_mut().popup = Some(Popup::ClearConfirm(ClearKind::Pins));
+    pub fn clear_pins(&mut self) {
+        self.pinned_registers.clear();
+        self.dirty = true;
     }
 
-    pub fn open_clear_labels(&mut self) {
-        self.read_mut().popup = Some(Popup::ClearConfirm(ClearKind::Labels));
+    pub fn clear_labels(&mut self) {
+        self.labels.clear();
+        self.dirty = true;
     }
 
-    pub fn commit_clear(&mut self) {
-        let kind = match &self.read().popup {
-            Some(Popup::ClearConfirm(kind)) => *kind,
-            _ => return,
-        };
-        match kind {
-            ClearKind::Pins => self.pinned_registers.clear(),
-            ClearKind::Labels => self.labels.clear(),
+    pub fn settings_adjust(&mut self, field: SettingsField, delta: i64) {
+        match field {
+            SettingsField::RegistersBatch => {
+                let n = (self.config.registers_batch as i64 + delta).clamp(1, u16::MAX as i64);
+                self.config.registers_batch = n as u16;
+            }
+            SettingsField::AutoUpdate => {
+                let cur = self.config.auto_update_interval_seconds.unwrap_or(0) as i64;
+                let n = (cur + delta).max(0);
+                self.config.auto_update_interval_seconds = (n > 0).then_some(n as u64);
+            }
+            SettingsField::ReadOnly => self.config.read_only = !self.config.read_only,
+            SettingsField::ClearPins | SettingsField::ClearLabels | SettingsField::Save => return,
         }
         self.dirty = true;
-        self.read_mut().popup = None;
-        self.rebuild_read_rows();
+    }
+
+    pub fn settings_digit(&mut self, field: SettingsField, digit: u8) {
+        let digit = digit as u64;
+        match field {
+            SettingsField::RegistersBatch => {
+                let n = (self.config.registers_batch as u64).saturating_mul(10) + digit;
+                self.config.registers_batch = n.min(u16::MAX as u64) as u16;
+            }
+            SettingsField::AutoUpdate => {
+                let cur = self.config.auto_update_interval_seconds.unwrap_or(0);
+                let n = cur.saturating_mul(10) + digit;
+                self.config.auto_update_interval_seconds = (n > 0).then_some(n);
+            }
+            _ => return,
+        }
+        self.dirty = true;
+    }
+
+    pub fn settings_backspace(&mut self, field: SettingsField) {
+        match field {
+            SettingsField::RegistersBatch => {
+                self.config.registers_batch = (self.config.registers_batch / 10).max(1);
+            }
+            SettingsField::AutoUpdate => {
+                let n = self.config.auto_update_interval_seconds.unwrap_or(0) / 10;
+                self.config.auto_update_interval_seconds = (n > 0).then_some(n);
+            }
+            _ => return,
+        }
+        self.dirty = true;
     }
 
     pub fn toggle_graph(&mut self) {
@@ -742,13 +792,13 @@ impl App {
         self.read_mut().scroll_pinned(rows, len);
     }
 
-    pub fn commit_save(&mut self) {
+    pub fn settings_save(&mut self) {
         let result = self.persist_config();
         if result.starts_with("Saved") {
             self.dirty = false;
         }
-        if let Some(Popup::Save(s)) = &mut self.read_mut().popup {
-            s.result = Some(result);
+        if let Some(s) = self.settings_mut() {
+            s.status = Some(result);
         }
     }
 

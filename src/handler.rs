@@ -8,7 +8,7 @@ use crate::num_ops::{
 };
 use crate::modbus::{DataBits, Parity, StopBits, WordOrder};
 use crate::state::{
-    DiscoveryField, DiscoveryParams, InterfaceKind, Popup, PopupKind, ReadPanel,
+    DiscoveryField, DiscoveryParams, InterfaceKind, Popup, PopupKind, ReadPanel, SettingsField,
 };
 use crossterm::event::{KeyCode, KeyEvent};
 
@@ -18,6 +18,11 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
 
     if app.discovery().is_some() {
         handle_discovery_key(key_event, app).await;
+        return Ok(());
+    }
+
+    if app.settings().is_some() {
+        handle_settings_key(key_event, app);
         return Ok(());
     }
 
@@ -45,15 +50,13 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         keybind::PIN => app.pin(),
         keybind::DUMP => app.open_dump(),
         keybind::HELP => app.open_help(),
-        keybind::SAVE => app.open_save(),
         keybind::COLUMNS => app.open_columns(),
         keybind::JUMP => app.open_search(),
         keybind::WRITE => app.open_write(),
         keybind::LABEL => app.open_label(),
         keybind::SLAVE => app.open_slave(),
-        keybind::CLEAR_PINS => app.open_clear_pins(),
-        keybind::CLEAR_LABELS => app.open_clear_labels(),
         keybind::DISCOVERY => app.open_discovery(),
+        keybind::SETTINGS => app.open_settings(),
         keybind::GRAPH => app.toggle_graph(),
         keybind::CYCLE_POSITION => app.cycle_position(),
         keybind::WORD_ORDER => app.toggle_word_order(),
@@ -154,12 +157,6 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
 async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
     match kind {
         PopupKind::Help => app.close_popup(),
-
-        PopupKind::Save => match key_event.code {
-            keybind::ACTION => app.commit_save(),
-            keybind::EXIT | keybind::SAVE => app.close_popup(),
-            _ => {}
-        },
 
         PopupKind::Dump => match key_event.code {
             keybind::ACTION => app.commit_dump(),
@@ -287,12 +284,6 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
             _ => {}
         },
 
-        PopupKind::ClearConfirm => match key_event.code {
-            keybind::ACTION => app.commit_clear(),
-            keybind::EXIT => app.close_popup(),
-            _ => {}
-        },
-
         PopupKind::Quit => match key_event.code {
             keybind::ACTION | keybind::EXIT => app.quit(),
             KeyCode::Backspace => app.close_popup(),
@@ -302,7 +293,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
 }
 
 pub fn handle_paste(data: String, app: &mut App) {
-    if app.discovery().is_some() {
+    if app.discovery().is_some() || app.settings().is_some() {
         return;
     }
     let original_size = data.len();
@@ -460,6 +451,39 @@ fn cycle_field(d: &mut DiscoveryParams, field: DiscoveryField, forward: bool) {
         DiscoveryField::Parity => d.parity = cycle(&PARITY, d.parity, forward),
         DiscoveryField::StopBits => d.stop_bits = cycle(&STOP_BITS, d.stop_bits, forward),
         DiscoveryField::WordOrder => d.word_order = cycle(&ORDERS, d.word_order, forward),
+        _ => {}
+    }
+}
+
+fn handle_settings_key(key_event: KeyEvent, app: &mut App) {
+    let count = SettingsField::ALL.len() as u16;
+    let selected = app.settings().map(|s| s.selected).unwrap_or(0);
+    let field = SettingsField::ALL[selected as usize];
+
+    match key_event.code {
+        keybind::EXIT | keybind::SETTINGS => app.return_to_read(),
+        keybind::MOVE_UP => {
+            if let Some(s) = app.settings_mut() {
+                s.selected = if s.selected == 0 { count - 1 } else { s.selected - 1 };
+            }
+        }
+        keybind::MOVE_DOWN => {
+            if let Some(s) = app.settings_mut() {
+                s.selected = (s.selected + 1) % count;
+            }
+        }
+        KeyCode::Left => app.settings_adjust(field, -1),
+        KeyCode::Right => app.settings_adjust(field, 1),
+        keybind::PAUSE if field == SettingsField::ReadOnly => app.settings_adjust(field, 1),
+        keybind::ACTION => match field {
+            SettingsField::ClearPins => app.clear_pins(),
+            SettingsField::ClearLabels => app.clear_labels(),
+            SettingsField::ReadOnly => app.settings_adjust(field, 1),
+            SettingsField::Save => app.settings_save(),
+            _ => {}
+        },
+        KeyCode::Backspace => app.settings_backspace(field),
+        KeyCode::Char(c) if c.is_ascii_digit() => app.settings_digit(field, c as u8 - b'0'),
         _ => {}
     }
 }

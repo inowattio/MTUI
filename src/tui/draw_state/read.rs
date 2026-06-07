@@ -1,7 +1,7 @@
 use crate::app::App;
 use crate::config::Column;
 use crate::constants::keybind;
-use crate::state::{ClearKind, LabelParams, Popup, ReadPanel, ReadParams, SearchParams, WriteParams};
+use crate::state::{LabelParams, Popup, ReadPanel, ReadParams, SearchParams, WriteParams};
 use crate::tui::theme::{spinner_frame, Theme};
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::symbols;
@@ -278,15 +278,6 @@ pub fn draw(
 fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup: &Popup) {
     match popup {
         Popup::Help => draw_help(frame, area, theme),
-        Popup::Save(s) => draw_confirm(
-            frame,
-            area,
-            theme,
-            "Save",
-            "Save configuration (labels & pins) to file?",
-            &s.result,
-            (None, Some("esc")),
-        ),
         Popup::Dump(d) => draw_confirm(
             frame,
             area,
@@ -301,13 +292,6 @@ fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup: &P
         Popup::Columns(selected) => draw_picker(frame, area, theme, app, *selected),
         Popup::Write(write) => draw_write(frame, area, theme, write),
         Popup::Slave(value) => draw_slave(frame, area, theme, *value),
-        Popup::ClearConfirm(kind) => {
-            let (title, prompt) = match kind {
-                ClearKind::Pins => ("Clear pins", format!(" Delete all {} pins?", app.pinned_registers.len())),
-                ClearKind::Labels => ("Clear labels", format!(" Delete all {} labels?", app.label_count())),
-            };
-            draw_confirm(frame, area, theme, title, &prompt, &None, (Some("esc"), None));
-        }
         Popup::Quit => draw_confirm(
             frame,
             area,
@@ -358,11 +342,10 @@ fn draw_help(frame: &mut Frame, area: Rect, theme: &Theme) {
         (format!("{SLAVE}"), "Set slave id"),
         (format!("{DISCOVERY}"), "Switch device"),
         (format!("{PIN}"), "Add/remove pin"),
-        (format!("{CLEAR_PINS}"), "Clear all pins"),
         (format!("{LABEL}"), "Label register"),
-        (format!("{CLEAR_LABELS}"), "Clear all labels"),
         (format!("{COLUMNS}"), "Toggle columns"),
         (format!("{DUMP}"), "Dump read data"),
+        (format!("{SETTINGS}"), "Settings"),
     ];
 
     const COLS: usize = 3;
@@ -389,7 +372,7 @@ fn draw_help(frame: &mut Frame, area: Rect, theme: &Theme) {
         theme.dim_style(),
     )));
     lines.push(Line::from(Span::styled(
-        format!(" {SAVE} \u{b7} save config to file   {EXIT} \u{b7} quit"),
+        format!(" {SETTINGS} \u{b7} settings (save / clear)   {EXIT} \u{b7} quit"),
         theme.dim_style(),
     )));
 

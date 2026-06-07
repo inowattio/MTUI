@@ -116,11 +116,6 @@ pub struct LabelParams {
 }
 
 #[derive(Debug, Default, PartialEq)]
-pub struct SaveParams {
-    pub result: Option<String>,
-}
-
-#[derive(Debug, Default, PartialEq)]
 pub struct DumpParams {
     pub result: Option<String>,
 }
@@ -166,36 +161,53 @@ pub enum ReadPanel {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ClearKind {
-    Pins,
-    Labels,
+pub enum SettingsField {
+    RegistersBatch,
+    AutoUpdate,
+    ReadOnly,
+    ClearPins,
+    ClearLabels,
+    Save,
+}
+
+impl SettingsField {
+    pub const ALL: [SettingsField; 6] = [
+        SettingsField::RegistersBatch,
+        SettingsField::AutoUpdate,
+        SettingsField::ReadOnly,
+        SettingsField::ClearPins,
+        SettingsField::ClearLabels,
+        SettingsField::Save,
+    ];
+}
+
+#[derive(Debug, Default, PartialEq)]
+pub struct SettingsParams {
+    pub selected: u16,
+    pub status: Option<String>,
 }
 
 #[derive(Debug, PartialEq)]
 pub enum Popup {
     Help,
-    Save(SaveParams),
     Dump(DumpParams),
     Search(SearchParams),
     Label(LabelParams),
     Columns(u16),
     Write(WriteParams),
     Slave(u16),
-    ClearConfirm(ClearKind),
     Quit,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum PopupKind {
     Help,
-    Save,
     Dump,
     Search,
     Label,
     Columns,
     Write,
     Slave,
-    ClearConfirm,
     Quit,
 }
 
@@ -203,14 +215,12 @@ impl Popup {
     pub fn kind(&self) -> PopupKind {
         match self {
             Popup::Help => PopupKind::Help,
-            Popup::Save(_) => PopupKind::Save,
             Popup::Dump(_) => PopupKind::Dump,
             Popup::Search(_) => PopupKind::Search,
             Popup::Label(_) => PopupKind::Label,
             Popup::Columns(_) => PopupKind::Columns,
             Popup::Write(_) => PopupKind::Write,
             Popup::Slave(_) => PopupKind::Slave,
-            Popup::ClearConfirm(_) => PopupKind::ClearConfirm,
             Popup::Quit => PopupKind::Quit,
         }
     }
@@ -300,4 +310,5 @@ pub enum ConnectionStatus {
 pub enum State {
     Read(ReadParams),
     Discovery(DiscoveryParams),
+    Settings(SettingsParams),
 }
