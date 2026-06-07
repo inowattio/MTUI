@@ -2,7 +2,7 @@ use std::time::Duration;
 
 pub const CONFIG_PATH: &str = "config.json";
 
-pub const EVENT_HANDLER_TICKRATE: Duration = Duration::from_millis(150);
+pub const EVENT_HANDLER_TICKRATE: Duration = Duration::from_millis(100);
 
 pub mod keybind {
     use crossterm::event::KeyCode;
