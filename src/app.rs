@@ -235,18 +235,9 @@ impl App {
         self.read_mut().popup = Some(Popup::Columns(0));
     }
 
-    /// Open the value-over-time graph for the currently focused register.
-    pub fn open_graph(&mut self) {
-        let p = self.read();
-        let cell = if p.panel == ReadPanel::Pinned {
-            self.pinned_registers
-                .get(p.pinned_index as usize)
-                .copied()
-                .unwrap_or((p.register_type, p.position))
-        } else {
-            (p.register_type, p.position)
-        };
-        self.read_mut().popup = Some(Popup::Graph(cell));
+    pub fn toggle_graph(&mut self) {
+        let p = self.read_mut();
+        p.graph = !p.graph;
     }
 
     /// Recorded value history for a register (oldest first), for the graph.

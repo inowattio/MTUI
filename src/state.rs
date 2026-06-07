@@ -83,8 +83,6 @@ pub enum Popup {
     Write(WriteParams),
     /// Slave-ID entry; the value is the id being typed.
     Slave(u16),
-    /// Value-over-time graph for the given register.
-    Graph(RegisterCell),
     /// Confirm quitting with unsaved label/pin changes.
     Quit,
 }
@@ -101,7 +99,6 @@ pub enum PopupKind {
     Columns,
     Write,
     Slave,
-    Graph,
     Quit,
 }
 
@@ -116,7 +113,6 @@ impl Popup {
             Popup::Columns(_) => PopupKind::Columns,
             Popup::Write(_) => PopupKind::Write,
             Popup::Slave(_) => PopupKind::Slave,
-            Popup::Graph(_) => PopupKind::Graph,
             Popup::Quit => PopupKind::Quit,
         }
     }
@@ -132,6 +128,8 @@ pub struct ReadParams {
     pub pinned_top: u16,
     /// The open modal overlay, if any.
     pub popup: Option<Popup>,
+    /// When true, the main panel shows the value-over-time graph instead of the table.
+    pub graph: bool,
     pub main_rows: Vec<String>,
     pub pinned_rows: Vec<String>,
     pub refresh_timer: Instant,
@@ -154,6 +152,7 @@ impl Default for ReadParams {
             pinned_index: 0,
             pinned_top: 0,
             popup: None,
+            graph: false,
             main_rows: Vec::new(),
             pinned_rows: Vec::new(),
             refresh_timer: Instant::now(),

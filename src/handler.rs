@@ -30,7 +30,7 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         keybind::WRITE => app.open_write(),
         keybind::LABEL => app.open_label(),
         keybind::SLAVE => app.open_slave(),
-        keybind::GRAPH => app.open_graph(),
+        keybind::GRAPH => app.toggle_graph(),
         keybind::CYCLE_POSITION => app.cycle_position(),
         keybind::WORD_ORDER => app.toggle_word_order(),
         keybind::REFRESH => app.refresh().await,
@@ -258,14 +258,6 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
                     digit_add(value, digit);
                 }
             }
-            _ => {}
-        },
-
-        PopupKind::Graph => match key_event.code {
-            keybind::EXIT | keybind::GRAPH => app.close_popup(),
-            // Allow reading while watching the graph so it keeps extending.
-            keybind::ACTION | keybind::REFRESH => app.refresh().await,
-            keybind::PAUSE => app.toggle_pause(),
             _ => {}
         },
 

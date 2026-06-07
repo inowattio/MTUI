@@ -162,7 +162,7 @@ pub fn draw(
         .iter()
         .any(|&(kind, address)| kind == info_type && address == info_addr);
 
-    let show_ascii = app.interpreter.shows_ascii();
+    let show_ascii = app.interpreter.shows_ascii() && !params.graph;
     let row_constraints = if show_ascii {
         vec![Constraint::Length(2), Constraint::Min(0), Constraint::Length(1)]
     } else {
@@ -228,6 +228,14 @@ pub fn draw(
 
     let visible = rows[1].height.saturating_sub(3).max(1);
     app.visible_rows.set(visible);
+
+    if params.graph {
+        draw_graph(frame, rows[1], theme, app, (info_type, info_addr));
+        if let Some(popup) = &params.popup {
+            draw_popup(frame, area, theme, app, popup);
+        }
+        return;
+    }
 
     let ascii_string = match params.panel {
         ReadPanel::Main => {
@@ -298,7 +306,6 @@ fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup: &P
         Popup::Columns(selected) => draw_picker(frame, area, theme, app, *selected),
         Popup::Write(write) => draw_write(frame, area, theme, write),
         Popup::Slave(value) => draw_slave(frame, area, theme, *value),
-        Popup::Graph(cell) => draw_graph(frame, area, theme, app, *cell),
         Popup::Quit => draw_confirm(
             frame,
             area,
@@ -345,7 +352,7 @@ fn draw_help(frame: &mut Frame, area: Rect, theme: &Theme) {
         (format!("{SWITCH_VIEW}"), "Switch Main / Pinned"),
         (format!("{JUMP}"), "Go to address / label"),
         (format!("{CYCLE_POSITION}"), "Toggle previous position"),
-        (format!("{GRAPH}"), "Graph value over time"),
+        (format!("{GRAPH}"), "Toggle value graph"),
         (format!("{WRITE}"), "Write register"),
         (format!("{SLAVE}"), "Set slave id"),
         (format!("{PIN}"), "Add / Remove pin"),
@@ -612,71 +619,119 @@ fn draw_picker(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, selected
 
 fn draw_graph(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, cell: RegisterCell) {
     let (kind, address) = cell;
+    let label = app.label_text(kind, address);
+    let title = match &label {
+        Some(l) => format!(" Graph  \u{201c}{l}\u{201d} "),
+        None => " Graph ".to_string(),
+    };
 
     let points: Vec<(f64, f64)> = app
         .value_history(cell)
         .map(|h| h.iter().enumerate().map(|(i, &v)| (i as f64, v as f64)).collect())
         .unwrap_or_default();
 
-    // Large, near-full-screen popup.
-    let w = area.width.saturating_sub(6).max(20);
-    let h = area.height.saturating_sub(4).max(8);
-    let rect = centered_rect(w, h, area);
-    frame.render_widget(Clear, rect);
+    let block = theme.panel(&title);
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
 
     if points.len() < 2 {
         let msg = Paragraph::new(Line::from(Span::styled(
-            "Collecting samples\u{2026} read this register a few times (esc / g to close).",
+            "Collecting samples\u{2026} read this register a few times  (enter/r read \u{b7} space pause \u{b7} esc/g close)",
             theme.dim_style(),
-        )))
-        .block(theme.panel(&format!("Graph {kind:?} {address}")));
-        frame.render_widget(msg, rect);
+        )));
+        frame.render_widget(msg, inner);
         return;
     }
 
-    let (mut min, mut max) = (f64::MAX, f64::MIN);
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(0), Constraint::Length(1)])
+        .split(inner);
+
+    // Stats.
+    let count = points.len();
+    let last = points[count - 1].1;
+    let prev = points[count - 2].1;
+    let delta = last - prev;
+    let mut min = f64::MAX;
+    let mut max = f64::MIN;
+    let mut sum = 0.0;
     for &(_, y) in &points {
         min = min.min(y);
         max = max.max(y);
+        sum += y;
     }
-    let (y_lo, y_hi) = if (max - min).abs() < f64::EPSILON {
+    let avg = sum / count as f64;
+    let span = max - min;
+    let (y_lo, y_hi) = if span < f64::EPSILON {
         (min - 1.0, max + 1.0)
     } else {
-        let pad = (max - min) * 0.05;
+        let pad = span * 0.08;
         (min - pad, max + pad)
     };
-    let x_hi = (points.len() - 1) as f64;
-    let last = points.last().map(|&(_, y)| y).unwrap_or(0.0);
+    let x_hi = (count - 1) as f64;
+
+    // Y labels: five evenly spaced ticks, bottom -> top.
+    let y_labels: Vec<Span> = (0..=4)
+        .map(|i| {
+            let v = y_lo + (y_hi - y_lo) * (i as f64 / 4.0);
+            Span::styled(format!("{v:.0}"), theme.dim_style())
+        })
+        .collect();
+    let x_labels = vec![
+        Span::styled(format!("-{}", count - 1), theme.dim_style()),
+        Span::styled(format!("-{}", (count - 1) / 2), theme.dim_style()),
+        Span::styled("now", theme.accent_style()),
+    ];
 
     let datasets = vec![Dataset::default()
+        .name(format!("{address}"))
         .marker(symbols::Marker::Braille)
         .graph_type(GraphType::Line)
         .style(theme.accent_style())
         .data(&points)];
 
-    let title =
-        format!("Graph {kind:?} {address}  cur {last:.0}  min {min:.0}  max {max:.0}  ({} pts)", points.len());
     let chart = Chart::new(datasets)
-        .block(theme.panel(&title))
         .x_axis(
             Axis::default()
+                .title(Span::styled("samples", theme.dim_style()))
                 .style(theme.dim_style())
                 .bounds([0.0, x_hi])
-                .labels([
-                    Span::styled("old", theme.dim_style()),
-                    Span::styled("now", theme.dim_style()),
-                ]),
+                .labels(x_labels),
         )
         .y_axis(
             Axis::default()
+                .title(Span::styled("value", theme.dim_style()))
                 .style(theme.dim_style())
                 .bounds([y_lo, y_hi])
-                .labels([
-                    Span::styled(format!("{y_lo:.0}"), theme.dim_style()),
-                    Span::styled(format!("{y_hi:.0}"), theme.dim_style()),
-                ]),
+                .labels(y_labels),
         );
-    frame.render_widget(chart, rect);
+    frame.render_widget(chart, chunks[0]);
+
+    // Footer: live stats.
+    let delta_style = if delta > 0.0 {
+        theme.ok_style()
+    } else if delta < 0.0 {
+        theme.warn_style()
+    } else {
+        theme.dim_style()
+    };
+    let footer = Line::from(vec![
+        Span::styled("cur ", theme.dim_style()),
+        Span::styled(format!("{last:.0}"), theme.accent_style()),
+        Span::styled(format!("  \u{0394}{delta:+.0}"), delta_style),
+        Span::styled("   min ", theme.dim_style()),
+        Span::styled(format!("{min:.0}"), theme.base()),
+        Span::styled("  max ", theme.dim_style()),
+        Span::styled(format!("{max:.0}"), theme.base()),
+        Span::styled("  avg ", theme.dim_style()),
+        Span::styled(format!("{avg:.1}"), theme.base()),
+        Span::styled("  span ", theme.dim_style()),
+        Span::styled(format!("{span:.0}"), theme.base()),
+        Span::styled("  n ", theme.dim_style()),
+        Span::styled(format!("{count}"), theme.base()),
+    ]);
+    frame.render_widget(Paragraph::new(footer), chunks[1]);
 }
 
 fn centered_rect(width: u16, height: u16, area: Rect) -> Rect {
