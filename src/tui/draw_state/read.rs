@@ -306,7 +306,7 @@ fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup: &P
             area,
             theme,
             "Unsaved changes",
-            "Unsaved labels/pins. Quit anyway?",
+            " Quit anyway?",
             &None,
             (Some("esc"), None)
         ),
