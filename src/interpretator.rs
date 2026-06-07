@@ -27,6 +27,9 @@ impl Interpretor {
         if self.config.time {
             header.push_str(&format!("{0: <12} ", "time"))
         }
+        if self.config.ago {
+            header.push_str(&format!("{0: <9} ", "ago"))
+        }
         header.push_str(&format!("{0: >5}: ", "index"));
         if self.config.u16 {
             header.push_str(&format!("{0: <5} ", "u16"))
@@ -111,6 +114,9 @@ impl Interpretor {
         if self.config.time {
             row.push_str(&format!("{dash: <12} "));
         }
+        if self.config.ago {
+            row.push_str(&format!("{dash: <9} "));
+        }
         if self.config.index_hex {
             row.push_str(&format!("{index: >5X}: "));
         } else {
@@ -162,6 +168,7 @@ impl Interpretor {
         data: Vec<RegisterCellValue>,
         index: u16,
         read_at: DateTime<Local>,
+        now: DateTime<Local>,
         label: impl Fn(RegisterCellValue) -> Option<String>,
     ) -> Vec<String> {
         (0..data.len())
@@ -171,7 +178,14 @@ impl Interpretor {
                 let next2 = data.get(i + 2).map(|(_, v)| *v);
                 let next3 = data.get(i + 3).map(|(_, v)| *v);
                 let lbl = label(data[i]);
-                self.format_row(index + i as u16, value, [next1, next2, next3], read_at, lbl.as_deref())
+                self.format_row(
+                    index + i as u16,
+                    value,
+                    [next1, next2, next3],
+                    read_at,
+                    now,
+                    lbl.as_deref(),
+                )
             })
             .collect()
     }
@@ -182,6 +196,7 @@ impl Interpretor {
         value: u16,
         next: [Option<u16>; 3],
         read_at: DateTime<Local>,
+        now: DateTime<Local>,
         label: Option<&str>,
     ) -> String {
         let byte = value;
@@ -190,6 +205,10 @@ impl Interpretor {
         if self.config.time {
             let formatted = read_at.format("%H:%M:%S:%3f").to_string();
             row.push_str(&format!("{formatted: <12} "));
+        }
+        if self.config.ago {
+            let ago = format_ago(now.signed_duration_since(read_at));
+            row.push_str(&format!("{ago: <9} "));
         }
         if self.config.index_hex {
             row.push_str(&format!("{address: >5X}: "));
@@ -278,5 +297,18 @@ impl Interpretor {
         }
 
         row
+    }
+}
+
+fn format_ago(elapsed: chrono::Duration) -> String {
+    let secs = elapsed.num_seconds();
+    if secs <= 0 {
+        "now".to_string()
+    } else if secs < 60 {
+        format!("{secs}s ago")
+    } else if secs < 3600 {
+        format!("{}m ago", secs / 60)
+    } else {
+        ">1h ago".to_string()
     }
 }

@@ -586,6 +586,8 @@ impl App {
 
         if should_refresh {
             self.refresh().await;
+        } else if self.interpreter.is_enabled(Column::Ago) {
+            self.rebuild_read_rows();
         }
     }
 
@@ -788,6 +790,7 @@ impl App {
             let p = self.read();
             (p.window_start, p.register_type)
         };
+        let now = Local::now();
 
         let mut main_rows = Vec::with_capacity(visible as usize);
         let mut main_changed = Vec::with_capacity(visible as usize);
@@ -807,6 +810,7 @@ impl App {
                         value,
                         [neighbor(1), neighbor(2), neighbor(3)],
                         time.with_timezone(&Local),
+                        now,
                         label,
                     ));
                     main_changed.push(self.changed.get(&cell).copied().unwrap_or(false));
@@ -820,8 +824,13 @@ impl App {
 
         let (pinned_rows, pinned_changed) = match &self.last_read {
             Some(lr) => {
-                let rows =
-                    Self::format_pinned(&self.interpreter, &lr.pinned_data, lr.pinned_read_at, &self.labels);
+                let rows = Self::format_pinned(
+                    &self.interpreter,
+                    &lr.pinned_data,
+                    lr.pinned_read_at,
+                    now,
+                    &self.labels,
+                );
                 let changed = lr
                     .pinned_data
                     .iter()
@@ -846,6 +855,7 @@ impl App {
         interpreter: &Interpretor,
         data: &[RegisterCellValue],
         read_at: DateTime<Local>,
+        now: DateTime<Local>,
         labels: &BTreeMap<RegisterCell, String>,
     ) -> Vec<String> {
         let mut rows = Vec::new();
@@ -873,7 +883,7 @@ impl App {
             };
             let ((_, address), _) = c;
 
-            rows.extend(interpreter.run(batch, address, read_at, |cell| {
+            rows.extend(interpreter.run(batch, address, read_at, now, |cell| {
                 let ((kind, c_address), _) = cell;
                 labels.get(&(kind, c_address)).cloned()
             }));

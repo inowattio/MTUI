@@ -131,6 +131,7 @@ interpretation_columns! {
     I32 => i32 : "i32" = true,
     F32 => f32 : "f32" = true,
     Time => time : "time (read at)" = true,
+    Ago => ago : "ago (read)" = false,
     U64 => u64 : "u64" = false,
     I64 => i64 : "i64" = false,
     Ascii => ascii : "ascii" = true,
