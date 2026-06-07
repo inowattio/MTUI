@@ -173,7 +173,11 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
                     {
                 let p = app.read_mut();
                         if let Some(Popup::Columns(i)) = &mut p.popup {
-                            *i = i.saturating_sub(1);
+                            if *i == 0 {
+                                *i = count - 1;
+                            } else {
+                                *i = *i - 1;
+                            }
                         }
                     }
                 }
@@ -181,7 +185,11 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
                     {
                 let p = app.read_mut();
                         if let Some(Popup::Columns(i)) = &mut p.popup {
-                            *i = (*i + 1).min(count - 1);
+                            if *i == count - 1 {
+                                *i = 0;
+                            } else {
+                                *i = *i + 1;
+                            }
                         }
                     }
                 }
