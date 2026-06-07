@@ -59,7 +59,7 @@ impl Interpretor {
             header.push_str(&format!("{0: <5} ", "ascii"))
         }
         if self.config.bits {
-            header.push_str(&format!("{0: <8} ", "bits"))
+            header.push_str(&format!("{0: <9} ", "bits"))
         }
         if self.config.label {
             header.push_str("label");
@@ -150,7 +150,7 @@ impl Interpretor {
             row.push_str(&format!("{dash: <5} "));
         }
         if self.config.bits {
-            row.push_str(&format!("{dash: <8} "));
+            row.push_str(&format!("{dash: <9} "));
         }
 
         if self.config.label {
