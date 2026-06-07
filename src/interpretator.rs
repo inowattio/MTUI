@@ -199,33 +199,6 @@ impl Interpretor {
         row
     }
 
-    pub fn run(
-        &self,
-        data: Vec<RegisterCellValue>,
-        index: u16,
-        read_at: DateTime<Local>,
-        now: DateTime<Local>,
-        label: impl Fn(RegisterCellValue) -> Option<String>,
-    ) -> Vec<String> {
-        (0..data.len())
-            .map(|i| {
-                let value = data[i].1;
-                let next1 = data.get(i + 1).map(|(_, v)| *v);
-                let next2 = data.get(i + 2).map(|(_, v)| *v);
-                let next3 = data.get(i + 3).map(|(_, v)| *v);
-                let lbl = label(data[i]);
-                self.format_row(
-                    index + i as u16,
-                    value,
-                    [next1, next2, next3],
-                    read_at,
-                    now,
-                    lbl.as_deref(),
-                )
-            })
-            .collect()
-    }
-
     pub fn format_row(
         &self,
         address: u16,

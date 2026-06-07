@@ -42,12 +42,6 @@ struct RefreshTaskResult {
 }
 
 #[derive(Debug)]
-struct LastRead {
-    pinned_data: Vec<RegisterCellValue>,
-    pinned_read_at: DateTime<Local>,
-}
-
-#[derive(Debug)]
 pub struct App {
     pub config: Config,
     pub running: bool,
@@ -66,7 +60,6 @@ pub struct App {
     changed: BTreeMap<RegisterCell, bool>,
     read_log: BTreeMap<RegisterCell, (u16, DateTime<Utc>)>,
     value_history: BTreeMap<RegisterCell, VecDeque<u16>>,
-    last_read: Option<LastRead>,
     labels: BTreeMap<RegisterCell, String>,
 }
 
@@ -190,7 +183,6 @@ impl App {
             changed: BTreeMap::new(),
             read_log: BTreeMap::new(),
             value_history: BTreeMap::new(),
-            last_read: None,
         }
     }
 
@@ -343,7 +335,6 @@ impl App {
                 self.changed.clear();
                 self.read_log.clear();
                 self.value_history.clear();
-                self.last_read = None;
                 self.connection = ConnectionStatus::Unknown;
                 self.state = State::Read(ReadParams {
                     position: self.config.startup.address,
@@ -887,20 +878,20 @@ impl App {
     async fn aquire_pinned_data_with(
         device: &ModbusDevice,
         regs: &[RegisterCell],
+        batch: u16,
     ) -> Result<Vec<RegisterCellValue>, anyhow::Error> {
+        let batch = batch.max(1) as usize;
         let mut collection = Vec::with_capacity(regs.len());
 
         let mut i = 0usize;
         while i < regs.len() {
-            let (kind, start_addr_raw) = regs[i];
-            let start_addr = start_addr_raw;
+            let (kind, start_addr) = regs[i];
 
             let mut run_len = 1usize;
-            while i + run_len < regs.len() {
-                let (next_kind, next_addr_raw) = regs[i + run_len];
-                let next_addr = next_addr_raw;
+            while i + run_len < regs.len() && run_len < batch {
+                let (next_kind, next_addr) = regs[i + run_len];
 
-                if next_kind == kind && next_addr == start_addr + (run_len as u16) {
+                if next_kind == kind && start_addr.checked_add(run_len as u16) == Some(next_addr) {
                     run_len += 1;
                 } else {
                     break;
@@ -949,7 +940,20 @@ impl App {
         let read_start = position.saturating_sub(amount / 2).min(max_read_start);
         self.connection = ConnectionStatus::Reading;
 
-        let pinned_registers = self.pinned_registers.clone();
+        // On the pinned panel, refresh only the `registers_batch` pins centered
+        // on the pinned cursor (like the main window) instead of every pin.
+        let pinned_registers = {
+            let pins = &self.pinned_registers;
+            let total = pins.len();
+            if total == 0 {
+                Vec::new()
+            } else {
+                let batch = (amount as usize).min(total);
+                let idx = (self.read().pinned_index as usize).min(total - 1);
+                let start = idx.saturating_sub(batch / 2).min(total - batch);
+                pins[start..start + batch].to_vec()
+            }
+        };
 
         self.background_task = Some(BackgroundTask::Refresh(tokio::spawn(async move {
             let read_began = Instant::now();
@@ -961,7 +965,7 @@ impl App {
                     (Some(main), None)
                 }
                 ReadPanel::Pinned => {
-                    let pinned = Self::aquire_pinned_data_with(&device, &pinned_registers)
+                    let pinned = Self::aquire_pinned_data_with(&device, &pinned_registers, amount)
                         .await
                         .map_err(|e| e.to_string());
                     (None, Some(pinned))
@@ -994,7 +998,6 @@ impl App {
         }
 
         let read_at = Utc::now();
-        let read_at_local = read_at.with_timezone(&Local);
 
         for data in [result.main_data.as_ref(), result.pinned_data.as_ref()]
             .into_iter()
@@ -1014,13 +1017,6 @@ impl App {
                     history.pop_front();
                 }
             }
-        }
-
-        if let Some(Ok(data)) = &result.pinned_data {
-            self.last_read = Some(LastRead {
-                pinned_data: data.clone(),
-                pinned_read_at: read_at_local,
-            });
         }
 
         let connection = match (&result.main_data, &result.pinned_data) {
@@ -1092,22 +1088,38 @@ impl App {
         }
         let main_ascii = self.interpreter.ascii_string(&window_values);
 
-        let (pinned_rows, pinned_changed, pinned_ascii) = self.last_read.as_ref().map(|lr| {
-            let rows = Self::format_pinned(
-                &self.interpreter,
-                &lr.pinned_data,
-                lr.pinned_read_at,
-                now,
-                &self.labels,
-            );
-            let changed = lr
-                .pinned_data
-                .iter()
-                .map(|&(cell, _)| self.changed.get(&cell).copied().unwrap_or(false))
-                .collect();
-            let ascii = self.interpreter.ascii_string(&lr.pinned_data);
-            (rows, changed, ascii)
-        }).unwrap_or_default();
+        let pins = self.pinned_registers.clone();
+        let mut pinned_rows = Vec::with_capacity(pins.len());
+        let mut pinned_changed = Vec::with_capacity(pins.len());
+        let mut pinned_values: Vec<RegisterCellValue> = Vec::new();
+        for &(kind, addr) in &pins {
+            let cell = (kind, addr);
+            let label = self.labels.get(&cell).map(String::as_str);
+            match self.read_log.get(&cell) {
+                Some(&(value, time)) => {
+                    let neighbor = |offset: u16| {
+                        self.read_log
+                            .get(&(kind, addr.saturating_add(offset)))
+                            .map(|&(v, _)| v)
+                    };
+                    pinned_rows.push(self.interpreter.format_row(
+                        addr,
+                        value,
+                        [neighbor(1), neighbor(2), neighbor(3)],
+                        time.with_timezone(&Local),
+                        now,
+                        label,
+                    ));
+                    pinned_changed.push(self.changed.get(&cell).copied().unwrap_or(false));
+                    pinned_values.push((cell, value));
+                }
+                None => {
+                    pinned_rows.push(self.interpreter.placeholder(addr, label));
+                    pinned_changed.push(false);
+                }
+            }
+        }
+        let pinned_ascii = self.interpreter.ascii_string(&pinned_values);
 
         let params = self.read_mut();
         params.main_rows = main_rows;
@@ -1117,47 +1129,6 @@ impl App {
         params.pinned_changed = pinned_changed;
         params.pinned_ascii_string = pinned_ascii;
         params.data_start = window_start;
-    }
-
-    fn format_pinned(
-        interpreter: &Interpretor,
-        data: &[RegisterCellValue],
-        read_at: DateTime<Local>,
-        now: DateTime<Local>,
-        labels: &BTreeMap<RegisterCell, String>,
-    ) -> Vec<String> {
-        let mut rows = Vec::new();
-        let mut skip = false;
-
-        for i in 0..data.len() {
-            if skip {
-                skip = false;
-                continue;
-            }
-
-            let c = data[i];
-            let batch = match data.get(i + 1) {
-                None => vec![c],
-                Some(&n) => {
-                    let ((c_kind, c_address), _) = c;
-                    let ((n_kind, n_address), _) = n;
-                    if n_kind == c_kind && n_address == c_address + 1 {
-                        skip = true;
-                        vec![c, n]
-                    } else {
-                        vec![c]
-                    }
-                }
-            };
-            let ((_, address), _) = c;
-
-            rows.extend(interpreter.run(batch, address, read_at, now, |cell| {
-                let ((kind, c_address), _) = cell;
-                labels.get(&(kind, c_address)).cloned()
-            }));
-        }
-
-        rows
     }
 
     pub fn toggle_column(&mut self, column: Column) {
