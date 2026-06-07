@@ -47,20 +47,6 @@ struct PendingWrite {
     new_value: u64,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum LogLevel {
-    Info,
-    Warn,
-    Error,
-}
-
-#[derive(Clone, Debug)]
-pub struct LogEntry {
-    pub time: DateTime<Local>,
-    pub level: LogLevel,
-    pub message: String,
-}
-
 #[derive(Debug)]
 struct RefreshTaskResult {
     window_start: u16,
@@ -91,7 +77,6 @@ pub struct App {
     value_history: BTreeMap<RegisterCell, VecDeque<u16>>,
     labels: BTreeMap<RegisterCell, String>,
     pending_write: Option<PendingWrite>,
-    logs: VecDeque<LogEntry>,
     logged_connection: ConnectionStatus,
 }
 
@@ -196,7 +181,7 @@ impl App {
             State::Discovery(Self::discovery_params(&config))
         };
 
-        let mut app = Self {
+        let app = Self {
             interpreter: Interpretor::new(config.interpretations.clone(), config.device.word_order),
             pinned_registers: config.pinned_registers.clone().into(),
             labels: config.labels.clone().into(),
@@ -216,15 +201,13 @@ impl App {
             read_log: BTreeMap::new(),
             value_history: BTreeMap::new(),
             pending_write: None,
-            logs: VecDeque::new(),
             logged_connection: ConnectionStatus::Unknown,
         };
 
         if app.device.is_some() {
-            let device = app.config.display_device();
-            app.log_info(format!("Started \u{b7} {device}"));
+            log::info!("Started \u{b7} {}", app.config.display_device());
         } else {
-            app.log_warn("Started \u{b7} no device, opened Discovery");
+            log::warn!("Started \u{b7} no device, opened Discovery");
         }
 
         app
@@ -383,7 +366,7 @@ impl App {
                 self.connection = ConnectionStatus::Unknown;
                 self.logged_connection = ConnectionStatus::Unknown;
                 let device = self.config.display_device();
-                self.log_info(format!("Switched device \u{b7} {device}"));
+                log::info!("Switched device \u{b7} {device}");
                 self.state = State::Read(ReadParams {
                     position: self.config.startup.address,
                     window_start: self.config.startup.address,
@@ -392,7 +375,7 @@ impl App {
                 });
             }
             Err(e) => {
-                self.log_error(format!("Connect failed \u{b7} {e}"));
+                log::error!("Connect failed \u{b7} {e}");
                 if let Some(d) = self.discovery_mut() {
                     d.status = Some(format!("Connection failed: {e}"));
                 }
@@ -424,14 +407,14 @@ impl App {
         let n = self.pinned_registers.len();
         self.pinned_registers.clear();
         self.dirty = true;
-        self.log_info(format!("Cleared {n} pinned register(s)"));
+        log::info!("Cleared {n} pinned register(s)");
     }
 
     pub fn clear_labels(&mut self) {
         let n = self.labels.len();
         self.labels.clear();
         self.dirty = true;
-        self.log_info(format!("Cleared {n} label(s)"));
+        log::info!("Cleared {n} label(s)");
     }
 
     pub fn writes_log_path(&self) -> std::path::PathBuf {
@@ -472,34 +455,6 @@ impl App {
         }
     }
 
-    fn push_log(&mut self, level: LogLevel, message: impl Into<String>) {
-        const LOG_CAP: usize = 1000;
-        self.logs.push_back(LogEntry {
-            time: Local::now(),
-            level,
-            message: message.into(),
-        });
-        while self.logs.len() > LOG_CAP {
-            self.logs.pop_front();
-        }
-    }
-
-    fn log_info(&mut self, message: impl Into<String>) {
-        self.push_log(LogLevel::Info, message);
-    }
-
-    fn log_warn(&mut self, message: impl Into<String>) {
-        self.push_log(LogLevel::Warn, message);
-    }
-
-    fn log_error(&mut self, message: impl Into<String>) {
-        self.push_log(LogLevel::Error, message);
-    }
-
-    pub fn activity_logs(&self) -> &VecDeque<LogEntry> {
-        &self.logs
-    }
-
     pub fn log_view(&self) -> Option<&LogViewParams> {
         match &self.state {
             State::Logs(l) => Some(l),
@@ -533,7 +488,7 @@ impl App {
     }
 
     pub fn log_view_scroll(&mut self, delta: i32) {
-        let len = self.logs.len() as i32;
+        let len = crate::logger::count() as i32;
         let visible = self.visible_rows.get().max(1) as i32;
         let max_top = (len - visible).max(0);
         if let Some(l) = self.log_view_mut() {
@@ -713,7 +668,7 @@ impl App {
                 device.set_slave(id).await;
             }
             self.config.device.slave_id = id;
-            self.log_info(format!("Slave id set to {id}"));
+            log::info!("Slave id set to {id}");
             self.read_mut().popup = None;
             self.refresh().await;
         }
@@ -1014,9 +969,9 @@ impl App {
         let result = self.persist_config();
         if result.starts_with("Saved") {
             self.dirty = false;
-            self.log_info("Configuration saved");
+            log::info!("Configuration saved");
         } else {
-            self.log_error(format!("Save failed \u{b7} {result}"));
+            log::error!("Save failed \u{b7} {result}");
         }
         if let Some(s) = self.settings_mut() {
             s.status = Some(result);
@@ -1064,11 +1019,11 @@ impl App {
 
     pub fn toggle_pause(&mut self) {
         self.paused = !self.paused;
-        self.log_info(if self.paused {
-            "Auto-refresh paused"
+        if self.paused {
+            log::info!("Auto-refresh paused");
         } else {
-            "Auto-refresh resumed"
-        });
+            log::info!("Auto-refresh resumed");
+        }
     }
 
     pub fn quit(&mut self) {
@@ -1263,8 +1218,8 @@ impl App {
 
         if connection != self.logged_connection {
             match &connection {
-                ConnectionStatus::Connected => self.log_info("Connected"),
-                ConnectionStatus::Error(e) => self.log_error(format!("Read error \u{b7} {e}")),
+                ConnectionStatus::Connected => log::info!("Connected"),
+                ConnectionStatus::Error(e) => log::error!("Read error \u{b7} {e}"),
                 _ => {}
             }
             self.logged_connection = connection.clone();
@@ -1523,7 +1478,7 @@ impl App {
                         params.main_changed = Vec::new();
                         params.loading = false;
                     }
-                    self.log_error(format!("Read task failed \u{b7} {message}"));
+                    log::error!("Read task failed \u{b7} {message}");
                     self.connection = ConnectionStatus::Error(message);
                 }
             },
@@ -1543,9 +1498,9 @@ impl App {
                     );
                     if outcome.ok {
                         self.log_write();
-                        self.log_info(format!("Write {detail}"));
+                        log::info!("Write {detail}");
                     } else {
-                        self.log_error(format!("Write failed \u{b7} {detail} \u{b7} {}", outcome.message));
+                        log::error!("Write failed \u{b7} {detail} \u{b7} {}", outcome.message);
                     }
                 }
                 self.pending_write = None;

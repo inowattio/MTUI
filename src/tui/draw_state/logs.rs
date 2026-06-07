@@ -1,4 +1,5 @@
-use crate::app::{App, LogLevel};
+use crate::app::App;
+use crate::logger::{self, LogLevel};
 use crate::state::LogViewParams;
 use crate::tui::theme::Theme;
 use ratatui::layout::Rect;
@@ -7,7 +8,7 @@ use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
 pub fn draw(params: &LogViewParams, app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
-    let entries = app.activity_logs();
+    let entries = logger::snapshot();
     let len = entries.len();
 
     let visible = area.height.saturating_sub(1).max(1);

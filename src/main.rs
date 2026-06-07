@@ -4,6 +4,7 @@ mod constants;
 pub mod event;
 pub mod handler;
 mod interpretator;
+mod logger;
 mod mock;
 mod modbus;
 mod num_ops;
@@ -21,6 +22,7 @@ use std::io;
 
 #[tokio::main]
 async fn main() -> AppResult<()> {
+    logger::init();
     let mut app = App::new().await;
 
     let backend = CrosstermBackend::new(io::stderr());
