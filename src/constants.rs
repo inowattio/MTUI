@@ -24,6 +24,7 @@ pub mod keybind {
     pub const GRAPH: KeyCode = KeyCode::Char('g');
     pub const DISCOVERY: KeyCode = KeyCode::Char('n');
     pub const SETTINGS: KeyCode = KeyCode::Char('s');
+    pub const COPY_ADDRESS: KeyCode = KeyCode::Char('y');
     pub const NEGATOR: KeyCode = KeyCode::Char('-');
     pub const SWITCH_VIEW: KeyCode = KeyCode::Tab;
     pub const ACTION: KeyCode = KeyCode::Enter;

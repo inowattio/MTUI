@@ -59,6 +59,7 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         keybind::SETTINGS => app.open_settings(),
         keybind::GRAPH => app.toggle_graph(),
         keybind::CYCLE_POSITION => app.cycle_position(),
+        keybind::COPY_ADDRESS => app.copy_address(),
         keybind::WORD_ORDER => app.toggle_word_order(),
         keybind::REFRESH => app.refresh().await,
         keybind::TOGGLE => app.toggle_type(),

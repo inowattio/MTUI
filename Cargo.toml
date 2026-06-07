@@ -18,3 +18,4 @@ num-traits = "0.2.19"
 anyhow = "1.0.102"
 serde_json = "1.0.150"
 chrono = "0.4"
+arboard = { version = "3", default-features = false }

@@ -337,6 +337,7 @@ fn draw_help(frame: &mut Frame, area: Rect, theme: &Theme) {
         (format!("{SWITCH_VIEW}"), "Main / Pinned"),
         (format!("{JUMP}"), "Go to addr/label"),
         (format!("{CYCLE_POSITION}"), "Prev position"),
+        (format!("{COPY_ADDRESS}"), "Copy address"),
         (format!("{GRAPH}"), "Value graph"),
         (format!("{WRITE}"), "Write register"),
         (format!("{SLAVE}"), "Set slave id"),

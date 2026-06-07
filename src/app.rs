@@ -443,6 +443,21 @@ impl App {
         p.graph = !p.graph;
     }
 
+    pub fn copy_address(&mut self) {
+        let p = self.read();
+        let address = if p.panel == ReadPanel::Pinned {
+            self.pinned_registers
+                .get(p.pinned_index as usize)
+                .map(|&(_, addr)| addr)
+                .unwrap_or(p.position)
+        } else {
+            p.position
+        };
+        if let Ok(mut clipboard) = arboard::Clipboard::new() {
+            let _ = clipboard.set_text(address.to_string());
+        }
+    }
+
     pub fn toggle_graph_width(&mut self) {
         let p = self.read_mut();
         p.graph_dword = !p.graph_dword;
