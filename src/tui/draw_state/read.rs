@@ -189,21 +189,18 @@ pub fn draw(
         Span::styled(device.to_string(), theme.base()),
         Span::styled("  slave ", theme.dim_style()),
         Span::styled(app.config.device.slave_id.to_string(), theme.base()),
-        Span::styled("   @ ", theme.dim_style()),
+        Span::styled(format!("   {info_type:?}"), theme.base()),
+        Span::styled(" @ ", theme.dim_style()),
         Span::styled(info_addr.to_string(), theme.accent_style()),
     ]);
     if is_pinned {
         info_spans.push(Span::styled(" (pinned)", theme.changed_style()));
     }
-    info_spans.push(Span::styled(
-        format!("   {info_type:?} "),
-        theme.base(),
-    ));
     let (access, access_style) = match info_type {
         RegisterType::Holding => ("RW", theme.ok_style()),
         RegisterType::Input => ("RO", theme.warn_style()),
     };
-    info_spans.push(Span::styled(access, access_style));
+    info_spans.push(Span::styled(format!(" {access}"), access_style));
     info_spans.push(Span::styled("   order ", theme.dim_style()));
     info_spans.push(Span::styled(
         format!("{:?}   ", app.config.device.word_order),

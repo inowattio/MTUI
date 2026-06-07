@@ -76,6 +76,11 @@ fn field_view(app: &App, field: SettingsField) -> (&'static str, String, Kind) {
                 .map_or_else(|| "off".to_string(), |n| n.to_string()),
             Kind::Number,
         ),
+        SettingsField::HistoryCap => (
+            "Graph history cap",
+            device.graph_history_cap.to_string(),
+            Kind::Number,
+        ),
         SettingsField::ReadOnly => (
             "Read-only",
             if device.read_only { "on" } else { "off" }.to_string(),

@@ -392,6 +392,10 @@ impl App {
                 let n = (cur + delta).max(0);
                 self.config.auto_update_interval_seconds = (n > 0).then_some(n as u64);
             }
+            SettingsField::HistoryCap => {
+                let n = (self.config.graph_history_cap as i64 + delta).clamp(1, u16::MAX as i64);
+                self.config.graph_history_cap = n as u16;
+            }
             SettingsField::ReadOnly => self.config.read_only = !self.config.read_only,
             SettingsField::ClearPins | SettingsField::ClearLabels | SettingsField::Save => return,
         }
@@ -410,6 +414,10 @@ impl App {
                 let n = cur.saturating_mul(10) + digit;
                 self.config.auto_update_interval_seconds = (n > 0).then_some(n);
             }
+            SettingsField::HistoryCap => {
+                let n = (self.config.graph_history_cap as u64).saturating_mul(10) + digit;
+                self.config.graph_history_cap = n.min(u16::MAX as u64) as u16;
+            }
             _ => return,
         }
         self.dirty = true;
@@ -423,6 +431,9 @@ impl App {
             SettingsField::AutoUpdate => {
                 let n = self.config.auto_update_interval_seconds.unwrap_or(0) / 10;
                 self.config.auto_update_interval_seconds = (n > 0).then_some(n);
+            }
+            SettingsField::HistoryCap => {
+                self.config.graph_history_cap = (self.config.graph_history_cap / 10).max(1);
             }
             _ => return,
         }
@@ -998,6 +1009,7 @@ impl App {
         }
 
         let read_at = Utc::now();
+        let history_cap = (self.config.graph_history_cap as usize).max(1);
 
         for data in [result.main_data.as_ref(), result.pinned_data.as_ref()]
             .into_iter()
@@ -1010,10 +1022,9 @@ impl App {
                 self.previous_values.insert(cell, value);
                 self.read_log.insert(cell, (value, read_at));
 
-                const HISTORY_CAP: usize = 180;
                 let history = self.value_history.entry(cell).or_default();
                 history.push_back(value);
-                if history.len() > HISTORY_CAP {
+                while history.len() > history_cap {
                     history.pop_front();
                 }
             }

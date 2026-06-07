@@ -164,6 +164,7 @@ pub enum ReadPanel {
 pub enum SettingsField {
     RegistersBatch,
     AutoUpdate,
+    HistoryCap,
     ReadOnly,
     ClearPins,
     ClearLabels,
@@ -171,9 +172,10 @@ pub enum SettingsField {
 }
 
 impl SettingsField {
-    pub const ALL: [SettingsField; 6] = [
+    pub const ALL: [SettingsField; 7] = [
         SettingsField::RegistersBatch,
         SettingsField::AutoUpdate,
+        SettingsField::HistoryCap,
         SettingsField::ReadOnly,
         SettingsField::ClearPins,
         SettingsField::ClearLabels,
