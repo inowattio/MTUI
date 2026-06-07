@@ -28,9 +28,9 @@ pub enum DataBits {
     Eight,
 }
 
-impl Into<tokio_serial::DataBits> for DataBits {
-    fn into(self) -> tokio_serial::DataBits {
-        match self {
+impl From<DataBits> for tokio_serial::DataBits {
+    fn from(val: DataBits) -> Self {
+        match val {
             DataBits::Five => tokio_serial::DataBits::Five,
             DataBits::Six => tokio_serial::DataBits::Six,
             DataBits::Seven => tokio_serial::DataBits::Seven,
@@ -71,9 +71,9 @@ pub enum Parity {
     Even,
 }
 
-impl Into<tokio_serial::Parity> for Parity {
-    fn into(self) -> tokio_serial::Parity {
-        match self {
+impl From<Parity> for tokio_serial::Parity {
+    fn from(val: Parity) -> Self {
+        match val {
             Parity::None => tokio_serial::Parity::None,
             Parity::Odd => tokio_serial::Parity::Odd,
             Parity::Even => tokio_serial::Parity::Even,
@@ -110,9 +110,9 @@ pub enum StopBits {
     Two,
 }
 
-impl Into<tokio_serial::StopBits> for StopBits {
-    fn into(self) -> tokio_serial::StopBits {
-        match self {
+impl From<StopBits> for tokio_serial::StopBits {
+    fn from(val: StopBits) -> Self {
+        match val {
             StopBits::One => tokio_serial::StopBits::One,
             StopBits::Two => tokio_serial::StopBits::Two,
         }
@@ -161,6 +161,7 @@ pub trait ModbusDataOrder: Clone + Send + Sync {
     fn split_word(data: u32) -> [u16; 2];
 }
 
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Clone)]
 pub struct ABCD;
 impl ModbusDataOrder for ABCD {
@@ -177,6 +178,7 @@ impl ModbusDataOrder for ABCD {
     }
 }
 
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Clone)]
 pub struct BADC;
 impl ModbusDataOrder for BADC {
@@ -194,6 +196,7 @@ impl ModbusDataOrder for BADC {
     }
 }
 
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Clone)]
 pub struct CDAB;
 impl ModbusDataOrder for CDAB {
@@ -211,6 +214,7 @@ impl ModbusDataOrder for CDAB {
     }
 }
 
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Clone)]
 pub struct DCBA;
 impl ModbusDataOrder for DCBA {
@@ -228,6 +232,7 @@ impl ModbusDataOrder for DCBA {
     }
 }
 
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
 pub enum WordOrder {
     #[default]

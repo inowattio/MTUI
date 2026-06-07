@@ -288,8 +288,7 @@ fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup: &P
             "Save",
             "Save configuration (labels & pins) to file?",
             &s.result,
-            None,
-            Some("esc"),
+            (None, Some("esc")),
         ),
         Popup::Dump(d) => draw_confirm(
             frame,
@@ -298,8 +297,7 @@ fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup: &P
             "Dump",
             &format!("Dump {} read register(s) to a file?", app.read_count()),
             &d.result,
-            None,
-            Some("esc"),
+            (None, Some("esc")),
         ),
         Popup::Search(s) => draw_search(frame, area, theme, s),
         Popup::Label(l) => draw_label(frame, area, theme, l),
@@ -313,8 +311,7 @@ fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup: &P
             "Unsaved changes",
             "Unsaved labels/pins. Quit anyway?",
             &None,
-            Some("esc"),
-            None
+            (Some("esc"), None)
         ),
     }
 }
@@ -394,9 +391,9 @@ fn draw_confirm(
     title: &str,
     prompt: &str,
     result: &Option<String>,
-    additional_confirm: Option<&str>,
-    additional_cancel: Option<&str>,
+    additionals: (Option<&str>, Option<&str>),
 ) {
+    let (additional_confirm, additional_cancel) = additionals;
     let mut info_line = String::new();
     info_line.push_str(" enter");
     if let Some(key) = additional_confirm {
