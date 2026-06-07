@@ -611,12 +611,12 @@ impl App {
 
         let mut i = 0usize;
         while i < regs.len() {
-            let (kind, start_addr_raw) = regs[i].clone();
+            let (kind, start_addr_raw) = regs[i];
             let start_addr = start_addr_raw;
 
             let mut run_len = 1usize;
             while i + run_len < regs.len() {
-                let (next_kind, next_addr_raw) = regs[i + run_len].clone();
+                let (next_kind, next_addr_raw) = regs[i + run_len];
                 let next_addr = next_addr_raw;
 
                 if next_kind == kind && next_addr == start_addr + (run_len as u16) {
@@ -632,7 +632,7 @@ impl App {
             };
 
             for j in 0..run_len {
-                let cell = regs[i + j].clone();
+                let cell = regs[i + j];
                 let value = values.get(j).cloned().unwrap();
 
                 collection.push((cell, value));
