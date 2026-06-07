@@ -12,6 +12,7 @@ pub struct Config {
     pub interpretations: InterpretorConfig,
     pub registers_batch: u16,
     pub auto_update_interval_seconds: Option<u64>,
+    pub read_only: bool,
     pub pinned_registers: PinnedRegisters,
     pub labels: Labels,
 }
@@ -71,6 +72,7 @@ impl Default for Config {
             interpretations: InterpretorConfig::default(),
             registers_batch: 4,
             auto_update_interval_seconds: Some(1),
+            read_only: false,
             pinned_registers: Default::default(),
             labels: Default::default(),
         }

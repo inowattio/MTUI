@@ -233,6 +233,10 @@ impl App {
     }
 
     pub fn open_write(&mut self) {
+        if self.config.read_only {
+            return;
+        }
+
         let (panel, register_type, position, pinned_index) = {
             let p = self.read();
             (p.panel, p.register_type, p.position, p.pinned_index)
@@ -931,6 +935,12 @@ impl App {
     }
 
     pub fn commit_write(&mut self) {
+        if self.config.read_only {
+            if let Some(Popup::Write(w)) = &mut self.read_mut().popup {
+                w.result = Some("Read-only mode.".to_string());
+            }
+            return;
+        }
         if self.background_task.is_some() {
             if let Some(Popup::Write(w)) = &mut self.read_mut().popup {
                 w.result = Some("Device is busy.".to_string());
