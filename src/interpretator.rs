@@ -62,7 +62,7 @@ impl Interpretor {
             header.push_str(&format!("{0: <5} ", "ascii"))
         }
         if self.config.bits {
-            header.push_str(&format!("{0: <9} ", "bits"))
+            header.push_str(&format!("{0: <19} ", "bits"))
         }
         if self.config.label {
             header.push_str("label");
@@ -156,7 +156,7 @@ impl Interpretor {
             row.push_str(&format!("{dash: <5} "));
         }
         if self.config.bits {
-            row.push_str(&format!("{dash: <9} "));
+            row.push_str(&format!("{dash: <19} "));
         }
 
         if self.config.label {
@@ -299,7 +299,9 @@ impl Interpretor {
             row.push_str(&format!("{s:<5} "))
         }
         if self.config.bits {
-            row.push_str(&format!("{byte:<08b} "))
+            let b = format!("{byte:016b}");
+            let grouped = format!("{} {} {} {}", &b[0..4], &b[4..8], &b[8..12], &b[12..16]);
+            row.push_str(&format!("{grouped: <19} "))
         }
 
         if self.config.label {
