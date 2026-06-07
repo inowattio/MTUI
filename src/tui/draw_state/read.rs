@@ -349,6 +349,7 @@ fn draw_help(frame: &mut Frame, area: Rect, theme: &Theme) {
         (format!("{GRAPH}"), "Toggle value graph"),
         (format!("{WRITE}"), "Write register"),
         (format!("{SLAVE}"), "Set slave id"),
+        (format!("{DISCOVERY}"), "Discover / switch device"),
         (format!("{PIN}"), "Add / Remove pin"),
         (format!("{LABEL}"), "Label register"),
         (format!("{COLUMNS}"), "Toggle columns"),

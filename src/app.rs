@@ -1,11 +1,11 @@
 use crate::config::{Column, Config, Label, Labels, Startup};
 use crate::constants::CONFIG_PATH;
 use crate::interpretator::Interpretor;
-use crate::modbus::ModbusDevice;
+use crate::modbus::{Interface, InterfaceNetworkParams, InterfaceWiredParams, ModbusDevice};
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
 use crate::state::{
-    ConnectionStatus, DumpParams, LabelParams, Popup, PopupKind, ReadPanel,
-    ReadParams, SaveParams, SearchParams, State, WriteParams,
+    ConnectionStatus, DiscoveryParams, DiscoveryStage, DumpParams, LabelParams, Popup, PopupKind,
+    ReadPanel, ReadParams, SaveParams, SearchParams, State, WriteParams,
 };
 use chrono::{DateTime, Local, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
@@ -51,7 +51,7 @@ pub struct App {
     pub running: bool,
     pub state: State,
     pub pinned_registers: Vec<RegisterCell>,
-    pub device: ModbusDevice,
+    pub device: Option<ModbusDevice>,
     pub interpreter: Interpretor,
     pub connection: ConnectionStatus,
     pub frame: u64,
@@ -155,19 +155,25 @@ impl App {
         let device = ModbusDevice::new(&config.device)
             .await
             .inspect_err(|e| println!("Could not initialize device: {e}"))
-            .unwrap();
+            .ok();
         let initial_rows = config.registers_batch.max(1);
+
+        let state = if device.is_some() {
+            State::Read(ReadParams {
+                position: config.startup.address,
+                window_start: config.startup.address,
+                register_type: config.startup.register_type,
+                ..Default::default()
+            })
+        } else {
+            State::Discovery(Self::discovery_params(&config))
+        };
 
         Self {
             interpreter: Interpretor::new(config.interpretations.clone(), config.device.word_order),
             pinned_registers: config.pinned_registers.clone().into(),
             labels: config.labels.clone().into(),
-            state: State::Read(ReadParams {
-                position: config.startup.address,
-                window_start: config.startup.address,
-                register_type: config.startup.register_type,
-                ..Default::default()
-            }),
+            state,
             config,
             device,
             running: true,
@@ -189,12 +195,161 @@ impl App {
     pub fn read(&self) -> &ReadParams {
         match &self.state {
             State::Read(p) => p,
+            State::Discovery(_) => unreachable!("read() called in Discovery state"),
         }
     }
 
     pub fn read_mut(&mut self) -> &mut ReadParams {
         match &mut self.state {
             State::Read(p) => p,
+            State::Discovery(_) => unreachable!("read_mut() called in Discovery state"),
+        }
+    }
+
+    pub fn discovery(&self) -> Option<&DiscoveryParams> {
+        match &self.state {
+            State::Discovery(d) => Some(d),
+            State::Read(_) => None,
+        }
+    }
+
+    pub fn discovery_mut(&mut self) -> Option<&mut DiscoveryParams> {
+        match &mut self.state {
+            State::Discovery(d) => Some(d),
+            State::Read(_) => None,
+        }
+    }
+
+    fn is_reading(&self) -> bool {
+        matches!(self.state, State::Read(_))
+    }
+
+    fn available_ports() -> Vec<String> {
+        tokio_serial::available_ports()
+            .map(|ports| ports.into_iter().map(|p| p.port_name).collect())
+            .unwrap_or_default()
+    }
+
+    fn discovery_params(config: &Config) -> DiscoveryParams {
+        let mut d = DiscoveryParams {
+            ports: Self::available_ports(),
+            ..Default::default()
+        };
+        match &config.device.interface {
+            Interface::Wired(w) => {
+                d.selected = 1;
+                d.baud_rate = w.baud_rate;
+                d.data_bits = w.data_bits;
+                d.parity = w.parity;
+                d.stop_bits = w.stop_bits;
+                if let Some(i) = d.ports.iter().position(|p| p == &w.path) {
+                    d.port_index = i as u16;
+                }
+            }
+            Interface::Network(n) => {
+                d.selected = 2;
+                d.ip = n.ip.clone();
+                d.port = n.port.to_string();
+            }
+            Interface::Mock => d.selected = 0,
+        }
+        d
+    }
+
+    pub fn open_discovery(&mut self) {
+        self.background_task = None;
+        self.state = State::Discovery(Self::discovery_params(&self.config));
+    }
+
+    pub fn return_to_read(&mut self) {
+        if self.device.is_none() {
+            return;
+        }
+        self.connection = ConnectionStatus::Unknown;
+        self.state = State::Read(ReadParams {
+            position: self.config.startup.address,
+            window_start: self.config.startup.address,
+            register_type: self.config.startup.register_type,
+            ..Default::default()
+        });
+    }
+
+    pub fn discovery_to_wired(&mut self) {
+        let ports = Self::available_ports();
+        if let Some(d) = self.discovery_mut() {
+            d.port_index = d.port_index.min(ports.len().saturating_sub(1) as u16);
+            d.ports = ports;
+            d.stage = DiscoveryStage::Wired;
+            d.selected = 0;
+            d.status = None;
+        }
+    }
+
+    pub fn discovery_to_network(&mut self) {
+        if let Some(d) = self.discovery_mut() {
+            d.stage = DiscoveryStage::Network;
+            d.selected = 0;
+            d.status = None;
+        }
+    }
+
+    pub fn discovery_back(&mut self) {
+        if let Some(d) = self.discovery_mut() {
+            d.stage = DiscoveryStage::Select;
+            d.status = None;
+        }
+    }
+
+    pub async fn discovery_connect(&mut self) {
+        let interface = {
+            let Some(d) = self.discovery() else {
+                return;
+            };
+            match d.stage {
+                DiscoveryStage::Select => Interface::Mock,
+                DiscoveryStage::Wired => Interface::Wired(InterfaceWiredParams {
+                    path: d.ports.get(d.port_index as usize).cloned().unwrap_or_default(),
+                    baud_rate: d.baud_rate,
+                    data_bits: d.data_bits,
+                    parity: d.parity,
+                    stop_bits: d.stop_bits,
+                }),
+                DiscoveryStage::Network => Interface::Network(InterfaceNetworkParams {
+                    ip: d.ip.clone(),
+                    port: d.port.parse().unwrap_or(502),
+                }),
+            }
+        };
+
+        if let Some(d) = self.discovery_mut() {
+            d.status = Some("Connecting\u{2026}".to_string());
+        }
+
+        let mut device_config = self.config.device.clone();
+        device_config.interface = interface;
+
+        match ModbusDevice::new(&device_config).await {
+            Ok(device) => {
+                self.device = Some(device);
+                self.config.device = device_config;
+                self.previous_values.clear();
+                self.changed.clear();
+                self.read_log.clear();
+                self.value_history.clear();
+                self.last_read = None;
+                self.connection = ConnectionStatus::Unknown;
+                self.state = State::Read(ReadParams {
+                    position: self.config.startup.address,
+                    window_start: self.config.startup.address,
+                    register_type: self.config.startup.register_type,
+                    ..Default::default()
+                });
+            }
+            Err(e) => {
+                if let Some(d) = self.discovery_mut() {
+                    d.status = Some(format!("Connection failed: {e}"));
+                }
+            }
         }
     }
 
@@ -281,7 +436,9 @@ impl App {
             _ => None,
         };
         if let Some(id) = id {
-            self.device.set_slave(id).await;
+            if let Some(device) = &self.device {
+                device.set_slave(id).await;
+            }
             self.config.device.slave_id = id;
             self.read_mut().popup = None;
             self.refresh().await;
@@ -292,7 +449,9 @@ impl App {
         let next = self.config.device.word_order.next();
         self.config.device.word_order = next;
         self.interpreter.set_word_order(next);
-        self.device.set_word_order(next);
+        if let Some(device) = &mut self.device {
+            device.set_word_order(next);
+        }
         self.rebuild_read_rows();
     }
 
@@ -676,9 +835,12 @@ impl App {
     }
 
     pub async fn refresh(&mut self) {
-        if self.background_task.is_some() {
+        if self.background_task.is_some() || !self.is_reading() {
             return;
         }
+        let Some(device) = self.device.clone() else {
+            return;
+        };
 
         let (panel, window_start, register_type) = {
             let p = self.read_mut();
@@ -688,7 +850,6 @@ impl App {
         };
         self.connection = ConnectionStatus::Reading;
 
-        let device = self.device.clone();
         let pinned_registers = self.pinned_registers.clone();
         let amount = self.visible_rows.get().max(1);
 
@@ -721,6 +882,9 @@ impl App {
     }
 
     fn apply_refresh_result(&mut self, result: RefreshTaskResult) {
+        if !self.is_reading() {
+            return;
+        }
         if result.main_data.is_some()
             && !matches!(
                 &self.state,
@@ -787,6 +951,9 @@ impl App {
     }
 
     pub fn rebuild_read_rows(&mut self) {
+        if !self.is_reading() {
+            return;
+        }
         let visible = self.visible_rows.get().max(1);
         let (window_start, register_type) = {
             let p = self.read();
@@ -930,7 +1097,9 @@ impl App {
             (w.position, number, w.write_type)
         };
 
-        let device = self.device.clone();
+        let Some(device) = self.device.clone() else {
+            return;
+        };
         self.background_task = Some(BackgroundTask::Write(tokio::spawn(async move {
             let result = match write_type {
                 WriteType::Word => device.write_register(position, number as u16).await,

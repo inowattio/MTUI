@@ -23,6 +23,7 @@ pub mod keybind {
     pub const SLAVE: KeyCode = KeyCode::Char('i');
     pub const CYCLE_POSITION: KeyCode = KeyCode::Char('b');
     pub const GRAPH: KeyCode = KeyCode::Char('g');
+    pub const DISCOVERY: KeyCode = KeyCode::Char('n');
     pub const NEGATOR: KeyCode = KeyCode::Char('-');
     pub const SWITCH_VIEW: KeyCode = KeyCode::Tab;
     pub const ACTION: KeyCode = KeyCode::Enter;

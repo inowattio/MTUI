@@ -6,12 +6,18 @@ use crate::num_ops::{
     digit_remove_option, increment_by, increment_option_by, negate_opt_option, set_option_to_zero,
     set_to_zero,
 };
-use crate::state::{Popup, PopupKind, ReadPanel};
+use crate::modbus::{DataBits, Parity, StopBits};
+use crate::state::{DiscoveryParams, DiscoveryStage, Popup, PopupKind, ReadPanel};
 use crossterm::event::{KeyCode, KeyEvent};
 
 pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
     let rows = app.visible_rows.get();
     let pinned_len = app.pinned_registers.len() as u16;
+
+    if app.discovery().is_some() {
+        handle_discovery_key(key_event, app).await;
+        return Ok(());
+    }
 
     if let Some(kind) = app.popup_kind() {
         handle_popup_key(kind, key_event, app).await;
@@ -43,6 +49,7 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         keybind::WRITE => app.open_write(),
         keybind::LABEL => app.open_label(),
         keybind::SLAVE => app.open_slave(),
+        keybind::DISCOVERY => app.open_discovery(),
         keybind::GRAPH => app.toggle_graph(),
         keybind::CYCLE_POSITION => app.cycle_position(),
         keybind::WORD_ORDER => app.toggle_word_order(),
@@ -277,6 +284,9 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
 }
 
 pub fn handle_paste(data: String, app: &mut App) {
+    if app.discovery().is_some() {
+        return;
+    }
     let original_size = data.len();
     let digits = data
         .chars()
@@ -313,6 +323,140 @@ pub fn handle_paste(data: String, app: &mut App) {
             }
             p.scroll_to_cursor(rows);
         }
+        _ => {}
+    }
+}
+
+async fn handle_discovery_key(key_event: KeyEvent, app: &mut App) {
+    let Some(stage) = app.discovery().map(|d| d.stage) else {
+        return;
+    };
+    match stage {
+        DiscoveryStage::Select => match key_event.code {
+            keybind::EXIT => {
+                if app.device.is_some() {
+                    app.return_to_read();
+                } else {
+                    app.quit();
+                }
+            }
+            keybind::MOVE_UP => {
+                if let Some(d) = app.discovery_mut() {
+                    d.selected = if d.selected == 0 { 2 } else { d.selected - 1 };
+                }
+            }
+            keybind::MOVE_DOWN => {
+                if let Some(d) = app.discovery_mut() {
+                    d.selected = (d.selected + 1) % 3;
+                }
+            }
+            keybind::ACTION => match app.discovery().map(|d| d.selected).unwrap_or(0) {
+                0 => app.discovery_connect().await,
+                1 => app.discovery_to_wired(),
+                2 => app.discovery_to_network(),
+                _ => {}
+            },
+            _ => {}
+        },
+
+        DiscoveryStage::Wired => match key_event.code {
+            keybind::EXIT => app.discovery_back(),
+            keybind::ACTION => app.discovery_connect().await,
+            keybind::MOVE_UP => {
+                if let Some(d) = app.discovery_mut() {
+                    d.selected = if d.selected == 0 { 5 } else { d.selected - 1 };
+                }
+            }
+            keybind::MOVE_DOWN => {
+                if let Some(d) = app.discovery_mut() {
+                    d.selected = (d.selected + 1) % 6;
+                }
+            }
+            KeyCode::Left => {
+                if let Some(d) = app.discovery_mut() {
+                    cycle_wired_field(d, false);
+                }
+            }
+            KeyCode::Right => {
+                if let Some(d) = app.discovery_mut() {
+                    cycle_wired_field(d, true);
+                }
+            }
+            _ => {}
+        },
+
+        DiscoveryStage::Network => match key_event.code {
+            keybind::EXIT => app.discovery_back(),
+            keybind::ACTION => app.discovery_connect().await,
+            keybind::MOVE_UP => {
+                if let Some(d) = app.discovery_mut() {
+                    d.selected = if d.selected == 0 { 2 } else { d.selected - 1 };
+                }
+            }
+            keybind::MOVE_DOWN => {
+                if let Some(d) = app.discovery_mut() {
+                    d.selected = (d.selected + 1) % 3;
+                }
+            }
+            KeyCode::Backspace => {
+                if let Some(d) = app.discovery_mut() {
+                    match d.selected {
+                        0 => {
+                            d.ip.pop();
+                        }
+                        1 => {
+                            d.port.pop();
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            KeyCode::Char(c) => {
+                if let Some(d) = app.discovery_mut() {
+                    match d.selected {
+                        0 if c.is_ascii_digit() || c == '.' => d.ip.push(c),
+                        1 if c.is_ascii_digit() => d.port.push(c),
+                        _ => {}
+                    }
+                }
+            }
+            _ => {}
+        },
+    }
+}
+
+fn cycle<T: Copy + PartialEq>(items: &[T], current: T, forward: bool) -> T {
+    if items.is_empty() {
+        return current;
+    }
+    let i = items.iter().position(|x| *x == current).unwrap_or(0);
+    let n = items.len();
+    let j = if forward { (i + 1) % n } else { (i + n - 1) % n };
+    items[j]
+}
+
+fn cycle_wired_field(d: &mut DiscoveryParams, forward: bool) {
+    const BAUDS: [u32; 6] = [9600, 19200, 38400, 57600, 115200, 230400];
+    const DATA_BITS: [DataBits; 4] =
+        [DataBits::Five, DataBits::Six, DataBits::Seven, DataBits::Eight];
+    const PARITY: [Parity; 3] = [Parity::None, Parity::Odd, Parity::Even];
+    const STOP_BITS: [StopBits; 2] = [StopBits::One, StopBits::Two];
+
+    match d.selected {
+        0 => {
+            if !d.ports.is_empty() {
+                let n = d.ports.len() as u16;
+                d.port_index = if forward {
+                    (d.port_index + 1) % n
+                } else {
+                    (d.port_index + n - 1) % n
+                };
+            }
+        }
+        1 => d.baud_rate = cycle(&BAUDS, d.baud_rate, forward),
+        2 => d.data_bits = cycle(&DATA_BITS, d.data_bits, forward),
+        3 => d.parity = cycle(&PARITY, d.parity, forward),
+        4 => d.stop_bits = cycle(&STOP_BITS, d.stop_bits, forward),
         _ => {}
     }
 }

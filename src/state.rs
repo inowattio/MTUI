@@ -1,6 +1,47 @@
 use crate::app::WriteType;
+use crate::modbus::{DataBits, Parity, StopBits};
 use crate::register::{RegisterCell, RegisterType};
 use std::time::{Duration, Instant};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DiscoveryStage {
+    Select,
+    Wired,
+    Network,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct DiscoveryParams {
+    pub stage: DiscoveryStage,
+    pub selected: u16,
+    pub ports: Vec<String>,
+    pub port_index: u16,
+    pub baud_rate: u32,
+    pub data_bits: DataBits,
+    pub parity: Parity,
+    pub stop_bits: StopBits,
+    pub ip: String,
+    pub port: String,
+    pub status: Option<String>,
+}
+
+impl Default for DiscoveryParams {
+    fn default() -> Self {
+        Self {
+            stage: DiscoveryStage::Select,
+            selected: 0,
+            ports: Vec::new(),
+            port_index: 0,
+            baud_rate: 9600,
+            data_bits: DataBits::Eight,
+            parity: Parity::None,
+            stop_bits: StopBits::One,
+            ip: "127.0.0.1".to_string(),
+            port: "502".to_string(),
+            status: None,
+        }
+    }
+}
 
 #[derive(Debug, Default, PartialEq)]
 pub struct WriteParams {
@@ -194,4 +235,5 @@ pub enum ConnectionStatus {
 #[derive(Debug, PartialEq)]
 pub enum State {
     Read(ReadParams),
+    Discovery(DiscoveryParams),
 }
