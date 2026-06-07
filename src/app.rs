@@ -754,15 +754,6 @@ impl App {
             }
         }
 
-        let main_ascii = match &result.main_data {
-            Some(Ok(data)) => Some(self.interpreter.ascii_string(data)),
-            _ => None,
-        };
-        let pinned_ascii = match &result.pinned_data {
-            Some(Ok(data)) => Some(self.interpreter.ascii_string(data)),
-            _ => None,
-        };
-
         if let Some(Ok(data)) = &result.pinned_data {
             self.last_read = Some(LastRead {
                 pinned_data: data.clone(),
@@ -782,12 +773,6 @@ impl App {
             let params = self.read_mut();
             params.read_duration = Some(result.read_duration);
             params.loading = false;
-            if let Some(s) = main_ascii {
-                params.ascii_string = s;
-            }
-            if let Some(s) = pinned_ascii {
-                params.pinned_ascii_string = s;
-            }
             if let Some(Err(e)) = &result.main_data {
                 params.main_rows = vec![e.clone()];
                 params.main_changed = Vec::new();
@@ -811,6 +796,7 @@ impl App {
 
         let mut main_rows = Vec::with_capacity(visible as usize);
         let mut main_changed = Vec::with_capacity(visible as usize);
+        let mut window_values: Vec<RegisterCellValue> = Vec::new();
         for i in 0..visible {
             let addr = window_start.saturating_add(i);
             let cell = (register_type, addr);
@@ -831,6 +817,7 @@ impl App {
                         label,
                     ));
                     main_changed.push(self.changed.get(&cell).copied().unwrap_or(false));
+                    window_values.push((cell, value));
                 }
                 None => {
                     main_rows.push(self.interpreter.placeholder(addr, label));
@@ -838,31 +825,32 @@ impl App {
                 }
             }
         }
+        let main_ascii = self.interpreter.ascii_string(&window_values);
 
-        let (pinned_rows, pinned_changed) = match &self.last_read {
-            Some(lr) => {
-                let rows = Self::format_pinned(
-                    &self.interpreter,
-                    &lr.pinned_data,
-                    lr.pinned_read_at,
-                    now,
-                    &self.labels,
-                );
-                let changed = lr
-                    .pinned_data
-                    .iter()
-                    .map(|&(cell, _)| self.changed.get(&cell).copied().unwrap_or(false))
-                    .collect();
-                (rows, changed)
-            }
-            None => (Vec::new(), Vec::new()),
-        };
+        let (pinned_rows, pinned_changed, pinned_ascii) = self.last_read.as_ref().map(|lr| {
+            let rows = Self::format_pinned(
+                &self.interpreter,
+                &lr.pinned_data,
+                lr.pinned_read_at,
+                now,
+                &self.labels,
+            );
+            let changed = lr
+                .pinned_data
+                .iter()
+                .map(|&(cell, _)| self.changed.get(&cell).copied().unwrap_or(false))
+                .collect();
+            let ascii = self.interpreter.ascii_string(&lr.pinned_data);
+            (rows, changed, ascii)
+        }).unwrap_or_default();
 
         let params = self.read_mut();
         params.main_rows = main_rows;
         params.main_changed = main_changed;
+        params.ascii_string = main_ascii;
         params.pinned_rows = pinned_rows;
         params.pinned_changed = pinned_changed;
+        params.pinned_ascii_string = pinned_ascii;
         params.data_start = window_start;
     }
 
