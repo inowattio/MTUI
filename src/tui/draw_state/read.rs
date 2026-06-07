@@ -1,7 +1,9 @@
 use crate::app::App;
 use crate::config::Column;
 use crate::constants::keybind;
-use crate::state::{LabelParams, Popup, ReadPanel, ReadParams, SearchParams, WriteParams};
+use crate::state::{
+    LabelParams, LogsParams, Popup, ReadPanel, ReadParams, SearchParams, WriteParams,
+};
 use crate::tui::theme::{spinner_frame, Theme};
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::symbols;
@@ -291,6 +293,7 @@ fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup: &P
         Popup::Columns(selected) => draw_picker(frame, area, theme, app, *selected),
         Popup::Write(write) => draw_write(frame, area, theme, write),
         Popup::Slave(value) => draw_slave(frame, area, theme, *value),
+        Popup::Logs(logs) => draw_logs(frame, area, theme, logs),
         Popup::Quit => draw_confirm(
             frame,
             area,
@@ -346,6 +349,7 @@ fn draw_help(frame: &mut Frame, area: Rect, theme: &Theme) {
         (format!("{COLUMNS}"), "Toggle columns"),
         (format!("{DUMP}"), "Dump read data"),
         (format!("{SETTINGS}"), "Settings"),
+        (format!("{LOGS}"), "View write log"),
     ];
 
     const COLS: usize = 3;
@@ -511,6 +515,42 @@ fn draw_search(frame: &mut Frame, area: Rect, theme: &Theme, search: &SearchPara
 
     frame.render_widget(Clear, rect);
     frame.render_widget(Paragraph::new(lines).block(theme.panel("Go to")), rect);
+}
+
+fn draw_logs(frame: &mut Frame, area: Rect, theme: &Theme, logs: &LogsParams) {
+    let visible = LogsParams::VISIBLE as usize;
+    let len = logs.lines.len();
+    let top = (logs.top as usize).min(len.saturating_sub(1));
+    let end = (top + visible).min(len);
+
+    let mut lines = vec![
+        Line::from(Span::styled(format!(" {}", logs.path), theme.dim_style())),
+        Line::default(),
+    ];
+
+    for line in &logs.lines[top..end] {
+        lines.push(Line::from(Span::styled(format!(" {line}"), theme.base())));
+    }
+    for _ in end..top + visible {
+        lines.push(Line::default());
+    }
+
+    lines.push(Line::default());
+    lines.push(Line::from(Span::styled(
+        format!(
+            " {}/{}   \u{2191}/\u{2193} scroll \u{b7} PgUp/Dn page \u{b7} esc close",
+            end.min(len),
+            len
+        ),
+        theme.dim_style(),
+    )));
+
+    let width = 78;
+    let height = lines.len() as u16 + 2;
+    let rect = centered_rect(width, height, area);
+
+    frame.render_widget(Clear, rect);
+    frame.render_widget(Paragraph::new(lines).block(theme.panel("Write log")), rect);
 }
 
 fn draw_write(frame: &mut Frame, area: Rect, theme: &Theme, write: &WriteParams) {

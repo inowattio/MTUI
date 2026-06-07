@@ -6,8 +6,9 @@ use crate::modbus::{
 };
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
 use crate::state::{
-    ConnectionStatus, DiscoveryParams, DumpParams, InterfaceKind, LabelParams, Popup, PopupKind,
-    ReadPanel, ReadParams, SearchParams, SettingsField, SettingsParams, State, WriteParams,
+    ConnectionStatus, DiscoveryParams, DumpParams, InterfaceKind, LabelParams, LogsParams, Popup,
+    PopupKind, ReadPanel, ReadParams, SearchParams, SettingsField, SettingsParams, State,
+    WriteParams,
 };
 use chrono::{DateTime, Local, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
@@ -409,6 +410,30 @@ impl App {
 
     pub fn writes_log_path_string(&self) -> String {
         self.writes_log_path().display().to_string()
+    }
+
+    pub fn open_logs(&mut self) {
+        let path = self.writes_log_path();
+        let lines: Vec<String> = match fs::read_to_string(&path) {
+            Ok(content) if !content.trim().is_empty() => {
+                content.lines().map(str::to_string).collect()
+            }
+            Ok(_) => vec!["(no writes logged yet)".to_string()],
+            Err(_) => vec!["(log file not found — enable \"Log writes\" in settings)".to_string()],
+        };
+        let mut params = LogsParams {
+            path: path.display().to_string(),
+            lines,
+            top: 0,
+        };
+        params.scroll_to_bottom();
+        self.read_mut().popup = Some(Popup::Logs(params));
+    }
+
+    pub fn logs_scroll(&mut self, delta: i32) {
+        if let Some(Popup::Logs(l)) = &mut self.read_mut().popup {
+            l.scroll(delta);
+        }
     }
 
     fn log_write(&self) {

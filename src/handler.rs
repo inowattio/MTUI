@@ -8,7 +8,8 @@ use crate::num_ops::{
 };
 use crate::modbus::{DataBits, Parity, StopBits, WordOrder};
 use crate::state::{
-    DiscoveryField, DiscoveryParams, InterfaceKind, Popup, PopupKind, ReadPanel, SettingsField,
+    DiscoveryField, DiscoveryParams, InterfaceKind, LogsParams, Popup, PopupKind, ReadPanel,
+    SettingsField,
 };
 use crossterm::event::{KeyCode, KeyEvent};
 
@@ -60,6 +61,7 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         keybind::GRAPH => app.toggle_graph(),
         keybind::CYCLE_POSITION => app.cycle_position(),
         keybind::COPY_ADDRESS => app.copy_address(),
+        keybind::LOGS => app.open_logs(),
         keybind::WORD_ORDER => app.toggle_word_order(),
         keybind::REFRESH => app.refresh().await,
         keybind::TOGGLE => app.toggle_type(),
@@ -277,6 +279,15 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
                     digit_add(value, digit);
                 }
             }
+            _ => {}
+        },
+
+        PopupKind::Logs => match key_event.code {
+            keybind::EXIT | keybind::LOGS => app.close_popup(),
+            keybind::MOVE_UP => app.logs_scroll(-1),
+            keybind::MOVE_DOWN => app.logs_scroll(1),
+            keybind::PAGE_UP => app.logs_scroll(-(LogsParams::VISIBLE as i32)),
+            keybind::PAGE_DOWN => app.logs_scroll(LogsParams::VISIBLE as i32),
             _ => {}
         },
 

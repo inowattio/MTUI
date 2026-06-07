@@ -191,6 +191,27 @@ pub struct SettingsParams {
     pub status: Option<String>,
 }
 
+#[derive(Debug, Default, PartialEq)]
+pub struct LogsParams {
+    pub path: String,
+    pub lines: Vec<String>,
+    pub top: u16,
+}
+
+impl LogsParams {
+    pub const VISIBLE: u16 = 16;
+
+    pub fn scroll(&mut self, delta: i32) {
+        let len = self.lines.len() as i32;
+        let max_top = (len - Self::VISIBLE as i32).max(0);
+        self.top = (self.top as i32 + delta).clamp(0, max_top) as u16;
+    }
+
+    pub fn scroll_to_bottom(&mut self) {
+        self.scroll(i32::MAX);
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub enum Popup {
     Help,
@@ -200,6 +221,7 @@ pub enum Popup {
     Columns(u16),
     Write(WriteParams),
     Slave(u16),
+    Logs(LogsParams),
     Quit,
 }
 
@@ -212,6 +234,7 @@ pub enum PopupKind {
     Columns,
     Write,
     Slave,
+    Logs,
     Quit,
 }
 
@@ -225,6 +248,7 @@ impl Popup {
             Popup::Columns(_) => PopupKind::Columns,
             Popup::Write(_) => PopupKind::Write,
             Popup::Slave(_) => PopupKind::Slave,
+            Popup::Logs(_) => PopupKind::Logs,
             Popup::Quit => PopupKind::Quit,
         }
     }
