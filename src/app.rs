@@ -801,7 +801,6 @@ impl App {
                         self.read_log
                             .get(&(register_type, addr.saturating_add(offset)))
                             .map(|&(v, _)| v)
-                            .unwrap_or(0)
                     };
                     main_rows.push(self.interpreter.format_row(
                         addr,

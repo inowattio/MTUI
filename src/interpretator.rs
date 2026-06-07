@@ -167,9 +167,9 @@ impl Interpretor {
         (0..data.len())
             .map(|i| {
                 let value = data[i].1;
-                let next1 = data.get(i + 1).map(|(_, v)| *v).unwrap_or(0);
-                let next2 = data.get(i + 2).map(|(_, v)| *v).unwrap_or(0);
-                let next3 = data.get(i + 3).map(|(_, v)| *v).unwrap_or(0);
+                let next1 = data.get(i + 1).map(|(_, v)| *v);
+                let next2 = data.get(i + 2).map(|(_, v)| *v);
+                let next3 = data.get(i + 3).map(|(_, v)| *v);
                 let lbl = label(data[i]);
                 self.format_row(index + i as u16, value, [next1, next2, next3], read_at, lbl.as_deref())
             })
@@ -180,7 +180,7 @@ impl Interpretor {
         &self,
         address: u16,
         value: u16,
-        next: [u16; 3],
+        next: [Option<u16>; 3],
         read_at: DateTime<Local>,
         label: Option<&str>,
     ) -> String {
@@ -203,36 +203,56 @@ impl Interpretor {
             row.push_str(&format!("{: <6} ", byte as i16))
         }
 
-        let word = self.word_order.make_word(byte, next1);
-        let second_word = self.word_order.make_word(next2, next3);
+        let word = self.word_order.make_word(byte, next1.unwrap_or_default());
+        let second_word = self.word_order.make_word(next2.unwrap_or_default(), next3.unwrap_or_default());
         let dword = self.word_order.make_dword(word, second_word);
         if self.config.hex {
             row.push_str(&format!("{byte:<04X} "))
         }
         if self.config.u32 {
-            row.push_str(&format!("{word: <10} "))
+            if next1.is_none() {
+                row.push_str(&format!("{: <10} ", "-"))
+            } else {
+                row.push_str(&format!("{word: <10} "))
+            }
         }
         if self.config.i32 {
-            row.push_str(&format!("{: <11} ", word as i32))
+            if next1.is_none() {
+                row.push_str(&format!("{: <11} ", "-"))
+            } else {
+                row.push_str(&format!("{: <11} ", word as i32))
+            }
         }
         if self.config.u64 {
-            row.push_str(&format!("{dword: <20} "))
+            if next1.is_none() || next2.is_none() || next3.is_none() {
+                row.push_str(&format!("{: <20} ", "-"))
+            } else {
+                row.push_str(&format!("{dword: <20} "))
+            }
         }
         if self.config.i64 {
-            row.push_str(&format!("{: <21} ", dword as i64))
+            if next1.is_none() || next2.is_none() || next3.is_none() {
+                row.push_str(&format!("{: <21} ", "-"))
+            } else {
+                row.push_str(&format!("{: <21} ", dword as i64))
+            }
         }
         if self.config.f32 {
-            let x = f32::from_bits(word);
-            let mut s = format!("{x}");
+            if next1.is_none() {
+                row.push_str(&format!("{: <10} ", "-"))
+            } else {
+                let x = f32::from_bits(word);
+                let mut s = format!("{x}");
 
-            let max_len = 10;
-            if s.len() > max_len {
-                s.truncate(max_len);
+                let max_len = 10;
+                if s.len() > max_len {
+                    s.truncate(max_len);
+                }
+                row.push_str(&format!("{s: <10} "))
             }
-            row.push_str(&format!("{s: <10} "))
         }
         if self.config.ascii {
-            let s: String = [byte, next1]
+            let s: String = [byte, next1.unwrap_or_default()]
                 .iter()
                 .flat_map(|n| [(n >> 8) as u8, (n & 0xFF) as u8])
                 .map(|b| {
