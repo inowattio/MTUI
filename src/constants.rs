@@ -29,8 +29,6 @@ pub mod keybind {
     pub const ACTION: KeyCode = KeyCode::Enter;
     pub const MOVE_UP: KeyCode = KeyCode::Up;
     pub const MOVE_DOWN: KeyCode = KeyCode::Down;
-    pub const MOVE_LEFT: KeyCode = KeyCode::Left;
-    pub const MOVE_RIGHT: KeyCode = KeyCode::Right;
     pub const PAGE_UP: KeyCode = KeyCode::PageUp;
     pub const PAGE_DOWN: KeyCode = KeyCode::PageDown;
 }

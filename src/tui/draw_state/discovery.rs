@@ -17,12 +17,6 @@ pub fn draw(params: &DiscoveryParams, frame: &mut Frame, area: Rect, theme: &The
         lines.push(render_field(params, field, i as u16 == params.selected, theme));
     }
 
-    lines.push(Line::default());
-    lines.push(Line::from(Span::styled(
-        " \u{2191}/\u{2193} field \u{b7} \u{2190}/\u{2192} change \u{b7} type to edit \u{b7} enter connect \u{b7} esc back",
-        theme.dim_style(),
-    )));
-
     if let Some(status) = &params.status {
         lines.push(Line::default());
         let style = if status.to_lowercase().contains("fail") {
