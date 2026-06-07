@@ -347,17 +347,17 @@ fn draw_help(frame: &mut Frame, area: Rect, theme: &Theme) {
         ("PgUp/Dn".to_string(), "Jump page"),
         (format!("{ACTION}"), "Read at cursor"),
         (format!("{REFRESH}"), "Refresh"),
-        ("space".to_string(), "Pause / resume auto-refresh"),
-        (format!("{TOGGLE}"), "Switch register type"),
+        ("space".to_string(), "Pause/resume"),
+        (format!("{TOGGLE}"), "Switch reg type"),
         (format!("{WORD_ORDER}"), "Cycle word order"),
-        (format!("{SWITCH_VIEW}"), "Switch Main / Pinned"),
-        (format!("{JUMP}"), "Go to address / label"),
-        (format!("{CYCLE_POSITION}"), "Toggle previous position"),
-        (format!("{GRAPH}"), "Toggle value graph"),
+        (format!("{SWITCH_VIEW}"), "Main / Pinned"),
+        (format!("{JUMP}"), "Go to addr/label"),
+        (format!("{CYCLE_POSITION}"), "Prev position"),
+        (format!("{GRAPH}"), "Value graph"),
         (format!("{WRITE}"), "Write register"),
         (format!("{SLAVE}"), "Set slave id"),
-        (format!("{DISCOVERY}"), "Discover / switch device"),
-        (format!("{PIN}"), "Add / Remove pin"),
+        (format!("{DISCOVERY}"), "Switch device"),
+        (format!("{PIN}"), "Add/remove pin"),
         (format!("{CLEAR_PINS}"), "Clear all pins"),
         (format!("{LABEL}"), "Label register"),
         (format!("{CLEAR_LABELS}"), "Clear all labels"),
@@ -365,18 +365,27 @@ fn draw_help(frame: &mut Frame, area: Rect, theme: &Theme) {
         (format!("{DUMP}"), "Dump read data"),
     ];
 
-    let mut lines: Vec<Line> = entries
-        .iter()
-        .map(|(key, desc)| {
-            Line::from(vec![
-                Span::styled(format!(" {key:<8}"), theme.accent_style()),
-                Span::styled(*desc, theme.base()),
-            ])
-        })
-        .collect();
+    const COLS: usize = 3;
+    let rows = entries.len().div_ceil(COLS);
+
+    let mut lines: Vec<Line> = Vec::with_capacity(rows + 3 + 1);
+    lines.push(Line::default());
+    
+    for r in 0..rows {
+        let mut spans = Vec::new();
+        for c in 0..COLS {
+            let idx = r * COLS + c;
+            if let Some((key, desc)) = entries.get(idx) {
+                spans.push(Span::styled(format!(" {key:<7} "), theme.accent_style()));
+                spans.push(Span::styled(format!("{desc:<17}"), theme.base()));
+            }
+        }
+        lines.push(Line::from(spans));
+    }
+
     lines.push(Line::default());
     lines.push(Line::from(Span::styled(
-        " Graph might disallow some operations".to_string(),
+        " Graph might disallow some operations",
         theme.dim_style(),
     )));
     lines.push(Line::from(Span::styled(
@@ -384,8 +393,9 @@ fn draw_help(frame: &mut Frame, area: Rect, theme: &Theme) {
         theme.dim_style(),
     )));
 
+    let width = (COLS as u16 * 26) + 3;
     let height = lines.len() as u16 + 2;
-    let rect = centered_rect(40, height, area);
+    let rect = centered_rect(width, height, area);
 
     frame.render_widget(Clear, rect);
     frame.render_widget(Paragraph::new(lines).block(theme.panel("Help")), rect);
