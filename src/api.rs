@@ -60,7 +60,7 @@ pub async fn serve(port: u16, device: ApiDevice, bound: BoundPort) {
 }
 
 async fn read_handler(State(device): State<ApiDevice>, Json(request): Json<ReadRequest>) -> Response {
-    log::error!("API read {:?}@{}:{}", request.register_type, request.address, request.count);
+    log::info!("API read {:?}@{}:{}", request.register_type, request.address, request.count);
     let Some(device) = current(&device) else {
         return StatusCode::SERVICE_UNAVAILABLE.into_response();
     };
@@ -81,7 +81,7 @@ async fn write_handler(
     State(device): State<ApiDevice>,
     Json(request): Json<WriteRequest>,
 ) -> StatusCode {
-    log::error!("API write {}:{:?}", request.address, request.values);
+    log::info!("API write {}:{:?}", request.address, request.values);
     let Some(device) = current(&device) else {
         return StatusCode::SERVICE_UNAVAILABLE;
     };
