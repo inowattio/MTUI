@@ -328,7 +328,7 @@ fn draw_slave(frame: &mut Frame, area: Rect, theme: &Theme, value: u16) {
 
 fn draw_help(frame: &mut Frame, area: Rect, theme: &Theme) {
     use keybind::*;
-    let entries: [(String, &str); 15] = [
+    let entries: &[(String, &str)] = &[
         (format!("{MOVE_UP}/{MOVE_DOWN}"), "Move cursor"),
         ("PgUp/Dn Home/End".to_string(), "Page / jump to ends"),
         (format!("{ACTION}"), "Read at cursor"),
@@ -338,6 +338,7 @@ fn draw_help(frame: &mut Frame, area: Rect, theme: &Theme) {
         (format!("{WORD_ORDER}"), "Cycle word order"),
         (format!("{SWITCH_VIEW}"), "Switch Main / Pinned"),
         (format!("{JUMP}"), "Go to address / label"),
+        (format!("{CYCLE_POSITION}"), "Toggle previous position"),
         (format!("{WRITE}"), "Write register"),
         (format!("{SLAVE}"), "Set slave id"),
         (format!("{PIN}"), "Add / Remove pin"),

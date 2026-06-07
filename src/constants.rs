@@ -21,6 +21,7 @@ pub mod keybind {
     pub const PAUSE: KeyCode = KeyCode::Char(' ');
     pub const WORD_ORDER: KeyCode = KeyCode::Char('o');
     pub const SLAVE: KeyCode = KeyCode::Char('i');
+    pub const CYCLE_POSITION: KeyCode = KeyCode::Char('b');
     pub const NEGATOR: KeyCode = KeyCode::Char('-');
     pub const SWITCH_VIEW: KeyCode = KeyCode::Tab;
     pub const ACTION: KeyCode = KeyCode::Enter;

@@ -30,6 +30,7 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         keybind::WRITE => app.open_write(),
         keybind::LABEL => app.open_label(),
         keybind::SLAVE => app.open_slave(),
+        keybind::CYCLE_POSITION => app.cycle_position(),
         keybind::WORD_ORDER => app.toggle_word_order(),
         keybind::REFRESH => app.refresh().await,
         keybind::TOGGLE => app.toggle_type(),

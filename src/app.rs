@@ -66,6 +66,8 @@ pub struct App {
     /// Number of register rows the Read table can show; written by the draw layer
     /// each frame and used to size the read window to exactly the visible area.
     pub visible_rows: Cell<u16>,
+    /// The position before the last jump, so the cycle key can toggle back to it.
+    previous_position: Option<RegisterCell>,
     background_task: Option<BackgroundTask>,
     previous_values: BTreeMap<RegisterCell, u16>,
     /// Per-cell "changed on its last read" flag, persisted alongside `read_log`
@@ -184,6 +186,7 @@ impl App {
             paused: false,
             dirty: false,
             visible_rows: Cell::new(initial_rows),
+            previous_position: None,
             background_task: None,
             previous_values: BTreeMap::new(),
             changed: BTreeMap::new(),
@@ -367,6 +370,13 @@ impl App {
             return false;
         };
 
+        // Remember where we jumped from so the cycle key can toggle back.
+        let from = {
+            let p = self.read();
+            (p.register_type, p.position)
+        };
+        self.previous_position = Some(from);
+
         let p = self.read_mut();
         let type_changed = register_type != p.register_type;
         p.panel = ReadPanel::Main;
@@ -387,6 +397,24 @@ impl App {
         // show immediately (no device read needed).
         self.rebuild_read_rows();
         true
+    }
+
+    pub fn cycle_position(&mut self) {
+        let Some((register_type, position)) = self.previous_position else {
+            return;
+        };
+        let current = {
+            let p = self.read();
+            (p.register_type, p.position)
+        };
+        self.previous_position = Some(current);
+
+        let p = self.read_mut();
+        p.panel = ReadPanel::Main;
+        p.register_type = register_type;
+        p.position = position;
+        p.window_start = position;
+        self.rebuild_read_rows();
     }
 
     fn recompute_search(&mut self) {
