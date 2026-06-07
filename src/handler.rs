@@ -19,6 +19,21 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         return Ok(());
     }
 
+    // In the graph view these keys don't apply (they act on the table display).
+    if app.read().graph
+        && matches!(
+            key_event.code,
+            keybind::DUMP
+                | keybind::COLUMNS
+                | keybind::SLAVE
+                | keybind::SWITCH_VIEW
+                | keybind::WORD_ORDER
+                | keybind::TOGGLE
+        )
+    {
+        return Ok(());
+    }
+
     match key_event.code {
         keybind::EXIT => app.request_quit(),
         keybind::PIN => app.pin(),

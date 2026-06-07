@@ -372,6 +372,10 @@ fn draw_help(frame: &mut Frame, area: Rect, theme: &Theme) {
         .collect();
     lines.push(Line::default());
     lines.push(Line::from(Span::styled(
+        " Graph might disallow some operations".to_string(),
+        theme.dim_style(),
+    )));
+    lines.push(Line::from(Span::styled(
         format!(" {SAVE} \u{b7} save config to file   {EXIT} \u{b7} quit"),
         theme.dim_style(),
     )));
