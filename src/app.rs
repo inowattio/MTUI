@@ -10,7 +10,7 @@ use crate::state::{
 use chrono::{DateTime, Local, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 use std::cell::Cell;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::time::{Duration, Instant};
 use std::{error, fs};
 use tokio::task::JoinHandle;
@@ -74,6 +74,8 @@ pub struct App {
     /// so the highlight survives jumps the same way the values do.
     changed: BTreeMap<RegisterCell, bool>,
     read_log: BTreeMap<RegisterCell, (u16, DateTime<Utc>)>,
+    /// Per-cell value history (oldest first, capped) for the value-over-time graph.
+    value_history: BTreeMap<RegisterCell, VecDeque<u16>>,
     last_read: Option<LastRead>,
     labels: BTreeMap<RegisterCell, String>,
 }
@@ -191,6 +193,7 @@ impl App {
             previous_values: BTreeMap::new(),
             changed: BTreeMap::new(),
             read_log: BTreeMap::new(),
+            value_history: BTreeMap::new(),
             last_read: None,
         }
     }
@@ -230,6 +233,25 @@ impl App {
 
     pub fn open_columns(&mut self) {
         self.read_mut().popup = Some(Popup::Columns(0));
+    }
+
+    /// Open the value-over-time graph for the currently focused register.
+    pub fn open_graph(&mut self) {
+        let p = self.read();
+        let cell = if p.panel == ReadPanel::Pinned {
+            self.pinned_registers
+                .get(p.pinned_index as usize)
+                .copied()
+                .unwrap_or((p.register_type, p.position))
+        } else {
+            (p.register_type, p.position)
+        };
+        self.read_mut().popup = Some(Popup::Graph(cell));
+    }
+
+    /// Recorded value history for a register (oldest first), for the graph.
+    pub fn value_history(&self, cell: RegisterCell) -> Option<&VecDeque<u16>> {
+        self.value_history.get(&cell)
     }
 
     pub fn open_write(&mut self) {
@@ -763,6 +785,13 @@ impl App {
                 self.changed.insert(cell, did_change);
                 self.previous_values.insert(cell, value);
                 self.read_log.insert(cell, (value, read_at));
+
+                const HISTORY_CAP: usize = 180;
+                let history = self.value_history.entry(cell).or_default();
+                history.push_back(value);
+                if history.len() > HISTORY_CAP {
+                    history.pop_front();
+                }
             }
         }
 

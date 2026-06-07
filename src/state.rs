@@ -83,6 +83,8 @@ pub enum Popup {
     Write(WriteParams),
     /// Slave-ID entry; the value is the id being typed.
     Slave(u16),
+    /// Value-over-time graph for the given register.
+    Graph(RegisterCell),
     /// Confirm quitting with unsaved label/pin changes.
     Quit,
 }
@@ -99,6 +101,7 @@ pub enum PopupKind {
     Columns,
     Write,
     Slave,
+    Graph,
     Quit,
 }
 
@@ -113,6 +116,7 @@ impl Popup {
             Popup::Columns(_) => PopupKind::Columns,
             Popup::Write(_) => PopupKind::Write,
             Popup::Slave(_) => PopupKind::Slave,
+            Popup::Graph(_) => PopupKind::Graph,
             Popup::Quit => PopupKind::Quit,
         }
     }

@@ -4,10 +4,11 @@ use crate::constants::keybind;
 use crate::state::{LabelParams, Popup, ReadPanel, ReadParams, SearchParams, WriteParams};
 use crate::tui::theme::{spinner_frame, Theme};
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
+use ratatui::symbols;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Cell, Clear, Paragraph, Row, Table, Wrap};
+use ratatui::widgets::{Axis, Cell, Chart, Clear, Dataset, GraphType, Paragraph, Row, Table, Wrap};
 use ratatui::Frame;
-use crate::register::RegisterType;
+use crate::register::{RegisterCell, RegisterType};
 
 fn rows_to_table(
     title: &str,
@@ -297,6 +298,7 @@ fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup: &P
         Popup::Columns(selected) => draw_picker(frame, area, theme, app, *selected),
         Popup::Write(write) => draw_write(frame, area, theme, write),
         Popup::Slave(value) => draw_slave(frame, area, theme, *value),
+        Popup::Graph(cell) => draw_graph(frame, area, theme, app, *cell),
         Popup::Quit => draw_confirm(
             frame,
             area,
@@ -343,6 +345,7 @@ fn draw_help(frame: &mut Frame, area: Rect, theme: &Theme) {
         (format!("{SWITCH_VIEW}"), "Switch Main / Pinned"),
         (format!("{JUMP}"), "Go to address / label"),
         (format!("{CYCLE_POSITION}"), "Toggle previous position"),
+        (format!("{GRAPH}"), "Graph value over time"),
         (format!("{WRITE}"), "Write register"),
         (format!("{SLAVE}"), "Set slave id"),
         (format!("{PIN}"), "Add / Remove pin"),
@@ -605,6 +608,75 @@ fn draw_picker(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, selected
 
     frame.render_widget(Clear, rect);
     frame.render_widget(Paragraph::new(lines).block(theme.panel("Columns")), rect);
+}
+
+fn draw_graph(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, cell: RegisterCell) {
+    let (kind, address) = cell;
+
+    let points: Vec<(f64, f64)> = app
+        .value_history(cell)
+        .map(|h| h.iter().enumerate().map(|(i, &v)| (i as f64, v as f64)).collect())
+        .unwrap_or_default();
+
+    // Large, near-full-screen popup.
+    let w = area.width.saturating_sub(6).max(20);
+    let h = area.height.saturating_sub(4).max(8);
+    let rect = centered_rect(w, h, area);
+    frame.render_widget(Clear, rect);
+
+    if points.len() < 2 {
+        let msg = Paragraph::new(Line::from(Span::styled(
+            "Collecting samples\u{2026} read this register a few times (esc / g to close).",
+            theme.dim_style(),
+        )))
+        .block(theme.panel(&format!("Graph {kind:?} {address}")));
+        frame.render_widget(msg, rect);
+        return;
+    }
+
+    let (mut min, mut max) = (f64::MAX, f64::MIN);
+    for &(_, y) in &points {
+        min = min.min(y);
+        max = max.max(y);
+    }
+    let (y_lo, y_hi) = if (max - min).abs() < f64::EPSILON {
+        (min - 1.0, max + 1.0)
+    } else {
+        let pad = (max - min) * 0.05;
+        (min - pad, max + pad)
+    };
+    let x_hi = (points.len() - 1) as f64;
+    let last = points.last().map(|&(_, y)| y).unwrap_or(0.0);
+
+    let datasets = vec![Dataset::default()
+        .marker(symbols::Marker::Braille)
+        .graph_type(GraphType::Line)
+        .style(theme.accent_style())
+        .data(&points)];
+
+    let title =
+        format!("Graph {kind:?} {address}  cur {last:.0}  min {min:.0}  max {max:.0}  ({} pts)", points.len());
+    let chart = Chart::new(datasets)
+        .block(theme.panel(&title))
+        .x_axis(
+            Axis::default()
+                .style(theme.dim_style())
+                .bounds([0.0, x_hi])
+                .labels([
+                    Span::styled("old", theme.dim_style()),
+                    Span::styled("now", theme.dim_style()),
+                ]),
+        )
+        .y_axis(
+            Axis::default()
+                .style(theme.dim_style())
+                .bounds([y_lo, y_hi])
+                .labels([
+                    Span::styled(format!("{y_lo:.0}"), theme.dim_style()),
+                    Span::styled(format!("{y_hi:.0}"), theme.dim_style()),
+                ]),
+        );
+    frame.render_widget(chart, rect);
 }
 
 fn centered_rect(width: u16, height: u16, area: Rect) -> Rect {
