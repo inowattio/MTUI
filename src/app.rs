@@ -236,7 +236,7 @@ impl App {
         let device = &config.device;
         let mut d = DiscoveryParams {
             ports: Self::available_ports(),
-            slave_id: device.slave_id as u16,
+            slave_id: device.slave_id,
             connect_timeout_ms: device.timeout_connect_ms,
             command_timeout_ms: device.timeout_command_ms,
             between_commands_ms: device.time_between_commands_ms,
@@ -305,7 +305,7 @@ impl App {
             };
             DeviceConfig {
                 interface,
-                slave_id: d.slave_id.min(u8::MAX as u16) as u8,
+                slave_id: d.slave_id,
                 timeout_connect_ms: d.connect_timeout_ms,
                 timeout_command_ms: d.command_timeout_ms,
                 time_between_commands_ms: d.between_commands_ms,

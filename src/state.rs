@@ -42,7 +42,7 @@ pub struct DiscoveryParams {
     pub stop_bits: StopBits,
     pub ip: String,
     pub net_port: u16,
-    pub slave_id: u16,
+    pub slave_id: u8,
     pub connect_timeout_ms: u64,
     pub command_timeout_ms: u64,
     pub between_commands_ms: u64,
