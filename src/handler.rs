@@ -66,14 +66,9 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         keybind::PAUSE => app.toggle_pause(),
         keybind::ACTION => app.refresh().await,
         keybind::SWITCH_VIEW => {
-            {
-                let p = app.read_mut();
-                p.toggle_panel();
-                p.scroll_pinned(rows, pinned_len);
-            }
-            if !app.paused {
-                app.refresh().await;
-            }
+            let p = app.read_mut();
+            p.toggle_panel();
+            p.scroll_pinned(rows, pinned_len);
         }
         keybind::MOVE_UP => {
             {
