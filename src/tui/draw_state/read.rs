@@ -330,7 +330,7 @@ fn draw_help(frame: &mut Frame, area: Rect, theme: &Theme) {
     use keybind::*;
     let entries: &[(String, &str)] = &[
         (format!("{MOVE_UP}/{MOVE_DOWN}"), "Move cursor"),
-        ("PgUp/Dn Home/End".to_string(), "Page / jump to ends"),
+        ("PgUp/Dn".to_string(), "Jump page"),
         (format!("{ACTION}"), "Read at cursor"),
         (format!("{REFRESH}"), "Refresh"),
         ("space".to_string(), "Pause / resume auto-refresh"),
