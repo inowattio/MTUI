@@ -41,6 +41,10 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
                 p.toggle_panel();
                 p.scroll_pinned(rows, pinned_len);
             }
+            // Immediately read the panel we just switched to (pause still holds).
+            if !app.paused {
+                app.refresh().await;
+            }
         }
         keybind::MOVE_UP => {
             {

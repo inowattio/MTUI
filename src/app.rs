@@ -34,19 +34,22 @@ enum BackgroundTask {
 struct RefreshTaskResult {
     window_start: u16,
     register_type: RegisterType,
-    main_data: Result<Vec<RegisterCellValue>, String>,
-    pinned_data: Result<Vec<RegisterCellValue>, String>,
+    /// `None` for a panel that wasn't read this cycle (only the active panel is).
+    main_data: Option<Result<Vec<RegisterCellValue>, String>>,
+    pinned_data: Option<Result<Vec<RegisterCellValue>, String>>,
     read_duration: Duration,
 }
 
 /// The raw data of the last successful read, kept so the visible rows can be
 /// re-formatted instantly when the interpretation columns change at runtime.
+/// Each panel keeps its own timestamp since only one is read per refresh.
 #[derive(Debug)]
 struct LastRead {
     window_start: u16,
     main_data: Vec<RegisterCellValue>,
+    main_read_at: DateTime<Local>,
     pinned_data: Vec<RegisterCellValue>,
-    read_at: DateTime<Local>,
+    pinned_read_at: DateTime<Local>,
 }
 
 #[derive(Debug)]
@@ -646,11 +649,11 @@ impl App {
             return;
         }
 
-        let (window_start, register_type) = {
+        let (panel, window_start, register_type) = {
             let p = self.read_mut();
             p.refresh_timer = Instant::now();
             p.loading = true;
-            (p.window_start, p.register_type)
+            (p.panel, p.window_start, p.register_type)
         };
         self.connection = ConnectionStatus::Reading;
 
@@ -660,13 +663,22 @@ impl App {
 
         self.background_task = Some(BackgroundTask::Refresh(tokio::spawn(async move {
             let read_start = Instant::now();
-            let main_data = Self::aquire_data_with(&device, amount, window_start, register_type)
-                .await
-                .map_err(|e| e.to_string());
+            // Only read the panel the user is actually looking at.
+            let (main_data, pinned_data) = match panel {
+                ReadPanel::Main => {
+                    let main = Self::aquire_data_with(&device, amount, window_start, register_type)
+                        .await
+                        .map_err(|e| e.to_string());
+                    (Some(main), None)
+                }
+                ReadPanel::Pinned => {
+                    let pinned = Self::aquire_pinned_data_with(&device, &pinned_registers)
+                        .await
+                        .map_err(|e| e.to_string());
+                    (None, Some(pinned))
+                }
+            };
             let read_duration = read_start.elapsed();
-            let pinned_data = Self::aquire_pinned_data_with(&device, &pinned_registers)
-                .await
-                .map_err(|e| e.to_string());
 
             RefreshTaskResult {
                 window_start,
@@ -679,10 +691,15 @@ impl App {
     }
 
     fn apply_refresh_result(&mut self, result: RefreshTaskResult) {
-        if !matches!(
-            &self.state,
-            State::Read(params) if params.register_type == result.register_type
-        ) {
+        // Drop a stale Main read if the register type changed while it was in flight.
+        // (A Pinned read carries its own per-cell types, so it isn't affected.)
+        if result.main_data.is_some()
+            && !matches!(
+                &self.state,
+                State::Read(params) if params.register_type == result.register_type
+            )
+        {
+            self.read_mut().loading = false;
             return;
         }
 
@@ -695,62 +712,87 @@ impl App {
                 .collect::<Vec<bool>>(),
             Err(_) => Vec::new(),
         };
-        let main_changed = changed_flags(&result.main_data);
-        let pinned_changed = changed_flags(&result.pinned_data);
+        let main_changed = result.main_data.as_ref().map(&changed_flags);
+        let pinned_changed = result.pinned_data.as_ref().map(&changed_flags);
 
-        let mut new_previous = BTreeMap::new();
         let read_at = Utc::now();
         let read_at_local = read_at.with_timezone(&Local);
-        for data in [&result.main_data, &result.pinned_data].into_iter().flatten() {
+
+        // Merge the panel(s) actually read into the value cache and read log;
+        // values for the panel not read this cycle are left intact.
+        for data in [result.main_data.as_ref(), result.pinned_data.as_ref()]
+            .into_iter()
+            .flatten() // Option -> &Result
+            .flatten() // &Result -> &Vec (Ok only)
+        {
             for &((kind, address), value) in data {
-                new_previous.insert((kind, address), value);
+                self.previous_values.insert((kind, address), value);
                 self.read_log.insert((kind, address), (value, read_at));
             }
         }
 
-        self.previous_values = new_previous;
-
-        let ascii_string = match &result.main_data {
-            Ok(data) => self.interpreter.ascii_string(data),
-            Err(_) => String::new(),
+        let main_ascii = match &result.main_data {
+            Some(Ok(data)) => Some(self.interpreter.ascii_string(data)),
+            _ => None,
+        };
+        let pinned_ascii = match &result.pinned_data {
+            Some(Ok(data)) => Some(self.interpreter.ascii_string(data)),
+            _ => None,
         };
 
-        let pinned_ascii_string = match &result.pinned_data {
-            Ok(data) => self.interpreter.ascii_string(data),
-            Err(_) => String::new(),
-        };
+        // Update only the read panel's slice of the cached snapshot.
+        let mut last = self.last_read.take().unwrap_or(LastRead {
+            window_start: result.window_start,
+            main_data: Vec::new(),
+            main_read_at: read_at_local,
+            pinned_data: Vec::new(),
+            pinned_read_at: read_at_local,
+        });
+        if let Some(Ok(data)) = &result.main_data {
+            last.window_start = result.window_start;
+            last.main_data = data.clone();
+            last.main_read_at = read_at_local;
+        }
+        if let Some(Ok(data)) = &result.pinned_data {
+            last.pinned_data = data.clone();
+            last.pinned_read_at = read_at_local;
+        }
+        self.last_read = Some(last);
 
-        // Cache the raw read so the rows can be re-formatted instantly when the
-        // visible columns change (see `rebuild_read_rows`).
-        let connection = match &result.main_data {
-            Ok(main_data) => {
-                self.last_read = Some(LastRead {
-                    window_start: result.window_start,
-                    main_data: main_data.clone(),
-                    pinned_data: result.pinned_data.clone().unwrap_or_default(),
-                    read_at: read_at_local,
-                });
-                ConnectionStatus::Connected
-            }
-            Err(e) => ConnectionStatus::Error(e.clone()),
+        // Connection reflects whichever panel was read this cycle.
+        let connection = match (&result.main_data, &result.pinned_data) {
+            (Some(Ok(_)), _) | (_, Some(Ok(_))) => ConnectionStatus::Connected,
+            (Some(Err(e)), _) | (_, Some(Err(e))) => ConnectionStatus::Error(e.clone()),
+            _ => self.connection.clone(),
         };
+        let read_ok =
+            matches!(&result.main_data, Some(Ok(_))) || matches!(&result.pinned_data, Some(Ok(_)));
 
         {
             let params = self.read_mut();
-            params.ascii_string = ascii_string;
-            params.pinned_ascii_string = pinned_ascii_string;
-            params.main_changed = main_changed;
-            params.pinned_changed = pinned_changed;
             params.read_duration = Some(result.read_duration);
             params.loading = false;
-            if let Err(e) = &result.main_data {
+            if let Some(changed) = main_changed {
+                params.main_changed = changed;
+            }
+            if let Some(changed) = pinned_changed {
+                params.pinned_changed = changed;
+            }
+            if let Some(s) = main_ascii {
+                params.ascii_string = s;
+            }
+            if let Some(s) = pinned_ascii {
+                params.pinned_ascii_string = s;
+            }
+            if let Some(Err(e)) = &result.main_data {
                 params.main_rows = vec![e.clone()];
-                params.pinned_rows = Vec::new();
                 params.data_start = result.window_start;
             }
         }
 
-        if result.main_data.is_ok() {
+        // Re-format from the (now partially updated) cache; the unread panel just
+        // re-renders its previous data unchanged.
+        if read_ok {
             self.rebuild_read_rows();
         }
         self.connection = connection;
@@ -760,22 +802,24 @@ impl App {
     /// interpreter columns. Cheap, and used both after a read and after a
     /// runtime column toggle so the table updates without re-reading the device.
     fn rebuild_read_rows(&mut self) {
-        let (window_start, main_data, pinned_data, read_at) = match &self.last_read {
-            Some(lr) => (
-                lr.window_start,
-                lr.main_data.clone(),
-                lr.pinned_data.clone(),
-                lr.read_at,
-            ),
-            None => return,
-        };
+        let (window_start, main_data, pinned_data, main_read_at, pinned_read_at) =
+            match &self.last_read {
+                Some(lr) => (
+                    lr.window_start,
+                    lr.main_data.clone(),
+                    lr.pinned_data.clone(),
+                    lr.main_read_at,
+                    lr.pinned_read_at,
+                ),
+                None => return,
+            };
 
         let labels = &self.labels;
-        let main_rows = self.interpreter.run(main_data, window_start, read_at, |cell| {
+        let main_rows = self.interpreter.run(main_data, window_start, main_read_at, |cell| {
             let ((kind, address), _) = cell;
             labels.get(&(kind, address)).cloned()
         });
-        let pinned_rows = Self::format_pinned(&self.interpreter, &pinned_data, read_at, labels);
+        let pinned_rows = Self::format_pinned(&self.interpreter, &pinned_data, pinned_read_at, labels);
 
         let params = self.read_mut();
         params.main_rows = main_rows;
