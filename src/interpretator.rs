@@ -37,6 +37,12 @@ impl Interpretor {
         if self.config.i16 {
             header.push_str(&format!("{0: <6} ", "i16"))
         }
+        if self.config.u8s {
+            header.push_str(&format!("{0: <8} ", "u8s"))
+        }
+        if self.config.i8s {
+            header.push_str(&format!("{0: <9} ", "i8s"))
+        }
         if self.config.hex {
             header.push_str(&format!("{0: <4} ", "hex"))
         }
@@ -139,6 +145,12 @@ impl Interpretor {
         }
         if self.config.i16 {
             row.push_str(&format!("{dash: <6} "));
+        }
+        if self.config.u8s {
+            row.push_str(&format!("{dash: <8} "));
+        }
+        if self.config.i8s {
+            row.push_str(&format!("{dash: <9} "));
         }
         if self.config.hex {
             row.push_str(&format!("{dash: <4} "));
@@ -244,6 +256,16 @@ impl Interpretor {
         }
         if self.config.i16 {
             row.push_str(&format!("{: <6} ", byte as i16))
+        }
+        if self.config.u8s {
+            let high = (byte >> 8) as u8;
+            let low = (byte & 0xFF) as u8;
+            row.push_str(&format!("{: <8} ", format!("{high}/{low}")))
+        }
+        if self.config.i8s {
+            let high = (byte >> 8) as u8 as i8;
+            let low = (byte & 0xFF) as u8 as i8;
+            row.push_str(&format!("{: <9} ", format!("{high}/{low}")))
         }
 
         let word = self.word_order.make_word(byte, next1.unwrap_or_default());

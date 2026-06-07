@@ -128,6 +128,8 @@ interpretation_columns! {
     IndexHex => index_hex : "index (hex)" = false,
     U16 => u16 : "u16" = true,
     I16 => i16 : "i16" = true,
+    U8s => u8s : "u8s" = false,
+    I8s => i8s : "i8s" = false,
     Hex => hex : "hex" = true,
     Hex32 => hex32 : "hex32" = false,
     F16 => f16 : "f16" = false,
