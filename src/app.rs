@@ -240,6 +240,11 @@ impl App {
         p.graph = !p.graph;
     }
 
+    pub fn toggle_graph_width(&mut self) {
+        let p = self.read_mut();
+        p.graph_dword = !p.graph_dword;
+    }
+
     /// Recorded value history for a register (oldest first), for the graph.
     pub fn value_history(&self, cell: RegisterCell) -> Option<&VecDeque<u16>> {
         self.value_history.get(&cell)

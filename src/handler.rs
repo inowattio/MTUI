@@ -19,19 +19,21 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         return Ok(());
     }
 
-    // In the graph view these keys don't apply (they act on the table display).
-    if app.read().graph
-        && matches!(
-            key_event.code,
-            keybind::DUMP
-                | keybind::COLUMNS
-                | keybind::SLAVE
-                | keybind::SWITCH_VIEW
-                | keybind::WORD_ORDER
-                | keybind::TOGGLE
-        )
-    {
-        return Ok(());
+    // In the graph view some keys don't apply (they act on the table display).
+    // `d` is repurposed to toggle the plotted value width (Word / DWord).
+    if app.read().graph {
+        match key_event.code {
+            keybind::DUMP => {
+                app.toggle_graph_width();
+                return Ok(());
+            }
+            keybind::COLUMNS
+            | keybind::SLAVE
+            | keybind::SWITCH_VIEW
+            | keybind::WORD_ORDER
+            | keybind::TOGGLE => return Ok(()),
+            _ => {}
+        }
     }
 
     match key_event.code {

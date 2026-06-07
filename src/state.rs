@@ -130,6 +130,8 @@ pub struct ReadParams {
     pub popup: Option<Popup>,
     /// When true, the main panel shows the value-over-time graph instead of the table.
     pub graph: bool,
+    /// In graph view, plot the 32-bit DWord (this + next register) instead of the 16-bit value.
+    pub graph_dword: bool,
     pub main_rows: Vec<String>,
     pub pinned_rows: Vec<String>,
     pub refresh_timer: Instant,
@@ -153,6 +155,7 @@ impl Default for ReadParams {
             pinned_top: 0,
             popup: None,
             graph: false,
+            graph_dword: false,
             main_rows: Vec::new(),
             pinned_rows: Vec::new(),
             refresh_timer: Instant::now(),

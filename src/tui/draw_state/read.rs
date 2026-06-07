@@ -230,7 +230,7 @@ pub fn draw(
     app.visible_rows.set(visible);
 
     if params.graph {
-        draw_graph(frame, rows[1], theme, app, (info_type, info_addr));
+        draw_graph(frame, rows[1], theme, app, (info_type, info_addr), params.graph_dword);
         if let Some(popup) = &params.popup {
             draw_popup(frame, area, theme, app, popup);
         }
@@ -621,18 +621,46 @@ fn draw_picker(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, selected
     frame.render_widget(Paragraph::new(lines).block(theme.panel("Columns")), rect);
 }
 
-fn draw_graph(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, cell: RegisterCell) {
+fn draw_graph(
+    frame: &mut Frame,
+    area: Rect,
+    theme: &Theme,
+    app: &App,
+    cell: RegisterCell,
+    dword: bool,
+) {
     let (kind, address) = cell;
+    let width = if dword { "DWord" } else { "Word" };
     let label = app.label_text(kind, address);
     let title = match &label {
-        Some(l) => format!(" Graph  \u{201c}{l}\u{201d} "),
-        None => " Graph ".to_string(),
+        Some(l) => format!(" Graph [{width}] \u{201c}{l}\u{201d} "),
+        None => format!(" Graph [{width}] "),
     };
 
-    let points: Vec<(f64, f64)> = app
-        .value_history(cell)
-        .map(|h| h.iter().enumerate().map(|(i, &v)| (i as f64, v as f64)).collect())
-        .unwrap_or_default();
+    // Word: the 16-bit value history. DWord: combine each sample with the next
+    // register's sample using the configured word order.
+    let points: Vec<(f64, f64)> = if dword {
+        let order = app.config.device.word_order;
+        match (
+            app.value_history(cell),
+            app.value_history((kind, address.wrapping_add(1))),
+        ) {
+            (Some(low), Some(high)) => {
+                let n = low.len().min(high.len());
+                low.iter()
+                    .skip(low.len() - n)
+                    .zip(high.iter().skip(high.len() - n))
+                    .enumerate()
+                    .map(|(i, (&a, &b))| (i as f64, order.make_word(a, b) as f64))
+                    .collect()
+            }
+            _ => Vec::new(),
+        }
+    } else {
+        app.value_history(cell)
+            .map(|h| h.iter().enumerate().map(|(i, &v)| (i as f64, v as f64)).collect())
+            .unwrap_or_default()
+    };
 
     let block = theme.panel(&title);
     let inner = block.inner(area);
@@ -689,7 +717,6 @@ fn draw_graph(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, cell: Reg
     ];
 
     let datasets = vec![Dataset::default()
-        .name(format!("{address}"))
         .marker(symbols::Marker::Braille)
         .graph_type(GraphType::Line)
         .style(theme.accent_style())
