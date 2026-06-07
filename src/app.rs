@@ -600,10 +600,6 @@ impl App {
             .collect())
     }
 
-    pub async fn aquire_pinned_data(&self) -> Result<Vec<RegisterCellValue>, anyhow::Error> {
-        Self::aquire_pinned_data_with(&self.device, &self.pinned_registers).await
-    }
-
     async fn aquire_pinned_data_with(
         device: &ModbusDevice,
         regs: &[RegisterCell],
