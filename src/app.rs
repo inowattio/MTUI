@@ -1,3 +1,4 @@
+use crate::api::{ApiDevice, BoundPort};
 use crate::config::{Column, Config, Label, Labels, Startup};
 use crate::constants::CONFIG_PATH;
 use crate::interpretator::Interpretor;
@@ -14,6 +15,7 @@ use chrono::{DateTime, Local, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 use std::cell::Cell;
 use std::collections::{BTreeMap, VecDeque};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use std::{error, fs};
 use tokio::task::JoinHandle;
@@ -78,6 +80,8 @@ pub struct App {
     labels: BTreeMap<RegisterCell, String>,
     pending_write: Option<PendingWrite>,
     logged_connection: ConnectionStatus,
+    api_device: ApiDevice,
+    api_bound_port: BoundPort,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -181,6 +185,9 @@ impl App {
             State::Discovery(Self::discovery_params(&config))
         };
 
+        let api_device: ApiDevice = Arc::new(Mutex::new(device.clone()));
+        let api_bound_port: BoundPort = Arc::new(std::sync::atomic::AtomicU16::new(0));
+
         let app = Self {
             interpreter: Interpretor::new(config.interpretations.clone(), config.device.word_order),
             pinned_registers: config.pinned_registers.clone().into(),
@@ -202,6 +209,8 @@ impl App {
             value_history: BTreeMap::new(),
             pending_write: None,
             logged_connection: ConnectionStatus::Unknown,
+            api_device,
+            api_bound_port,
         };
 
         if app.device.is_some() {
@@ -257,6 +266,27 @@ impl App {
 
     pub fn open_settings(&mut self) {
         self.state = State::Settings(SettingsParams::default());
+    }
+
+    pub fn api_device(&self) -> ApiDevice {
+        self.api_device.clone()
+    }
+
+    pub fn api_bound_port_handle(&self) -> BoundPort {
+        self.api_bound_port.clone()
+    }
+
+    pub fn api_bound_port(&self) -> Option<u16> {
+        match self.api_bound_port.load(std::sync::atomic::Ordering::Relaxed) {
+            0 => None,
+            port => Some(port),
+        }
+    }
+
+    fn sync_api_device(&self) {
+        if let Ok(mut slot) = self.api_device.lock() {
+            *slot = self.device.clone();
+        }
     }
 
     fn is_reading(&self) -> bool {
@@ -356,6 +386,7 @@ impl App {
         match ModbusDevice::new(&device_config).await {
             Ok(device) => {
                 self.device = Some(device);
+                self.sync_api_device();
                 self.interpreter.set_word_order(device_config.word_order);
                 self.config.device = device_config;
                 self.dirty = true;
@@ -547,6 +578,11 @@ impl App {
             }
             SettingsField::ReadOnly => self.config.read_only = !self.config.read_only,
             SettingsField::LogWrites => self.config.log_writes = !self.config.log_writes,
+            SettingsField::ApiPort => {
+                let current = self.config.port.map_or(-1, |p| p as i64);
+                let n = (current + delta).clamp(-1, u16::MAX as i64);
+                self.config.port = (n >= 0).then_some(n as u16);
+            }
             SettingsField::ClearPins | SettingsField::ClearLabels | SettingsField::Save => return,
         }
         self.dirty = true;
@@ -568,6 +604,10 @@ impl App {
                 let n = (self.config.graph_history_cap as u64).saturating_mul(10) + digit;
                 self.config.graph_history_cap = n.min(u16::MAX as u64) as u16;
             }
+            SettingsField::ApiPort => {
+                let n = (self.config.port.unwrap_or(0) as u64).saturating_mul(10) + digit;
+                self.config.port = Some(n.min(u16::MAX as u64) as u16);
+            }
             _ => return,
         }
         self.dirty = true;
@@ -584,6 +624,12 @@ impl App {
             }
             SettingsField::HistoryCap => {
                 self.config.graph_history_cap = (self.config.graph_history_cap / 10).max(1);
+            }
+            SettingsField::ApiPort => {
+                self.config.port = match self.config.port {
+                    Some(n) if n >= 10 => Some(n / 10),
+                    _ => None,
+                };
             }
             _ => return,
         }

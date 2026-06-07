@@ -92,6 +92,18 @@ fn field_view(app: &App, field: SettingsField) -> (&'static str, String, Kind) {
             if device.read_only { "on" } else { "off" }.to_string(),
             Kind::Toggle,
         ),
+        SettingsField::ApiPort => (
+            "API port",
+            match device.port {
+                None => "off".to_string(),
+                Some(0) => match app.api_bound_port() {
+                    Some(bound) => format!("any (:{bound})"),
+                    None => "any".to_string(),
+                },
+                Some(n) => n.to_string(),
+            },
+            Kind::Number,
+        ),
         SettingsField::LogWrites => (
             "Log writes to file",
             if device.log_writes { "on" } else { "off" }.to_string(),

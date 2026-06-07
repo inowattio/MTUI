@@ -1,3 +1,4 @@
+mod api;
 pub mod app;
 mod config;
 mod constants;
@@ -24,6 +25,14 @@ use std::io;
 async fn main() -> AppResult<()> {
     logger::init();
     let mut app = App::new().await;
+
+    if let Some(port) = app.config.port {
+        tokio::spawn(api::serve(
+            port,
+            app.api_device(),
+            app.api_bound_port_handle(),
+        ));
+    }
 
     let backend = CrosstermBackend::new(io::stderr());
     let terminal = Terminal::new(backend)?;

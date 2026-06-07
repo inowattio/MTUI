@@ -15,6 +15,7 @@ pub struct Config {
     pub graph_history_cap: u16,
     pub read_only: bool,
     pub log_writes: bool,
+    pub port: Option<u16>,
     pub pinned_registers: PinnedRegisters,
     pub labels: Labels,
 }
@@ -77,6 +78,7 @@ impl Default for Config {
             graph_history_cap: 180,
             read_only: false,
             log_writes: false,
+            port: None,
             pinned_registers: Default::default(),
             labels: Default::default(),
         }
