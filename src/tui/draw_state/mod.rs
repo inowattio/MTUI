@@ -1,6 +1,4 @@
-pub mod dump;
-pub mod help;
-pub mod jump;
-pub mod label;
+pub mod discovery;
+pub mod logs;
 pub mod read;
-pub mod write;
+pub mod settings;

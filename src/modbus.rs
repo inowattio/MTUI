@@ -9,7 +9,8 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
 use tokio_modbus::client::{rtu, tcp, Context, Reader, Writer};
-use tokio_modbus::slave::Slave;
+use tokio_modbus::prelude::SlaveContext;
+use tokio_modbus::slave::{Slave, SlaveId};
 use tokio_serial::SerialStream;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -27,9 +28,9 @@ pub enum DataBits {
     Eight,
 }
 
-impl Into<tokio_serial::DataBits> for DataBits {
-    fn into(self) -> tokio_serial::DataBits {
-        match self {
+impl From<DataBits> for tokio_serial::DataBits {
+    fn from(val: DataBits) -> Self {
+        match val {
             DataBits::Five => tokio_serial::DataBits::Five,
             DataBits::Six => tokio_serial::DataBits::Six,
             DataBits::Seven => tokio_serial::DataBits::Seven,
@@ -70,9 +71,9 @@ pub enum Parity {
     Even,
 }
 
-impl Into<tokio_serial::Parity> for Parity {
-    fn into(self) -> tokio_serial::Parity {
-        match self {
+impl From<Parity> for tokio_serial::Parity {
+    fn from(val: Parity) -> Self {
+        match val {
             Parity::None => tokio_serial::Parity::None,
             Parity::Odd => tokio_serial::Parity::Odd,
             Parity::Even => tokio_serial::Parity::Even,
@@ -109,9 +110,9 @@ pub enum StopBits {
     Two,
 }
 
-impl Into<tokio_serial::StopBits> for StopBits {
-    fn into(self) -> tokio_serial::StopBits {
-        match self {
+impl From<StopBits> for tokio_serial::StopBits {
+    fn from(val: StopBits) -> Self {
+        match val {
             StopBits::One => tokio_serial::StopBits::One,
             StopBits::Two => tokio_serial::StopBits::Two,
         }
@@ -160,6 +161,7 @@ pub trait ModbusDataOrder: Clone + Send + Sync {
     fn split_word(data: u32) -> [u16; 2];
 }
 
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Clone)]
 pub struct ABCD;
 impl ModbusDataOrder for ABCD {
@@ -176,6 +178,7 @@ impl ModbusDataOrder for ABCD {
     }
 }
 
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Clone)]
 pub struct BADC;
 impl ModbusDataOrder for BADC {
@@ -193,6 +196,7 @@ impl ModbusDataOrder for BADC {
     }
 }
 
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Clone)]
 pub struct CDAB;
 impl ModbusDataOrder for CDAB {
@@ -210,6 +214,7 @@ impl ModbusDataOrder for CDAB {
     }
 }
 
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Clone)]
 pub struct DCBA;
 impl ModbusDataOrder for DCBA {
@@ -227,6 +232,7 @@ impl ModbusDataOrder for DCBA {
     }
 }
 
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
 pub enum WordOrder {
     #[default]
@@ -263,16 +269,24 @@ impl WordOrder {
             Self::DCBA => DCBA::split_word(data),
         }
     }
+
+    pub fn next(self) -> Self {
+        match self {
+            Self::ABCD => Self::BADC,
+            Self::BADC => Self::CDAB,
+            Self::CDAB => Self::DCBA,
+            Self::DCBA => Self::ABCD,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct DeviceConfig {
     pub interface: Interface,
-    pub slave_id: tokio_modbus::slave::SlaveId,
+    pub slave_id: SlaveId,
     pub timeout_connect_ms: u64,
     pub timeout_command_ms: u64,
     pub time_between_commands_ms: u64,
-    #[serde(default)]
     pub word_order: WordOrder,
 }
 
@@ -339,7 +353,6 @@ impl ModbusDevice {
                 let context = timeout(connection, timeout_connect, Duration::default()).await??;
 
                 tokio::time::sleep(Duration::from_secs(2)).await;
-                // TODO: hmmm
 
                 context
             }
@@ -350,6 +363,14 @@ impl ModbusDevice {
             context: Arc::new(Mutex::new(context)),
             config: config.clone(),
         })
+    }
+
+    pub async fn set_slave(&self, slave_id: SlaveId) {
+        self.context.lock().await.set_slave(Slave(slave_id));
+    }
+
+    pub fn set_word_order(&mut self, word_order: WordOrder) {
+        self.config.word_order = word_order;
     }
 
     pub async fn inputs(&self, address: u16, quantity: u16) -> Result<Vec<u16>> {

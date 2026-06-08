@@ -1,33 +1,110 @@
 use crate::app::WriteType;
-use crate::constants::keybind;
-use crate::register::RegisterType;
+use crate::modbus::{DataBits, Parity, StopBits, WordOrder};
+use crate::register::{RegisterCell, RegisterType};
 use std::time::{Duration, Instant};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InterfaceKind {
+    Mock,
+    Wired,
+    Network,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DiscoveryField {
+    Interface,
+    Port,
+    Baud,
+    DataBits,
+    Parity,
+    StopBits,
+    Ip,
+    NetPort,
+    SlaveId,
+    ConnectTimeout,
+    CommandTimeout,
+    BetweenCommands,
+    WordOrder,
+    Connect,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct DiscoveryParams {
+    pub interface: InterfaceKind,
+    pub selected: u16,
+    pub ports: Vec<String>,
+    pub port_index: u16,
+    pub baud_rate: u32,
+    pub data_bits: DataBits,
+    pub parity: Parity,
+    pub stop_bits: StopBits,
+    pub ip: String,
+    pub net_port: u16,
+    pub slave_id: u8,
+    pub connect_timeout_ms: u64,
+    pub command_timeout_ms: u64,
+    pub between_commands_ms: u64,
+    pub word_order: WordOrder,
+    pub status: Option<String>,
+}
+
+impl Default for DiscoveryParams {
+    fn default() -> Self {
+        Self {
+            interface: InterfaceKind::Mock,
+            selected: 0,
+            ports: Vec::new(),
+            port_index: 0,
+            baud_rate: 9600,
+            data_bits: DataBits::Eight,
+            parity: Parity::None,
+            stop_bits: StopBits::One,
+            ip: "127.0.0.1".to_string(),
+            net_port: 502,
+            slave_id: 1,
+            connect_timeout_ms: 1000,
+            command_timeout_ms: 2000,
+            between_commands_ms: 3,
+            word_order: WordOrder::default(),
+            status: None,
+        }
+    }
+}
+
+impl DiscoveryParams {
+    pub fn fields(&self) -> Vec<DiscoveryField> {
+        use DiscoveryField::*;
+        let mut fields = vec![Interface];
+        match self.interface {
+            InterfaceKind::Mock => {}
+            InterfaceKind::Wired => fields.extend([Port, Baud, DataBits, Parity, StopBits]),
+            InterfaceKind::Network => fields.extend([Ip, NetPort]),
+        }
+        fields.extend([
+            SlaveId,
+            ConnectTimeout,
+            CommandTimeout,
+            BetweenCommands,
+            WordOrder,
+            Connect,
+        ]);
+        fields
+    }
+
+    pub fn current_field(&self) -> DiscoveryField {
+        let fields = self.fields();
+        let i = (self.selected as usize).min(fields.len() - 1);
+        fields[i]
+    }
+}
 
 #[derive(Debug, Default, PartialEq)]
 pub struct WriteParams {
     pub position: u16,
     pub result: Option<String>,
-    pub value: Option<i32>,
+    pub value: Option<i64>,
     pub write_type: WriteType,
-}
-
-#[derive(Debug, PartialEq, Default)]
-pub struct DumpParams {
-    pub started: bool,
-    pub total_batches: Option<u16>,
-    pub completed_batches: u16,
-    pub start_position: u16,
-    pub position: u16,
-    pub header_written: bool,
-    pub error: Option<String>,
-    pub register_type: RegisterType,
-}
-
-#[derive(Debug, Default, PartialEq)]
-pub struct JumpParams {
-    pub from: u16,
-    pub to: u16,
-    pub register_type: RegisterType,
+    pub bit_cursor: u16,
 }
 
 #[derive(Debug, Default, PartialEq)]
@@ -38,11 +115,160 @@ pub struct LabelParams {
     pub result: Option<String>,
 }
 
+#[derive(Debug, Default, PartialEq)]
+pub struct DumpParams {
+    pub result: Option<String>,
+}
+
+#[derive(Debug, Default, PartialEq)]
+pub struct SearchParams {
+    pub query: String,
+    pub matches: Vec<(RegisterCell, String)>,
+    pub selected: u16,
+    pub top: u16,
+}
+
+impl SearchParams {
+    pub fn scroll(&mut self, rows: u16) {
+        let len = self.matches.len() as u16;
+        scroll_window(&mut self.selected, &mut self.top, rows, len);
+    }
+}
+
+fn scroll_window(cursor: &mut u16, top: &mut u16, rows: u16, len: u16) {
+    let rows = rows.max(1);
+    if len == 0 {
+        *cursor = 0;
+        *top = 0;
+        return;
+    }
+    *cursor = (*cursor).min(len - 1);
+    if *cursor < *top {
+        *top = *cursor;
+    } else if *cursor >= top.saturating_add(rows) {
+        *top = cursor.saturating_sub(rows - 1);
+    }
+    if *top >= len {
+        *top = len.saturating_sub(rows).min(*cursor);
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub enum ReadPanel {
+    #[default]
+    Main,
+    Pinned,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SettingsField {
+    RegistersBatch,
+    AutoUpdate,
+    HistoryCap,
+    ReadOnly,
+    LogWrites,
+    ApiPort,
+    ClearPins,
+    ClearLabels,
+    Save,
+}
+
+impl SettingsField {
+    pub const ALL: [SettingsField; 9] = [
+        SettingsField::RegistersBatch,
+        SettingsField::AutoUpdate,
+        SettingsField::HistoryCap,
+        SettingsField::ReadOnly,
+        SettingsField::LogWrites,
+        SettingsField::ApiPort,
+        SettingsField::ClearPins,
+        SettingsField::ClearLabels,
+        SettingsField::Save,
+    ];
+}
+
+#[derive(Debug, Default, PartialEq)]
+pub struct SettingsParams {
+    pub selected: u16,
+    pub status: Option<String>,
+}
+
+#[derive(Debug, Default, PartialEq)]
+pub struct LogsParams {
+    pub path: String,
+    pub lines: Vec<String>,
+    pub top: u16,
+}
+
+impl LogsParams {
+    pub const VISIBLE: u16 = 16;
+
+    pub fn scroll(&mut self, delta: i32) {
+        let len = self.lines.len() as i32;
+        let max_top = (len - Self::VISIBLE as i32).max(0);
+        self.top = (self.top as i32 + delta).clamp(0, max_top) as u16;
+    }
+
+    pub fn scroll_to_bottom(&mut self) {
+        self.scroll(i32::MAX);
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Popup {
+    Help,
+    Dump(DumpParams),
+    Search(SearchParams),
+    Label(LabelParams),
+    Columns(u16),
+    Write(WriteParams),
+    Slave(u16),
+    Logs(LogsParams),
+    Quit,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum PopupKind {
+    Help,
+    Dump,
+    Search,
+    Label,
+    Columns,
+    Write,
+    Slave,
+    Logs,
+    Quit,
+}
+
+impl Popup {
+    pub fn kind(&self) -> PopupKind {
+        match self {
+            Popup::Help => PopupKind::Help,
+            Popup::Dump(_) => PopupKind::Dump,
+            Popup::Search(_) => PopupKind::Search,
+            Popup::Label(_) => PopupKind::Label,
+            Popup::Columns(_) => PopupKind::Columns,
+            Popup::Write(_) => PopupKind::Write,
+            Popup::Slave(_) => PopupKind::Slave,
+            Popup::Logs(_) => PopupKind::Logs,
+            Popup::Quit => PopupKind::Quit,
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub struct ReadParams {
     pub position: u16,
-    pub main_data: String,
-    pub pinned_data: String,
+    pub window_start: u16,
+    pub data_start: u16,
+    pub panel: ReadPanel,
+    pub pinned_index: u16,
+    pub pinned_top: u16,
+    pub popup: Option<Popup>,
+    pub graph: bool,
+    pub graph_dword: bool,
+    pub main_rows: Vec<String>,
+    pub pinned_rows: Vec<String>,
     pub refresh_timer: Instant,
     pub register_type: RegisterType,
     pub read_duration: Option<Duration>,
@@ -57,8 +283,16 @@ impl Default for ReadParams {
     fn default() -> Self {
         Self {
             position: 0,
-            main_data: no_data_text(),
-            pinned_data: "".to_string(),
+            window_start: 0,
+            data_start: 0,
+            panel: ReadPanel::Main,
+            pinned_index: 0,
+            pinned_top: 0,
+            popup: None,
+            graph: false,
+            graph_dword: false,
+            main_rows: Vec::new(),
+            pinned_rows: Vec::new(),
             refresh_timer: Instant::now(),
             register_type: Default::default(),
             read_duration: None,
@@ -71,25 +305,45 @@ impl Default for ReadParams {
     }
 }
 
-pub fn no_data_text() -> String {
-    format!("No data, press '{}' to refresh.", keybind::REFRESH)
+impl ReadParams {
+    pub fn scroll_to_cursor(&mut self, rows: u16) {
+        let rows = rows.max(1);
+        let max_start = u16::MAX - (rows - 1);
+        self.window_start = self.position.saturating_sub(rows / 2).min(max_start);
+    }
+
+    pub fn toggle_panel(&mut self) {
+        self.panel = match self.panel {
+            ReadPanel::Main => ReadPanel::Pinned,
+            ReadPanel::Pinned => ReadPanel::Main,
+        };
+    }
+
+    pub fn scroll_pinned(&mut self, rows: u16, len: u16) {
+        scroll_window(&mut self.pinned_index, &mut self.pinned_top, rows, len);
+    }
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub enum ConnectionStatus {
+    #[default]
+    Unknown,
+    Reading,
+    Connected,
+    Error(String),
+}
+
+#[derive(Debug, PartialEq)]
+pub struct LogViewParams {
+    pub top: u16,
+    pub follow: bool,
+    pub previous: ReadParams,
 }
 
 #[derive(Debug, PartialEq)]
 pub enum State {
     Read(ReadParams),
-    Jump(JumpParams),
-    Write(WriteParams),
-    Help,
-    Dump(DumpParams),
-    Label(LabelParams),
-}
-
-pub enum StateTransition {
-    Read,
-    Jump,
-    Write,
-    Help,
-    Dump,
-    Label,
+    Discovery(DiscoveryParams),
+    Settings(SettingsParams),
+    Logs(LogViewParams),
 }

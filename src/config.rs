@@ -12,9 +12,11 @@ pub struct Config {
     pub interpretations: InterpretorConfig,
     pub registers_batch: u16,
     pub auto_update_interval_seconds: Option<u64>,
-    pub dump_file: String,
-    pub pinned_defaults: PinnedRegisters,
-    #[serde(default)]
+    pub graph_history_cap: u16,
+    pub read_only: bool,
+    pub log_writes: bool,
+    pub port: Option<u16>,
+    pub pinned_registers: PinnedRegisters,
     pub labels: Labels,
 }
 
@@ -70,35 +72,83 @@ impl Default for Config {
                 address: 0,
                 register_type: RegisterType::Holding,
             },
-            interpretations: InterpretorConfig {
-                hex: false,
-                u32: true,
-                i32: true,
-                f32: false,
-                u64: false,
-                i64: false,
-                ascii: true,
-                bits: false,
-                label: true,
-            },
+            interpretations: InterpretorConfig::default(),
             registers_batch: 4,
             auto_update_interval_seconds: Some(1),
-            dump_file: "dump.txt".into(),
-            pinned_defaults: Default::default(),
+            graph_history_cap: 180,
+            read_only: false,
+            log_writes: false,
+            port: None,
+            pinned_registers: Default::default(),
             labels: Default::default(),
         }
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct InterpretorConfig {
-    pub hex: bool,
-    pub u32: bool,
-    pub i32: bool,
-    pub f32: bool,
-    pub u64: bool,
-    pub i64: bool,
-    pub ascii: bool,
-    pub bits: bool,
-    pub label: bool,
+macro_rules! interpretation_columns {
+    ($($variant:ident => $field:ident : $name:literal = $default:literal),+ $(,)?) => {
+        #[derive(Clone, Debug, Deserialize, Serialize)]
+        #[serde(default)]
+        pub struct InterpretorConfig {
+            $(pub $field: bool,)+
+        }
+
+        impl Default for InterpretorConfig {
+            fn default() -> Self {
+                Self { $($field: $default,)+ }
+            }
+        }
+
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        pub enum Column {
+            $($variant,)+
+        }
+
+        impl Column {
+            pub const ALL: &'static [Column] = &[$(Column::$variant),+];
+
+            pub fn name(self) -> &'static str {
+                match self {
+                    $(Column::$variant => $name,)+
+                }
+            }
+        }
+
+        impl InterpretorConfig {
+            pub fn get(&self, column: Column) -> bool {
+                match column {
+                    $(Column::$variant => self.$field,)+
+                }
+            }
+
+            pub fn toggle(&mut self, column: Column) {
+                match column {
+                    $(Column::$variant => self.$field = !self.$field,)+
+                }
+            }
+        }
+    };
+}
+
+interpretation_columns! {
+    IndexHex => index_hex : "index (hex)" = false,
+    U8s => u8s : "u8s" = false,
+    I8s => i8s : "i8s" = false,
+    U16 => u16 : "u16" = true,
+    I16 => i16 : "i16" = true,
+    F16 => f16 : "f16" = false,
+    U32 => u32 : "u32" = true,
+    I32 => i32 : "i32" = true,
+    F32 => f32 : "f32" = true,
+    U64 => u64 : "u64" = false,
+    I64 => i64 : "i64" = false,
+    Hex => hex : "hex" = true,
+    Hex32 => hex32 : "hex32" = false,
+    Bcd => bcd : "bcd" = false,
+    Bcd32 => bcd32 : "bcd32" = false,
+    Bits => bits : "bits" = true,
+    Ascii => ascii : "ascii" = true,
+    Time => time : "time (read at)" = true,
+    Ago => ago : "ago (read)" = false,
+    Label => label : "label" = true,
 }

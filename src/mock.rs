@@ -2,11 +2,12 @@ use async_trait::async_trait;
 use std::collections::HashMap;
 use tokio_modbus::client::{Client, Context};
 use tokio_modbus::slave::SlaveContext;
-use tokio_modbus::{Request, Response, Slave};
+use tokio_modbus::{Request, Response, Slave, SlaveId};
 
 #[derive(Debug, Default)]
 pub struct MockContext {
     holdings: HashMap<u16, u16>,
+    slave_id: SlaveId,
 }
 
 impl MockContext {
@@ -18,7 +19,9 @@ impl MockContext {
 
 #[async_trait]
 impl SlaveContext for MockContext {
-    fn set_slave(&mut self, _: Slave) {}
+    fn set_slave(&mut self, slave: Slave) {
+        self.slave_id = slave.0
+    }
 }
 
 #[async_trait]
@@ -28,8 +31,11 @@ impl Client for MockContext {
             Request::ReadHoldingRegisters(addr, count) => {
                 let mut regs = Vec::with_capacity(count as usize);
                 for offset in 0..count {
-                    let reg_addr = addr + offset;
-                    let value = *self.holdings.get(&reg_addr).unwrap_or(&(addr + count));
+                    let reg_addr = addr.wrapping_add(offset);
+                    let value = *self
+                        .holdings
+                        .get(&reg_addr)
+                        .unwrap_or(&addr.wrapping_add(count));
                     regs.push(value);
                 }
 
@@ -37,7 +43,7 @@ impl Client for MockContext {
             }
 
             Request::ReadInputRegisters(a, b) => Ok(Ok(Response::ReadInputRegisters(vec![
-                    a + b + 1;
+                    a.wrapping_add(b).wrapping_add(self.slave_id as u16);
                     b as usize
                 ]))),
 
@@ -49,7 +55,7 @@ impl Client for MockContext {
             Request::WriteMultipleRegisters(addr, values) => {
                 let quantity = values.len() as u16;
                 for (i, v) in values.to_vec().into_iter().enumerate() {
-                    self.holdings.insert(addr + i as u16, v);
+                    self.holdings.insert(addr.wrapping_add(i as u16), v);
                 }
                 Ok(Ok(Response::WriteMultipleRegisters(addr, quantity)))
             }

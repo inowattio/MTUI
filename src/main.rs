@@ -1,14 +1,17 @@
+mod api;
 pub mod app;
 mod config;
 mod constants;
 pub mod event;
 pub mod handler;
 mod interpretator;
+mod logger;
 mod mock;
 mod modbus;
 mod num_ops;
 mod register;
 mod state;
+mod writes_log;
 pub mod tui;
 
 use crate::app::{App, AppResult};
@@ -21,7 +24,17 @@ use std::io;
 
 #[tokio::main]
 async fn main() -> AppResult<()> {
+    logger::init();
     let mut app = App::new().await;
+
+    if let Some(port) = app.config.port {
+        tokio::spawn(api::serve(
+            port,
+            app.api_device(),
+            app.api_bound_port_handle(),
+            app.writes_log_handle(),
+        ));
+    }
 
     let backend = CrosstermBackend::new(io::stderr());
     let terminal = Terminal::new(backend)?;

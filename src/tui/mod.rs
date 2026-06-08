@@ -1,18 +1,22 @@
 mod draw_state;
 mod make_bottom_title;
 mod make_top_title;
+pub mod theme;
 
 use crate::app::{App, AppResult};
 use crate::event::{Event, EventHandler};
 use crate::state::State;
 use crate::tui::make_bottom_title::make_bottom_title;
 use crate::tui::make_top_title::make_top_title;
+use crate::tui::theme::{status_span, Theme};
+use chrono::Local;
 use crossterm::event::{
     DisableBracketedPaste, EnableBracketedPaste,
 };
 use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
 use ratatui::backend::Backend;
-use ratatui::prelude::{Color, Style};
+use ratatui::style::Style;
+use ratatui::text::Line;
 use ratatui::widgets::{Block, BorderType, Borders};
 use ratatui::Terminal;
 use std::io;
@@ -50,26 +54,31 @@ where
 
     pub fn draw(&mut self, app: &mut App) -> AppResult<()> {
         let device = app.config.display_device();
-        let base_style = Style::default().fg(Color::White);
+        let theme = Theme::default();
 
         self.terminal.draw(|frame| {
-            let top_title = make_top_title(&app.state);
-            let bottom_title = make_bottom_title(&app.state);
+            let mode = make_top_title(&app.state);
+            let key_hints = make_bottom_title(&app.state);
+            let clock = Local::now().format("%H:%M:%S:%3f").to_string();
 
             let outer = Block::default()
-                .title_top(top_title)
-                .title_bottom(bottom_title)
-                .style(Style::default().fg(Color::LightGreen))
+                .title_top(Line::styled(format!(" {mode} "), theme.accent_style()))
+                .title_top(Line::from(status_span(&app.connection, &theme)).right_aligned())
+                .title_bottom(Line::styled(format!(" {clock} "), theme.accent_style()))
+                .title_bottom(Line::styled(key_hints, theme.dim_style()).right_aligned())
+                .style(Style::default().fg(theme.border))
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded);
 
+            let area = frame.area();
+            let inner = outer.inner(area);
+            frame.render_widget(outer, area);
+
             match &app.state {
-                State::Read(p) => draw_state::read::draw(p, app, frame, outer, base_style, device),
-                State::Dump(p) => draw_state::dump::draw(p, app, frame, outer, base_style, device),
-                State::Jump(p) => draw_state::jump::draw(p, frame, outer, base_style, device),
-                State::Write(p) => draw_state::write::draw(p, frame, outer, base_style, device),
-                State::Label(p) => draw_state::label::draw(p, frame, outer, base_style, device),
-                State::Help => draw_state::help::draw(frame, outer, base_style, device),
+                State::Read(p) => draw_state::read::draw(p, app, frame, inner, &theme, &device),
+                State::Discovery(d) => draw_state::discovery::draw(d, frame, inner, &theme),
+                State::Settings(s) => draw_state::settings::draw(s, app, frame, inner, &theme),
+                State::Logs(l) => draw_state::logs::draw(l, app, frame, inner, &theme),
             }
         })?;
         Ok(())
