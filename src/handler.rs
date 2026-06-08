@@ -485,7 +485,7 @@ fn handle_settings_key(key_event: KeyEvent, app: &mut App) {
     let field = SettingsField::ALL[selected as usize];
 
     match key_event.code {
-        keybind::EXIT | keybind::SETTINGS => app.return_to_read(),
+        keybind::EXIT | keybind::SETTINGS => app.close_settings(),
         keybind::MOVE_UP => {
             if let Some(s) = app.settings_mut() {
                 s.selected = if s.selected == 0 { count - 1 } else { s.selected - 1 };

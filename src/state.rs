@@ -191,6 +191,7 @@ impl SettingsField {
 pub struct SettingsParams {
     pub selected: u16,
     pub status: Option<String>,
+    pub previous: ReadParams,
 }
 
 #[derive(Debug, Default, PartialEq)]

@@ -271,7 +271,21 @@ impl App {
     }
 
     pub fn open_settings(&mut self) {
-        self.state = State::Settings(SettingsParams::default());
+        let previous = std::mem::take(self.read_mut());
+        self.state = State::Settings(SettingsParams {
+            previous,
+            ..Default::default()
+        });
+    }
+
+    pub fn close_settings(&mut self) {
+        let mut previous = match &mut self.state {
+            State::Settings(s) => std::mem::take(&mut s.previous),
+            _ => return,
+        };
+        previous.loading = false;
+        self.state = State::Read(previous);
+        self.rebuild_read_rows();
     }
 
     pub fn api_device(&self) -> ApiDevice {
