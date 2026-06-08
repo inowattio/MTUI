@@ -487,20 +487,17 @@ fn draw_custom(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &Cust
         ])
     };
 
-    let mut lines: Vec<Line> = vec![Line::from(vec![
-        Span::styled("Register ", theme.dim_style()),
-        Span::styled(c.address.to_string(), theme.accent_style()),
-        Span::styled(format!("  ({:?})", c.register_type), theme.dim_style()),
-    ])];
+    let mut lines: Vec<Line> = vec![];
 
     lines.push(match app.custom_preview(c) {
         Ok((input, output)) => Line::from(vec![
-            Span::styled("Preview  ", theme.dim_style()),
-            Span::styled(format!("[{input}] \u{2192} "), theme.dim_style()),
+            Span::styled(" Preview  ", theme.dim_style()),
+            Span::styled(input.to_string(), theme.base()),
+            Span::styled(" \u{2192} ".to_string(), theme.dim_style()),
             Span::styled(output, theme.accent_style()),
         ]),
         Err(reason) => Line::from(vec![
-            Span::styled("Preview  ", theme.dim_style()),
+            Span::styled(" Preview  ", theme.dim_style()),
             Span::styled(reason, theme.dim_style()),
         ]),
     });
@@ -522,7 +519,11 @@ fn draw_custom(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &Cust
     lines.push(field_line("Operations", ops_str, sel == CustomField::Ops));
     if sel == CustomField::Ops {
         lines.push(Line::from(Span::styled(
-            format!("    add: {}_   e.g. *0.1  +5  /10  ^2  (enter adds, backspace removes last)", c.op_buffer),
+            "    (enter adds, backspace removes)".to_string(),
+            theme.dim_style(),
+        )));
+        lines.push(Line::from(Span::styled(
+            format!("    add: {}_   e.g. *0.1  +5  /10  ^2", c.op_buffer),
             theme.dim_style(),
         )));
     }
@@ -539,16 +540,20 @@ fn draw_custom(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &Cust
     lines.push(field_line("Enum", enum_str, sel == CustomField::Enum));
     if sel == CustomField::Enum {
         lines.push(Line::from(Span::styled(
-            format!("    add: {}_   e.g. 3=Running  (enter adds, backspace removes last)", c.enum_buffer),
+            "    (enter adds, backspace removes)".to_string(),
+            theme.dim_style(),
+        )));
+        lines.push(Line::from(Span::styled(
+            format!("    add: {}_   e.g. 3=Running", c.enum_buffer),
             theme.dim_style(),
         )));
     }
 
-    let dec = if c.decimals.is_empty() { "all".to_string() } else { c.decimals.clone() };
+    let dec = if c.decimals.is_empty() { "auto".to_string() } else { c.decimals.clone() };
     lines.push(field_line("Decimals", dec, sel == CustomField::Decimals));
     if sel == CustomField::Decimals {
         lines.push(Line::from(Span::styled(
-            "    all; 0 for none; numerical for amount".to_string(),
+            "    auto; 0 for none; numerical for amount".to_string(),
             theme.dim_style(),
         )));
     }
@@ -580,12 +585,16 @@ fn draw_custom(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &Cust
 
     lines.push(Line::default());
     lines.push(Line::from(Span::styled(
-        " \u{2191}/\u{2193} field \u{b7} \u{2190}/\u{2192} change \u{b7} type to edit \u{b7} esc close",
+        " \u{2191}/\u{2193} field \u{b7} \u{2190}/\u{2192} change",
+        theme.dim_style(),
+    )));
+    lines.push(Line::from(Span::styled(
+        " type to edit \u{b7} esc close",
         theme.dim_style(),
     )));
 
     let height = lines.len() as u16 + 2;
-    let rect = centered_rect(72, height, area);
+    let rect = centered_rect(48, height, area);
 
     frame.render_widget(Clear, rect);
     frame.render_widget(Paragraph::new(lines).block(theme.panel("Custom rule")), rect);
