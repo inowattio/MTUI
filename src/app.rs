@@ -186,29 +186,17 @@ fn save_config(config: &Config) -> Result<(), String> {
     fs::write(CONFIG_PATH, content).map_err(|e| e.to_string())
 }
 
-fn parse_optional_f64(s: &str) -> Result<Option<f64>, ()> {
-    match s.trim() {
-        "" => Ok(None),
-        s => s.parse::<f64>().map(Some).map_err(|_| ()),
-    }
-}
-
 fn build_custom_rule(c: &CustomParams) -> Result<(RegisterCell, CustomRule), String> {
     let decimals = match c.decimals.trim() {
         "" => None,
         s => Some(s.parse::<u8>().map_err(|_| "decimals: invalid".to_string())?.min(10)),
     };
-    let clamp_min = parse_optional_f64(&c.clamp_min).map_err(|_| "clamp min: invalid".to_string())?;
-    let clamp_max = parse_optional_f64(&c.clamp_max).map_err(|_| "clamp max: invalid".to_string())?;
 
     let rule = CustomRule {
         address: c.address,
         repr: c.repr,
         ops: c.ops.clone(),
         enum_map: c.enum_map.clone(),
-        round: c.round,
-        clamp_min,
-        clamp_max,
         decimals,
         prefix: c.prefix.clone(),
         suffix: c.suffix.clone(),
@@ -1060,10 +1048,7 @@ impl App {
                 repr: rule.repr,
                 ops: rule.ops.clone(),
                 enum_map: rule.enum_map.clone(),
-                round: rule.round,
                 decimals: rule.decimals.map(|d| d.to_string()).unwrap_or_default(),
-                clamp_min: rule.clamp_min.map(|v| v.to_string()).unwrap_or_default(),
-                clamp_max: rule.clamp_max.map(|v| v.to_string()).unwrap_or_default(),
                 prefix: rule.prefix.clone(),
                 suffix: rule.suffix.clone(),
                 op_buffer: String::new(),
@@ -1078,10 +1063,7 @@ impl App {
                 repr: CustomRepr::default(),
                 ops: Vec::new(),
                 enum_map: Vec::new(),
-                round: false,
                 decimals: String::new(),
-                clamp_min: String::new(),
-                clamp_max: String::new(),
                 prefix: String::new(),
                 suffix: String::new(),
                 op_buffer: String::new(),
@@ -1124,7 +1106,6 @@ impl App {
                     let n = all.len();
                     c.repr = if forward { all[(i + 1) % n] } else { all[(i + n - 1) % n] };
                 }
-                CustomField::Round => c.round = !c.round,
                 _ => {}
             }
         });
@@ -1141,19 +1122,8 @@ impl App {
                         c.decimals.push(ch);
                     }
                 }
-                CustomField::ClampMin => {
-                    if ch.is_ascii_digit() || ch == '.' || ch == '-' {
-                        c.clamp_min.push(ch);
-                    }
-                }
-                CustomField::ClampMax => {
-                    if ch.is_ascii_digit() || ch == '.' || ch == '-' {
-                        c.clamp_max.push(ch);
-                    }
-                }
                 CustomField::Prefix => c.prefix.push(ch),
                 CustomField::Suffix => c.suffix.push(ch),
-                CustomField::Round if ch == ' ' => c.round = !c.round,
                 _ => {}
             }
         });
@@ -1175,12 +1145,6 @@ impl App {
                 }
                 CustomField::Decimals => {
                     c.decimals.pop();
-                }
-                CustomField::ClampMin => {
-                    c.clamp_min.pop();
-                }
-                CustomField::ClampMax => {
-                    c.clamp_max.pop();
                 }
                 CustomField::Prefix => {
                     c.prefix.pop();

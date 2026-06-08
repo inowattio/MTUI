@@ -127,9 +127,6 @@ pub enum CustomField {
     Ops,
     Enum,
     Decimals,
-    Round,
-    ClampMin,
-    ClampMax,
     Prefix,
     Suffix,
     Save,
@@ -137,14 +134,11 @@ pub enum CustomField {
 }
 
 impl CustomField {
-    pub const ALL: [CustomField; 11] = [
+    pub const ALL: [CustomField; 8] = [
         CustomField::Repr,
         CustomField::Ops,
         CustomField::Enum,
         CustomField::Decimals,
-        CustomField::Round,
-        CustomField::ClampMin,
-        CustomField::ClampMax,
         CustomField::Prefix,
         CustomField::Suffix,
         CustomField::Save,
@@ -159,10 +153,7 @@ pub struct CustomParams {
     pub repr: CustomRepr,
     pub ops: Vec<CustomOp>,
     pub enum_map: Vec<EnumEntry>,
-    pub round: bool,
     pub decimals: String,
-    pub clamp_min: String,
-    pub clamp_max: String,
     pub prefix: String,
     pub suffix: String,
     pub op_buffer: String,

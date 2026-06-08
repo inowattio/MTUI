@@ -118,12 +118,6 @@ pub struct CustomRule {
     #[serde(default, rename = "enum")]
     pub enum_map: Vec<EnumEntry>,
     #[serde(default)]
-    pub round: bool,
-    #[serde(default)]
-    pub clamp_min: Option<f64>,
-    #[serde(default)]
-    pub clamp_max: Option<f64>,
-    #[serde(default)]
     pub decimals: Option<u8>,
     #[serde(default)]
     pub prefix: String,
@@ -164,15 +158,6 @@ impl CustomRule {
         let mut value = base;
         for op in &self.ops {
             value = op.apply(value);
-        }
-        if let Some(min) = self.clamp_min {
-            value = value.max(min);
-        }
-        if let Some(max) = self.clamp_max {
-            value = value.min(max);
-        }
-        if self.round {
-            value = value.round();
         }
 
         let number = if !value.is_finite() {
@@ -260,13 +245,11 @@ mod tests {
     }
 
     #[test]
-    fn clamp_and_round() {
+    fn decimals_formatting() {
         let mut r = rule(CustomRepr::U16);
         r.ops = vec![CustomOp { op: OpKind::Div, v: 3.0 }];
-        r.round = true;
-        r.clamp_max = Some(10.0);
-        assert_eq!(r.evaluate(&[10], WordOrder::ABCD), "3");
-        assert_eq!(r.evaluate(&[60], WordOrder::ABCD), "10");
+        r.decimals = Some(2);
+        assert_eq!(r.evaluate(&[10], WordOrder::ABCD), "3.33");
     }
 
     #[test]

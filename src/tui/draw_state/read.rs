@@ -534,37 +534,26 @@ fn draw_custom(frame: &mut Frame, area: Rect, theme: &Theme, c: &CustomParams) {
         )));
     }
 
-    let dec = if c.decimals.is_empty() { "auto".to_string() } else { c.decimals.clone() };
-    let dec = if sel == CustomField::Decimals { format!("{dec}_") } else { dec };
+    let dec = if c.decimals.is_empty() { "all".to_string() } else { c.decimals.clone() };
     lines.push(field_line("Decimals", dec, sel == CustomField::Decimals));
-
-    let round = if c.round { "on" } else { "off" };
-    let round = if sel == CustomField::Round {
-        format!("\u{2039} {round} \u{203a}")
-    } else {
-        round.to_string()
-    };
-    lines.push(field_line("Round", round, sel == CustomField::Round));
-
-    let cmin = if c.clamp_min.is_empty() { "none".to_string() } else { c.clamp_min.clone() };
-    let cmin = if sel == CustomField::ClampMin { format!("{cmin}_") } else { cmin };
-    lines.push(field_line("Clamp min", cmin, sel == CustomField::ClampMin));
-
-    let cmax = if c.clamp_max.is_empty() { "none".to_string() } else { c.clamp_max.clone() };
-    let cmax = if sel == CustomField::ClampMax { format!("{cmax}_") } else { cmax };
-    lines.push(field_line("Clamp max", cmax, sel == CustomField::ClampMax));
+    if sel == CustomField::Decimals {
+        lines.push(Line::from(Span::styled(
+            "    all; 0 for none; numerical for amount".to_string(),
+            theme.dim_style(),
+        )));
+    }
 
     let pfx = if sel == CustomField::Prefix {
-        format!("'{}'_", c.prefix)
+        format!("{} ", c.prefix)
     } else {
-        format!("'{}'", c.prefix)
+        format!("{}", c.prefix)
     };
     lines.push(field_line("Prefix", pfx, sel == CustomField::Prefix));
 
     let sfx = if sel == CustomField::Suffix {
-        format!("'{}'_", c.suffix)
+        format!("{} ", c.suffix)
     } else {
-        format!("'{}'", c.suffix)
+        format!("{}", c.suffix)
     };
     lines.push(field_line("Suffix", sfx, sel == CustomField::Suffix));
 
