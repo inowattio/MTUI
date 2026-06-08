@@ -401,7 +401,7 @@ async fn handle_discovery_key(key_event: KeyEvent, app: &mut App) {
         }
         KeyCode::Char(c) => {
             if let Some(d) = app.discovery_mut() {
-                let digit = c as u8 - b'0';
+                let digit = (c as u8).saturating_sub(b'0');
                 match field {
                     DiscoveryField::Ip if c.is_ascii_digit() || c == '.' => d.ip.push(c),
                     DiscoveryField::NetPort if c.is_ascii_digit() => digit_add(&mut d.net_port, digit),
