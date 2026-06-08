@@ -8,17 +8,19 @@ use axum::routing::post;
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use std::net::Ipv4Addr;
-use std::sync::atomic::{AtomicU16, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
 use std::sync::{Arc, Mutex};
 use tokio::net::TcpListener;
 
 pub type ApiDevice = Arc<Mutex<Option<ModbusDevice>>>;
 pub type BoundPort = Arc<AtomicU16>;
+pub type ReadOnlyFlag = Arc<AtomicBool>;
 
 #[derive(Clone)]
 struct ApiState {
     device: ApiDevice,
     writes_log: SharedWritesLog,
+    read_only: ReadOnlyFlag,
 }
 
 #[derive(Deserialize)]
@@ -40,11 +42,21 @@ struct WriteRequest {
     values: Vec<u16>,
 }
 
-pub async fn serve(port: u16, device: ApiDevice, bound: BoundPort, writes_log: SharedWritesLog) {
+pub async fn serve(
+    port: u16,
+    device: ApiDevice,
+    bound: BoundPort,
+    writes_log: SharedWritesLog,
+    read_only: ReadOnlyFlag,
+) {
     let router = Router::new()
         .route("/read", post(read_handler))
         .route("/write", post(write_handler))
-        .with_state(ApiState { device, writes_log });
+        .with_state(ApiState {
+            device,
+            writes_log,
+            read_only,
+        });
 
     let listener = match TcpListener::bind((Ipv4Addr::UNSPECIFIED, port)).await {
         Ok(listener) => listener,
@@ -91,6 +103,10 @@ async fn read_handler(State(state): State<ApiState>, Json(request): Json<ReadReq
 
 async fn write_handler(State(state): State<ApiState>, Json(request): Json<WriteRequest>) -> StatusCode {
     log::info!("API write {}:{:?}", request.address, request.values);
+    if state.read_only.load(Ordering::Relaxed) {
+        log::warn!("API write rejected due to read-only mode");
+        return StatusCode::FORBIDDEN;
+    }
     let Some(device) = current(&state.device) else {
         return StatusCode::SERVICE_UNAVAILABLE;
     };

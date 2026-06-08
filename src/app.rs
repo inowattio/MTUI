@@ -1,4 +1,4 @@
-use crate::api::{ApiDevice, BoundPort};
+use crate::api::{ApiDevice, BoundPort, ReadOnlyFlag};
 use crate::config::{Column, Config, Label, Labels, Startup};
 use crate::constants::CONFIG_PATH;
 use crate::interpretator::Interpretor;
@@ -83,6 +83,7 @@ pub struct App {
     logged_connection: ConnectionStatus,
     api_device: ApiDevice,
     api_bound_port: BoundPort,
+    api_read_only: ReadOnlyFlag,
     writes_log: SharedWritesLog,
 }
 
@@ -189,6 +190,8 @@ impl App {
 
         let api_device: ApiDevice = Arc::new(Mutex::new(device.clone()));
         let api_bound_port: BoundPort = Arc::new(std::sync::atomic::AtomicU16::new(0));
+        let api_read_only: ReadOnlyFlag =
+            Arc::new(std::sync::atomic::AtomicBool::new(config.read_only));
         let writes_log: SharedWritesLog = Arc::new(Mutex::new(WritesLogState::default()));
 
         let app = Self {
@@ -214,6 +217,7 @@ impl App {
             logged_connection: ConnectionStatus::Unknown,
             api_device,
             api_bound_port,
+            api_read_only,
             writes_log,
         };
 
@@ -294,6 +298,15 @@ impl App {
 
     pub fn api_bound_port_handle(&self) -> BoundPort {
         self.api_bound_port.clone()
+    }
+
+    pub fn api_read_only_handle(&self) -> ReadOnlyFlag {
+        self.api_read_only.clone()
+    }
+
+    fn sync_api_read_only(&self) {
+        self.api_read_only
+            .store(self.config.read_only, std::sync::atomic::Ordering::Relaxed);
     }
 
     pub fn api_bound_port(&self) -> Option<u16> {
@@ -602,6 +615,7 @@ impl App {
             SettingsField::ClearPins | SettingsField::ClearLabels | SettingsField::Save => return,
         }
         self.refresh_writes_log_state();
+        self.sync_api_read_only();
         self.dirty = true;
     }
 

@@ -33,6 +33,7 @@ async fn main() -> AppResult<()> {
             app.api_device(),
             app.api_bound_port_handle(),
             app.writes_log_handle(),
+            app.api_read_only_handle(),
         ));
     }
 
