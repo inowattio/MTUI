@@ -148,7 +148,7 @@ impl CustomRule {
             return String::new();
         };
 
-        if !self.enum_map.is_empty() {
+        if base.is_finite() && !self.enum_map.is_empty() {
             let key = base as i64;
             if let Some(entry) = self.enum_map.iter().find(|e| e.value == key) {
                 return format!("{}{}{}", self.prefix, entry.text, self.suffix);
@@ -258,6 +258,14 @@ mod tests {
         assert_eq!(r.evaluate(&[3], WordOrder::ABCD), "Running");
 
         assert_eq!(r.evaluate(&[2], WordOrder::ABCD), "200");
+    }
+
+    #[test]
+    fn nan_does_not_match_enum_zero() {
+        let mut r = rule(CustomRepr::F32);
+        r.enum_map = vec![EnumEntry { value: 0, text: "Off".into() }];
+
+        assert_eq!(r.evaluate(&[0x7FC0, 0x0000], WordOrder::ABCD), "--");
     }
 
     #[test]
