@@ -55,13 +55,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             device: DeviceConfig {
-                interface: Interface::Wired(InterfaceWiredParams {
-                    path: "".to_string(),
-                    baud_rate: 0,
-                    data_bits: DataBits::Five,
-                    parity: Parity::None,
-                    stop_bits: StopBits::One,
-                }),
+                interface: Interface::Mock,
                 slave_id: 0,
                 timeout_connect_ms: 1000,
                 timeout_command_ms: 2000,
