@@ -580,7 +580,7 @@ fn draw_custom(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &Cust
 
     if let Some(err) = &c.error {
         lines.push(Line::default());
-        lines.push(Line::from(Span::styled(err.clone(), theme.err_style())));
+        lines.push(Line::from(Span::styled(format!(" {}", err.clone()), theme.err_style())));
     }
 
     lines.push(Line::default());

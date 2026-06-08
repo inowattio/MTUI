@@ -180,6 +180,9 @@ pub fn parse_op(input: &str) -> Result<CustomOp, String> {
     let op = OpKind::from_symbol(symbol).ok_or("start with + - * / or ^")?;
     let rest = chars.as_str().trim();
     let v: f64 = rest.parse().map_err(|_| "invalid number".to_string())?;
+    if !v.is_finite() {
+        return Err("must be a finite number".to_string());
+    }
     Ok(CustomOp { op, v })
 }
 
@@ -294,6 +297,8 @@ mod tests {
         assert_eq!(parse_op("/10").unwrap(), CustomOp { op: OpKind::Div, v: 10.0 });
         assert!(parse_op("5").is_err());
         assert!(parse_op("*abc").is_err());
+        assert!(parse_op("*inf").is_err());
+        assert!(parse_op("/nan").is_err());
 
         assert_eq!(
             parse_enum("3=Running").unwrap(),
