@@ -1,6 +1,6 @@
 use crate::app::PinnedRegisters;
 use crate::modbus::{
-    DataBits, DeviceConfig, Interface, InterfaceWiredParams, Parity, StopBits, WordOrder,
+    DeviceConfig, Interface, WordOrder,
 };
 use crate::register::RegisterType;
 use serde::{Deserialize, Serialize};
