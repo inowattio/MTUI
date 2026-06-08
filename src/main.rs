@@ -11,6 +11,7 @@ mod modbus;
 mod num_ops;
 mod register;
 mod state;
+mod writes_log;
 pub mod tui;
 
 use crate::app::{App, AppResult};
@@ -31,6 +32,7 @@ async fn main() -> AppResult<()> {
             port,
             app.api_device(),
             app.api_bound_port_handle(),
+            app.writes_log_handle(),
         ));
     }
 

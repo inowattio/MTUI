@@ -11,6 +11,7 @@ use crate::state::{
     LogsParams, Popup, PopupKind, ReadPanel, ReadParams, SearchParams, SettingsField,
     SettingsParams, State, WriteParams,
 };
+use crate::writes_log::{SharedWritesLog, WriteKind, WritesLogState};
 use chrono::{DateTime, Local, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 use std::cell::Cell;
@@ -82,6 +83,7 @@ pub struct App {
     logged_connection: ConnectionStatus,
     api_device: ApiDevice,
     api_bound_port: BoundPort,
+    writes_log: SharedWritesLog,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -187,6 +189,7 @@ impl App {
 
         let api_device: ApiDevice = Arc::new(Mutex::new(device.clone()));
         let api_bound_port: BoundPort = Arc::new(std::sync::atomic::AtomicU16::new(0));
+        let writes_log: SharedWritesLog = Arc::new(Mutex::new(WritesLogState::default()));
 
         let app = Self {
             interpreter: Interpretor::new(config.interpretations.clone(), config.device.word_order),
@@ -211,7 +214,10 @@ impl App {
             logged_connection: ConnectionStatus::Unknown,
             api_device,
             api_bound_port,
+            writes_log,
         };
+
+        app.refresh_writes_log_state();
 
         if app.device.is_some() {
             log::info!("Started \u{b7} {}", app.config.display_device());
@@ -387,6 +393,7 @@ impl App {
             Ok(device) => {
                 self.device = Some(device);
                 self.sync_api_device();
+                self.refresh_writes_log_state();
                 self.interpreter.set_word_order(device_config.word_order);
                 self.config.device = device_config;
                 self.dirty = true;
@@ -529,36 +536,31 @@ impl App {
         }
     }
 
-    fn log_write(&self) {
-        use std::io::Write as _;
+    pub fn writes_log_handle(&self) -> SharedWritesLog {
+        self.writes_log.clone()
+    }
 
-        if !self.config.log_writes {
-            return;
+    fn refresh_writes_log_state(&self) {
+        if let Ok(mut state) = self.writes_log.lock() {
+            state.enabled = self.config.log_writes;
+            state.path = Some(self.writes_log_path());
         }
+    }
+
+    fn log_write(&self) {
         let Some(pending) = self.pending_write.as_ref() else {
             return;
         };
-
-        let timestamp = Local::now().format("%Y-%m-%dT%H:%M:%S%.3f");
         let kind = match pending.write_type {
-            WriteType::Word => "word",
-            WriteType::DWord => "dword",
+            WriteType::Word => WriteKind::Word(pending.new_value as u16),
+            WriteType::DWord => WriteKind::DWord(pending.new_value as u32),
         };
-        let previous = pending
-            .previous
-            .map_or_else(|| "?".to_string(), |v| v.to_string());
-        let line = format!(
-            "{timestamp} | {} | {kind} | {previous} | {}\n",
-            pending.address, pending.new_value
+        crate::writes_log::append(
+            &self.writes_log,
+            pending.address,
+            kind,
+            pending.previous,
         );
-
-        if let Ok(mut file) = fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(self.writes_log_path())
-        {
-            let _ = file.write_all(line.as_bytes());
-        }
     }
 
     pub fn settings_adjust(&mut self, field: SettingsField, delta: i64) {
@@ -585,6 +587,7 @@ impl App {
             }
             SettingsField::ClearPins | SettingsField::ClearLabels | SettingsField::Save => return,
         }
+        self.refresh_writes_log_state();
         self.dirty = true;
     }
 
@@ -714,6 +717,7 @@ impl App {
                 device.set_slave(id).await;
             }
             self.config.device.slave_id = id;
+            self.refresh_writes_log_state();
             log::info!("Slave id set to {id}");
             self.read_mut().popup = None;
             self.refresh().await;

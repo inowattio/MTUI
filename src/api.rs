@@ -1,5 +1,6 @@
 use crate::modbus::ModbusDevice;
 use crate::register::RegisterType;
+use crate::writes_log::{self, SharedWritesLog, WriteKind};
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
@@ -13,6 +14,12 @@ use tokio::net::TcpListener;
 
 pub type ApiDevice = Arc<Mutex<Option<ModbusDevice>>>;
 pub type BoundPort = Arc<AtomicU16>;
+
+#[derive(Clone)]
+struct ApiState {
+    device: ApiDevice,
+    writes_log: SharedWritesLog,
+}
 
 #[derive(Deserialize)]
 struct ReadRequest {
@@ -33,11 +40,11 @@ struct WriteRequest {
     values: Vec<u16>,
 }
 
-pub async fn serve(port: u16, device: ApiDevice, bound: BoundPort) {
+pub async fn serve(port: u16, device: ApiDevice, bound: BoundPort, writes_log: SharedWritesLog) {
     let router = Router::new()
         .route("/read", post(read_handler))
         .route("/write", post(write_handler))
-        .with_state(device);
+        .with_state(ApiState { device, writes_log });
 
     let listener = match TcpListener::bind((Ipv4Addr::UNSPECIFIED, port)).await {
         Ok(listener) => listener,
@@ -59,9 +66,14 @@ pub async fn serve(port: u16, device: ApiDevice, bound: BoundPort) {
     }
 }
 
-async fn read_handler(State(device): State<ApiDevice>, Json(request): Json<ReadRequest>) -> Response {
-    log::info!("API read {:?}@{}:{}", request.register_type, request.address, request.count);
-    let Some(device) = current(&device) else {
+async fn read_handler(State(state): State<ApiState>, Json(request): Json<ReadRequest>) -> Response {
+    log::info!(
+        "API read {:?}@{}:{}",
+        request.register_type,
+        request.address,
+        request.count
+    );
+    let Some(device) = current(&state.device) else {
         return StatusCode::SERVICE_UNAVAILABLE.into_response();
     };
     let result = match request.register_type {
@@ -77,16 +89,21 @@ async fn read_handler(State(device): State<ApiDevice>, Json(request): Json<ReadR
     }
 }
 
-async fn write_handler(
-    State(device): State<ApiDevice>,
-    Json(request): Json<WriteRequest>,
-) -> StatusCode {
+async fn write_handler(State(state): State<ApiState>, Json(request): Json<WriteRequest>) -> StatusCode {
     log::info!("API write {}:{:?}", request.address, request.values);
-    let Some(device) = current(&device) else {
+    let Some(device) = current(&state.device) else {
         return StatusCode::SERVICE_UNAVAILABLE;
     };
     match device.write_registers(request.address, &request.values).await {
-        Ok(()) => StatusCode::NO_CONTENT,
+        Ok(()) => {
+            writes_log::append(
+                &state.writes_log,
+                request.address,
+                WriteKind::Multiple(request.values),
+                None,
+            );
+            StatusCode::NO_CONTENT
+        }
         Err(e) => {
             log::error!("API write failed: {e}");
             StatusCode::BAD_GATEWAY
