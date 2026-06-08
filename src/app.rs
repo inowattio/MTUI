@@ -1584,6 +1584,26 @@ impl App {
         (!formatted.is_empty()).then_some(formatted)
     }
 
+    pub fn custom_preview(&self, c: &CustomParams) -> Result<(String, String), String> {
+        let (cell, rule) = build_custom_rule(c)?;
+        let Some(&(value, _)) = self.read_log.get(&cell) else {
+            return Err("no value read yet".to_string());
+        };
+        let mut words = vec![value];
+        if rule.repr.register_count() == 2 {
+            match self.read_log.get(&(cell.0, cell.1.saturating_add(1))) {
+                Some(&(n, _)) => words.push(n),
+                None => return Err("waiting for second register".to_string()),
+            }
+        }
+        let output = rule.evaluate(&words, self.config.device.word_order);
+        if output.is_empty() {
+            return Err("no output".to_string());
+        }
+        let input = words.iter().map(|w| w.to_string()).collect::<Vec<_>>().join(", ");
+        Ok((input, output))
+    }
+
     pub fn rebuild_read_rows(&mut self) {
         if !self.is_reading() {
             return;

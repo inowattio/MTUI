@@ -291,7 +291,7 @@ fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup: &P
         ),
         Popup::Search(s) => draw_search(frame, area, theme, s),
         Popup::Label(l) => draw_label(frame, area, theme, l),
-        Popup::Custom(c) => draw_custom(frame, area, theme, c),
+        Popup::Custom(c) => draw_custom(frame, area, theme, app, c),
         Popup::Columns(selected) => draw_picker(frame, area, theme, app, *selected),
         Popup::Write(write) => draw_write(frame, area, theme, write),
         Popup::Slave(value) => draw_slave(frame, area, theme, *value),
@@ -475,7 +475,7 @@ fn draw_label(frame: &mut Frame, area: Rect, theme: &Theme, label: &LabelParams)
     frame.render_widget(Paragraph::new(lines).block(theme.panel("Label")), rect);
 }
 
-fn draw_custom(frame: &mut Frame, area: Rect, theme: &Theme, c: &CustomParams) {
+fn draw_custom(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &CustomParams) {
     let sel = c.current_field();
 
     let field_line = |label: &str, value: String, selected: bool| -> Line<'static> {
@@ -487,14 +487,24 @@ fn draw_custom(frame: &mut Frame, area: Rect, theme: &Theme, c: &CustomParams) {
         ])
     };
 
-    let mut lines: Vec<Line> = vec![
-        Line::from(vec![
-            Span::styled("Register ", theme.dim_style()),
-            Span::styled(c.address.to_string(), theme.accent_style()),
-            Span::styled(format!("  ({:?})", c.register_type), theme.dim_style()),
+    let mut lines: Vec<Line> = vec![Line::from(vec![
+        Span::styled("Register ", theme.dim_style()),
+        Span::styled(c.address.to_string(), theme.accent_style()),
+        Span::styled(format!("  ({:?})", c.register_type), theme.dim_style()),
+    ])];
+
+    lines.push(match app.custom_preview(c) {
+        Ok((input, output)) => Line::from(vec![
+            Span::styled("Preview  ", theme.dim_style()),
+            Span::styled(format!("[{input}] \u{2192} "), theme.dim_style()),
+            Span::styled(output, theme.accent_style()),
         ]),
-        Line::default(),
-    ];
+        Err(reason) => Line::from(vec![
+            Span::styled("Preview  ", theme.dim_style()),
+            Span::styled(reason, theme.dim_style()),
+        ]),
+    });
+    lines.push(Line::default());
 
     let repr_val = format!("{}  ({} reg)", c.repr.label(), c.repr.register_count());
     let repr_val = if sel == CustomField::Repr {
