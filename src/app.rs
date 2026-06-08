@@ -177,7 +177,7 @@ impl From<&BTreeMap<RegisterCell, CustomRule>> for CustomRules {
             }
         }
 
-        Self { holdings, inputs }
+        Self { holdings, inputs, ..Default::default() }
     }
 }
 
@@ -674,6 +674,10 @@ impl App {
             }
             SettingsField::ReadOnly => self.config.read_only = !self.config.read_only,
             SettingsField::LogWrites => self.config.log_writes = !self.config.log_writes,
+            SettingsField::ShowContinuation => {
+                self.config.custom_rules.show_continuation =
+                    !self.config.custom_rules.show_continuation
+            }
             SettingsField::ApiPort => {
                 let current = self.config.port.map_or(-1, |p| p as i64);
                 let n = (current + delta).clamp(-1, u16::MAX as i64);
@@ -1221,7 +1225,10 @@ impl App {
 
     fn persist_config(&mut self) -> String {
         self.config.labels = (&self.labels).into();
-        self.config.custom_rules = (&self.custom_rules).into();
+
+        let rebuilt: CustomRules = (&self.custom_rules).into();
+        self.config.custom_rules.holdings = rebuilt.holdings;
+        self.config.custom_rules.inputs = rebuilt.inputs;
 
         let mut pinned = PinnedRegisters::default();
         for (kind, address) in &self.pinned_registers {
@@ -1573,7 +1580,16 @@ impl App {
         word_order: WordOrder,
         neighbor: &impl Fn(u16) -> Option<u16>,
     ) -> Option<String> {
-        let rule = self.custom_rules.get(&cell)?;
+        let (kind, address) = cell;
+        let Some(rule) = self.custom_rules.get(&cell) else {
+            if !self.config.custom_rules.show_continuation {
+                return None;
+            }
+            let prev = address.checked_sub(1)?;
+            let prev_rule = self.custom_rules.get(&(kind, prev))?;
+            return (prev_rule.repr.register_count() == 2)
+                .then(|| "part of \u{2191}".to_string());
+        };
         let mut words = vec![value];
         if rule.repr.register_count() == 2 {
             if let Some(n) = neighbor(1) {

@@ -221,11 +221,12 @@ pub enum SettingsField {
     ClearPins,
     ClearLabels,
     ClearCustom,
+    ShowContinuation,
     Save,
 }
 
 impl SettingsField {
-    pub const ALL: [SettingsField; 10] = [
+    pub const ALL: [SettingsField; 11] = [
         SettingsField::RegistersBatch,
         SettingsField::AutoUpdate,
         SettingsField::HistoryCap,
@@ -235,6 +236,7 @@ impl SettingsField {
         SettingsField::ClearPins,
         SettingsField::ClearLabels,
         SettingsField::ClearCustom,
+        SettingsField::ShowContinuation,
         SettingsField::Save,
     ];
 }

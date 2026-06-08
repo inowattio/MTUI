@@ -26,6 +26,7 @@ pub struct Config {
 pub struct CustomRules {
     pub holdings: Vec<CustomRule>,
     pub inputs: Vec<CustomRule>,
+    pub show_continuation: bool,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]

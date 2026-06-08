@@ -518,7 +518,12 @@ fn handle_settings_key(key_event: KeyEvent, app: &mut App) {
         KeyCode::Left => app.settings_adjust(field, -1),
         KeyCode::Right => app.settings_adjust(field, 1),
         keybind::PAUSE
-            if matches!(field, SettingsField::ReadOnly | SettingsField::LogWrites) =>
+            if matches!(
+                field,
+                SettingsField::ReadOnly
+                    | SettingsField::LogWrites
+                    | SettingsField::ShowContinuation
+            ) =>
         {
             app.settings_adjust(field, 1)
         }
@@ -526,7 +531,9 @@ fn handle_settings_key(key_event: KeyEvent, app: &mut App) {
             SettingsField::ClearPins => app.clear_pins(),
             SettingsField::ClearLabels => app.clear_labels(),
             SettingsField::ClearCustom => app.clear_custom(),
-            SettingsField::ReadOnly | SettingsField::LogWrites => app.settings_adjust(field, 1),
+            SettingsField::ReadOnly
+            | SettingsField::LogWrites
+            | SettingsField::ShowContinuation => app.settings_adjust(field, 1),
             SettingsField::Save => app.settings_save(),
             _ => {}
         },
