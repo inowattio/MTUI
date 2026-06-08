@@ -98,7 +98,7 @@ impl CustomOp {
     }
 
     pub fn display(self) -> String {
-        format!("{}{}", self.op.symbol(), trim_float(self.v))
+        format!("{}{:?}", self.op.symbol(), self.v)
     }
 }
 
@@ -165,19 +165,11 @@ impl CustomRule {
         } else {
             match self.decimals {
                 Some(d) => format!("{value:.*}", d as usize),
-                None => trim_float(value),
+                None => format!("{value}"),
             }
         };
 
         format!("{}{}{}", self.prefix, number, self.suffix)
-    }
-}
-
-fn trim_float(v: f64) -> String {
-    if v.is_finite() && v.fract() == 0.0 && v.abs() < 1e15 {
-        format!("{}", v as i64)
-    } else {
-        format!("{v}")
     }
 }
 
