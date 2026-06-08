@@ -119,6 +119,11 @@ fn field_view(app: &App, field: SettingsField) -> (&'static str, String, Kind) {
             format!("{} labels", app.label_count()),
             Kind::Action,
         ),
+        SettingsField::ClearCustom => (
+            "Clear custom rules",
+            format!("{} rules", app.custom_count()),
+            Kind::Action,
+        ),
         SettingsField::Save => ("Save configuration", CONFIG_PATH.to_string(), Kind::Action),
     }
 }

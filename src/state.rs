@@ -1,4 +1,5 @@
 use crate::app::WriteType;
+use crate::custom::{CustomOp, CustomRepr, EnumEntry};
 use crate::modbus::{DataBits, Parity, StopBits, WordOrder};
 use crate::register::{RegisterCell, RegisterType};
 use std::time::{Duration, Instant};
@@ -120,6 +121,64 @@ pub struct DumpParams {
     pub result: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CustomField {
+    Repr,
+    Ops,
+    Enum,
+    Decimals,
+    Round,
+    ClampMin,
+    ClampMax,
+    Prefix,
+    Suffix,
+    Save,
+    Remove,
+}
+
+impl CustomField {
+    pub const ALL: [CustomField; 11] = [
+        CustomField::Repr,
+        CustomField::Ops,
+        CustomField::Enum,
+        CustomField::Decimals,
+        CustomField::Round,
+        CustomField::ClampMin,
+        CustomField::ClampMax,
+        CustomField::Prefix,
+        CustomField::Suffix,
+        CustomField::Save,
+        CustomField::Remove,
+    ];
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CustomParams {
+    pub address: u16,
+    pub register_type: RegisterType,
+    pub repr: CustomRepr,
+    pub ops: Vec<CustomOp>,
+    pub enum_map: Vec<EnumEntry>,
+    pub round: bool,
+    pub decimals: String,
+    pub clamp_min: String,
+    pub clamp_max: String,
+    pub prefix: String,
+    pub suffix: String,
+    pub op_buffer: String,
+    pub enum_buffer: String,
+    pub selected: u16,
+    pub existed: bool,
+    pub error: Option<String>,
+}
+
+impl CustomParams {
+    pub fn current_field(&self) -> CustomField {
+        let i = (self.selected as usize).min(CustomField::ALL.len() - 1);
+        CustomField::ALL[i]
+    }
+}
+
 #[derive(Debug, Default, PartialEq)]
 pub struct SearchParams {
     pub query: String,
@@ -170,11 +229,12 @@ pub enum SettingsField {
     ApiPort,
     ClearPins,
     ClearLabels,
+    ClearCustom,
     Save,
 }
 
 impl SettingsField {
-    pub const ALL: [SettingsField; 9] = [
+    pub const ALL: [SettingsField; 10] = [
         SettingsField::RegistersBatch,
         SettingsField::AutoUpdate,
         SettingsField::HistoryCap,
@@ -183,6 +243,7 @@ impl SettingsField {
         SettingsField::ApiPort,
         SettingsField::ClearPins,
         SettingsField::ClearLabels,
+        SettingsField::ClearCustom,
         SettingsField::Save,
     ];
 }
@@ -221,6 +282,7 @@ pub enum Popup {
     Dump(DumpParams),
     Search(SearchParams),
     Label(LabelParams),
+    Custom(CustomParams),
     Columns(u16),
     Write(WriteParams),
     Slave(u16),
@@ -234,6 +296,7 @@ pub enum PopupKind {
     Dump,
     Search,
     Label,
+    Custom,
     Columns,
     Write,
     Slave,
@@ -248,6 +311,7 @@ impl Popup {
             Popup::Dump(_) => PopupKind::Dump,
             Popup::Search(_) => PopupKind::Search,
             Popup::Label(_) => PopupKind::Label,
+            Popup::Custom(_) => PopupKind::Custom,
             Popup::Columns(_) => PopupKind::Columns,
             Popup::Write(_) => PopupKind::Write,
             Popup::Slave(_) => PopupKind::Slave,
