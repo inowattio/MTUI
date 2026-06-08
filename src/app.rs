@@ -1152,10 +1152,15 @@ impl App {
                 RegisterType::Holding => device.holdings(start_addr, run_len as u16).await?,
                 RegisterType::Input => device.inputs(start_addr, run_len as u16).await?,
             };
+            anyhow::ensure!(
+                values.len() == run_len,
+                "Expected {run_len} value(s) at {start_addr}, got {}",
+                values.len()
+            );
 
             for j in 0..run_len {
                 let cell = regs[i + j];
-                let value = values.get(j).cloned().unwrap();
+                let value = values[j];
 
                 collection.push((cell, value));
             }
