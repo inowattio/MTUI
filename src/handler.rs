@@ -60,6 +60,7 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         keybind::JUMP => app.open_search(),
         keybind::WRITE => app.open_write(),
         keybind::LABEL => app.open_label(),
+        keybind::CUSTOM => app.open_custom(),
         keybind::SLAVE => app.open_slave(),
         keybind::DISCOVERY => app.open_discovery(),
         keybind::SETTINGS => app.open_settings(),
@@ -268,6 +269,24 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
             KeyCode::Char(c) => app.label_input(c),
             _ => {}
         },
+
+        PopupKind::Custom => {
+            let field = match &app.read().popup {
+                Some(Popup::Custom(c)) => c.current_field(),
+                _ => return,
+            };
+            match key_event.code {
+                keybind::EXIT => app.close_popup(),
+                keybind::MOVE_UP => app.custom_move(false),
+                keybind::MOVE_DOWN => app.custom_move(true),
+                KeyCode::Left => app.custom_cycle(field, false),
+                KeyCode::Right => app.custom_cycle(field, true),
+                keybind::ACTION => app.custom_enter(field),
+                KeyCode::Backspace => app.custom_backspace(field),
+                KeyCode::Char(c) => app.custom_char(field, c),
+                _ => {}
+            }
+        }
 
         PopupKind::Slave => match key_event.code {
             keybind::EXIT | keybind::SLAVE => app.close_popup(),
@@ -499,14 +518,22 @@ fn handle_settings_key(key_event: KeyEvent, app: &mut App) {
         KeyCode::Left => app.settings_adjust(field, -1),
         KeyCode::Right => app.settings_adjust(field, 1),
         keybind::PAUSE
-            if matches!(field, SettingsField::ReadOnly | SettingsField::LogWrites) =>
+            if matches!(
+                field,
+                SettingsField::ReadOnly
+                    | SettingsField::LogWrites
+                    | SettingsField::ShowContinuation
+            ) =>
         {
             app.settings_adjust(field, 1)
         }
         keybind::ACTION => match field {
             SettingsField::ClearPins => app.clear_pins(),
             SettingsField::ClearLabels => app.clear_labels(),
-            SettingsField::ReadOnly | SettingsField::LogWrites => app.settings_adjust(field, 1),
+            SettingsField::ClearCustom => app.clear_custom(),
+            SettingsField::ReadOnly
+            | SettingsField::LogWrites
+            | SettingsField::ShowContinuation => app.settings_adjust(field, 1),
             SettingsField::Save => app.settings_save(),
             _ => {}
         },

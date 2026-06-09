@@ -2,6 +2,7 @@ mod api;
 pub mod app;
 mod config;
 mod constants;
+mod custom;
 pub mod event;
 pub mod handler;
 mod interpretator;

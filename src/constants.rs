@@ -16,6 +16,7 @@ pub mod keybind {
     pub const WRITE: KeyCode = KeyCode::Char('w');
     pub const JUMP: KeyCode = KeyCode::Char('j');
     pub const LABEL: KeyCode = KeyCode::Char('l');
+    pub const CUSTOM: KeyCode = KeyCode::Char('m');
     pub const COLUMNS: KeyCode = KeyCode::Char('c');
     pub const PAUSE: KeyCode = KeyCode::Char(' ');
     pub const WORD_ORDER: KeyCode = KeyCode::Char('o');

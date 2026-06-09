@@ -79,6 +79,9 @@ impl Interpretor {
         if self.config.bits {
             header.push_str(&format!("{0: <19} ", "bits"))
         }
+        if self.config.custom {
+            header.push_str(&format!("{0: <18} ", "custom"))
+        }
         if self.config.label {
             header.push_str("label");
         }
@@ -188,6 +191,9 @@ impl Interpretor {
         if self.config.bits {
             row.push_str(&format!("{dash: <19} "));
         }
+        if self.config.custom {
+            row.push_str(&format!("{dash: <18} "));
+        }
 
         if self.config.label {
             match label {
@@ -199,6 +205,7 @@ impl Interpretor {
         row
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn format_row(
         &self,
         address: u16,
@@ -206,6 +213,7 @@ impl Interpretor {
         next: [Option<u16>; 3],
         read_at: DateTime<Local>,
         now: DateTime<Local>,
+        custom: Option<&str>,
         label: Option<&str>,
     ) -> String {
         let byte = value;
@@ -336,6 +344,10 @@ impl Interpretor {
             let grouped = format!("{} {} {} {}", &b[0..4], &b[4..8], &b[8..12], &b[12..16]);
             row.push_str(&format!("{grouped: <19} "))
         }
+        if self.config.custom {
+            let s = custom.unwrap_or("--");
+            row.push_str(&format!("{s: <18} "))
+        }
 
         if self.config.label {
             if let Some(t) = label {
@@ -384,7 +396,7 @@ fn bcd_to_decimal_u32(value: u32) -> Option<u32> {
     Some(result)
 }
 
-fn f16_to_f32(bits: u16) -> f32 {
+pub(crate) fn f16_to_f32(bits: u16) -> f32 {
     let sign = if bits & 0x8000 != 0 { -1.0 } else { 1.0 };
     let exponent = (bits >> 10) & 0x1f;
     let mantissa = bits & 0x3ff;

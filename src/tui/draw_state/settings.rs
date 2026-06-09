@@ -119,6 +119,16 @@ fn field_view(app: &App, field: SettingsField) -> (&'static str, String, Kind) {
             format!("{} labels", app.label_count()),
             Kind::Action,
         ),
+        SettingsField::ClearCustom => (
+            "Clear custom rules",
+            format!("{} rules", app.custom_count()),
+            Kind::Action,
+        ),
+        SettingsField::ShowContinuation => (
+            "Show \"part of\" marker",
+            if device.custom_rules.show_continuation { "on" } else { "off" }.to_string(),
+            Kind::Toggle,
+        ),
         SettingsField::Save => ("Save configuration", CONFIG_PATH.to_string(), Kind::Action),
     }
 }

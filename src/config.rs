@@ -1,4 +1,5 @@
 use crate::app::PinnedRegisters;
+use crate::custom::CustomRule;
 use crate::modbus::{
     DeviceConfig, Interface, WordOrder,
 };
@@ -18,6 +19,14 @@ pub struct Config {
     pub port: Option<u16>,
     pub pinned_registers: PinnedRegisters,
     pub labels: Labels,
+    pub custom_rules: CustomRules,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct CustomRules {
+    pub holdings: Vec<CustomRule>,
+    pub inputs: Vec<CustomRule>,
+    pub show_continuation: bool,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
@@ -75,6 +84,7 @@ impl Default for Config {
             port: None,
             pinned_registers: Default::default(),
             labels: Default::default(),
+            custom_rules: Default::default(),
         }
     }
 }
@@ -124,6 +134,27 @@ macro_rules! interpretation_columns {
     };
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn config_round_trips() {
+        let json = serde_json::to_string(&Config::default()).unwrap();
+        let back: Config = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.custom_rules.holdings.len(), 0);
+    }
+
+    #[test]
+    fn config_without_custom_rules_still_loads() {
+        let mut value = serde_json::to_value(Config::default()).unwrap();
+        value.as_object_mut().unwrap().remove("custom_rules");
+        let parsed: Config = serde_json::from_value(value).unwrap();
+        assert!(parsed.custom_rules.holdings.is_empty());
+        assert!(parsed.custom_rules.inputs.is_empty());
+    }
+}
+
 interpretation_columns! {
     IndexHex => index_hex : "index (hex)" = false,
     U8s => u8s : "u8s" = false,
@@ -142,6 +173,7 @@ interpretation_columns! {
     Bcd32 => bcd32 : "bcd32" = false,
     Bits => bits : "bits" = true,
     Ascii => ascii : "ascii" = true,
+    Custom => custom : "custom" = false,
     Time => time : "time (read at)" = true,
     Ago => ago : "ago (read)" = false,
     Label => label : "label" = true,
