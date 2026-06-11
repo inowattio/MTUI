@@ -865,11 +865,7 @@ fn draw_picker(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, selected
 }
 
 fn draw_inspect(frame: &mut Frame, area: Rect, theme: &Theme, app: &App) {
-    let ((kind, address), entries) = app.inspect_lines();
-    let kind_char = match kind {
-        RegisterType::Holding => 'H',
-        RegisterType::Input => 'I',
-    };
+    let (_, entries) = app.inspect_lines();
 
     const NAME: usize = 9;
     const VALUE: usize = 21;
@@ -912,7 +908,7 @@ fn draw_inspect(frame: &mut Frame, area: Rect, theme: &Theme, app: &App) {
 
     frame.render_widget(Clear, rect);
     frame.render_widget(
-        Paragraph::new(lines).block(theme.panel(&format!("Inspect {address} ({kind_char})"))),
+        Paragraph::new(lines).block(theme.panel("Inspect")),
         rect,
     );
 }
