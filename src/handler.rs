@@ -161,6 +161,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
 
         PopupKind::Inspect => match key_event.code {
             keybind::EXIT | keybind::INSPECT => app.close_popup(),
+            keybind::REFRESH | keybind::ACTION => app.refresh().await,
             keybind::MOVE_UP | keybind::MOVE_DOWN | keybind::PAGE_UP | keybind::PAGE_DOWN => {
                 move_read_cursor(app, key_event.code);
                 app.rebuild_read_rows();
