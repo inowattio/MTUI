@@ -30,14 +30,6 @@
       margin: 0;
     }
   </style>
-  <script>
-    // The terminal grid is measured once at startup; reload to re-measure.
-    let resizeTimer;
-    addEventListener("resize", () => {
-      clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(() => location.reload(), 250);
-    });
-  </script>
 </head>
 <body></body>
 </html>
