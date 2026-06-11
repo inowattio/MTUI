@@ -1,16 +1,22 @@
+use crate::compat;
 use crate::mock::MockContext;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use std::future::Future;
+#[cfg(not(target_arch = "wasm32"))]
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
+#[cfg(not(target_arch = "wasm32"))]
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
-use tokio_modbus::client::{rtu, tcp, Context, Reader, Writer};
+#[cfg(not(target_arch = "wasm32"))]
+use tokio_modbus::client::{rtu, tcp};
+use tokio_modbus::client::{Context, Reader, Writer};
 use tokio_modbus::prelude::SlaveContext;
 use tokio_modbus::slave::{Slave, SlaveId};
+#[cfg(not(target_arch = "wasm32"))]
 use tokio_serial::SerialStream;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -28,6 +34,7 @@ pub enum DataBits {
     Eight,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl From<DataBits> for tokio_serial::DataBits {
     fn from(val: DataBits) -> Self {
         match val {
@@ -71,6 +78,7 @@ pub enum Parity {
     Even,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl From<Parity> for tokio_serial::Parity {
     fn from(val: Parity) -> Self {
         match val {
@@ -110,6 +118,7 @@ pub enum StopBits {
     Two,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl From<StopBits> for tokio_serial::StopBits {
     fn from(val: StopBits) -> Self {
         match val {
@@ -265,12 +274,11 @@ pub struct DeviceConfig {
 
 async fn timeout<F, D>(future: F, timeout: Duration, between: Duration) -> Result<D>
 where
-    F: Future<Output = D> + Send,
-    D: Send,
+    F: Future<Output = D>,
 {
-    let output = tokio::time::timeout(timeout, future).await?;
+    let output = compat::timeout(timeout, future).await?;
 
-    tokio::time::sleep(between).await;
+    compat::sleep(between).await;
 
     Ok(output)
 }
@@ -305,7 +313,10 @@ impl ModbusDevice {
     pub async fn new(config: &DeviceConfig) -> Result<Self> {
         let timeout_connect = Duration::from_millis(config.timeout_connect_ms);
         let slave = Slave(config.slave_id);
+        #[cfg(target_arch = "wasm32")]
+        let _ = (timeout_connect, slave);
 
+        #[cfg(not(target_arch = "wasm32"))]
         let context = match &config.interface {
             Interface::Wired(interface) => {
                 let builder = tokio_serial::new(&interface.path, interface.baud_rate)
@@ -325,12 +336,15 @@ impl ModbusDevice {
                 let connection = tcp::connect_slave(socket_addr, slave);
                 let context = timeout(connection, timeout_connect, Duration::default()).await??;
 
-                tokio::time::sleep(Duration::from_secs(2)).await;
+                compat::sleep(Duration::from_secs(2)).await;
 
                 context
             }
             Interface::Mock => MockContext::make(),
         };
+
+        #[cfg(target_arch = "wasm32")]
+        let context = MockContext::make();
 
         Ok(Self {
             context: Arc::new(Mutex::new(context)),

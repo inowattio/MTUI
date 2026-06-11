@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MTUI &mdash; browser demo</title>
+  <link data-trunk rel="rust" data-bin="mtui-web" />
+  <style>
+    html {
+      height: 100%;
+    }
+    body {
+      height: 100%;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      align-content: center;
+      background-color: #121212;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    pre {
+      font-family: "Fira Code", monospace;
+      font-size: 16px;
+      margin: 0;
+    }
+  </style>
+  <script>
+    // The terminal grid is measured once at startup; reload to re-measure.
+    let resizeTimer;
+    addEventListener("resize", () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => location.reload(), 250);
+    });
+  </script>
+</head>
+<body></body>
+</html>
