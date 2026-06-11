@@ -21,3 +21,4 @@ chrono = "0.4"
 arboard = { version = "3", default-features = false }
 log = "0.4"
 axum = "0.8"
+local-ip-address = "0.6.13"

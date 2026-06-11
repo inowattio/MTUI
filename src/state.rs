@@ -51,6 +51,16 @@ pub struct DiscoveryParams {
     pub status: Option<String>,
 }
 
+fn local_subnet_prefix() -> Option<String> {
+    match local_ip_address::local_ip().ok()? {
+        std::net::IpAddr::V4(ip) if !ip.is_loopback() => {
+            let [a, b, c, _] = ip.octets();
+            Some(format!("{a}.{b}.{c}."))
+        }
+        _ => None,
+    }
+}
+
 impl Default for DiscoveryParams {
     fn default() -> Self {
         Self {
@@ -62,7 +72,7 @@ impl Default for DiscoveryParams {
             data_bits: DataBits::Eight,
             parity: Parity::None,
             stop_bits: StopBits::One,
-            ip: "127.0.0.1".to_string(),
+            ip: local_subnet_prefix().unwrap_or_else(|| "127.0.0.1".to_string()),
             net_port: 502,
             slave_id: 1,
             connect_timeout_ms: 1000,
