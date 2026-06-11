@@ -19,7 +19,8 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     let clock = Local::now().format("%H:%M:%S.%3f").to_string();
 
     let outer = Block::default()
-        .title_top(Line::styled(format!(" {mode} "), theme.accent_style()))
+        .title_top(Line::styled(format!(" {mode} "), theme.base()))
+        .title_top(Line::styled(" MTUI ", theme.base()).centered())
         .title_top(Line::from(status_span(&app.connection, &theme)).right_aligned())
         .title_bottom(Line::styled(format!(" {clock} "), theme.accent_style()))
         .title_bottom(Line::styled(key_hints, theme.dim_style()).right_aligned())
