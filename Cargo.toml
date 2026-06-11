@@ -22,3 +22,9 @@ arboard = { version = "3", default-features = false }
 log = "0.4"
 axum = "0.8"
 local-ip-address = "0.6.13"
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "debuginfo"
