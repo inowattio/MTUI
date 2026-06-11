@@ -1,4 +1,3 @@
-
 #[cfg(target_arch = "wasm32")]
 mod web {
     use mtui::app::App;
@@ -8,6 +7,9 @@ mod web {
     use mtui::input;
     use mtui::tui::render;
     use mtui::{compat, logger};
+    use ratatui::backend::Backend;
+    use ratatui::layout::Rect;
+    use ratatui::{TerminalOptions, Viewport};
     use ratzilla::{DomBackend, WebRenderer};
     use std::io;
     use std::rc::Rc;
@@ -43,8 +45,18 @@ mod web {
             "browser demo (not persisted)".to_string(),
         ))));
 
-        let backend = DomBackend::new()?;
-        let mut terminal = ratatui::Terminal::new(backend)?;
+        // The backend's `size()` assumes 10x20px cells, which rarely matches
+        // the measured cell size and leaves part of the page blank; fix the
+        // viewport to the measured DOM grid instead. Window resizes reload
+        // the page (see index.html) so the grid is re-measured.
+        let mut backend = DomBackend::new()?;
+        let grid = backend.window_size()?.columns_rows;
+        let mut terminal = ratatui::Terminal::with_options(
+            backend,
+            TerminalOptions {
+                viewport: Viewport::Fixed(Rect::new(0, 0, grid.width, grid.height)),
+            },
+        )?;
 
         let key_app = app.clone();
         terminal
