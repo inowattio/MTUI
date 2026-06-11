@@ -4,7 +4,7 @@ use std::collections::VecDeque;
 use std::sync::Mutex;
 
 const CAP: usize = 1000;
-const TARGET_PREFIX: &str = "modbus_viewer";
+const TARGET_PREFIX: &str = "mtui";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LogLevel {
