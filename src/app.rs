@@ -772,36 +772,49 @@ impl App {
         crate::writes_log::append(&self.writes_log, pending.address, kind, pending.previous);
     }
 
+    fn numeric_spec(field: SettingsField) -> Option<(i64, i64, i64)> {
+        match field {
+            SettingsField::RegistersBatch
+            | SettingsField::HistoryCap
+            | SettingsField::MatrixCols => Some((1, u16::MAX as i64, 1)),
+            SettingsField::AutoUpdate => Some((0, u32::MAX as i64, 100)),
+            SettingsField::ApiPort => Some((-1, u16::MAX as i64, 1)),
+            _ => None,
+        }
+    }
+
+    fn numeric_get(&self, field: SettingsField) -> i64 {
+        match field {
+            SettingsField::RegistersBatch => self.config.registers_batch as i64,
+            SettingsField::AutoUpdate => self.config.update_interval_ms.map_or(0, |n| n as i64),
+            SettingsField::HistoryCap => self.config.graph_history_cap as i64,
+            SettingsField::MatrixCols => self.config.matrix_cols as i64,
+            SettingsField::ApiPort => self.config.port.map_or(-1, |p| p as i64),
+            _ => 0,
+        }
+    }
+
+    fn numeric_set(&mut self, field: SettingsField, value: i64) {
+        match field {
+            SettingsField::RegistersBatch => self.config.registers_batch = value as u16,
+            SettingsField::AutoUpdate => {
+                self.config.update_interval_ms = (value > 0).then_some(value as u64)
+            }
+            SettingsField::HistoryCap => self.config.graph_history_cap = value as u16,
+            SettingsField::MatrixCols => self.config.matrix_cols = value as u16,
+            SettingsField::ApiPort => self.config.port = (value >= 0).then_some(value as u16),
+            _ => {}
+        }
+    }
+
     pub fn settings_adjust(&mut self, field: SettingsField, delta: i64) {
         match field {
-            SettingsField::RegistersBatch => {
-                let n = (self.config.registers_batch as i64 + delta).clamp(1, u16::MAX as i64);
-                self.config.registers_batch = n as u16;
-            }
-            SettingsField::AutoUpdate => {
-                let cur = self.config.update_interval_ms.unwrap_or(0) as i64;
-                let n = (cur + delta * 100).max(0);
-                self.config.update_interval_ms = (n > 0).then_some(n as u64);
-            }
-            SettingsField::HistoryCap => {
-                let n = (self.config.graph_history_cap as i64 + delta).clamp(1, u16::MAX as i64);
-                self.config.graph_history_cap = n as u16;
-            }
-            SettingsField::MatrixCols => {
-                let n = (self.config.matrix_cols as i64 + delta).clamp(1, u16::MAX as i64);
-                self.config.matrix_cols = n as u16;
-            }
             SettingsField::IgnoreDirty => self.config.ignore_dirty = !self.config.ignore_dirty,
             SettingsField::ReadOnly => self.config.read_only = !self.config.read_only,
             SettingsField::LogWrites => self.config.log_writes = !self.config.log_writes,
             SettingsField::ShowContinuation => {
                 self.config.custom_rules.show_continuation =
                     !self.config.custom_rules.show_continuation
-            }
-            SettingsField::ApiPort => {
-                let current = self.config.port.map_or(-1, |p| p as i64);
-                let n = (current + delta).clamp(-1, u16::MAX as i64);
-                self.config.port = (n >= 0).then_some(n as u16);
             }
             SettingsField::StartupPanel => {
                 let panels = ReadPanel::ALL;
@@ -812,11 +825,13 @@ impl App {
                 let next = (current + delta).rem_euclid(panels.len() as i64);
                 self.config.startup.panel = panels[next as usize];
             }
-            SettingsField::ClearPins
-            | SettingsField::ClearLabels
-            | SettingsField::ClearCustom
-            | SettingsField::Save
-            | SettingsField::LoadConfig => return,
+            _ => {
+                let Some((min, max, step)) = Self::numeric_spec(field) else {
+                    return;
+                };
+                let value = (self.numeric_get(field) + delta * step).clamp(min, max);
+                self.numeric_set(field, value);
+            }
         }
         self.refresh_writes_log_state();
         self.sync_api_read_only();
@@ -824,63 +839,26 @@ impl App {
     }
 
     pub fn settings_digit(&mut self, field: SettingsField, digit: u8) {
-        let digit = digit as u64;
-        match field {
-            SettingsField::RegistersBatch => {
-                let n = (self.config.registers_batch as u64).saturating_mul(10) + digit;
-                self.config.registers_batch = n.min(u16::MAX as u64) as u16;
-            }
-            SettingsField::AutoUpdate => {
-                let cur = self.config.update_interval_ms.unwrap_or(0);
-                let n = cur.saturating_mul(10) + digit;
-                self.config.update_interval_ms = (n > 0).then_some(n);
-            }
-            SettingsField::HistoryCap => {
-                let n = (self.config.graph_history_cap as u64).saturating_mul(10) + digit;
-                self.config.graph_history_cap = n.min(u16::MAX as u64) as u16;
-            }
-            SettingsField::MatrixCols => {
-                let n = (self.config.matrix_cols as u64).saturating_mul(10) + digit;
-                self.config.matrix_cols = n.min(u16::MAX as u64) as u16;
-            }
-            SettingsField::ApiPort => {
-                let n = (self.config.port.unwrap_or(0) as u64).saturating_mul(10) + digit;
-                self.config.port = Some(n.min(u16::MAX as u64) as u16);
-            }
-            _ => return,
-        }
+        let Some((min, max, _)) = Self::numeric_spec(field) else {
+            return;
+        };
+        let value = (self.numeric_get(field).max(0) * 10 + digit as i64).clamp(min, max);
+        self.numeric_set(field, value);
         self.dirty = true;
     }
 
     pub fn settings_backspace(&mut self, field: SettingsField) {
-        match field {
-            SettingsField::LoadConfig => {
-                if let Some(s) = self.settings_mut() {
-                    s.load_path.pop();
-                }
-                return;
+        if field == SettingsField::LoadConfig {
+            if let Some(s) = self.settings_mut() {
+                s.load_path.pop();
             }
-            SettingsField::RegistersBatch => {
-                self.config.registers_batch = (self.config.registers_batch / 10).max(1);
-            }
-            SettingsField::AutoUpdate => {
-                let n = self.config.update_interval_ms.unwrap_or(0) / 10;
-                self.config.update_interval_ms = (n > 0).then_some(n);
-            }
-            SettingsField::HistoryCap => {
-                self.config.graph_history_cap = (self.config.graph_history_cap / 10).max(1);
-            }
-            SettingsField::MatrixCols => {
-                self.config.matrix_cols = (self.config.matrix_cols / 10).max(1);
-            }
-            SettingsField::ApiPort => {
-                self.config.port = match self.config.port {
-                    Some(n) if n >= 10 => Some(n / 10),
-                    _ => None,
-                };
-            }
-            _ => return,
+            return;
         }
+        let Some((min, _, _)) = Self::numeric_spec(field) else {
+            return;
+        };
+        let value = self.numeric_get(field);
+        self.numeric_set(field, if value >= 10 { value / 10 } else { min });
         self.dirty = true;
     }
 
