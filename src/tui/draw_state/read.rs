@@ -266,7 +266,12 @@ pub fn draw(
     info_spans.push(Span::styled(format!(" {access}"), access_style));
     info_spans.push(Span::styled("   order ", theme.dim_style()));
     info_spans.push(Span::styled(
-        format!("{:?}   ", app.config.device.word_order),
+        format!("{:?}", app.config.device.word_order),
+        theme.base(),
+    ));
+    info_spans.push(Span::styled("   batch ", theme.dim_style()));
+    info_spans.push(Span::styled(
+        format!("{}   ", app.config.registers_batch),
         theme.base(),
     ));
     info_spans.push(Span::styled(read_time, theme.dim_style()));
