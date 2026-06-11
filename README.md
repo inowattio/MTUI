@@ -3,7 +3,7 @@ A very extensive Modbus client available in pretty much any terminal.
 
 ![Demo](.github/resources/demo.gif)
 
-Try it in your browser (mock device only): **<https://inowattio.github.io/modbus-tui/>**
+Try it in your browser (mock device only): **<https://inowattio.github.io/MTUI/>**
 
 ## Features
 - Modbus TCP and RTU, plus a built-in mock device for playing around
