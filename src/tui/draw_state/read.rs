@@ -7,6 +7,7 @@ use crate::state::{
     WriteParams,
 };
 use crate::tui::theme::{spinner_frame, Theme};
+use chrono::Local;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::symbols;
 use ratatui::text::{Line, Span};
@@ -47,9 +48,10 @@ fn main_table(
     params: &ReadParams,
     app: &App,
     visible: u16,
-    header: String,
+    header: &str,
     theme: &Theme,
 ) -> Table<'static> {
+    let now = Local::now();
     let mut table_rows = Vec::with_capacity(visible as usize);
 
     for i in 0..visible {
@@ -59,18 +61,7 @@ fn main_table(
         let selected = addr == params.position;
         let zebra = i % 2 == 1;
 
-        let cached = (addr >= params.data_start)
-            .then(|| (addr - params.data_start) as usize)
-            .and_then(|idx| {
-                params.main_rows.get(idx).map(|text| {
-                    (
-                        text.clone(),
-                        params.main_changed.get(idx).copied().unwrap_or(false),
-                    )
-                })
-            });
-
-        let (text, style) = match cached {
+        let (text, style) = match app.cell_row((params.register_type, addr), now) {
             Some((text, changed)) => {
                 let style = if selected {
                     theme.selected_style()
@@ -97,39 +88,40 @@ fn main_table(
         table_rows.push(Row::new([Cell::from(text)]).style(style));
     }
 
+    if let Some(error) = &params.read_error {
+        if let Some(first) = table_rows.first_mut() {
+            *first = Row::new([Cell::from(error.clone())]).style(theme.err_style());
+        }
+    }
+
     Table::new(table_rows, [Constraint::Percentage(100)])
-        .header(Row::new([Cell::from(header)]).style(theme.header_style()))
+        .header(Row::new([Cell::from(header.to_string())]).style(theme.header_style()))
         .block(theme.panel("Main data"))
 }
 
 fn list_table(
     params: &ReadParams,
     app: &App,
-    visible: u16,
-    header: String,
+    header: &str,
     theme: &Theme,
-    pins: &[RegisterCell],
+    cells: &[RegisterCell],
+    top: usize,
     title: &str,
 ) -> Table<'static> {
-    let len = pins.len();
-    let top = (params.pinned_top as usize).min(len.saturating_sub(1));
-    let end = (top + visible as usize).min(len);
-
+    let now = Local::now();
     let header = format!("{:<2}{header}", "T");
 
-    let mut table_rows = Vec::with_capacity(end - top);
-    for (i, &(kind, address)) in pins.iter().enumerate().take(end).skip(top) {
-        let (text, changed) = if i < params.pinned_rows.len() {
-            (
-                params.pinned_rows[i].clone(),
-                params.pinned_changed.get(i).copied().unwrap_or(false),
-            )
-        } else {
-            let label = app.label_text(kind, address);
-            (
-                app.interpreter.placeholder(address, label.as_deref()),
-                false,
-            )
+    let mut table_rows = Vec::with_capacity(cells.len());
+    for (offset, &(kind, address)) in cells.iter().enumerate() {
+        let (text, changed) = match app.cell_row((kind, address), now) {
+            Some(row) => row,
+            None => {
+                let label = app.label_text(kind, address);
+                (
+                    app.interpreter.placeholder(address, label.as_deref()),
+                    false,
+                )
+            }
         };
 
         let marker = match kind {
@@ -138,11 +130,11 @@ fn list_table(
         };
         let text = format!("{marker:<2}{text}");
 
-        let style = if i as u16 == params.pinned_index {
+        let style = if (top + offset) as u16 == params.pinned_index {
             theme.selected_style()
         } else if changed {
             theme.changed_style()
-        } else if (i - top) % 2 == 1 {
+        } else if offset % 2 == 1 {
             theme.zebra_style()
         } else {
             theme.base()
@@ -312,14 +304,22 @@ pub fn draw(
         return;
     }
 
-    let ascii_string: &str = match params.panel {
+    let ascii_string: String = match params.panel {
         ReadPanel::Main => {
             frame.render_widget(main_table(params, app, visible, header, theme), rows[1]);
-            &params.ascii_string
+            if show_ascii {
+                app.ascii_string_for(
+                    (0..visible)
+                        .filter_map(|i| params.window_start.checked_add(i))
+                        .map(|addr| (params.register_type, addr)),
+                )
+            } else {
+                String::new()
+            }
         }
         ReadPanel::Matrix => {
             frame.render_widget(matrix_table(params, app, visible, theme), rows[1]);
-            ""
+            String::new()
         }
         _ => {
             let (title, empty_message) = match params.panel {
@@ -327,21 +327,33 @@ pub fn draw(
                 ReadPanel::Custom => ("Custom", "No custom rules."),
                 _ => ("Pinned", "No pinned registers."),
             };
-            let cells = app.panel_cells();
-            let table = if cells.is_empty() {
-                rows_to_table(
-                    title,
-                    header,
-                    &[empty_message.to_string()],
-                    &[],
-                    None,
-                    theme,
-                )
+            let len = app.panel_len() as usize;
+            if len == 0 {
+                frame.render_widget(
+                    rows_to_table(
+                        title,
+                        header.to_string(),
+                        &[empty_message.to_string()],
+                        &[],
+                        None,
+                        theme,
+                    ),
+                    rows[1],
+                );
+                String::new()
             } else {
-                list_table(params, app, visible, header, theme, &cells, title)
-            };
-            frame.render_widget(table, rows[1]);
-            &params.pinned_ascii_string
+                let top = (params.pinned_top as usize).min(len - 1);
+                let cells = app.panel_window(top, visible as usize);
+                frame.render_widget(
+                    list_table(params, app, header, theme, &cells, top, title),
+                    rows[1],
+                );
+                if show_ascii {
+                    app.ascii_string_for(cells.iter().copied())
+                } else {
+                    String::new()
+                }
+            }
         }
     };
 

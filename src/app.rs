@@ -53,7 +53,6 @@ struct PendingWrite {
 
 #[derive(Debug)]
 struct RefreshTaskResult {
-    window_start: u16,
     register_type: RegisterType,
     main_data: Option<Result<Vec<RegisterCellValue>, String>>,
     pinned_data: Option<Result<Vec<RegisterCellValue>, String>>,
@@ -353,7 +352,6 @@ impl App {
         };
         previous.loading = false;
         self.state = State::Read(previous);
-        self.rebuild_read_rows();
     }
 
     pub fn api_device(&self) -> ApiDevice {
@@ -545,13 +543,39 @@ impl App {
         self.read_mut().popup = Some(Popup::Inspect);
     }
 
-    pub fn panel_cells(&self) -> Vec<RegisterCell> {
+    pub fn panel_cell_at(&self, index: usize) -> Option<RegisterCell> {
         match self.read().panel {
             ReadPanel::Main | ReadPanel::Pinned | ReadPanel::Matrix => {
-                self.pinned_registers.clone()
+                self.pinned_registers.get(index).copied()
             }
-            ReadPanel::Labeled => self.labels.keys().copied().collect(),
-            ReadPanel::Custom => self.custom_rules.keys().copied().collect(),
+            ReadPanel::Labeled => self.labels.keys().nth(index).copied(),
+            ReadPanel::Custom => self.custom_rules.keys().nth(index).copied(),
+        }
+    }
+
+    pub fn panel_window(&self, start: usize, count: usize) -> Vec<RegisterCell> {
+        match self.read().panel {
+            ReadPanel::Main | ReadPanel::Pinned | ReadPanel::Matrix => self
+                .pinned_registers
+                .iter()
+                .skip(start)
+                .take(count)
+                .copied()
+                .collect(),
+            ReadPanel::Labeled => self
+                .labels
+                .keys()
+                .skip(start)
+                .take(count)
+                .copied()
+                .collect(),
+            ReadPanel::Custom => self
+                .custom_rules
+                .keys()
+                .skip(start)
+                .take(count)
+                .copied()
+                .collect(),
         }
     }
 
@@ -572,9 +596,7 @@ impl App {
         match panel {
             ReadPanel::Main | ReadPanel::Matrix => (register_type, position),
             _ => self
-                .panel_cells()
-                .get(index as usize)
-                .copied()
+                .panel_cell_at(index as usize)
                 .unwrap_or((register_type, position)),
         }
     }
@@ -636,7 +658,6 @@ impl App {
         let n = self.custom_rules.len();
         self.custom_rules.clear();
         self.dirty = true;
-        self.rebuild_read_rows();
         log::info!("Cleared {n} custom rule(s)");
     }
 
@@ -932,7 +953,6 @@ impl App {
         if let Some(device) = &mut self.device {
             device.set_word_order(next);
         }
-        self.rebuild_read_rows();
     }
 
     pub fn request_quit(&mut self) {
@@ -1007,19 +1027,13 @@ impl App {
         let rows = self.visible_rows.get();
         let cols = self.config.matrix_cols;
         let p = self.read_mut();
-        let type_changed = register_type != p.register_type;
         if p.panel != ReadPanel::Matrix {
             p.panel = ReadPanel::Main;
         }
         p.position = position;
         p.register_type = register_type;
         p.scroll_to_cursor(rows, cols);
-        if type_changed {
-            p.main_rows = Vec::new();
-            p.main_changed = Vec::new();
-        }
         p.popup = None;
-        self.rebuild_read_rows();
         true
     }
 
@@ -1042,7 +1056,6 @@ impl App {
         p.register_type = register_type;
         p.position = position;
         p.scroll_to_cursor(rows, cols);
-        self.rebuild_read_rows();
     }
 
     fn recompute_search(&mut self) {
@@ -1122,7 +1135,6 @@ impl App {
         self.dirty = true;
 
         self.read_mut().popup = None;
-        self.rebuild_read_rows();
     }
 
     pub fn open_custom(&mut self) {
@@ -1287,7 +1299,6 @@ impl App {
                 self.custom_rules.insert(cell, rule);
                 self.dirty = true;
                 self.read_mut().popup = None;
-                self.rebuild_read_rows();
                 log::info!("Custom rule set \u{b7} {:?}@{}", cell.0, cell.1);
             }
             Err(e) => self.with_custom(|c| c.error = Some(e)),
@@ -1304,7 +1315,6 @@ impl App {
             log::info!("Custom rule removed \u{b7} {:?}@{}", cell.0, cell.1);
         }
         self.read_mut().popup = None;
-        self.rebuild_read_rows();
     }
 
     fn persist_config(&mut self) -> String {
@@ -1380,8 +1390,8 @@ impl App {
 
         let selection = match panel {
             ReadPanel::Main => (register_type, position),
-            _ => match self.panel_cells().get(pinned_index as usize) {
-                Some(&cell) => cell,
+            _ => match self.panel_cell_at(pinned_index as usize) {
+                Some(cell) => cell,
                 None => return,
             },
         };
@@ -1490,12 +1500,7 @@ impl App {
         if matches!(self.state, State::Read(_)) {
             let rows = self.visible_rows.get();
             let cols = self.config.matrix_cols;
-            let p = self.read_mut();
-            let before = p.window_start;
-            p.scroll_to_cursor(rows, cols);
-            if p.window_start != before {
-                self.rebuild_read_rows();
-            }
+            self.read_mut().scroll_to_cursor(rows, cols);
         }
 
         let should_refresh = !self.paused
@@ -1508,8 +1513,6 @@ impl App {
 
         if should_refresh {
             self.refresh().await;
-        } else if self.interpreter.is_enabled(Column::Ago) {
-            self.rebuild_read_rows();
         }
     }
 
@@ -1602,27 +1605,26 @@ impl App {
         let amount = self.config.registers_batch.max(1);
         let visible = self.visible_rows.get().max(1);
         let cols = self.config.matrix_cols;
-        let (panel, window_start, position, register_type) = {
+        let (panel, position, register_type) = {
             let p = self.read_mut();
             p.refresh_timer = Instant::now();
             p.loading = true;
             p.scroll_to_cursor(visible, cols);
-            (p.panel, p.window_start, p.position, p.register_type)
+            (p.panel, p.position, p.register_type)
         };
         let max_read_start = u16::MAX - (amount - 1);
         let read_start = position.saturating_sub(amount / 2).min(max_read_start);
         self.connection = ConnectionStatus::Reading;
 
         let panel_registers = {
-            let cells = self.panel_cells();
-            let total = cells.len();
+            let total = self.panel_len() as usize;
             if total == 0 {
                 Vec::new()
             } else {
                 let batch = (amount as usize).min(total);
                 let idx = (self.read().pinned_index as usize).min(total - 1);
                 let start = idx.saturating_sub(batch / 2).min(total - batch);
-                cells[start..start + batch].to_vec()
+                self.panel_window(start, batch)
             }
         };
 
@@ -1645,7 +1647,6 @@ impl App {
             let read_duration = read_began.elapsed();
 
             RefreshTaskResult {
-                window_start,
                 register_type,
                 main_data,
                 pinned_data,
@@ -1696,22 +1697,15 @@ impl App {
             (Some(Err(e)), _) | (_, Some(Err(e))) => ConnectionStatus::Error(e.clone()),
             _ => self.connection.clone(),
         };
-        let read_ok =
-            matches!(&result.main_data, Some(Ok(_))) || matches!(&result.pinned_data, Some(Ok(_)));
-
         {
             let params = self.read_mut();
             params.read_duration = Some(result.read_duration);
             params.loading = false;
-            if let Some(Err(e)) = &result.main_data {
-                params.main_rows = vec![e.clone()];
-                params.main_changed = Vec::new();
-                params.data_start = result.window_start;
+            match &result.main_data {
+                Some(Err(e)) => params.read_error = Some(e.clone()),
+                Some(Ok(_)) => params.read_error = None,
+                None => {}
             }
-        }
-
-        if read_ok {
-            self.rebuild_read_rows();
         }
 
         if connection != self.logged_connection {
@@ -1775,101 +1769,37 @@ impl App {
         Ok((input, output))
     }
 
-    pub fn rebuild_read_rows(&mut self) {
-        if !self.is_reading() {
-            return;
-        }
-        let visible = self.visible_rows.get().max(1);
-        let (window_start, register_type) = {
-            let p = self.read();
-            (p.window_start, p.register_type)
+    pub fn cell_row(&self, cell: RegisterCell, now: DateTime<Local>) -> Option<(String, bool)> {
+        let (kind, addr) = cell;
+        let &(value, time) = self.read_log.get(&cell)?;
+        let neighbor = |offset: u16| {
+            self.read_log
+                .get(&(kind, addr.saturating_add(offset)))
+                .map(|&(v, _)| v)
         };
-        let word_order = self.config.device.word_order;
-        let now = Local::now();
+        let custom = self.custom_value(cell, value, self.config.device.word_order, &neighbor);
+        let label = self.labels.get(&cell).map(String::as_str);
+        let row = self.interpreter.format_row(
+            addr,
+            value,
+            [neighbor(1), neighbor(2), neighbor(3)],
+            time.with_timezone(&Local),
+            now,
+            custom.as_deref(),
+            label,
+        );
+        Some((row, self.cell_changed(cell)))
+    }
 
-        let mut main_rows = Vec::with_capacity(visible as usize);
-        let mut main_changed = Vec::with_capacity(visible as usize);
-        let mut window_values: Vec<RegisterCellValue> = Vec::new();
-        for i in 0..visible {
-            let addr = window_start.saturating_add(i);
-            let cell = (register_type, addr);
-            let label = self.labels.get(&cell).map(String::as_str);
-            match self.read_log.get(&cell) {
-                Some(&(value, time)) => {
-                    let neighbor = |offset: u16| {
-                        self.read_log
-                            .get(&(register_type, addr.saturating_add(offset)))
-                            .map(|&(v, _)| v)
-                    };
-                    let custom = self.custom_value(cell, value, word_order, &neighbor);
-                    main_rows.push(self.interpreter.format_row(
-                        addr,
-                        value,
-                        [neighbor(1), neighbor(2), neighbor(3)],
-                        time.with_timezone(&Local),
-                        now,
-                        custom.as_deref(),
-                        label,
-                    ));
-                    main_changed.push(self.changed.get(&cell).copied().unwrap_or(false));
-                    window_values.push((cell, value));
-                }
-                None => {
-                    main_rows.push(self.interpreter.placeholder(addr, label));
-                    main_changed.push(false);
-                }
-            }
-        }
-        let main_ascii = self.interpreter.ascii_string(&window_values);
-
-        let pins = self.panel_cells();
-        let mut pinned_rows = Vec::with_capacity(pins.len());
-        let mut pinned_changed = Vec::with_capacity(pins.len());
-        let mut pinned_values: Vec<RegisterCellValue> = Vec::new();
-        for &(kind, addr) in &pins {
-            let cell = (kind, addr);
-            let label = self.labels.get(&cell).map(String::as_str);
-            match self.read_log.get(&cell) {
-                Some(&(value, time)) => {
-                    let neighbor = |offset: u16| {
-                        self.read_log
-                            .get(&(kind, addr.saturating_add(offset)))
-                            .map(|&(v, _)| v)
-                    };
-                    let custom = self.custom_value(cell, value, word_order, &neighbor);
-                    pinned_rows.push(self.interpreter.format_row(
-                        addr,
-                        value,
-                        [neighbor(1), neighbor(2), neighbor(3)],
-                        time.with_timezone(&Local),
-                        now,
-                        custom.as_deref(),
-                        label,
-                    ));
-                    pinned_changed.push(self.changed.get(&cell).copied().unwrap_or(false));
-                    pinned_values.push((cell, value));
-                }
-                None => {
-                    pinned_rows.push(self.interpreter.placeholder(addr, label));
-                    pinned_changed.push(false);
-                }
-            }
-        }
-        let pinned_ascii = self.interpreter.ascii_string(&pinned_values);
-
-        let params = self.read_mut();
-        params.main_rows = main_rows;
-        params.main_changed = main_changed;
-        params.ascii_string = main_ascii;
-        params.pinned_rows = pinned_rows;
-        params.pinned_changed = pinned_changed;
-        params.pinned_ascii_string = pinned_ascii;
-        params.data_start = window_start;
+    pub fn ascii_string_for(&self, cells: impl Iterator<Item = RegisterCell>) -> String {
+        let values: Vec<RegisterCellValue> = cells
+            .filter_map(|cell| self.read_log.get(&cell).map(|&(value, _)| (cell, value)))
+            .collect();
+        self.interpreter.ascii_string(&values)
     }
 
     pub fn toggle_column(&mut self, column: Column) {
         self.interpreter.toggle(column);
-        self.rebuild_read_rows();
     }
 
     pub fn label_text(&self, register_type: RegisterType, address: u16) -> Option<String> {
@@ -2027,8 +1957,7 @@ impl App {
                     let message = e.to_string();
                     if self.is_reading() {
                         let params = self.read_mut();
-                        params.main_rows = vec![message.clone()];
-                        params.main_changed = Vec::new();
+                        params.read_error = Some(message.clone());
                         params.loading = false;
                     }
                     log::error!("Read task failed \u{b7} {message}");
@@ -2068,10 +1997,8 @@ impl App {
 
     pub fn toggle_type(&mut self) {
         let p = self.read_mut();
-        p.main_rows = Vec::new();
         p.read_duration = None;
-        p.ascii_string = String::new();
-        p.main_changed = Vec::new();
+        p.read_error = None;
         p.register_type.toggle();
     }
 }

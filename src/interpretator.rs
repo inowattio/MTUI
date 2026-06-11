@@ -2,6 +2,7 @@ use crate::config::{Column, InterpretorConfig};
 use crate::modbus::WordOrder;
 use crate::register::RegisterCellValue;
 use chrono::{DateTime, Local};
+use std::fmt::Write as _;
 
 #[derive(Debug, Clone)]
 pub struct Interpretor {
@@ -25,71 +26,71 @@ impl Interpretor {
         let mut header = String::new();
 
         if self.config.time {
-            header.push_str(&format!("{0: <12} ", "time"))
+            let _ = write!(header, "{0: <12} ", "time");
         }
         if self.config.ago {
-            header.push_str(&format!("{0: <9} ", "ago"))
+            let _ = write!(header, "{0: <9} ", "ago");
         }
-        header.push_str(&format!("{0: >5}: ", "index"));
+        let _ = write!(header, "{0: >5}: ", "index");
         if self.config.u16 {
-            header.push_str(&format!("{0: <5} ", "u16"))
+            let _ = write!(header, "{0: <5} ", "u16");
         }
         if self.config.i16 {
-            header.push_str(&format!("{0: <6} ", "i16"))
+            let _ = write!(header, "{0: <6} ", "i16");
         }
         if self.config.u8s {
-            header.push_str(&format!("{0: <8} ", "u8s"))
+            let _ = write!(header, "{0: <8} ", "u8s");
         }
         if self.config.i8s {
-            header.push_str(&format!("{0: <9} ", "i8s"))
+            let _ = write!(header, "{0: <9} ", "i8s");
         }
         if self.config.hex {
-            header.push_str(&format!("{0: <4} ", "hex"))
+            let _ = write!(header, "{0: <4} ", "hex");
         }
         if self.config.hex32 {
-            header.push_str(&format!("{0: <9} ", "hex32"))
+            let _ = write!(header, "{0: <9} ", "hex32");
         }
         if self.config.f16 {
-            header.push_str(&format!("{0: <10} ", "f16"))
+            let _ = write!(header, "{0: <10} ", "f16");
         }
         if self.config.bcd {
-            header.push_str(&format!("{0: <6} ", "bcd"))
+            let _ = write!(header, "{0: <6} ", "bcd");
         }
         if self.config.bcd32 {
-            header.push_str(&format!("{0: <10} ", "bcd32"))
+            let _ = write!(header, "{0: <10} ", "bcd32");
         }
         if self.config.u32 {
-            header.push_str(&format!("{0: <10} ", "u32"))
+            let _ = write!(header, "{0: <10} ", "u32");
         }
         if self.config.i32 {
-            header.push_str(&format!("{0: <11} ", "i32"))
+            let _ = write!(header, "{0: <11} ", "i32");
         }
         if self.config.u32_m10k {
-            header.push_str(&format!("{0: <8} ", "u32m10k"))
+            let _ = write!(header, "{0: <8} ", "u32m10k");
         }
         if self.config.i32_m10k {
-            header.push_str(&format!("{0: <9} ", "i32m10k"))
+            let _ = write!(header, "{0: <9} ", "i32m10k");
         }
         if self.config.u64 {
-            header.push_str(&format!("{0: <20} ", "u64"))
+            let _ = write!(header, "{0: <20} ", "u64");
         }
         if self.config.i64 {
-            header.push_str(&format!("{0: <21} ", "i64"))
+            let _ = write!(header, "{0: <21} ", "i64");
         }
         if self.config.f32 {
-            header.push_str(&format!("{0: <10} ", "f32"))
+            let _ = write!(header, "{0: <10} ", "f32");
         }
         if self.config.f64 {
-            header.push_str(&format!("{0: <12} ", "f64"))
+            let _ = write!(header, "{0: <12} ", "f64");
         }
         if self.config.ascii {
-            header.push_str(&format!("{0: <5} ", "ascii"))
+            let _ = write!(header, "{0: <5} ", "ascii");
         }
         if self.config.bits {
-            header.push_str(&format!("{0: <19} ", "bits"))
+            let _ = write!(header, "{0: <19} ", "bits");
         }
         if self.config.custom {
-            header.push_str(&format!("{0: <18} ", "custom"))
+            let _ = write!(header, "{0: <18} ", "custom");
         }
         if self.config.label {
             header.push_str("label");
@@ -115,8 +116,8 @@ impl Interpretor {
         self.word_order = word_order;
     }
 
-    pub fn header(&self) -> String {
-        self.header.clone()
+    pub fn header(&self) -> &str {
+        &self.header
     }
 
     pub fn shows_ascii(&self) -> bool {
@@ -142,75 +143,75 @@ impl Interpretor {
         let mut row = String::new();
 
         if self.config.time {
-            row.push_str(&format!("{dash: <12} "));
+            let _ = write!(row, "{dash: <12} ");
         }
         if self.config.ago {
-            row.push_str(&format!("{dash: <9} "));
+            let _ = write!(row, "{dash: <9} ");
         }
         if self.config.index_hex {
-            row.push_str(&format!("{index: >5X}: "));
+            let _ = write!(row, "{index: >5X}: ");
         } else {
-            row.push_str(&format!("{index: >5}: "));
+            let _ = write!(row, "{index: >5}: ");
         }
         if self.config.u16 {
-            row.push_str(&format!("{dash: <5} "));
+            let _ = write!(row, "{dash: <5} ");
         }
         if self.config.i16 {
-            row.push_str(&format!("{dash: <6} "));
+            let _ = write!(row, "{dash: <6} ");
         }
         if self.config.u8s {
-            row.push_str(&format!("{dash: <8} "));
+            let _ = write!(row, "{dash: <8} ");
         }
         if self.config.i8s {
-            row.push_str(&format!("{dash: <9} "));
+            let _ = write!(row, "{dash: <9} ");
         }
         if self.config.hex {
-            row.push_str(&format!("{dash: <4} "));
+            let _ = write!(row, "{dash: <4} ");
         }
         if self.config.hex32 {
-            row.push_str(&format!("{dash: <9} "));
+            let _ = write!(row, "{dash: <9} ");
         }
         if self.config.f16 {
-            row.push_str(&format!("{dash: <10} "));
+            let _ = write!(row, "{dash: <10} ");
         }
         if self.config.bcd {
-            row.push_str(&format!("{dash: <6} "));
+            let _ = write!(row, "{dash: <6} ");
         }
         if self.config.bcd32 {
-            row.push_str(&format!("{dash: <10} "));
+            let _ = write!(row, "{dash: <10} ");
         }
         if self.config.u32 {
-            row.push_str(&format!("{dash: <10} "));
+            let _ = write!(row, "{dash: <10} ");
         }
         if self.config.i32 {
-            row.push_str(&format!("{dash: <11} "));
+            let _ = write!(row, "{dash: <11} ");
         }
         if self.config.u32_m10k {
-            row.push_str(&format!("{dash: <8} "));
+            let _ = write!(row, "{dash: <8} ");
         }
         if self.config.i32_m10k {
-            row.push_str(&format!("{dash: <9} "));
+            let _ = write!(row, "{dash: <9} ");
         }
         if self.config.u64 {
-            row.push_str(&format!("{dash: <20} "));
+            let _ = write!(row, "{dash: <20} ");
         }
         if self.config.i64 {
-            row.push_str(&format!("{dash: <21} "));
+            let _ = write!(row, "{dash: <21} ");
         }
         if self.config.f32 {
-            row.push_str(&format!("{dash: <10} "));
+            let _ = write!(row, "{dash: <10} ");
         }
         if self.config.f64 {
-            row.push_str(&format!("{dash: <12} "));
+            let _ = write!(row, "{dash: <12} ");
         }
         if self.config.ascii {
-            row.push_str(&format!("{dash: <5} "));
+            let _ = write!(row, "{dash: <5} ");
         }
         if self.config.bits {
-            row.push_str(&format!("{dash: <19} "));
+            let _ = write!(row, "{dash: <19} ");
         }
         if self.config.custom {
-            row.push_str(&format!("{dash: <18} "));
+            let _ = write!(row, "{dash: <18} ");
         }
 
         if self.config.label {
@@ -239,32 +240,32 @@ impl Interpretor {
         let mut row = String::new();
         if self.config.time {
             let formatted = read_at.format("%H:%M:%S.%3f").to_string();
-            row.push_str(&format!("{formatted: <12} "));
+            let _ = write!(row, "{formatted: <12} ");
         }
         if self.config.ago {
             let ago = format_ago(now.signed_duration_since(read_at));
-            row.push_str(&format!("{ago: <9} "));
+            let _ = write!(row, "{ago: <9} ");
         }
         if self.config.index_hex {
-            row.push_str(&format!("{address: >5X}: "));
+            let _ = write!(row, "{address: >5X}: ");
         } else {
-            row.push_str(&format!("{address: >5}: "));
+            let _ = write!(row, "{address: >5}: ");
         }
         if self.config.u16 {
-            row.push_str(&format!("{byte: <5} "))
+            let _ = write!(row, "{byte: <5} ");
         }
         if self.config.i16 {
-            row.push_str(&format!("{: <6} ", byte as i16))
+            let _ = write!(row, "{: <6} ", byte as i16);
         }
         if self.config.u8s {
             let high = (byte >> 8) as u8;
             let low = (byte & 0xFF) as u8;
-            row.push_str(&format!("{: <8} ", format!("{high}/{low}")))
+            let _ = write!(row, "{: <8} ", format!("{high}/{low}"));
         }
         if self.config.i8s {
             let high = (byte >> 8) as u8 as i8;
             let low = (byte & 0xFF) as u8 as i8;
-            row.push_str(&format!("{: <9} ", format!("{high}/{low}")))
+            let _ = write!(row, "{: <9} ", format!("{high}/{low}"));
         }
 
         let word = self.word_order.make_word(byte, next1.unwrap_or_default());
@@ -273,14 +274,14 @@ impl Interpretor {
             .make_word(next2.unwrap_or_default(), next3.unwrap_or_default());
         let dword = self.word_order.make_dword(word, second_word);
         if self.config.hex {
-            row.push_str(&format!("{byte:<04X} "))
+            let _ = write!(row, "{byte:<04X} ");
         }
         if self.config.hex32 {
             if next1.is_none() {
-                row.push_str(&format!("{: <9} ", "-"))
+                let _ = write!(row, "{: <9} ", "-");
             } else {
                 let s = format!("{word:08X}");
-                row.push_str(&format!("{s: <9} "))
+                let _ = write!(row, "{s: <9} ");
             }
         }
         if self.config.f16 {
@@ -289,89 +290,89 @@ impl Interpretor {
             if s.len() > 10 {
                 s = format!("{x:.3e}");
             }
-            row.push_str(&format!("{s: <10} "))
+            let _ = write!(row, "{s: <10} ");
         }
         if self.config.bcd {
             let s = bcd_to_decimal(byte).map_or_else(|| "--".to_string(), |n| n.to_string());
-            row.push_str(&format!("{s: <6} "))
+            let _ = write!(row, "{s: <6} ");
         }
         if self.config.bcd32 {
             if next1.is_none() {
-                row.push_str(&format!("{: <10} ", "-"))
+                let _ = write!(row, "{: <10} ", "-");
             } else {
                 let s =
                     bcd_to_decimal_u32(word).map_or_else(|| "--".to_string(), |n| n.to_string());
-                row.push_str(&format!("{s: <10} "))
+                let _ = write!(row, "{s: <10} ");
             }
         }
         if self.config.u32 {
             if next1.is_none() {
-                row.push_str(&format!("{: <10} ", "-"))
+                let _ = write!(row, "{: <10} ", "-");
             } else {
-                row.push_str(&format!("{word: <10} "))
+                let _ = write!(row, "{word: <10} ");
             }
         }
         if self.config.i32 {
             if next1.is_none() {
-                row.push_str(&format!("{: <11} ", "-"))
+                let _ = write!(row, "{: <11} ", "-");
             } else {
-                row.push_str(&format!("{: <11} ", word as i32))
+                let _ = write!(row, "{: <11} ", word as i32);
             }
         }
         if self.config.u32_m10k {
             if next1.is_none() {
-                row.push_str(&format!("{: <8} ", "-"))
+                let _ = write!(row, "{: <8} ", "-");
             } else {
                 let s =
                     m10k_to_u32(word).map_or_else(|| "--".to_string(), |(h, l)| format!("{h}/{l}"));
-                row.push_str(&format!("{s: <8} "))
+                let _ = write!(row, "{s: <8} ");
             }
         }
         if self.config.i32_m10k {
             if next1.is_none() {
-                row.push_str(&format!("{: <9} ", "-"))
+                let _ = write!(row, "{: <9} ", "-");
             } else {
                 let s =
                     m10k_to_i32(word).map_or_else(|| "--".to_string(), |(h, l)| format!("{h}/{l}"));
-                row.push_str(&format!("{s: <9} "))
+                let _ = write!(row, "{s: <9} ");
             }
         }
         if self.config.u64 {
             if next1.is_none() || next2.is_none() || next3.is_none() {
-                row.push_str(&format!("{: <20} ", "-"))
+                let _ = write!(row, "{: <20} ", "-");
             } else {
-                row.push_str(&format!("{dword: <20} "))
+                let _ = write!(row, "{dword: <20} ");
             }
         }
         if self.config.i64 {
             if next1.is_none() || next2.is_none() || next3.is_none() {
-                row.push_str(&format!("{: <21} ", "-"))
+                let _ = write!(row, "{: <21} ", "-");
             } else {
-                row.push_str(&format!("{: <21} ", dword as i64))
+                let _ = write!(row, "{: <21} ", dword as i64);
             }
         }
         if self.config.f32 {
             if next1.is_none() {
-                row.push_str(&format!("{: <10} ", "-"))
+                let _ = write!(row, "{: <10} ", "-");
             } else {
                 let x = f32::from_bits(word);
                 let mut s = format!("{x}");
                 if s.len() > 10 {
                     s = format!("{x:.3e}");
                 }
-                row.push_str(&format!("{s: <10} "))
+                let _ = write!(row, "{s: <10} ");
             }
         }
         if self.config.f64 {
             if next1.is_none() || next2.is_none() || next3.is_none() {
-                row.push_str(&format!("{: <12} ", "-"))
+                let _ = write!(row, "{: <12} ", "-");
             } else {
                 let x = f64::from_bits(dword);
                 let mut s = format!("{x}");
                 if s.len() > 12 {
                     s = format!("{x:.3e}");
                 }
-                row.push_str(&format!("{s: <12} "))
+                let _ = write!(row, "{s: <12} ");
             }
         }
         if self.config.ascii {
@@ -388,16 +389,16 @@ impl Interpretor {
                 })
                 .collect();
 
-            row.push_str(&format!("{s:<5} "))
+            let _ = write!(row, "{s:<5} ");
         }
         if self.config.bits {
             let b = format!("{byte:016b}");
             let grouped = format!("{} {} {} {}", &b[0..4], &b[4..8], &b[8..12], &b[12..16]);
-            row.push_str(&format!("{grouped: <19} "))
+            let _ = write!(row, "{grouped: <19} ");
         }
         if self.config.custom {
             let s = custom.unwrap_or("--");
-            row.push_str(&format!("{s: <18} "))
+            let _ = write!(row, "{s: <18} ");
         }
 
         if self.config.label {

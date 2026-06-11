@@ -113,7 +113,6 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         }
         _ => {}
     }
-    app.rebuild_read_rows();
     Ok(())
 }
 
@@ -166,7 +165,6 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
             keybind::REFRESH | keybind::ACTION => app.refresh().await,
             keybind::MOVE_UP | keybind::MOVE_DOWN | keybind::PAGE_UP | keybind::PAGE_DOWN => {
                 move_read_cursor(app, key_event.code);
-                app.rebuild_read_rows();
             }
             _ => {}
         },

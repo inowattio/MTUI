@@ -364,23 +364,17 @@ impl Popup {
 pub struct ReadParams {
     pub position: u16,
     pub window_start: u16,
-    pub data_start: u16,
     pub panel: ReadPanel,
     pub pinned_index: u16,
     pub pinned_top: u16,
     pub popup: Option<Popup>,
     pub graph: bool,
     pub graph_dword: bool,
-    pub main_rows: Vec<String>,
-    pub pinned_rows: Vec<String>,
     pub refresh_timer: Instant,
     pub register_type: RegisterType,
     pub read_duration: Option<Duration>,
     pub loading: bool,
-    pub ascii_string: String,
-    pub pinned_ascii_string: String,
-    pub main_changed: Vec<bool>,
-    pub pinned_changed: Vec<bool>,
+    pub read_error: Option<String>,
 }
 
 impl Default for ReadParams {
@@ -388,23 +382,17 @@ impl Default for ReadParams {
         Self {
             position: 0,
             window_start: 0,
-            data_start: 0,
             panel: ReadPanel::Main,
             pinned_index: 0,
             pinned_top: 0,
             popup: None,
             graph: false,
             graph_dword: false,
-            main_rows: Vec::new(),
-            pinned_rows: Vec::new(),
             refresh_timer: Instant::now(),
             register_type: Default::default(),
             read_duration: None,
             loading: false,
-            ascii_string: String::new(),
-            pinned_ascii_string: String::new(),
-            main_changed: Vec::new(),
-            pinned_changed: Vec::new(),
+            read_error: None,
         }
     }
 }
