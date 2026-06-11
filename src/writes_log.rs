@@ -29,12 +29,7 @@ pub struct WritesLogState {
 
 pub type SharedWritesLog = Arc<Mutex<WritesLogState>>;
 
-pub fn append(
-    shared: &SharedWritesLog,
-    address: u16,
-    kind: WriteKind,
-    previous: Option<u64>
-) {
+pub fn append(shared: &SharedWritesLog, address: u16, kind: WriteKind, previous: Option<u64>) {
     let (enabled, path) = match shared.lock() {
         Ok(state) => (state.enabled, state.path.clone()),
         Err(_) => return,
@@ -56,9 +51,12 @@ pub fn append(
         let val = match &kind {
             WriteKind::Word(w) => w.to_string(),
             WriteKind::DWord(d) => d.to_string(),
-            WriteKind::Multiple(v) => format!("{v:?}")
+            WriteKind::Multiple(v) => format!("{v:?}"),
         };
 
-        let _ = writeln!(file, "{timestamp} | {address} | {kind} | {previous} | {val}");
+        let _ = writeln!(
+            file,
+            "{timestamp} | {address} | {kind} | {previous} | {val}"
+        );
     }
 }

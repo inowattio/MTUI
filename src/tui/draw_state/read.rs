@@ -1,6 +1,7 @@
 use crate::app::App;
 use crate::config::Column;
 use crate::constants::{keybind, MATRIX_COLS};
+use crate::register::{RegisterCell, RegisterType};
 use crate::state::{
     CustomField, CustomParams, LabelParams, LogsParams, Popup, ReadPanel, ReadParams, SearchParams,
     WriteParams,
@@ -11,7 +12,6 @@ use ratatui::symbols;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Axis, Cell, Chart, Clear, Dataset, GraphType, Paragraph, Row, Table, Wrap};
 use ratatui::Frame;
-use crate::register::{RegisterCell, RegisterType};
 
 fn rows_to_table(
     title: &str,
@@ -62,10 +62,12 @@ fn main_table(
         let cached = (addr >= params.data_start)
             .then(|| (addr - params.data_start) as usize)
             .and_then(|idx| {
-                params
-                    .main_rows
-                    .get(idx)
-                    .map(|text| (text.clone(), params.main_changed.get(idx).copied().unwrap_or(false)))
+                params.main_rows.get(idx).map(|text| {
+                    (
+                        text.clone(),
+                        params.main_changed.get(idx).copied().unwrap_or(false),
+                    )
+                })
             });
 
         let (text, style) = match cached {
@@ -124,7 +126,10 @@ fn list_table(
             )
         } else {
             let label = app.label_text(kind, address);
-            (app.interpreter.placeholder(address, label.as_deref()), false)
+            (
+                app.interpreter.placeholder(address, label.as_deref()),
+                false,
+            )
         };
 
         let marker = match kind {
@@ -217,7 +222,11 @@ pub fn draw(
 
     let show_ascii = app.interpreter.shows_ascii() && !params.graph;
     let row_constraints = if show_ascii {
-        vec![Constraint::Length(2), Constraint::Min(0), Constraint::Length(1)]
+        vec![
+            Constraint::Length(2),
+            Constraint::Min(0),
+            Constraint::Length(1),
+        ]
     } else {
         vec![Constraint::Length(2), Constraint::Min(0)]
     };
@@ -280,7 +289,14 @@ pub fn draw(
     app.visible_rows.set(visible);
 
     if params.graph {
-        draw_graph(frame, rows[1], theme, app, (info_type, info_addr), params.graph_dword);
+        draw_graph(
+            frame,
+            rows[1],
+            theme,
+            app,
+            (info_type, info_addr),
+            params.graph_dword,
+        );
         if let Some(popup) = &params.popup {
             draw_popup(frame, area, theme, app, popup);
         }
@@ -365,7 +381,7 @@ fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup: &P
             "Unsaved changes",
             " Quit anyway?",
             &None,
-            (Some("esc"), None)
+            (Some("esc"), None),
         ),
     }
 }
@@ -424,7 +440,7 @@ fn draw_help(frame: &mut Frame, area: Rect, theme: &Theme) {
 
     let mut lines: Vec<Line> = Vec::with_capacity(rows + 3 + 1);
     lines.push(Line::default());
-    
+
     for r in 0..rows {
         let mut spans = Vec::new();
         for c in 0..COLS {
@@ -478,10 +494,7 @@ fn draw_confirm(
 
     let mut lines = vec![
         Line::from(Span::styled(prompt.to_string(), theme.base())),
-        Line::from(Span::styled(
-            info_line,
-            theme.dim_style(),
-        )),
+        Line::from(Span::styled(info_line, theme.dim_style())),
     ];
 
     if let Some(result) = result {
@@ -543,7 +556,11 @@ fn draw_custom(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &Cust
 
     let field_line = |label: &str, value: String, selected: bool| -> Line<'static> {
         let marker = if selected { "> " } else { "  " };
-        let style = if selected { theme.selected_style() } else { theme.base() };
+        let style = if selected {
+            theme.selected_style()
+        } else {
+            theme.base()
+        };
         Line::from(vec![
             Span::styled(format!("{marker}{label:<12} "), theme.dim_style()),
             Span::styled(value, style),
@@ -577,7 +594,11 @@ fn draw_custom(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &Cust
     let ops_str = if c.ops.is_empty() {
         "(none)".to_string()
     } else {
-        c.ops.iter().map(|o| o.display()).collect::<Vec<_>>().join(" ")
+        c.ops
+            .iter()
+            .map(|o| o.display())
+            .collect::<Vec<_>>()
+            .join(" ")
     };
     lines.push(field_line("Operations", ops_str, sel == CustomField::Ops));
     if sel == CustomField::Ops {
@@ -612,7 +633,11 @@ fn draw_custom(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &Cust
         )));
     }
 
-    let dec = if c.decimals.is_empty() { "auto".to_string() } else { c.decimals.clone() };
+    let dec = if c.decimals.is_empty() {
+        "auto".to_string()
+    } else {
+        c.decimals.clone()
+    };
     lines.push(field_line("Decimals", dec, sel == CustomField::Decimals));
     if sel == CustomField::Decimals {
         lines.push(Line::from(Span::styled(
@@ -636,14 +661,29 @@ fn draw_custom(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &Cust
     lines.push(field_line("Suffix", sfx, sel == CustomField::Suffix));
 
     lines.push(Line::default());
-    let save_hint = if sel == CustomField::Save { "\u{2190} enter".to_string() } else { String::new() };
+    let save_hint = if sel == CustomField::Save {
+        "\u{2190} enter".to_string()
+    } else {
+        String::new()
+    };
     lines.push(field_line("Save rule", save_hint, sel == CustomField::Save));
-    let remove_hint = if sel == CustomField::Remove { "\u{2190} enter".to_string() } else { String::new() };
-    lines.push(field_line("Remove rule", remove_hint, sel == CustomField::Remove));
+    let remove_hint = if sel == CustomField::Remove {
+        "\u{2190} enter".to_string()
+    } else {
+        String::new()
+    };
+    lines.push(field_line(
+        "Remove rule",
+        remove_hint,
+        sel == CustomField::Remove,
+    ));
 
     if let Some(err) = &c.error {
         lines.push(Line::default());
-        lines.push(Line::from(Span::styled(format!(" {}", err.clone()), theme.err_style())));
+        lines.push(Line::from(Span::styled(
+            format!(" {}", err.clone()),
+            theme.err_style(),
+        )));
     }
 
     lines.push(Line::default());
@@ -660,7 +700,10 @@ fn draw_custom(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &Cust
     let rect = centered_rect(48, height, area);
 
     frame.render_widget(Clear, rect);
-    frame.render_widget(Paragraph::new(lines).block(theme.panel("Custom rule")), rect);
+    frame.render_widget(
+        Paragraph::new(lines).block(theme.panel("Custom rule")),
+        rect,
+    );
 }
 
 fn draw_search(frame: &mut Frame, area: Rect, theme: &Theme, search: &SearchParams) {
@@ -818,7 +861,6 @@ fn draw_write(frame: &mut Frame, area: Rect, theme: &Theme, write: &WriteParams)
     frame.render_widget(Paragraph::new(lines).block(theme.panel("Write")), rect);
 }
 
-
 fn draw_picker(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, selected: u16) {
     let columns = Column::ALL;
     let count = columns.len();
@@ -907,10 +949,7 @@ fn draw_inspect(frame: &mut Frame, area: Rect, theme: &Theme, app: &App) {
     let rect = centered_rect(width, height, area);
 
     frame.render_widget(Clear, rect);
-    frame.render_widget(
-        Paragraph::new(lines).block(theme.panel("Inspect")),
-        rect,
-    );
+    frame.render_widget(Paragraph::new(lines).block(theme.panel("Inspect")), rect);
 }
 
 fn draw_graph(
@@ -948,7 +987,12 @@ fn draw_graph(
         }
     } else {
         app.value_history(cell)
-            .map(|h| h.iter().enumerate().map(|(i, &v)| (i as f64, v as f64)).collect())
+            .map(|h| {
+                h.iter()
+                    .enumerate()
+                    .map(|(i, &v)| (i as f64, v as f64))
+                    .collect()
+            })
             .unwrap_or_default()
     };
 

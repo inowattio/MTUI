@@ -177,7 +177,11 @@ impl From<&BTreeMap<RegisterCell, CustomRule>> for CustomRules {
             }
         }
 
-        Self { holdings, inputs, ..Default::default() }
+        Self {
+            holdings,
+            inputs,
+            ..Default::default()
+        }
     }
 }
 
@@ -189,7 +193,11 @@ fn save_config(config: &Config) -> Result<(), String> {
 fn build_custom_rule(c: &CustomParams) -> Result<(RegisterCell, CustomRule), String> {
     let decimals = match c.decimals.trim() {
         "" => None,
-        s => Some(s.parse::<u8>().map_err(|_| "decimals: invalid".to_string())?.min(10)),
+        s => Some(
+            s.parse::<u8>()
+                .map_err(|_| "decimals: invalid".to_string())?
+                .min(10),
+        ),
     };
 
     let rule = CustomRule {
@@ -366,7 +374,10 @@ impl App {
     }
 
     pub fn api_bound_port(&self) -> Option<u16> {
-        match self.api_bound_port.load(std::sync::atomic::Ordering::Relaxed) {
+        match self
+            .api_bound_port
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
             0 => None,
             port => Some(port),
         }
@@ -448,7 +459,11 @@ impl App {
             let interface = match d.interface {
                 InterfaceKind::Mock => Interface::Mock,
                 InterfaceKind::Wired => Interface::Wired(InterfaceWiredParams {
-                    path: d.ports.get(d.port_index as usize).cloned().unwrap_or_default(),
+                    path: d
+                        .ports
+                        .get(d.port_index as usize)
+                        .cloned()
+                        .unwrap_or_default(),
                     baud_rate: d.baud_rate,
                     data_bits: d.data_bits,
                     parity: d.parity,
@@ -588,7 +603,9 @@ impl App {
         let mut lines = vec![
             (
                 "read at",
-                time.with_timezone(&Local).format("%H:%M:%S.%3f").to_string(),
+                time.with_timezone(&Local)
+                    .format("%H:%M:%S.%3f")
+                    .to_string(),
             ),
             ("ago", format_ago(Utc::now().signed_duration_since(time))),
         ];
@@ -727,12 +744,7 @@ impl App {
             WriteType::Word => WriteKind::Word(pending.new_value as u16),
             WriteType::DWord => WriteKind::DWord(pending.new_value as u32),
         };
-        crate::writes_log::append(
-            &self.writes_log,
-            pending.address,
-            kind,
-            pending.previous,
-        );
+        crate::writes_log::append(&self.writes_log, pending.address, kind, pending.previous);
     }
 
     pub fn settings_adjust(&mut self, field: SettingsField, delta: i64) {
@@ -1164,7 +1176,11 @@ impl App {
                 let all = CustomRepr::ALL;
                 let i = all.iter().position(|&r| r == c.repr).unwrap_or(0);
                 let n = all.len();
-                c.repr = if forward { all[(i + 1) % n] } else { all[(i + n - 1) % n] };
+                c.repr = if forward {
+                    all[(i + 1) % n]
+                } else {
+                    all[(i + n - 1) % n]
+                };
             }
         });
     }
@@ -1325,7 +1341,11 @@ impl App {
 
         let mut out = String::from("read_at\ttype\taddress\thex\tdecimal\tlabel\n");
         for (&(kind, address), &(value, read_at)) in &self.read_log {
-            let label = self.labels.get(&(kind, address)).cloned().unwrap_or_default();
+            let label = self
+                .labels
+                .get(&(kind, address))
+                .cloned()
+                .unwrap_or_default();
             out.push_str(&format!(
                 "{}\t{kind:?}\t{address}\t{value:04X}\t{value}\t{label}\n",
                 read_at.to_rfc3339_opts(SecondsFormat::Millis, true),
@@ -1641,7 +1661,8 @@ impl App {
             .flatten()
         {
             for &(cell, value) in data {
-                let did_change = matches!(self.previous_values.get(&cell), Some(&prev) if prev != value);
+                let did_change =
+                    matches!(self.previous_values.get(&cell), Some(&prev) if prev != value);
                 self.changed.insert(cell, did_change);
                 self.previous_values.insert(cell, value);
                 self.read_log.insert(cell, (value, read_at));
@@ -1702,8 +1723,7 @@ impl App {
             }
             let prev = address.checked_sub(1)?;
             let prev_rule = self.custom_rules.get(&(kind, prev))?;
-            return (prev_rule.repr.register_count() == 2)
-                .then(|| "part of \u{2191}".to_string());
+            return (prev_rule.repr.register_count() == 2).then(|| "part of \u{2191}".to_string());
         };
         let mut words = vec![value];
         if rule.repr.register_count() == 2 {
@@ -1731,7 +1751,11 @@ impl App {
         if output.is_empty() {
             return Err("no output".to_string());
         }
-        let input = words.iter().map(|w| w.to_string()).collect::<Vec<_>>().join(", ");
+        let input = words
+            .iter()
+            .map(|w| w.to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
         Ok((input, output))
     }
 

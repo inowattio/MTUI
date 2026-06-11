@@ -6,15 +6,18 @@ use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
 pub fn draw(params: &DiscoveryParams, frame: &mut Frame, area: Rect, theme: &Theme) {
-    let mut lines: Vec<Line> = vec![
-        Line::default(),
-    ];
+    let mut lines: Vec<Line> = vec![Line::default()];
 
     for (i, &field) in params.fields().iter().enumerate() {
         if field == DiscoveryField::Connect {
             lines.push(Line::default());
         }
-        lines.push(render_field(params, field, i as u16 == params.selected, theme));
+        lines.push(render_field(
+            params,
+            field,
+            i as u16 == params.selected,
+            theme,
+        ));
     }
 
     if let Some(status) = &params.status {
@@ -87,15 +90,21 @@ fn field_view(p: &DiscoveryParams, field: DiscoveryField) -> (&'static str, Stri
         DiscoveryField::Ip => ("IP", p.ip.clone(), false),
         DiscoveryField::NetPort => ("Port", p.net_port.to_string(), false),
         DiscoveryField::SlaveId => ("Slave ID", p.slave_id.to_string(), false),
-        DiscoveryField::ConnectTimeout => {
-            ("Connect timeout (ms)", p.connect_timeout_ms.to_string(), false)
-        }
-        DiscoveryField::CommandTimeout => {
-            ("Command timeout (ms)", p.command_timeout_ms.to_string(), false)
-        }
-        DiscoveryField::BetweenCommands => {
-            ("Between commands (ms)", p.between_commands_ms.to_string(), false)
-        }
+        DiscoveryField::ConnectTimeout => (
+            "Connect timeout (ms)",
+            p.connect_timeout_ms.to_string(),
+            false,
+        ),
+        DiscoveryField::CommandTimeout => (
+            "Command timeout (ms)",
+            p.command_timeout_ms.to_string(),
+            false,
+        ),
+        DiscoveryField::BetweenCommands => (
+            "Between commands (ms)",
+            p.between_commands_ms.to_string(),
+            false,
+        ),
         DiscoveryField::WordOrder => ("Word order", format!("{:?}", p.word_order), true),
         DiscoveryField::Connect => ("Connect", String::new(), false),
     }

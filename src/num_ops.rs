@@ -106,14 +106,14 @@ where
 
 pub fn set_to_zero<T>(v: &mut T)
 where
-    T: Zero
+    T: Zero,
 {
     *v = T::zero();
 }
 
 pub fn set_option_to_zero<T>(v: &mut Option<T>)
 where
-    T: Zero
+    T: Zero,
 {
     if let Some(v) = v {
         *v = T::zero();

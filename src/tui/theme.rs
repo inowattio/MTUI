@@ -67,9 +67,7 @@ impl Theme {
     }
 
     pub fn header_style(&self) -> Style {
-        Style::default()
-            .fg(self.dim)
-            .add_modifier(Modifier::BOLD)
+        Style::default().fg(self.dim).add_modifier(Modifier::BOLD)
     }
 
     pub fn ok_style(&self) -> Style {

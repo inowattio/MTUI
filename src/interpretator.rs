@@ -268,7 +268,9 @@ impl Interpretor {
         }
 
         let word = self.word_order.make_word(byte, next1.unwrap_or_default());
-        let second_word = self.word_order.make_word(next2.unwrap_or_default(), next3.unwrap_or_default());
+        let second_word = self
+            .word_order
+            .make_word(next2.unwrap_or_default(), next3.unwrap_or_default());
         let dword = self.word_order.make_dword(word, second_word);
         if self.config.hex {
             row.push_str(&format!("{byte:<04X} "))
@@ -297,7 +299,8 @@ impl Interpretor {
             if next1.is_none() {
                 row.push_str(&format!("{: <10} ", "-"))
             } else {
-                let s = bcd_to_decimal_u32(word).map_or_else(|| "--".to_string(), |n| n.to_string());
+                let s =
+                    bcd_to_decimal_u32(word).map_or_else(|| "--".to_string(), |n| n.to_string());
                 row.push_str(&format!("{s: <10} "))
             }
         }
@@ -319,7 +322,8 @@ impl Interpretor {
             if next1.is_none() {
                 row.push_str(&format!("{: <8} ", "-"))
             } else {
-                let s = m10k_to_u32(word).map_or_else(|| "--".to_string(), |(h, l)| format!("{h}/{l}"));
+                let s =
+                    m10k_to_u32(word).map_or_else(|| "--".to_string(), |(h, l)| format!("{h}/{l}"));
                 row.push_str(&format!("{s: <8} "))
             }
         }
@@ -327,7 +331,8 @@ impl Interpretor {
             if next1.is_none() {
                 row.push_str(&format!("{: <9} ", "-"))
             } else {
-                let s = m10k_to_i32(word).map_or_else(|| "--".to_string(), |(h, l)| format!("{h}/{l}"));
+                let s =
+                    m10k_to_i32(word).map_or_else(|| "--".to_string(), |(h, l)| format!("{h}/{l}"));
                 row.push_str(&format!("{s: <9} "))
             }
         }
@@ -413,7 +418,9 @@ impl Interpretor {
     ) -> Vec<(&'static str, String)> {
         let [next1, next2, next3] = next;
         let word = self.word_order.make_word(value, next1.unwrap_or_default());
-        let second_word = self.word_order.make_word(next2.unwrap_or_default(), next3.unwrap_or_default());
+        let second_word = self
+            .word_order
+            .make_word(next2.unwrap_or_default(), next3.unwrap_or_default());
         let dword = self.word_order.make_dword(word, second_word);
         let two = next1.is_some();
         let four = two && next2.is_some() && next3.is_some();
@@ -442,16 +449,37 @@ impl Interpretor {
             ("u8s", format!("{high}/{low}")),
             ("i8s", format!("{}/{}", high as i8, low as i8)),
             ("hex", format!("{value:04X}")),
-            ("bits", format!("{} {} {} {}", &b[0..4], &b[4..8], &b[8..12], &b[12..16])),
+            (
+                "bits",
+                format!("{} {} {} {}", &b[0..4], &b[4..8], &b[8..12], &b[12..16]),
+            ),
             ("f16", float_repr(f16_to_f32(value))),
-            ("bcd", bcd_to_decimal(value).map_or_else(|| "--".to_string(), |n| n.to_string())),
+            (
+                "bcd",
+                bcd_to_decimal(value).map_or_else(|| "--".to_string(), |n| n.to_string()),
+            ),
             ("hex32", two_or(format!("{word:08X}"))),
             ("u32", two_or(word.to_string())),
             ("i32", two_or((word as i32).to_string())),
-            ("u32 m10k", two_or(m10k_to_u32(word).map_or_else(|| "--".to_string(), |(h, l)| format!("{h}/{l}")))),
-            ("i32 m10k", two_or(m10k_to_i32(word).map_or_else(|| "--".to_string(), |(h, l)| format!("{h}/{l}")))),
+            (
+                "u32 m10k",
+                two_or(
+                    m10k_to_u32(word).map_or_else(|| "--".to_string(), |(h, l)| format!("{h}/{l}")),
+                ),
+            ),
+            (
+                "i32 m10k",
+                two_or(
+                    m10k_to_i32(word).map_or_else(|| "--".to_string(), |(h, l)| format!("{h}/{l}")),
+                ),
+            ),
             ("f32", two_or(float_repr(f32::from_bits(word)))),
-            ("bcd32", two_or(bcd_to_decimal_u32(word).map_or_else(|| "--".to_string(), |n| n.to_string()))),
+            (
+                "bcd32",
+                two_or(
+                    bcd_to_decimal_u32(word).map_or_else(|| "--".to_string(), |n| n.to_string()),
+                ),
+            ),
             ("u64", four_or(dword.to_string())),
             ("i64", four_or((dword as i64).to_string())),
             ("f64", four_or(float_repr(f64::from_bits(dword)))),
@@ -512,14 +540,14 @@ fn m10k_to_u32(value: u32) -> Option<(u16, u16)> {
     let high = (value >> 16) as u16;
     let low = (value & 0xFFFF) as u16;
 
-    Some((high , low))
+    Some((high, low))
 }
 
 fn m10k_to_i32(value: u32) -> Option<(i16, i16)> {
     let high = (value >> 16) as i16;
     let low = (value & 0xFFFF) as i16;
 
-    Some((high , low))
+    Some((high, low))
 }
 
 pub(crate) fn f16_to_f32(bits: u16) -> f32 {

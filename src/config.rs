@@ -1,8 +1,6 @@
 use crate::app::PinnedRegisters;
 use crate::custom::CustomRule;
-use crate::modbus::{
-    DeviceConfig, Interface, WordOrder,
-};
+use crate::modbus::{DeviceConfig, Interface, WordOrder};
 use crate::register::RegisterType;
 use crate::state::ReadPanel;
 use serde::{Deserialize, Serialize};

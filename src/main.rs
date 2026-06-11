@@ -12,8 +12,8 @@ mod modbus;
 mod num_ops;
 mod register;
 mod state;
-mod writes_log;
 pub mod tui;
+mod writes_log;
 
 use crate::app::{App, AppResult};
 use crate::event::{Event, EventHandler};

@@ -101,7 +101,10 @@ async fn read_handler(State(state): State<ApiState>, Json(request): Json<ReadReq
     }
 }
 
-async fn write_handler(State(state): State<ApiState>, Json(request): Json<WriteRequest>) -> StatusCode {
+async fn write_handler(
+    State(state): State<ApiState>,
+    Json(request): Json<WriteRequest>,
+) -> StatusCode {
     log::info!("API write {}:{:?}", request.address, request.values);
     if state.read_only.load(Ordering::Relaxed) {
         log::warn!("API write rejected due to read-only mode");
@@ -110,7 +113,10 @@ async fn write_handler(State(state): State<ApiState>, Json(request): Json<WriteR
     let Some(device) = current(&state.device) else {
         return StatusCode::SERVICE_UNAVAILABLE;
     };
-    match device.write_registers(request.address, &request.values).await {
+    match device
+        .write_registers(request.address, &request.values)
+        .await
+    {
         Ok(()) => {
             writes_log::append(
                 &state.writes_log,

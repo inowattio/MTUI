@@ -14,15 +14,19 @@ enum Kind {
 }
 
 pub fn draw(params: &SettingsParams, app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
-    let mut lines: Vec<Line> = vec![
-        Line::default(),
-    ];
+    let mut lines: Vec<Line> = vec![Line::default()];
 
     for (i, &field) in SettingsField::ALL.iter().enumerate() {
         if matches!(field, SettingsField::ClearPins | SettingsField::Save) {
             lines.push(Line::default());
         }
-        lines.push(render_field(app, params, field, i as u16 == params.selected, theme));
+        lines.push(render_field(
+            app,
+            params,
+            field,
+            i as u16 == params.selected,
+            theme,
+        ));
         if field == SettingsField::LogWrites {
             lines.push(Line::from(Span::styled(
                 format!("  {:<24} {}", "", app.writes_log_path_string()),
@@ -73,7 +77,11 @@ fn render_field(
     ])
 }
 
-fn field_view(app: &App, params: &SettingsParams, field: SettingsField) -> (&'static str, String, Kind) {
+fn field_view(
+    app: &App,
+    params: &SettingsParams,
+    field: SettingsField,
+) -> (&'static str, String, Kind) {
     let device = &app.config;
     match field {
         SettingsField::RegistersBatch => (
@@ -137,14 +145,15 @@ fn field_view(app: &App, params: &SettingsParams, field: SettingsField) -> (&'st
         ),
         SettingsField::ShowContinuation => (
             "Show \"part of\" marker",
-            if device.custom_rules.show_continuation { "on" } else { "off" }.to_string(),
+            if device.custom_rules.show_continuation {
+                "on"
+            } else {
+                "off"
+            }
+            .to_string(),
             Kind::Toggle,
         ),
         SettingsField::Save => ("Save configuration", CONFIG_PATH.to_string(), Kind::Action),
-        SettingsField::LoadConfig => (
-            "Load configuration",
-            params.load_path.clone(),
-            Kind::Number,
-        ),
+        SettingsField::LoadConfig => ("Load configuration", params.load_path.clone(), Kind::Number),
     }
 }

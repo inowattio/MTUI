@@ -1,11 +1,11 @@
 use crate::app::{App, AppResult};
 use crate::config::Column;
 use crate::constants::{keybind, MATRIX_COLS};
+use crate::modbus::{DataBits, Parity, StopBits, WordOrder};
 use crate::num_ops::{
     decrement_option_by, digit_add, digit_add_option, digit_remove, digit_remove_option,
     increment_option_by, negate_opt_option, set_option_to_zero, set_to_zero,
 };
-use crate::modbus::{DataBits, Parity, StopBits, WordOrder};
 use crate::state::{
     DiscoveryField, DiscoveryParams, InterfaceKind, LogsParams, Popup, PopupKind, ReadPanel,
     SettingsField,
@@ -41,10 +41,9 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
                 app.toggle_graph_width();
                 return Ok(());
             }
-            keybind::COLUMNS
-            | keybind::SLAVE
-            | keybind::SWITCH_VIEW
-            | keybind::TOGGLE => return Ok(()),
+            keybind::COLUMNS | keybind::SLAVE | keybind::SWITCH_VIEW | keybind::TOGGLE => {
+                return Ok(())
+            }
             _ => {}
         }
     }
@@ -104,11 +103,9 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
             }
         }
         KeyCode::Backspace => {
-            {
-                let p = app.read_mut();
-                digit_remove(&mut p.position);
-                p.scroll_to_cursor(rows);
-            }
+            let p = app.read_mut();
+            digit_remove(&mut p.position);
+            p.scroll_to_cursor(rows);
         }
         _ => {}
     }
@@ -180,26 +177,22 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
             match key_event.code {
                 keybind::EXIT | keybind::COLUMNS => app.close_popup(),
                 keybind::MOVE_UP => {
-                    {
-                let p = app.read_mut();
-                        if let Some(Popup::Columns(i)) = &mut p.popup {
-                            if *i == 0 {
-                                *i = count - 1;
-                            } else {
-                                *i -= 1;
-                            }
+                    let p = app.read_mut();
+                    if let Some(Popup::Columns(i)) = &mut p.popup {
+                        if *i == 0 {
+                            *i = count - 1;
+                        } else {
+                            *i -= 1;
                         }
                     }
                 }
                 keybind::MOVE_DOWN => {
-                    {
-                let p = app.read_mut();
-                        if let Some(Popup::Columns(i)) = &mut p.popup {
-                            if *i == count - 1 {
-                                *i = 0;
-                            } else {
-                                *i += 1;
-                            }
+                    let p = app.read_mut();
+                    if let Some(Popup::Columns(i)) = &mut p.popup {
+                        if *i == count - 1 {
+                            *i = 0;
+                        } else {
+                            *i += 1;
                         }
                     }
                 }
@@ -260,7 +253,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
             keybind::EXIT => app.close_popup(),
             keybind::ACTION => {
                 let _ = app.search_commit();
-            },
+            }
             keybind::MOVE_UP => app.search_move(false),
             keybind::MOVE_DOWN => app.search_move(true),
             KeyCode::Backspace => app.search_backspace(),
@@ -391,7 +384,11 @@ async fn handle_discovery_key(key_event: KeyEvent, app: &mut App) {
         keybind::ACTION => app.discovery_connect().await,
         keybind::MOVE_UP => {
             if let Some(d) = app.discovery_mut() {
-                d.selected = if d.selected == 0 { count - 1 } else { d.selected - 1 };
+                d.selected = if d.selected == 0 {
+                    count - 1
+                } else {
+                    d.selected - 1
+                };
             }
         }
         keybind::MOVE_DOWN => {
@@ -429,8 +426,12 @@ async fn handle_discovery_key(key_event: KeyEvent, app: &mut App) {
                 let digit = (c as u8).saturating_sub(b'0');
                 match field {
                     DiscoveryField::Ip if c.is_ascii_digit() || c == '.' => d.ip.push(c),
-                    DiscoveryField::NetPort if c.is_ascii_digit() => digit_add(&mut d.net_port, digit),
-                    DiscoveryField::SlaveId if c.is_ascii_digit() => digit_add(&mut d.slave_id, digit),
+                    DiscoveryField::NetPort if c.is_ascii_digit() => {
+                        digit_add(&mut d.net_port, digit)
+                    }
+                    DiscoveryField::SlaveId if c.is_ascii_digit() => {
+                        digit_add(&mut d.slave_id, digit)
+                    }
                     DiscoveryField::ConnectTimeout if c.is_ascii_digit() => {
                         digit_add(&mut d.connect_timeout_ms, digit)
                     }
@@ -454,20 +455,35 @@ fn cycle<T: Copy + PartialEq>(items: &[T], current: T, forward: bool) -> T {
     }
     let i = items.iter().position(|x| *x == current).unwrap_or(0);
     let n = items.len();
-    let j = if forward { (i + 1) % n } else { (i + n - 1) % n };
+    let j = if forward {
+        (i + 1) % n
+    } else {
+        (i + n - 1) % n
+    };
     items[j]
 }
 
 fn cycle_field(d: &mut DiscoveryParams, field: DiscoveryField, forward: bool) {
-    const KINDS: [InterfaceKind; 3] =
-        [InterfaceKind::Mock, InterfaceKind::Wired, InterfaceKind::Network];
+    const KINDS: [InterfaceKind; 3] = [
+        InterfaceKind::Mock,
+        InterfaceKind::Wired,
+        InterfaceKind::Network,
+    ];
     const BAUDS: [u32; 6] = [9600, 19200, 38400, 57600, 115200, 230400];
-    const DATA_BITS: [DataBits; 4] =
-        [DataBits::Five, DataBits::Six, DataBits::Seven, DataBits::Eight];
+    const DATA_BITS: [DataBits; 4] = [
+        DataBits::Five,
+        DataBits::Six,
+        DataBits::Seven,
+        DataBits::Eight,
+    ];
     const PARITY: [Parity; 3] = [Parity::None, Parity::Odd, Parity::Even];
     const STOP_BITS: [StopBits; 2] = [StopBits::One, StopBits::Two];
-    const ORDERS: [WordOrder; 4] =
-        [WordOrder::ABCD, WordOrder::BADC, WordOrder::CDAB, WordOrder::DCBA];
+    const ORDERS: [WordOrder; 4] = [
+        WordOrder::ABCD,
+        WordOrder::BADC,
+        WordOrder::CDAB,
+        WordOrder::DCBA,
+    ];
 
     match field {
         DiscoveryField::Interface => {
@@ -514,7 +530,11 @@ async fn handle_settings_key(key_event: KeyEvent, app: &mut App) {
         keybind::SETTINGS if field != SettingsField::LoadConfig => app.close_settings(),
         keybind::MOVE_UP => {
             if let Some(s) = app.settings_mut() {
-                s.selected = if s.selected == 0 { count - 1 } else { s.selected - 1 };
+                s.selected = if s.selected == 0 {
+                    count - 1
+                } else {
+                    s.selected - 1
+                };
             }
         }
         keybind::MOVE_DOWN => {

@@ -188,7 +188,10 @@ pub fn parse_op(input: &str) -> Result<CustomOp, String> {
 
 pub fn parse_enum(input: &str) -> Result<EnumEntry, String> {
     let (value, text) = input.split_once('=').ok_or("use value=text")?;
-    let value: i64 = value.trim().parse().map_err(|_| "invalid value".to_string())?;
+    let value: i64 = value
+        .trim()
+        .parse()
+        .map_err(|_| "invalid value".to_string())?;
     Ok(EnumEntry {
         value,
         text: text.trim().to_string(),
@@ -208,8 +211,14 @@ mod tests {
 
     #[test]
     fn word_reprs() {
-        assert_eq!(rule(CustomRepr::U16).evaluate(&[40000], WordOrder::ABCD), "40000");
-        assert_eq!(rule(CustomRepr::I16).evaluate(&[40000], WordOrder::ABCD), "-25536");
+        assert_eq!(
+            rule(CustomRepr::U16).evaluate(&[40000], WordOrder::ABCD),
+            "40000"
+        );
+        assert_eq!(
+            rule(CustomRepr::I16).evaluate(&[40000], WordOrder::ABCD),
+            "-25536"
+        );
     }
 
     #[test]
@@ -229,8 +238,14 @@ mod tests {
     fn op_pipeline_order() {
         let mut r = rule(CustomRepr::U16);
         r.ops = vec![
-            CustomOp { op: OpKind::Mul, v: 0.1 },
-            CustomOp { op: OpKind::Add, v: 5.0 },
+            CustomOp {
+                op: OpKind::Mul,
+                v: 0.1,
+            },
+            CustomOp {
+                op: OpKind::Add,
+                v: 5.0,
+            },
         ];
         r.decimals = Some(1);
         r.prefix = "~ ".to_string();
@@ -242,7 +257,10 @@ mod tests {
     #[test]
     fn decimals_formatting() {
         let mut r = rule(CustomRepr::U16);
-        r.ops = vec![CustomOp { op: OpKind::Div, v: 3.0 }];
+        r.ops = vec![CustomOp {
+            op: OpKind::Div,
+            v: 3.0,
+        }];
         r.decimals = Some(2);
         assert_eq!(r.evaluate(&[10], WordOrder::ABCD), "3.33");
     }
@@ -250,10 +268,19 @@ mod tests {
     #[test]
     fn enum_short_circuits_math() {
         let mut r = rule(CustomRepr::U16);
-        r.ops = vec![CustomOp { op: OpKind::Mul, v: 100.0 }];
+        r.ops = vec![CustomOp {
+            op: OpKind::Mul,
+            v: 100.0,
+        }];
         r.enum_map = vec![
-            EnumEntry { value: 0, text: "Off".into() },
-            EnumEntry { value: 3, text: "Running".into() },
+            EnumEntry {
+                value: 0,
+                text: "Off".into(),
+            },
+            EnumEntry {
+                value: 3,
+                text: "Running".into(),
+            },
         ];
         assert_eq!(r.evaluate(&[3], WordOrder::ABCD), "Running");
 
@@ -263,7 +290,10 @@ mod tests {
     #[test]
     fn nan_does_not_match_enum_zero() {
         let mut r = rule(CustomRepr::F32);
-        r.enum_map = vec![EnumEntry { value: 0, text: "Off".into() }];
+        r.enum_map = vec![EnumEntry {
+            value: 0,
+            text: "Off".into(),
+        }];
 
         assert_eq!(r.evaluate(&[0x7FC0, 0x0000], WordOrder::ABCD), "--");
     }
@@ -271,7 +301,10 @@ mod tests {
     #[test]
     fn div_by_zero_is_safe() {
         let mut r = rule(CustomRepr::U16);
-        r.ops = vec![CustomOp { op: OpKind::Div, v: 0.0 }];
+        r.ops = vec![CustomOp {
+            op: OpKind::Div,
+            v: 0.0,
+        }];
         assert_eq!(r.evaluate(&[10], WordOrder::ABCD), "--");
     }
 
@@ -279,8 +312,14 @@ mod tests {
     fn serde_round_trip() {
         let mut r = rule(CustomRepr::F32);
         r.address = 100;
-        r.ops = vec![CustomOp { op: OpKind::Mul, v: 0.1 }];
-        r.enum_map = vec![EnumEntry { value: 0, text: "Off".into() }];
+        r.ops = vec![CustomOp {
+            op: OpKind::Mul,
+            v: 0.1,
+        }];
+        r.enum_map = vec![EnumEntry {
+            value: 0,
+            text: "Off".into(),
+        }];
         r.decimals = Some(2);
         r.prefix = "~ ".into();
         let json = serde_json::to_string(&r).unwrap();
@@ -300,9 +339,27 @@ mod tests {
 
     #[test]
     fn parse_helpers() {
-        assert_eq!(parse_op("*0.1").unwrap(), CustomOp { op: OpKind::Mul, v: 0.1 });
-        assert_eq!(parse_op("+5").unwrap(), CustomOp { op: OpKind::Add, v: 5.0 });
-        assert_eq!(parse_op("/10").unwrap(), CustomOp { op: OpKind::Div, v: 10.0 });
+        assert_eq!(
+            parse_op("*0.1").unwrap(),
+            CustomOp {
+                op: OpKind::Mul,
+                v: 0.1
+            }
+        );
+        assert_eq!(
+            parse_op("+5").unwrap(),
+            CustomOp {
+                op: OpKind::Add,
+                v: 5.0
+            }
+        );
+        assert_eq!(
+            parse_op("/10").unwrap(),
+            CustomOp {
+                op: OpKind::Div,
+                v: 10.0
+            }
+        );
         assert!(parse_op("5").is_err());
         assert!(parse_op("*abc").is_err());
         assert!(parse_op("*inf").is_err());
@@ -310,7 +367,10 @@ mod tests {
 
         assert_eq!(
             parse_enum("3=Running").unwrap(),
-            EnumEntry { value: 3, text: "Running".into() }
+            EnumEntry {
+                value: 3,
+                text: "Running".into()
+            }
         );
         assert!(parse_enum("Running").is_err());
     }

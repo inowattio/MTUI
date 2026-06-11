@@ -10,9 +10,7 @@ use crate::tui::make_bottom_title::make_bottom_title;
 use crate::tui::make_top_title::make_top_title;
 use crate::tui::theme::{status_span, Theme};
 use chrono::Local;
-use crossterm::event::{
-    DisableBracketedPaste, EnableBracketedPaste,
-};
+use crossterm::event::{DisableBracketedPaste, EnableBracketedPaste};
 use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
 use ratatui::backend::Backend;
 use ratatui::style::Style;
@@ -34,11 +32,7 @@ where
 {
     pub fn new(mut terminal: Terminal<B>, events: EventHandler) -> AppResult<Self> {
         terminal::enable_raw_mode()?;
-        crossterm::execute!(
-            io::stderr(),
-            EnterAlternateScreen,
-            EnableBracketedPaste
-        )?;
+        crossterm::execute!(io::stderr(), EnterAlternateScreen, EnableBracketedPaste)?;
 
         let panic_hook = panic::take_hook();
         panic::set_hook(Box::new(move |panic| {
@@ -86,11 +80,7 @@ where
 
     fn reset() -> AppResult<()> {
         terminal::disable_raw_mode()?;
-        crossterm::execute!(
-            io::stderr(),
-            LeaveAlternateScreen,
-            DisableBracketedPaste
-        )?;
+        crossterm::execute!(io::stderr(), LeaveAlternateScreen, DisableBracketedPaste)?;
         Ok(())
     }
 
