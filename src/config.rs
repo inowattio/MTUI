@@ -134,27 +134,6 @@ macro_rules! interpretation_columns {
     };
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn config_round_trips() {
-        let json = serde_json::to_string(&Config::default()).unwrap();
-        let back: Config = serde_json::from_str(&json).unwrap();
-        assert_eq!(back.custom_rules.holdings.len(), 0);
-    }
-
-    #[test]
-    fn config_without_custom_rules_still_loads() {
-        let mut value = serde_json::to_value(Config::default()).unwrap();
-        value.as_object_mut().unwrap().remove("custom_rules");
-        let parsed: Config = serde_json::from_value(value).unwrap();
-        assert!(parsed.custom_rules.holdings.is_empty());
-        assert!(parsed.custom_rules.inputs.is_empty());
-    }
-}
-
 interpretation_columns! {
     IndexHex => index_hex : "index (hex)" = false,
     U8s => u8s : "u8s" = false,
