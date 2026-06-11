@@ -64,6 +64,12 @@ impl Interpretor {
         if self.config.i32 {
             header.push_str(&format!("{0: <11} ", "i32"))
         }
+        if self.config.u32_m10k {
+            header.push_str(&format!("{0: <8} ", "u32m10k"))
+        }
+        if self.config.i32_m10k {
+            header.push_str(&format!("{0: <9} ", "i32m10k"))
+        }
         if self.config.u64 {
             header.push_str(&format!("{0: <20} ", "u64"))
         }
@@ -72,6 +78,9 @@ impl Interpretor {
         }
         if self.config.f32 {
             header.push_str(&format!("{0: <10} ", "f32"))
+        }
+        if self.config.f64 {
+            header.push_str(&format!("{0: <12} ", "f64"))
         }
         if self.config.ascii {
             header.push_str(&format!("{0: <5} ", "ascii"))
@@ -176,6 +185,12 @@ impl Interpretor {
         if self.config.i32 {
             row.push_str(&format!("{dash: <11} "));
         }
+        if self.config.u32_m10k {
+            row.push_str(&format!("{dash: <8} "));
+        }
+        if self.config.i32_m10k {
+            row.push_str(&format!("{dash: <9} "));
+        }
         if self.config.u64 {
             row.push_str(&format!("{dash: <20} "));
         }
@@ -184,6 +199,9 @@ impl Interpretor {
         }
         if self.config.f32 {
             row.push_str(&format!("{dash: <10} "));
+        }
+        if self.config.f64 {
+            row.push_str(&format!("{dash: <12} "));
         }
         if self.config.ascii {
             row.push_str(&format!("{dash: <5} "));
@@ -297,6 +315,22 @@ impl Interpretor {
                 row.push_str(&format!("{: <11} ", word as i32))
             }
         }
+        if self.config.u32_m10k {
+            if next1.is_none() {
+                row.push_str(&format!("{: <8} ", "-"))
+            } else {
+                let s = m10k_to_u32(word).map_or_else(|| "--".to_string(), |(h, l)| format!("{h}/{l}"));
+                row.push_str(&format!("{s: <8} "))
+            }
+        }
+        if self.config.i32_m10k {
+            if next1.is_none() {
+                row.push_str(&format!("{: <9} ", "-"))
+            } else {
+                let s = m10k_to_i32(word).map_or_else(|| "--".to_string(), |(h, l)| format!("{h}/{l}"));
+                row.push_str(&format!("{s: <9} "))
+            }
+        }
         if self.config.u64 {
             if next1.is_none() || next2.is_none() || next3.is_none() {
                 row.push_str(&format!("{: <20} ", "-"))
@@ -321,6 +355,18 @@ impl Interpretor {
                     s = format!("{x:.3e}");
                 }
                 row.push_str(&format!("{s: <10} "))
+            }
+        }
+        if self.config.f64 {
+            if next1.is_none() || next2.is_none() || next3.is_none() {
+                row.push_str(&format!("{: <12} ", "-"))
+            } else {
+                let x = f64::from_bits(dword);
+                let mut s = format!("{x}");
+                if s.len() > 12 {
+                    s = format!("{x:.3e}");
+                }
+                row.push_str(&format!("{s: <12} "))
             }
         }
         if self.config.ascii {
@@ -394,6 +440,20 @@ fn bcd_to_decimal_u32(value: u32) -> Option<u32> {
         result = result * 10 + nibble;
     }
     Some(result)
+}
+
+fn m10k_to_u32(value: u32) -> Option<(u16, u16)> {
+    let high = (value >> 16) as u16;
+    let low = (value & 0xFFFF) as u16;
+
+    Some((high , low))
+}
+
+fn m10k_to_i32(value: u32) -> Option<(i16, i16)> {
+    let high = (value >> 16) as i16;
+    let low = (value & 0xFFFF) as i16;
+
+    Some((high , low))
 }
 
 pub(crate) fn f16_to_f32(bits: u16) -> f32 {
