@@ -1,6 +1,6 @@
 use crate::app::App;
 use crate::config::Column;
-use crate::constants::{keybind, MATRIX_COLS};
+use crate::constants::keybind;
 use crate::register::{RegisterCell, RegisterType};
 use crate::state::{
     CustomField, CustomParams, LabelParams, LogsParams, Popup, ReadPanel, ReadParams, SearchParams,
@@ -156,7 +156,7 @@ fn list_table(
 }
 
 fn matrix_table(params: &ReadParams, app: &App, visible: u16, theme: &Theme) -> Table<'static> {
-    let cols = MATRIX_COLS.max(1);
+    let cols = app.config.matrix_cols.max(1);
     let base = params.window_start - (params.window_start % cols);
 
     let mut header = format!("{: >5}  ", "");

@@ -1,6 +1,6 @@
 use crate::app::{App, AppResult};
 use crate::config::Column;
-use crate::constants::{keybind, MATRIX_COLS};
+use crate::constants::keybind;
 use crate::modbus::{DataBits, Parity, StopBits, WordOrder};
 use crate::num_ops::{
     decrement_option_by, digit_add, digit_add_option, digit_remove, digit_remove_option,
@@ -75,21 +75,23 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         keybind::SWITCH_VIEW => {
             app.read_mut().toggle_panel();
             let len = app.panel_len();
+            let cols = app.config.matrix_cols;
             let p = app.read_mut();
             p.scroll_pinned(rows, len);
-            p.scroll_to_cursor(rows);
+            p.scroll_to_cursor(rows, cols);
         }
         keybind::MOVE_UP | keybind::MOVE_DOWN | keybind::PAGE_UP | keybind::PAGE_DOWN => {
             move_read_cursor(app, key_event.code);
         }
         KeyCode::Left | KeyCode::Right if app.read().panel == ReadPanel::Matrix => {
+            let cols = app.config.matrix_cols;
             let p = app.read_mut();
             p.position = if key_event.code == KeyCode::Left {
                 p.position.saturating_sub(1)
             } else {
                 p.position.saturating_add(1)
             };
-            p.scroll_to_cursor(rows);
+            p.scroll_to_cursor(rows, cols);
         }
         KeyCode::Char(c) => {
             if !c.is_ascii_digit() {
@@ -97,15 +99,17 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
             }
             let digit = c as u8 - b'0';
             {
+                let cols = app.config.matrix_cols;
                 let p = app.read_mut();
                 digit_add(&mut p.position, digit);
-                p.scroll_to_cursor(rows);
+                p.scroll_to_cursor(rows, cols);
             }
         }
         KeyCode::Backspace => {
+            let cols = app.config.matrix_cols;
             let p = app.read_mut();
             digit_remove(&mut p.position);
-            p.scroll_to_cursor(rows);
+            p.scroll_to_cursor(rows, cols);
         }
         _ => {}
     }
@@ -116,6 +120,7 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
 fn move_read_cursor(app: &mut App, code: KeyCode) {
     let rows = app.visible_rows.get();
     let panel_len = app.panel_len();
+    let cols = app.config.matrix_cols;
     let step = if matches!(code, keybind::PAGE_UP | keybind::PAGE_DOWN) {
         rows
     } else {
@@ -130,16 +135,16 @@ fn move_read_cursor(app: &mut App, code: KeyCode) {
             } else {
                 p.position.saturating_add(step)
             };
-            p.scroll_to_cursor(rows);
+            p.scroll_to_cursor(rows, cols);
         }
         ReadPanel::Matrix => {
-            let step = step.saturating_mul(MATRIX_COLS);
+            let step = step.saturating_mul(cols.max(1));
             p.position = if up {
                 p.position.saturating_sub(step)
             } else {
                 p.position.saturating_add(step)
             };
-            p.scroll_to_cursor(rows);
+            p.scroll_to_cursor(rows, cols);
         }
         _ => {
             p.pinned_index = if up {
@@ -356,12 +361,13 @@ pub fn handle_paste(data: String, app: &mut App) {
             }
         }
         None => {
+            let cols = app.config.matrix_cols;
             let p = app.read_mut();
             set_to_zero(&mut p.position);
             for digit in digits {
                 digit_add(&mut p.position, digit);
             }
-            p.scroll_to_cursor(rows);
+            p.scroll_to_cursor(rows, cols);
         }
         _ => {}
     }
@@ -551,6 +557,7 @@ async fn handle_settings_key(key_event: KeyEvent, app: &mut App) {
                     | SettingsField::LogWrites
                     | SettingsField::ShowContinuation
                     | SettingsField::StartupPanel
+                    | SettingsField::IgnoreDirty
             ) =>
         {
             app.settings_adjust(field, 1)
@@ -562,7 +569,8 @@ async fn handle_settings_key(key_event: KeyEvent, app: &mut App) {
             SettingsField::ReadOnly
             | SettingsField::LogWrites
             | SettingsField::ShowContinuation
-            | SettingsField::StartupPanel => app.settings_adjust(field, 1),
+            | SettingsField::StartupPanel
+            | SettingsField::IgnoreDirty => app.settings_adjust(field, 1),
             SettingsField::Save => app.settings_save(),
             SettingsField::LoadConfig => app.settings_load().await,
             _ => {}

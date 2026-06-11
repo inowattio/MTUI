@@ -101,6 +101,16 @@ fn field_view(
             device.graph_history_cap.to_string(),
             Kind::Number,
         ),
+        SettingsField::MatrixCols => (
+            "Matrix columns",
+            device.matrix_cols.to_string(),
+            Kind::Number,
+        ),
+        SettingsField::IgnoreDirty => (
+            "Ignore unsaved warning",
+            if device.ignore_dirty { "on" } else { "off" }.to_string(),
+            Kind::Toggle,
+        ),
         SettingsField::ReadOnly => (
             "Read-only",
             if device.read_only { "on" } else { "off" }.to_string(),

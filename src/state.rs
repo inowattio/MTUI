@@ -1,5 +1,4 @@
 use crate::app::WriteType;
-use crate::constants::MATRIX_COLS;
 use crate::custom::{CustomOp, CustomRepr, EnumEntry};
 use crate::modbus::{DataBits, Parity, StopBits, WordOrder};
 use crate::register::{RegisterCell, RegisterType};
@@ -250,10 +249,12 @@ pub enum SettingsField {
     RegistersBatch,
     AutoUpdate,
     HistoryCap,
+    MatrixCols,
     ReadOnly,
     LogWrites,
     ApiPort,
     StartupPanel,
+    IgnoreDirty,
     ClearPins,
     ClearLabels,
     ClearCustom,
@@ -263,14 +264,16 @@ pub enum SettingsField {
 }
 
 impl SettingsField {
-    pub const ALL: [SettingsField; 13] = [
+    pub const ALL: [SettingsField; 15] = [
         SettingsField::RegistersBatch,
         SettingsField::AutoUpdate,
         SettingsField::HistoryCap,
+        SettingsField::MatrixCols,
         SettingsField::ReadOnly,
         SettingsField::LogWrites,
         SettingsField::ApiPort,
         SettingsField::StartupPanel,
+        SettingsField::IgnoreDirty,
         SettingsField::ClearPins,
         SettingsField::ClearLabels,
         SettingsField::ClearCustom,
@@ -407,14 +410,15 @@ impl Default for ReadParams {
 }
 
 impl ReadParams {
-    pub fn scroll_to_cursor(&mut self, rows: u16) {
+    pub fn scroll_to_cursor(&mut self, rows: u16, matrix_cols: u16) {
         let rows = rows.max(1);
         if self.panel == ReadPanel::Matrix {
-            let last_row = u16::MAX / MATRIX_COLS;
+            let cols = matrix_cols.max(1);
+            let last_row = u16::MAX / cols;
             let max_start_row = last_row.saturating_sub(rows - 1);
-            let row = self.position / MATRIX_COLS;
+            let row = self.position / cols;
             let start_row = row.saturating_sub(rows / 2).min(max_start_row);
-            self.window_start = start_row * MATRIX_COLS;
+            self.window_start = start_row.saturating_mul(cols);
             return;
         }
         let max_start = u16::MAX - (rows - 1);

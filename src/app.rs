@@ -762,6 +762,11 @@ impl App {
                 let n = (self.config.graph_history_cap as i64 + delta).clamp(1, u16::MAX as i64);
                 self.config.graph_history_cap = n as u16;
             }
+            SettingsField::MatrixCols => {
+                let n = (self.config.matrix_cols as i64 + delta).clamp(1, u16::MAX as i64);
+                self.config.matrix_cols = n as u16;
+            }
+            SettingsField::IgnoreDirty => self.config.ignore_dirty = !self.config.ignore_dirty,
             SettingsField::ReadOnly => self.config.read_only = !self.config.read_only,
             SettingsField::LogWrites => self.config.log_writes = !self.config.log_writes,
             SettingsField::ShowContinuation => {
@@ -809,6 +814,10 @@ impl App {
                 let n = (self.config.graph_history_cap as u64).saturating_mul(10) + digit;
                 self.config.graph_history_cap = n.min(u16::MAX as u64) as u16;
             }
+            SettingsField::MatrixCols => {
+                let n = (self.config.matrix_cols as u64).saturating_mul(10) + digit;
+                self.config.matrix_cols = n.min(u16::MAX as u64) as u16;
+            }
             SettingsField::ApiPort => {
                 let n = (self.config.port.unwrap_or(0) as u64).saturating_mul(10) + digit;
                 self.config.port = Some(n.min(u16::MAX as u64) as u16);
@@ -835,6 +844,9 @@ impl App {
             }
             SettingsField::HistoryCap => {
                 self.config.graph_history_cap = (self.config.graph_history_cap / 10).max(1);
+            }
+            SettingsField::MatrixCols => {
+                self.config.matrix_cols = (self.config.matrix_cols / 10).max(1);
             }
             SettingsField::ApiPort => {
                 self.config.port = match self.config.port {
@@ -924,7 +936,7 @@ impl App {
     }
 
     pub fn request_quit(&mut self) {
-        if self.dirty {
+        if self.dirty && !self.config.ignore_dirty {
             self.read_mut().popup = Some(Popup::Quit);
         } else {
             self.running = false;
@@ -993,6 +1005,7 @@ impl App {
         self.previous_position = Some(from);
 
         let rows = self.visible_rows.get();
+        let cols = self.config.matrix_cols;
         let p = self.read_mut();
         let type_changed = register_type != p.register_type;
         if p.panel != ReadPanel::Matrix {
@@ -1000,7 +1013,7 @@ impl App {
         }
         p.position = position;
         p.register_type = register_type;
-        p.scroll_to_cursor(rows);
+        p.scroll_to_cursor(rows, cols);
         if type_changed {
             p.main_rows = Vec::new();
             p.main_changed = Vec::new();
@@ -1021,13 +1034,14 @@ impl App {
         self.previous_position = Some(current);
 
         let rows = self.visible_rows.get();
+        let cols = self.config.matrix_cols;
         let p = self.read_mut();
         if p.panel != ReadPanel::Matrix {
             p.panel = ReadPanel::Main;
         }
         p.register_type = register_type;
         p.position = position;
-        p.scroll_to_cursor(rows);
+        p.scroll_to_cursor(rows, cols);
         self.rebuild_read_rows();
     }
 
@@ -1475,9 +1489,10 @@ impl App {
 
         if matches!(self.state, State::Read(_)) {
             let rows = self.visible_rows.get();
+            let cols = self.config.matrix_cols;
             let p = self.read_mut();
             let before = p.window_start;
-            p.scroll_to_cursor(rows);
+            p.scroll_to_cursor(rows, cols);
             if p.window_start != before {
                 self.rebuild_read_rows();
             }
@@ -1586,11 +1601,12 @@ impl App {
 
         let amount = self.config.registers_batch.max(1);
         let visible = self.visible_rows.get().max(1);
+        let cols = self.config.matrix_cols;
         let (panel, window_start, position, register_type) = {
             let p = self.read_mut();
             p.refresh_timer = Instant::now();
             p.loading = true;
-            p.scroll_to_cursor(visible);
+            p.scroll_to_cursor(visible, cols);
             (p.panel, p.window_start, p.position, p.register_type)
         };
         let max_read_start = u16::MAX - (amount - 1);
