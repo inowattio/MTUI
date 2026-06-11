@@ -45,6 +45,17 @@ pub fn draw(params: &SettingsParams, app: &App, frame: &mut Frame, area: Rect, t
     }
 
     frame.render_widget(Paragraph::new(lines), area);
+
+    if area.height > 0 {
+        let footer = Rect::new(area.x, area.y + area.height - 1, area.width, 1);
+        frame.render_widget(
+            Paragraph::new(Line::from(Span::styled(
+                concat!("  ", env!("CARGO_PKG_REPOSITORY")),
+                theme.dim_style(),
+            ))),
+            footer,
+        );
+    }
 }
 
 fn render_field(
