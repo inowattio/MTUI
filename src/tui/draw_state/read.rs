@@ -277,10 +277,14 @@ pub fn draw(
     info_spans.push(Span::styled(read_time, theme.dim_style()));
     if app.paused {
         info_spans.push(Span::styled("   \u{23f8} paused", theme.warn_style()));
-    } else if let Some(interval) = app.config.auto_update_interval_seconds {
+    } else if let Some(interval) = app.config.update_interval_ms {
         if !params.loading {
-            let remaining = interval.saturating_sub(params.refresh_timer.elapsed().as_secs());
-            info_spans.push(Span::styled(format!("   ⟳ {remaining}s"), theme.ok_style()));
+            let remaining =
+                (interval as u128).saturating_sub(params.refresh_timer.elapsed().as_millis());
+            info_spans.push(Span::styled(
+                format!("   ⟳ {:.1}s", remaining as f64 / 1000.0),
+                theme.ok_style(),
+            ));
         }
     }
     frame.render_widget(

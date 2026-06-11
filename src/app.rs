@@ -754,9 +754,9 @@ impl App {
                 self.config.registers_batch = n as u16;
             }
             SettingsField::AutoUpdate => {
-                let cur = self.config.auto_update_interval_seconds.unwrap_or(0) as i64;
-                let n = (cur + delta).max(0);
-                self.config.auto_update_interval_seconds = (n > 0).then_some(n as u64);
+                let cur = self.config.update_interval_ms.unwrap_or(0) as i64;
+                let n = (cur + delta * 100).max(0);
+                self.config.update_interval_ms = (n > 0).then_some(n as u64);
             }
             SettingsField::HistoryCap => {
                 let n = (self.config.graph_history_cap as i64 + delta).clamp(1, u16::MAX as i64);
@@ -806,9 +806,9 @@ impl App {
                 self.config.registers_batch = n.min(u16::MAX as u64) as u16;
             }
             SettingsField::AutoUpdate => {
-                let cur = self.config.auto_update_interval_seconds.unwrap_or(0);
+                let cur = self.config.update_interval_ms.unwrap_or(0);
                 let n = cur.saturating_mul(10) + digit;
-                self.config.auto_update_interval_seconds = (n > 0).then_some(n);
+                self.config.update_interval_ms = (n > 0).then_some(n);
             }
             SettingsField::HistoryCap => {
                 let n = (self.config.graph_history_cap as u64).saturating_mul(10) + digit;
@@ -839,8 +839,8 @@ impl App {
                 self.config.registers_batch = (self.config.registers_batch / 10).max(1);
             }
             SettingsField::AutoUpdate => {
-                let n = self.config.auto_update_interval_seconds.unwrap_or(0) / 10;
-                self.config.auto_update_interval_seconds = (n > 0).then_some(n);
+                let n = self.config.update_interval_ms.unwrap_or(0) / 10;
+                self.config.update_interval_ms = (n > 0).then_some(n);
             }
             SettingsField::HistoryCap => {
                 self.config.graph_history_cap = (self.config.graph_history_cap / 10).max(1);
@@ -1502,8 +1502,8 @@ impl App {
             && matches!(
                 &self.state,
                 State::Read(p)
-                    if self.config.auto_update_interval_seconds
-                        .is_some_and(|seconds| p.refresh_timer.elapsed().as_secs() > seconds)
+                    if self.config.update_interval_ms
+                        .is_some_and(|ms| p.refresh_timer.elapsed().as_millis() >= ms as u128)
             );
 
         if should_refresh {

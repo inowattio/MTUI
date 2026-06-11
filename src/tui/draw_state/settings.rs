@@ -90,9 +90,9 @@ fn field_view(
             Kind::Number,
         ),
         SettingsField::AutoUpdate => (
-            "Auto-update (seconds)",
+            "Auto-update (ms)",
             device
-                .auto_update_interval_seconds
+                .update_interval_ms
                 .map_or_else(|| "off".to_string(), |n| n.to_string()),
             Kind::Number,
         ),
