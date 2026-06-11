@@ -1,4 +1,4 @@
-# modbus-viewer
+# MTUI
 A TUI for reads and write on modbus (RTU and TCP).
 
 ![Example screenshot](.github/resources/img.png)
