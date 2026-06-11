@@ -2,7 +2,7 @@ use crate::api::{ApiDevice, BoundPort, ReadOnlyFlag};
 use crate::config::{Column, Config, CustomRules, Label, Labels, Startup};
 use crate::constants::CONFIG_PATH;
 use crate::custom::{parse_enum, parse_op, CustomRepr, CustomRule};
-use crate::interpretator::Interpretor;
+use crate::interpretator::{format_ago, Interpretor};
 use crate::modbus::{
     DeviceConfig, Interface, InterfaceNetworkParams, InterfaceWiredParams, ModbusDevice, WordOrder,
 };
@@ -585,10 +585,13 @@ impl App {
         };
         let custom = self.custom_value(cell, value, self.config.device.word_order, &neighbor);
         let label = self.labels.get(&cell).map(String::as_str);
-        let mut lines = vec![(
-            "read at",
-            time.with_timezone(&Local).format("%H:%M:%S.%3f").to_string(),
-        )];
+        let mut lines = vec![
+            (
+                "read at",
+                time.with_timezone(&Local).format("%H:%M:%S.%3f").to_string(),
+            ),
+            ("ago", format_ago(Utc::now().signed_duration_since(time))),
+        ];
         lines.extend(self.interpreter.interpret_all(
             value,
             [neighbor(1), neighbor(2), neighbor(3)],

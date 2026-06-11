@@ -471,7 +471,7 @@ fn float_repr<T: std::fmt::Display + std::fmt::LowerExp>(x: T) -> String {
     }
 }
 
-fn format_ago(elapsed: chrono::Duration) -> String {
+pub(crate) fn format_ago(elapsed: chrono::Duration) -> String {
     let secs = elapsed.num_seconds();
     if secs <= 0 {
         "now".to_string()
