@@ -1,6 +1,6 @@
 use crate::app::App;
 use crate::config::Column;
-use crate::constants::keybind;
+use crate::constants::{keybind, MATRIX_COLS};
 use crate::state::{
     CustomField, CustomParams, LabelParams, LogsParams, Popup, ReadPanel, ReadParams, SearchParams,
     WriteParams,
@@ -150,6 +150,57 @@ fn list_table(
         .block(theme.panel(title))
 }
 
+fn matrix_table(params: &ReadParams, app: &App, visible: u16, theme: &Theme) -> Table<'static> {
+    let cols = MATRIX_COLS.max(1);
+    let base = params.window_start - (params.window_start % cols);
+
+    let mut header = format!("{: >5}  ", "");
+    for c in 0..cols {
+        header.push_str(&format!("{: >5} ", format!("+{c}")));
+    }
+
+    let mut table_rows: Vec<Row> = Vec::with_capacity(visible as usize);
+    for r in 0..visible {
+        let row_base = (base as u32) + (r as u32) * (cols as u32);
+        if row_base > u16::MAX as u32 {
+            break;
+        }
+        let row_base = row_base as u16;
+        let zebra = r % 2 == 1;
+
+        let mut spans = vec![Span::styled(format!("{row_base: >5}: "), theme.dim_style())];
+        for c in 0..cols {
+            let Some(addr) = row_base.checked_add(c) else {
+                break;
+            };
+            let cell = (params.register_type, addr);
+            let (text, mut style) = match app.cell_value(cell) {
+                Some(value) => {
+                    let style = if app.cell_changed(cell) {
+                        theme.changed_style()
+                    } else if zebra {
+                        theme.zebra_style()
+                    } else {
+                        theme.base()
+                    };
+                    (format!("{value: >5}"), style)
+                }
+                None => (format!("{: >5}", "--"), theme.dim_style()),
+            };
+            if addr == params.position {
+                style = theme.selected_style();
+            }
+            spans.push(Span::styled(text, style));
+            spans.push(Span::raw(" "));
+        }
+        table_rows.push(Row::new([Cell::from(Line::from(spans))]));
+    }
+
+    Table::new(table_rows, [Constraint::Percentage(100)])
+        .header(Row::new([Cell::from(header)]).style(theme.header_style()))
+        .block(theme.panel("Matrix"))
+}
+
 pub fn draw(
     params: &ReadParams,
     app: &App,
@@ -236,10 +287,14 @@ pub fn draw(
         return;
     }
 
-    let ascii_string = match params.panel {
+    let ascii_string: &str = match params.panel {
         ReadPanel::Main => {
             frame.render_widget(main_table(params, app, visible, header, theme), rows[1]);
             &params.ascii_string
+        }
+        ReadPanel::Matrix => {
+            frame.render_widget(matrix_table(params, app, visible, theme), rows[1]);
+            ""
         }
         _ => {
             let (title, empty_message) = match params.panel {

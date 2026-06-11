@@ -1,6 +1,6 @@
 use crate::app::{App, AppResult};
 use crate::config::Column;
-use crate::constants::keybind;
+use crate::constants::{keybind, MATRIX_COLS};
 use crate::num_ops::{
     decrement_option_by, digit_add, digit_add_option, digit_remove, digit_remove_option,
     increment_option_by, negate_opt_option, set_option_to_zero, set_to_zero,
@@ -76,10 +76,21 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         keybind::SWITCH_VIEW => {
             app.read_mut().toggle_panel();
             let len = app.panel_len();
-            app.read_mut().scroll_pinned(rows, len);
+            let p = app.read_mut();
+            p.scroll_pinned(rows, len);
+            p.scroll_to_cursor(rows);
         }
         keybind::MOVE_UP | keybind::MOVE_DOWN | keybind::PAGE_UP | keybind::PAGE_DOWN => {
             move_read_cursor(app, key_event.code);
+        }
+        KeyCode::Left | KeyCode::Right if app.read().panel == ReadPanel::Matrix => {
+            let p = app.read_mut();
+            p.position = if key_event.code == KeyCode::Left {
+                p.position.saturating_sub(1)
+            } else {
+                p.position.saturating_add(1)
+            };
+            p.scroll_to_cursor(rows);
         }
         KeyCode::Char(c) => {
             if !c.is_ascii_digit() {
@@ -117,6 +128,15 @@ fn move_read_cursor(app: &mut App, code: KeyCode) {
     let p = app.read_mut();
     match p.panel {
         ReadPanel::Main => {
+            p.position = if up {
+                p.position.saturating_sub(step)
+            } else {
+                p.position.saturating_add(step)
+            };
+            p.scroll_to_cursor(rows);
+        }
+        ReadPanel::Matrix => {
+            let step = step.saturating_mul(MATRIX_COLS);
             p.position = if up {
                 p.position.saturating_sub(step)
             } else {

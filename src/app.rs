@@ -532,7 +532,9 @@ impl App {
 
     pub fn panel_cells(&self) -> Vec<RegisterCell> {
         match self.read().panel {
-            ReadPanel::Main | ReadPanel::Pinned => self.pinned_registers.clone(),
+            ReadPanel::Main | ReadPanel::Pinned | ReadPanel::Matrix => {
+                self.pinned_registers.clone()
+            }
             ReadPanel::Labeled => self.labels.keys().copied().collect(),
             ReadPanel::Custom => self.custom_rules.keys().copied().collect(),
         }
@@ -540,7 +542,7 @@ impl App {
 
     pub fn panel_len(&self) -> u16 {
         let len = match self.read().panel {
-            ReadPanel::Main | ReadPanel::Pinned => self.pinned_registers.len(),
+            ReadPanel::Main | ReadPanel::Pinned | ReadPanel::Matrix => self.pinned_registers.len(),
             ReadPanel::Labeled => self.labels.len(),
             ReadPanel::Custom => self.custom_rules.len(),
         };
@@ -553,13 +555,21 @@ impl App {
             (p.panel, p.register_type, p.position, p.pinned_index)
         };
         match panel {
-            ReadPanel::Main => (register_type, position),
+            ReadPanel::Main | ReadPanel::Matrix => (register_type, position),
             _ => self
                 .panel_cells()
                 .get(index as usize)
                 .copied()
                 .unwrap_or((register_type, position)),
         }
+    }
+
+    pub fn cell_value(&self, cell: RegisterCell) -> Option<u16> {
+        self.read_log.get(&cell).map(|&(value, _)| value)
+    }
+
+    pub fn cell_changed(&self, cell: RegisterCell) -> bool {
+        self.changed.get(&cell).copied().unwrap_or(false)
     }
 
     pub fn inspect_lines(&self) -> (RegisterCell, Vec<(&'static str, String)>) {
@@ -970,7 +980,9 @@ impl App {
         let rows = self.visible_rows.get();
         let p = self.read_mut();
         let type_changed = register_type != p.register_type;
-        p.panel = ReadPanel::Main;
+        if p.panel != ReadPanel::Matrix {
+            p.panel = ReadPanel::Main;
+        }
         p.position = position;
         p.register_type = register_type;
         p.scroll_to_cursor(rows);
@@ -995,7 +1007,9 @@ impl App {
 
         let rows = self.visible_rows.get();
         let p = self.read_mut();
-        p.panel = ReadPanel::Main;
+        if p.panel != ReadPanel::Matrix {
+            p.panel = ReadPanel::Main;
+        }
         p.register_type = register_type;
         p.position = position;
         p.scroll_to_cursor(rows);
@@ -1579,7 +1593,7 @@ impl App {
         self.background_task = Some(BackgroundTask::Refresh(tokio::spawn(async move {
             let read_began = Instant::now();
             let (main_data, pinned_data) = match panel {
-                ReadPanel::Main => {
+                ReadPanel::Main | ReadPanel::Matrix => {
                     let main = Self::aquire_data_with(&device, amount, read_start, register_type)
                         .await
                         .map_err(|e| e.to_string());

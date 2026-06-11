@@ -1,4 +1,5 @@
 use crate::app::WriteType;
+use crate::constants::MATRIX_COLS;
 use crate::custom::{CustomOp, CustomRepr, EnumEntry};
 use crate::modbus::{DataBits, Parity, StopBits, WordOrder};
 use crate::register::{RegisterCell, RegisterType};
@@ -211,14 +212,16 @@ pub enum ReadPanel {
     Pinned,
     Labeled,
     Custom,
+    Matrix,
 }
 
 impl ReadPanel {
-    pub const ALL: [ReadPanel; 4] = [
+    pub const ALL: [ReadPanel; 5] = [
         ReadPanel::Main,
         ReadPanel::Pinned,
         ReadPanel::Labeled,
         ReadPanel::Custom,
+        ReadPanel::Matrix,
     ];
 
     pub fn name(self) -> &'static str {
@@ -227,6 +230,7 @@ impl ReadPanel {
             ReadPanel::Pinned => "Pinned",
             ReadPanel::Labeled => "Labeled",
             ReadPanel::Custom => "Custom",
+            ReadPanel::Matrix => "Matrix",
         }
     }
 }
@@ -395,6 +399,14 @@ impl Default for ReadParams {
 impl ReadParams {
     pub fn scroll_to_cursor(&mut self, rows: u16) {
         let rows = rows.max(1);
+        if self.panel == ReadPanel::Matrix {
+            let last_row = u16::MAX / MATRIX_COLS;
+            let max_start_row = last_row.saturating_sub(rows - 1);
+            let row = self.position / MATRIX_COLS;
+            let start_row = row.saturating_sub(rows / 2).min(max_start_row);
+            self.window_start = start_row * MATRIX_COLS;
+            return;
+        }
         let max_start = u16::MAX - (rows - 1);
         self.window_start = self.position.saturating_sub(rows / 2).min(max_start);
     }
@@ -404,7 +416,8 @@ impl ReadParams {
             ReadPanel::Main => ReadPanel::Pinned,
             ReadPanel::Pinned => ReadPanel::Labeled,
             ReadPanel::Labeled => ReadPanel::Custom,
-            ReadPanel::Custom => ReadPanel::Main,
+            ReadPanel::Custom => ReadPanel::Matrix,
+            ReadPanel::Matrix => ReadPanel::Main,
         };
     }
 

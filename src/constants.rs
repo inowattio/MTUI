@@ -4,6 +4,8 @@ pub const CONFIG_PATH: &str = "config.json";
 
 pub const EVENT_HANDLER_TICKRATE: Duration = Duration::from_millis(100);
 
+pub const MATRIX_COLS: u16 = 10;
+
 pub mod keybind {
     use crossterm::event::KeyCode;
 
