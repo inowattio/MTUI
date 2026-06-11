@@ -1160,14 +1160,11 @@ impl App {
     pub fn custom_cycle(&mut self, field: CustomField, forward: bool) {
         self.with_custom(|c| {
             c.error = None;
-            match field {
-                CustomField::Repr => {
-                    let all = CustomRepr::ALL;
-                    let i = all.iter().position(|&r| r == c.repr).unwrap_or(0);
-                    let n = all.len();
-                    c.repr = if forward { all[(i + 1) % n] } else { all[(i + n - 1) % n] };
-                }
-                _ => {}
+            if field == CustomField::Repr {
+                let all = CustomRepr::ALL;
+                let i = all.iter().position(|&r| r == c.repr).unwrap_or(0);
+                let n = all.len();
+                c.repr = if forward { all[(i + 1) % n] } else { all[(i + n - 1) % n] };
             }
         });
     }

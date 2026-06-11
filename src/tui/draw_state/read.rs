@@ -624,14 +624,14 @@ fn draw_custom(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &Cust
     let pfx = if sel == CustomField::Prefix {
         format!("{} ", c.prefix)
     } else {
-        format!("{}", c.prefix)
+        c.suffix.to_string()
     };
     lines.push(field_line("Prefix", pfx, sel == CustomField::Prefix));
 
     let sfx = if sel == CustomField::Suffix {
         format!("{} ", c.suffix)
     } else {
-        format!("{}", c.suffix)
+        c.suffix.to_string()
     };
     lines.push(field_line("Suffix", sfx, sel == CustomField::Suffix));
 
