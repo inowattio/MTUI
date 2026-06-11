@@ -10,6 +10,9 @@ mod web {
     use ratatui::backend::Backend;
     use ratatui::layout::Rect;
     use ratatui::{TerminalOptions, Viewport};
+    use ratzilla::web_sys;
+    use ratzilla::web_sys::wasm_bindgen::prelude::Closure;
+    use ratzilla::web_sys::wasm_bindgen::JsCast;
     use ratzilla::{DomBackend, WebRenderer};
     use std::io;
     use std::rc::Rc;
@@ -51,26 +54,38 @@ mod web {
         // the page (see index.html) so the grid is re-measured.
         let mut backend = DomBackend::new()?;
         let grid = backend.window_size()?.columns_rows;
-        let mut terminal = ratatui::Terminal::with_options(
+        let terminal = ratatui::Terminal::with_options(
             backend,
             TerminalOptions {
                 viewport: Viewport::Fixed(Rect::new(0, 0, grid.width, grid.height)),
             },
         )?;
 
+        // Listen on the window rather than `terminal.on_key_event`, which
+        // binds to the grid element: the grid only receives keys while
+        // focused, and Tab's default action moves that focus to the browser
+        // UI. Preventing the default keeps handled keys (Tab included) in
+        // the app; browser shortcuts (Ctrl/Alt/Meta) are left alone.
         let key_app = app.clone();
-        terminal
-            .on_key_event(move |event| {
-                let Some(key) = convert_key(event) else {
-                    return;
-                };
-                let app = key_app.clone();
-                wasm_bindgen_futures::spawn_local(async move {
-                    let mut app = app.lock().await;
-                    let _ = handle_key_events(key, &mut app).await;
-                });
-            })
-            .map_err(|e| io::Error::other(e.to_string()))?;
+        let on_key = Closure::<dyn FnMut(_)>::new(move |event: web_sys::KeyboardEvent| {
+            if event.ctrl_key() || event.alt_key() || event.meta_key() {
+                return;
+            }
+            let Some(key) = convert_key(event.clone().into()) else {
+                return;
+            };
+            event.prevent_default();
+            let app = key_app.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                let mut app = app.lock().await;
+                let _ = handle_key_events(key, &mut app).await;
+            });
+        });
+        web_sys::window()
+            .ok_or_else(|| io::Error::other("no window"))?
+            .add_event_listener_with_callback("keydown", on_key.as_ref().unchecked_ref())
+            .map_err(|e| io::Error::other(format!("{e:?}")))?;
+        on_key.forget();
 
         let mut last_tick = compat::Instant::now();
         terminal.draw_web(move |frame| {
