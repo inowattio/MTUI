@@ -62,6 +62,7 @@ struct RefreshTaskResult {
 #[derive(Debug)]
 pub struct App {
     pub config: Config,
+    config_path: String,
     pub running: bool,
     pub state: State,
     pub pinned_registers: Vec<RegisterCell>,
@@ -184,9 +185,9 @@ impl From<&BTreeMap<RegisterCell, CustomRule>> for CustomRules {
     }
 }
 
-fn save_config(config: &Config) -> Result<(), String> {
+fn save_config(path: &str, config: &Config) -> Result<(), String> {
     let content = serde_json::to_string_pretty(config).map_err(|e| e.to_string())?;
-    fs::write(CONFIG_PATH, content).map_err(|e| e.to_string())
+    fs::write(path, content).map_err(|e| e.to_string())
 }
 
 fn build_custom_rule(c: &CustomParams) -> Result<(RegisterCell, CustomRule), String> {
@@ -211,33 +212,46 @@ fn build_custom_rule(c: &CustomParams) -> Result<(RegisterCell, CustomRule), Str
     Ok(((c.register_type, c.address), rule))
 }
 
-fn dump_example_config_and_exit() {
+fn dump_example_config_and_exit(path: &str) {
     let example_config = Config::default();
     let config_string = serde_json::to_string_pretty(&example_config).unwrap();
 
-    fs::write(CONFIG_PATH, config_string).unwrap();
-    println!("No config file found, dumped example.");
-    std::process::exit(0)
+    fs::write(path, config_string).unwrap();
+    println!("No config file found, dumped example to {path}.");
+    std::process::exit(1)
 }
 
-fn fetch_config_or_exit() -> Config {
-    let content = fs::read_to_string(CONFIG_PATH)
-        .inspect_err(|_| dump_example_config_and_exit())
-        .unwrap();
-    serde_json::from_str(&content)
-        .inspect_err(|e| println!("Could not parse config: {e}"))
-        .unwrap()
+fn fetch_config_or_exit(path: &str, dump_example_if_missing: bool) -> Config {
+    let content = match fs::read_to_string(path) {
+        Ok(content) => content,
+        Err(e) => {
+            if dump_example_if_missing {
+                dump_example_config_and_exit(path);
+            }
+            println!("Could not read config {path}: {e}");
+            std::process::exit(2)
+        }
+    };
+    serde_json::from_str(&content).unwrap_or_else(|e| {
+        println!("Could not parse config {path}: {e}");
+        std::process::exit(3)
+    })
 }
 
 impl App {
-    pub async fn new() -> Self {
-        let config = fetch_config_or_exit();
+    pub async fn new(config_path: Option<String>) -> Self {
+        // A missing file is only auto-created at the default path; an
+        // explicitly requested config that does not exist is an error.
+        let dump_example_if_missing = config_path.is_none();
+        let config_path = config_path.unwrap_or_else(|| CONFIG_PATH.to_string());
+        let config = fetch_config_or_exit(&config_path, dump_example_if_missing);
         let device = ModbusDevice::new(&config.device)
             .await
             .inspect_err(|e| println!("Could not initialize device: {e}"))
             .ok();
 
         let mut app = Self {
+            config_path,
             interpreter: Interpretor::new(InterpretorConfig::default(), WordOrder::default()),
             pinned_registers: Vec::new(),
             labels: BTreeMap::new(),
@@ -1324,10 +1338,14 @@ impl App {
             };
         }
 
-        match save_config(&self.config) {
-            Ok(()) => format!("Saved to {CONFIG_PATH}"),
+        match save_config(&self.config_path, &self.config) {
+            Ok(()) => format!("Saved to {}", self.config_path),
             Err(e) => format!("Save failed: {e}"),
         }
+    }
+
+    pub fn config_path(&self) -> &str {
+        &self.config_path
     }
 
     pub fn read_count(&self) -> usize {

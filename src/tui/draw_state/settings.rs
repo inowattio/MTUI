@@ -1,5 +1,4 @@
 use crate::app::App;
-use crate::constants::CONFIG_PATH;
 use crate::state::{SettingsField, SettingsParams};
 use crate::tui::theme::Theme;
 use ratatui::layout::Rect;
@@ -163,7 +162,11 @@ fn field_view(
             .to_string(),
             Kind::Toggle,
         ),
-        SettingsField::Save => ("Save configuration", CONFIG_PATH.to_string(), Kind::Action),
+        SettingsField::Save => (
+            "Save configuration",
+            app.config_path().to_string(),
+            Kind::Action,
+        ),
         SettingsField::LoadConfig => ("Load configuration", params.load_path.clone(), Kind::Number),
     }
 }

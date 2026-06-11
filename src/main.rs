@@ -19,14 +19,25 @@ use crate::app::{App, AppResult};
 use crate::event::{Event, EventHandler};
 use crate::handler::{handle_key_events, handle_paste};
 use crate::tui::Tui;
+use clap::Parser;
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 use std::io;
 
+/// A TUI for Modbus reads and writes (RTU and TCP).
+#[derive(Parser)]
+#[command(version)]
+struct Args {
+    /// Path to the configuration file [default: config.json]
+    #[arg(long)]
+    config: Option<String>,
+}
+
 #[tokio::main]
 async fn main() -> AppResult<()> {
+    let args = Args::parse();
     logger::init();
-    let mut app = App::new().await;
+    let mut app = App::new(args.config).await;
 
     if let Some(port) = app.config.port {
         tokio::spawn(api::serve(
