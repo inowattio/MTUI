@@ -53,10 +53,6 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme) {
 
     lines.push(Line::default());
     lines.push(Line::from(Span::styled(
-        " Graph might disallow some operations",
-        theme.dim_style(),
-    )));
-    lines.push(Line::from(Span::styled(
         format!(" {SETTINGS} \u{b7} settings (save / clear)   {EXIT} \u{b7} quit"),
         theme.dim_style(),
     )));
