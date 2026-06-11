@@ -527,15 +527,35 @@ impl App {
         self.read_mut().popup = Some(Popup::Inspect);
     }
 
+    pub fn panel_cells(&self) -> Vec<RegisterCell> {
+        match self.read().panel {
+            ReadPanel::Main | ReadPanel::Pinned => self.pinned_registers.clone(),
+            ReadPanel::Labeled => self.labels.keys().copied().collect(),
+            ReadPanel::Custom => self.custom_rules.keys().copied().collect(),
+        }
+    }
+
+    pub fn panel_len(&self) -> u16 {
+        let len = match self.read().panel {
+            ReadPanel::Main | ReadPanel::Pinned => self.pinned_registers.len(),
+            ReadPanel::Labeled => self.labels.len(),
+            ReadPanel::Custom => self.custom_rules.len(),
+        };
+        len as u16
+    }
+
     pub fn cursor_cell(&self) -> RegisterCell {
-        let p = self.read();
-        match p.panel {
-            ReadPanel::Pinned => self
-                .pinned_registers
-                .get(p.pinned_index as usize)
+        let (panel, register_type, position, index) = {
+            let p = self.read();
+            (p.panel, p.register_type, p.position, p.pinned_index)
+        };
+        match panel {
+            ReadPanel::Main => (register_type, position),
+            _ => self
+                .panel_cells()
+                .get(index as usize)
                 .copied()
-                .unwrap_or((p.register_type, p.position)),
-            ReadPanel::Main => (p.register_type, p.position),
+                .unwrap_or((register_type, position)),
         }
     }
 
@@ -789,15 +809,7 @@ impl App {
     }
 
     pub fn copy_address(&mut self) {
-        let p = self.read();
-        let address = if p.panel == ReadPanel::Pinned {
-            self.pinned_registers
-                .get(p.pinned_index as usize)
-                .map(|&(_, addr)| addr)
-                .unwrap_or(p.position)
-        } else {
-            p.position
-        };
+        let (_, address) = self.cursor_cell();
         if let Ok(mut clipboard) = arboard::Clipboard::new() {
             let _ = clipboard.set_text(address.to_string());
         }
@@ -1052,18 +1064,7 @@ impl App {
     }
 
     pub fn open_custom(&mut self) {
-        let (panel, register_type, position, pinned_index) = {
-            let p = self.read();
-            (p.panel, p.register_type, p.position, p.pinned_index)
-        };
-        let (register_type, address) = if panel == ReadPanel::Pinned {
-            self.pinned_registers
-                .get(pinned_index as usize)
-                .map(|&(kind, address)| (kind, address))
-                .unwrap_or((register_type, position))
-        } else {
-            (register_type, position)
-        };
+        let (register_type, address) = self.cursor_cell();
 
         let params = match self.custom_rules.get(&(register_type, address)) {
             Some(rule) => CustomParams {
@@ -1311,7 +1312,7 @@ impl App {
 
         let selection = match panel {
             ReadPanel::Main => (register_type, position),
-            ReadPanel::Pinned => match self.pinned_registers.get(pinned_index as usize) {
+            _ => match self.panel_cells().get(pinned_index as usize) {
                 Some(&cell) => cell,
                 None => return,
             },
@@ -1327,7 +1328,7 @@ impl App {
         self.dirty = true;
 
         let rows = self.visible_rows.get();
-        let len = self.pinned_registers.len() as u16;
+        let len = self.panel_len();
         self.read_mut().scroll_pinned(rows, len);
     }
 
@@ -1482,16 +1483,16 @@ impl App {
         let read_start = position.saturating_sub(amount / 2).min(max_read_start);
         self.connection = ConnectionStatus::Reading;
 
-        let pinned_registers = {
-            let pins = &self.pinned_registers;
-            let total = pins.len();
+        let panel_registers = {
+            let cells = self.panel_cells();
+            let total = cells.len();
             if total == 0 {
                 Vec::new()
             } else {
                 let batch = (amount as usize).min(total);
                 let idx = (self.read().pinned_index as usize).min(total - 1);
                 let start = idx.saturating_sub(batch / 2).min(total - batch);
-                pins[start..start + batch].to_vec()
+                cells[start..start + batch].to_vec()
             }
         };
 
@@ -1504,8 +1505,8 @@ impl App {
                         .map_err(|e| e.to_string());
                     (Some(main), None)
                 }
-                ReadPanel::Pinned => {
-                    let pinned = Self::aquire_pinned_data_with(&device, &pinned_registers, amount)
+                _ => {
+                    let pinned = Self::aquire_pinned_data_with(&device, &panel_registers, amount)
                         .await
                         .map_err(|e| e.to_string());
                     (None, Some(pinned))
@@ -1687,7 +1688,7 @@ impl App {
         }
         let main_ascii = self.interpreter.ascii_string(&window_values);
 
-        let pins = self.pinned_registers.clone();
+        let pins = self.panel_cells();
         let mut pinned_rows = Vec::with_capacity(pins.len());
         let mut pinned_changed = Vec::with_capacity(pins.len());
         let mut pinned_values: Vec<RegisterCellValue> = Vec::new();

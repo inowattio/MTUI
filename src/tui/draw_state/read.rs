@@ -100,8 +100,15 @@ fn main_table(
         .block(theme.panel("Main data"))
 }
 
-fn pinned_table(params: &ReadParams, app: &App, visible: u16, header: String, theme: &Theme) -> Table<'static> {
-    let pins = &app.pinned_registers;
+fn list_table(
+    params: &ReadParams,
+    app: &App,
+    visible: u16,
+    header: String,
+    theme: &Theme,
+    pins: &[RegisterCell],
+    title: &str,
+) -> Table<'static> {
     let len = pins.len();
     let top = (params.pinned_top as usize).min(len.saturating_sub(1));
     let end = (top + visible as usize).min(len);
@@ -140,7 +147,7 @@ fn pinned_table(params: &ReadParams, app: &App, visible: u16, header: String, th
 
     Table::new(table_rows, [Constraint::Percentage(100)])
         .header(Row::new([Cell::from(header)]).style(theme.header_style()))
-        .block(theme.panel("Pinned"))
+        .block(theme.panel(title))
 }
 
 pub fn draw(
@@ -151,14 +158,7 @@ pub fn draw(
     theme: &Theme,
     device: &str,
 ) {
-    let (info_type, info_addr) = if params.panel == ReadPanel::Pinned {
-        app.pinned_registers
-            .get(params.pinned_index as usize)
-            .copied()
-            .unwrap_or((params.register_type, params.position))
-    } else {
-        (params.register_type, params.position)
-    };
+    let (info_type, info_addr) = app.cursor_cell();
     let is_pinned = app
         .pinned_registers
         .iter()
@@ -241,18 +241,24 @@ pub fn draw(
             frame.render_widget(main_table(params, app, visible, header, theme), rows[1]);
             &params.ascii_string
         }
-        ReadPanel::Pinned => {
-            let table = if app.pinned_registers.is_empty() {
+        _ => {
+            let (title, empty_message) = match params.panel {
+                ReadPanel::Labeled => ("Labeled", "No labeled registers."),
+                ReadPanel::Custom => ("Custom", "No custom rules."),
+                _ => ("Pinned", "No pinned registers."),
+            };
+            let cells = app.panel_cells();
+            let table = if cells.is_empty() {
                 rows_to_table(
-                    "Pinned",
+                    title,
                     header,
-                    &["No pinned registers.".to_string()],
+                    &[empty_message.to_string()],
                     &[],
                     None,
                     theme,
                 )
             } else {
-                pinned_table(params, app, visible, header, theme)
+                list_table(params, app, visible, header, theme, &cells, title)
             };
             frame.render_widget(table, rows[1]);
             &params.pinned_ascii_string
@@ -339,7 +345,7 @@ fn draw_help(frame: &mut Frame, area: Rect, theme: &Theme) {
         ("space".to_string(), "Pause/resume"),
         (format!("{TOGGLE}"), "Switch reg type"),
         (format!("{WORD_ORDER}"), "Cycle word order"),
-        (format!("{SWITCH_VIEW}"), "Main / Pinned"),
+        (format!("{SWITCH_VIEW}"), "Cycle panel"),
         (format!("{JUMP}"), "Go to addr/label"),
         (format!("{CYCLE_POSITION}"), "Prev position"),
         (format!("{COPY_ADDRESS}"), "Copy address"),

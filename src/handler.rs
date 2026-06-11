@@ -14,7 +14,6 @@ use crossterm::event::{KeyCode, KeyEvent};
 
 pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
     let rows = app.visible_rows.get();
-    let pinned_len = app.pinned_registers.len() as u16;
 
     if app.discovery().is_some() {
         handle_discovery_key(key_event, app).await;
@@ -75,9 +74,9 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         keybind::PAUSE => app.toggle_pause(),
         keybind::ACTION => app.refresh().await,
         keybind::SWITCH_VIEW => {
-            let p = app.read_mut();
-            p.toggle_panel();
-            p.scroll_pinned(rows, pinned_len);
+            app.read_mut().toggle_panel();
+            let len = app.panel_len();
+            app.read_mut().scroll_pinned(rows, len);
         }
         keybind::MOVE_UP | keybind::MOVE_DOWN | keybind::PAGE_UP | keybind::PAGE_DOWN => {
             move_read_cursor(app, key_event.code);
@@ -108,7 +107,7 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
 
 fn move_read_cursor(app: &mut App, code: KeyCode) {
     let rows = app.visible_rows.get();
-    let pinned_len = app.pinned_registers.len() as u16;
+    let panel_len = app.panel_len();
     let step = if matches!(code, keybind::PAGE_UP | keybind::PAGE_DOWN) {
         rows
     } else {
@@ -125,13 +124,13 @@ fn move_read_cursor(app: &mut App, code: KeyCode) {
             };
             p.scroll_to_cursor(rows);
         }
-        ReadPanel::Pinned => {
+        _ => {
             p.pinned_index = if up {
                 p.pinned_index.saturating_sub(step)
             } else {
                 p.pinned_index.saturating_add(step)
             };
-            p.scroll_pinned(rows, pinned_len);
+            p.scroll_pinned(rows, panel_len);
         }
     }
 }

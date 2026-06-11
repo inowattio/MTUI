@@ -208,6 +208,8 @@ pub enum ReadPanel {
     #[default]
     Main,
     Pinned,
+    Labeled,
+    Custom,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -376,7 +378,9 @@ impl ReadParams {
     pub fn toggle_panel(&mut self) {
         self.panel = match self.panel {
             ReadPanel::Main => ReadPanel::Pinned,
-            ReadPanel::Pinned => ReadPanel::Main,
+            ReadPanel::Pinned => ReadPanel::Labeled,
+            ReadPanel::Labeled => ReadPanel::Custom,
+            ReadPanel::Custom => ReadPanel::Main,
         };
     }
 
