@@ -296,6 +296,7 @@ fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup: &P
         Popup::Write(write) => draw_write(frame, area, theme, write),
         Popup::Slave(value) => draw_slave(frame, area, theme, *value),
         Popup::Logs(logs) => draw_logs(frame, area, theme, logs),
+        Popup::Inspect => draw_inspect(frame, area, theme, app),
         Popup::Quit => draw_confirm(
             frame,
             area,
@@ -343,6 +344,7 @@ fn draw_help(frame: &mut Frame, area: Rect, theme: &Theme) {
         (format!("{CYCLE_POSITION}"), "Prev position"),
         (format!("{COPY_ADDRESS}"), "Copy address"),
         (format!("{GRAPH}"), "Value graph"),
+        (format!("{INSPECT}"), "Inspect register"),
         (format!("{WRITE}"), "Write register"),
         (format!("{SLAVE}"), "Set slave id"),
         (format!("{DISCOVERY}"), "Switch device"),
@@ -799,6 +801,59 @@ fn draw_picker(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, selected
 
     frame.render_widget(Clear, rect);
     frame.render_widget(Paragraph::new(lines).block(theme.panel("Columns")), rect);
+}
+
+fn draw_inspect(frame: &mut Frame, area: Rect, theme: &Theme, app: &App) {
+    let ((kind, address), entries) = app.inspect_lines();
+    let kind_char = match kind {
+        RegisterType::Holding => 'H',
+        RegisterType::Input => 'I',
+    };
+
+    const NAME: usize = 9;
+    const VALUE: usize = 21;
+
+    let mut lines: Vec<Line> = Vec::new();
+    if entries.is_empty() {
+        lines.push(Line::from(Span::styled(
+            " no data read yet",
+            theme.dim_style(),
+        )));
+    } else {
+        let rows = entries.len().div_ceil(2);
+        let cell = |i: usize| -> [Span<'static>; 2] {
+            let (name, value) = &entries[i];
+            let value: String = value.chars().take(VALUE).collect();
+            [
+                Span::styled(format!(" {name:<NAME$} "), theme.dim_style()),
+                Span::styled(format!("{value:<VALUE$} "), theme.base()),
+            ]
+        };
+        for r in 0..rows {
+            let mut spans = cell(r).to_vec();
+            let right = r + rows;
+            if right < entries.len() {
+                spans.push(Span::raw(" "));
+                spans.extend(cell(right));
+            }
+            lines.push(Line::from(spans));
+        }
+    }
+    lines.push(Line::default());
+    lines.push(Line::from(Span::styled(
+        " \u{2191}/\u{2193} move \u{b7} esc close",
+        theme.dim_style(),
+    )));
+
+    let width = ((NAME + VALUE + 3) as u16) * 2 + 3;
+    let height = lines.len() as u16 + 2;
+    let rect = centered_rect(width, height, area);
+
+    frame.render_widget(Clear, rect);
+    frame.render_widget(
+        Paragraph::new(lines).block(theme.panel(&format!("Inspect {address} ({kind_char})"))),
+        rect,
+    );
 }
 
 fn draw_graph(

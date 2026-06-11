@@ -403,6 +403,72 @@ impl Interpretor {
 
         row
     }
+
+    pub fn interpret_all(
+        &self,
+        value: u16,
+        next: [Option<u16>; 3],
+        custom: Option<&str>,
+        label: Option<&str>,
+    ) -> Vec<(&'static str, String)> {
+        let [next1, next2, next3] = next;
+        let word = self.word_order.make_word(value, next1.unwrap_or_default());
+        let second_word = self.word_order.make_word(next2.unwrap_or_default(), next3.unwrap_or_default());
+        let dword = self.word_order.make_dword(word, second_word);
+        let two = next1.is_some();
+        let four = two && next2.is_some() && next3.is_some();
+        let two_or = |s: String| if two { s } else { "-".to_string() };
+        let four_or = |s: String| if four { s } else { "-".to_string() };
+
+        let high = (value >> 8) as u8;
+        let low = (value & 0xFF) as u8;
+        let b = format!("{value:016b}");
+        let ascii: String = [value, next1.unwrap_or_default()]
+            .iter()
+            .flat_map(|n| [(n >> 8) as u8, (n & 0xFF) as u8])
+            .map(|b| {
+                let c = b as char;
+                if c.is_ascii_graphic() {
+                    c
+                } else {
+                    '·'
+                }
+            })
+            .collect();
+
+        vec![
+            ("u16", value.to_string()),
+            ("i16", (value as i16).to_string()),
+            ("u8s", format!("{high}/{low}")),
+            ("i8s", format!("{}/{}", high as i8, low as i8)),
+            ("hex", format!("{value:04X}")),
+            ("bits", format!("{} {} {} {}", &b[0..4], &b[4..8], &b[8..12], &b[12..16])),
+            ("f16", float_repr(f16_to_f32(value))),
+            ("bcd", bcd_to_decimal(value).map_or_else(|| "--".to_string(), |n| n.to_string())),
+            ("hex32", two_or(format!("{word:08X}"))),
+            ("u32", two_or(word.to_string())),
+            ("i32", two_or((word as i32).to_string())),
+            ("u32 m10k", two_or(m10k_to_u32(word).map_or_else(|| "--".to_string(), |(h, l)| format!("{h}/{l}")))),
+            ("i32 m10k", two_or(m10k_to_i32(word).map_or_else(|| "--".to_string(), |(h, l)| format!("{h}/{l}")))),
+            ("f32", two_or(float_repr(f32::from_bits(word)))),
+            ("bcd32", two_or(bcd_to_decimal_u32(word).map_or_else(|| "--".to_string(), |n| n.to_string()))),
+            ("u64", four_or(dword.to_string())),
+            ("i64", four_or((dword as i64).to_string())),
+            ("f64", four_or(float_repr(f64::from_bits(dword)))),
+            ("ascii", ascii),
+            ("custom", custom.unwrap_or("--").to_string()),
+            ("label", label.unwrap_or("").to_string()),
+        ]
+    }
+}
+
+fn float_repr<T: std::fmt::Display + std::fmt::LowerExp>(x: T) -> String {
+    let s = format!("{x}");
+    if s.len() > 21 {
+        format!("{x:.3e}")
+    } else {
+        s
+    }
 }
 
 fn format_ago(elapsed: chrono::Duration) -> String {

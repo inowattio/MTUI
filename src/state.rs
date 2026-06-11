@@ -280,6 +280,7 @@ pub enum Popup {
     Write(WriteParams),
     Slave(u16),
     Logs(LogsParams),
+    Inspect,
     Quit,
 }
 
@@ -294,6 +295,7 @@ pub enum PopupKind {
     Write,
     Slave,
     Logs,
+    Inspect,
     Quit,
 }
 
@@ -309,6 +311,7 @@ impl Popup {
             Popup::Write(_) => PopupKind::Write,
             Popup::Slave(_) => PopupKind::Slave,
             Popup::Logs(_) => PopupKind::Logs,
+            Popup::Inspect => PopupKind::Inspect,
             Popup::Quit => PopupKind::Quit,
         }
     }

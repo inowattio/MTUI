@@ -2,9 +2,8 @@ use crate::app::{App, AppResult};
 use crate::config::Column;
 use crate::constants::keybind;
 use crate::num_ops::{
-    decrement_by, decrement_option_by, digit_add, digit_add_option, digit_remove,
-    digit_remove_option, increment_by, increment_option_by, negate_opt_option, set_option_to_zero,
-    set_to_zero,
+    decrement_option_by, digit_add, digit_add_option, digit_remove, digit_remove_option,
+    increment_option_by, negate_opt_option, set_option_to_zero, set_to_zero,
 };
 use crate::modbus::{DataBits, Parity, StopBits, WordOrder};
 use crate::state::{
@@ -65,6 +64,7 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         keybind::DISCOVERY => app.open_discovery(),
         keybind::SETTINGS => app.open_settings(),
         keybind::GRAPH => app.toggle_graph(),
+        keybind::INSPECT => app.open_inspect(),
         keybind::CYCLE_POSITION => app.cycle_position(),
         keybind::COPY_ADDRESS => app.copy_address(),
         keybind::LOGS => app.open_logs(),
@@ -79,61 +79,8 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
             p.toggle_panel();
             p.scroll_pinned(rows, pinned_len);
         }
-        keybind::MOVE_UP => {
-            {
-                let p = app.read_mut();
-                match p.panel {
-                    ReadPanel::Main => {
-                        decrement_by(&mut p.position, 1);
-                        p.scroll_to_cursor(rows);
-                    }
-                    ReadPanel::Pinned => {
-                        p.pinned_index = p.pinned_index.saturating_sub(1);
-                        p.scroll_pinned(rows, pinned_len);
-                    }
-                }
-            }
-        }
-        keybind::MOVE_DOWN => {
-            {
-                let p = app.read_mut();
-                match p.panel {
-                    ReadPanel::Main => {
-                        increment_by(&mut p.position, 1);
-                        p.scroll_to_cursor(rows);
-                    }
-                    ReadPanel::Pinned => {
-                        p.pinned_index = p.pinned_index.saturating_add(1);
-                        p.scroll_pinned(rows, pinned_len);
-                    }
-                }
-            }
-        }
-        keybind::PAGE_UP => {
-            let p = app.read_mut();
-            match p.panel {
-                ReadPanel::Main => {
-                    p.position = p.position.saturating_sub(rows);
-                    p.scroll_to_cursor(rows);
-                }
-                ReadPanel::Pinned => {
-                    p.pinned_index = p.pinned_index.saturating_sub(rows);
-                    p.scroll_pinned(rows, pinned_len);
-                }
-            }
-        }
-        keybind::PAGE_DOWN => {
-            let p = app.read_mut();
-            match p.panel {
-                ReadPanel::Main => {
-                    p.position = p.position.saturating_add(rows);
-                    p.scroll_to_cursor(rows);
-                }
-                ReadPanel::Pinned => {
-                    p.pinned_index = p.pinned_index.saturating_add(rows);
-                    p.scroll_pinned(rows, pinned_len);
-                }
-            }
+        keybind::MOVE_UP | keybind::MOVE_DOWN | keybind::PAGE_UP | keybind::PAGE_DOWN => {
+            move_read_cursor(app, key_event.code);
         }
         KeyCode::Char(c) => {
             if !c.is_ascii_digit() {
@@ -159,9 +106,48 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
     Ok(())
 }
 
+fn move_read_cursor(app: &mut App, code: KeyCode) {
+    let rows = app.visible_rows.get();
+    let pinned_len = app.pinned_registers.len() as u16;
+    let step = if matches!(code, keybind::PAGE_UP | keybind::PAGE_DOWN) {
+        rows
+    } else {
+        1
+    };
+    let up = matches!(code, keybind::MOVE_UP | keybind::PAGE_UP);
+    let p = app.read_mut();
+    match p.panel {
+        ReadPanel::Main => {
+            p.position = if up {
+                p.position.saturating_sub(step)
+            } else {
+                p.position.saturating_add(step)
+            };
+            p.scroll_to_cursor(rows);
+        }
+        ReadPanel::Pinned => {
+            p.pinned_index = if up {
+                p.pinned_index.saturating_sub(step)
+            } else {
+                p.pinned_index.saturating_add(step)
+            };
+            p.scroll_pinned(rows, pinned_len);
+        }
+    }
+}
+
 async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
     match kind {
         PopupKind::Help => app.close_popup(),
+
+        PopupKind::Inspect => match key_event.code {
+            keybind::EXIT | keybind::INSPECT => app.close_popup(),
+            keybind::MOVE_UP | keybind::MOVE_DOWN | keybind::PAGE_UP | keybind::PAGE_DOWN => {
+                move_read_cursor(app, key_event.code);
+                app.rebuild_read_rows();
+            }
+            _ => {}
+        },
 
         PopupKind::Dump => match key_event.code {
             keybind::ACTION => app.commit_dump(),

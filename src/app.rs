@@ -523,6 +523,48 @@ impl App {
         self.read_mut().popup = Some(Popup::Columns(0));
     }
 
+    pub fn open_inspect(&mut self) {
+        self.read_mut().popup = Some(Popup::Inspect);
+    }
+
+    pub fn cursor_cell(&self) -> RegisterCell {
+        let p = self.read();
+        match p.panel {
+            ReadPanel::Pinned => self
+                .pinned_registers
+                .get(p.pinned_index as usize)
+                .copied()
+                .unwrap_or((p.register_type, p.position)),
+            ReadPanel::Main => (p.register_type, p.position),
+        }
+    }
+
+    pub fn inspect_lines(&self) -> (RegisterCell, Vec<(&'static str, String)>) {
+        let cell = self.cursor_cell();
+        let (kind, addr) = cell;
+        let Some(&(value, time)) = self.read_log.get(&cell) else {
+            return (cell, Vec::new());
+        };
+        let neighbor = |offset: u16| {
+            self.read_log
+                .get(&(kind, addr.saturating_add(offset)))
+                .map(|&(v, _)| v)
+        };
+        let custom = self.custom_value(cell, value, self.config.device.word_order, &neighbor);
+        let label = self.labels.get(&cell).map(String::as_str);
+        let mut lines = vec![(
+            "read at",
+            time.with_timezone(&Local).format("%H:%M:%S:%3f").to_string(),
+        )];
+        lines.extend(self.interpreter.interpret_all(
+            value,
+            [neighbor(1), neighbor(2), neighbor(3)],
+            custom.as_deref(),
+            label,
+        ));
+        (cell, lines)
+    }
+
     pub fn clear_pins(&mut self) {
         let n = self.pinned_registers.len();
         self.pinned_registers.clear();
@@ -775,18 +817,7 @@ impl App {
             return;
         }
 
-        let (panel, register_type, position, pinned_index) = {
-            let p = self.read();
-            (p.panel, p.register_type, p.position, p.pinned_index)
-        };
-        let (write_type, write_pos) = if panel == ReadPanel::Pinned {
-            self.pinned_registers
-                .get(pinned_index as usize)
-                .map(|&(kind, address)| (kind, address))
-                .unwrap_or((register_type, position))
-        } else {
-            (register_type, position)
-        };
+        let (write_type, write_pos) = self.cursor_cell();
 
         if write_type == RegisterType::Input {
             return;
@@ -850,18 +881,7 @@ impl App {
     }
 
     pub fn open_label(&mut self) {
-        let (panel, register_type, position, pinned_index) = {
-            let p = self.read();
-            (p.panel, p.register_type, p.position, p.pinned_index)
-        };
-        let (label_type, label_pos) = if panel == ReadPanel::Pinned {
-            self.pinned_registers
-                .get(pinned_index as usize)
-                .map(|&(kind, address)| (kind, address))
-                .unwrap_or((register_type, position))
-        } else {
-            (register_type, position)
-        };
+        let (label_type, label_pos) = self.cursor_cell();
         let text = self
             .labels
             .get(&(label_type, label_pos))
