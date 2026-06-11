@@ -1,7 +1,8 @@
+use crate::compat::{self, Instant};
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tokio_modbus::client::{Client, Context};
 use tokio_modbus::slave::SlaveContext;
 use tokio_modbus::{ExceptionCode, Request, Response, Slave, SlaveId};
@@ -206,7 +207,7 @@ impl MockContext {
 
     async fn simulate_latency(&self) {
         let jitter = (self.started.elapsed().as_micros() as u64).wrapping_mul(2_654_435_761) % 12;
-        tokio::time::sleep(Duration::from_millis(4 + jitter)).await;
+        compat::sleep(Duration::from_millis(4 + jitter)).await;
     }
 }
 

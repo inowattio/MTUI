@@ -1,4 +1,4 @@
-use crate::api::{ApiDevice, BoundPort, ReadOnlyFlag};
+use crate::compat::{self, Instant, TaskHandle, TaskPoll};
 use crate::config::{Column, Config, CustomRules, InterpretorConfig, Label, Labels, Startup};
 use crate::constants::CONFIG_PATH;
 use crate::custom::{parse_enum, parse_op, CustomRepr, CustomRule};
@@ -17,10 +17,14 @@ use chrono::{DateTime, Local, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 use std::cell::Cell;
 use std::collections::{BTreeMap, VecDeque};
+use std::sync::atomic::{AtomicBool, AtomicU16};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use std::{error, fs};
-use tokio::task::JoinHandle;
+
+pub type ApiDevice = Arc<Mutex<Option<ModbusDevice>>>;
+pub type BoundPort = Arc<AtomicU16>;
+pub type ReadOnlyFlag = Arc<AtomicBool>;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum WriteType {
@@ -33,8 +37,8 @@ pub type AppResult<T> = Result<T, Box<dyn error::Error>>;
 
 #[derive(Debug)]
 enum BackgroundTask {
-    Refresh(JoinHandle<RefreshTaskResult>),
-    Write(JoinHandle<WriteOutcome>),
+    Refresh(TaskHandle<RefreshTaskResult>),
+    Write(TaskHandle<WriteOutcome>),
 }
 
 #[derive(Debug)]
@@ -245,6 +249,10 @@ impl App {
         let dump_example_if_missing = config_path.is_none();
         let config_path = config_path.unwrap_or_else(|| CONFIG_PATH.to_string());
         let config = fetch_config_or_exit(&config_path, dump_example_if_missing);
+        Self::boot(config, config_path).await
+    }
+
+    pub async fn boot(config: Config, config_path: String) -> Self {
         let device = ModbusDevice::new(&config.device)
             .await
             .inspect_err(|e| println!("Could not initialize device: {e}"))
@@ -421,6 +429,12 @@ impl App {
         matches!(self.state, State::Read(_))
     }
 
+    #[cfg(target_arch = "wasm32")]
+    fn available_ports() -> Vec<String> {
+        Vec::new()
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
     fn available_ports() -> Vec<String> {
         tokio_serial::available_ports()
             .map(|ports| ports.into_iter().map(|p| p.port_name).collect())
@@ -690,7 +704,11 @@ impl App {
             Interface::Network(_) => "network",
         };
         let name = format!("writes_{kind}_{}.txt", self.config.device.slave_id);
-        std::env::temp_dir().join(name)
+        #[cfg(not(target_arch = "wasm32"))]
+        let dir = std::env::temp_dir();
+        #[cfg(target_arch = "wasm32")]
+        let dir = std::path::PathBuf::new();
+        dir.join(name)
     }
 
     pub fn writes_log_path_string(&self) -> String {
@@ -883,9 +901,12 @@ impl App {
 
     pub fn copy_address(&mut self) {
         let (_, address) = self.cursor_cell();
+        #[cfg(not(target_arch = "wasm32"))]
         if let Ok(mut clipboard) = arboard::Clipboard::new() {
             let _ = clipboard.set_text(address.to_string());
         }
+        #[cfg(target_arch = "wasm32")]
+        let _ = address;
     }
 
     pub fn toggle_graph_width(&mut self) {
@@ -1605,7 +1626,7 @@ impl App {
             }
         };
 
-        self.background_task = Some(BackgroundTask::Refresh(tokio::spawn(async move {
+        self.background_task = Some(BackgroundTask::Refresh(compat::spawn(async move {
             let read_began = Instant::now();
             let (main_data, pinned_data) = match panel {
                 ReadPanel::Main | ReadPanel::Matrix => {
@@ -1839,7 +1860,7 @@ impl App {
             new_value,
         });
 
-        self.background_task = Some(BackgroundTask::Write(tokio::spawn(async move {
+        self.background_task = Some(BackgroundTask::Write(compat::spawn(async move {
             let result = match write_type {
                 WriteType::Word => device.write_register(position, number as u16).await,
                 WriteType::DWord => device.write_register_word(position, number as i32).await,
@@ -1914,37 +1935,42 @@ impl App {
     }
 
     pub async fn complete_background_task(&mut self) {
-        let Some(task) = self.background_task.as_ref() else {
-            return;
-        };
-
-        if !match task {
-            BackgroundTask::Refresh(handle) => handle.is_finished(),
-            BackgroundTask::Write(handle) => handle.is_finished(),
-        } {
-            return;
+        enum Done {
+            Refresh(Option<RefreshTaskResult>),
+            Write(Option<WriteOutcome>),
         }
 
-        let task = self.background_task.take().unwrap();
-
-        match task {
-            BackgroundTask::Refresh(handle) => match handle.await {
-                Ok(result) => self.apply_refresh_result(result),
-                Err(e) => {
-                    let message = e.to_string();
-                    if self.is_reading() {
-                        let params = self.read_mut();
-                        params.read_error = Some(message.clone());
-                        params.loading = false;
-                    }
-                    log::error!("Read task failed \u{b7} {message}");
-                    self.connection = ConnectionStatus::Error(message);
-                }
+        let done = match self.background_task.as_mut() {
+            None => return,
+            Some(BackgroundTask::Refresh(handle)) => match handle.poll_result() {
+                TaskPoll::Pending => return,
+                TaskPoll::Finished(result) => Done::Refresh(Some(result)),
+                TaskPoll::Gone => Done::Refresh(None),
             },
-            BackgroundTask::Write(handle) => {
-                let outcome = handle.await.unwrap_or_else(|e| WriteOutcome {
+            Some(BackgroundTask::Write(handle)) => match handle.poll_result() {
+                TaskPoll::Pending => return,
+                TaskPoll::Finished(outcome) => Done::Write(Some(outcome)),
+                TaskPoll::Gone => Done::Write(None),
+            },
+        };
+        self.background_task = None;
+
+        match done {
+            Done::Refresh(Some(result)) => self.apply_refresh_result(result),
+            Done::Refresh(None) => {
+                let message = "read task stopped unexpectedly".to_string();
+                if self.is_reading() {
+                    let params = self.read_mut();
+                    params.read_error = Some(message.clone());
+                    params.loading = false;
+                }
+                log::error!("Read task failed \u{b7} {message}");
+                self.connection = ConnectionStatus::Error(message);
+            }
+            Done::Write(outcome) => {
+                let outcome = outcome.unwrap_or_else(|| WriteOutcome {
                     ok: false,
-                    message: e.to_string(),
+                    message: "write task stopped unexpectedly".to_string(),
                 });
                 if let Some(pending) = &self.pending_write {
                     let detail = format!(

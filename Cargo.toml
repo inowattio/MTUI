@@ -2,27 +2,50 @@
 name = "mtui"
 version = "0.1.0"
 edition = "2021"
+default-run = "mtui"
+
+[[bin]]
+name = "mtui"
+path = "src/main.rs"
+
+[[bin]]
+name = "mtui-web"
+path = "src/bin/web.rs"
 
 [dependencies]
-crossterm = { version = "0.29.0", features = ["event-stream"] }
-ratatui = "0.30.1"
-tokio = { version = "1.52.3", features = ["full"] }
+ratatui = { version = "0.30.1", default-features = false }
+tokio = { version = "1.52.3", default-features = false, features = ["sync", "macros"] }
 futures = "0.3.32"
+futures-timer = { version = "3.0.3", features = ["wasm-bindgen"] }
+web-time = "1"
 serde = { version = "1.0.228", features = ["derive"] }
 
-tokio-modbus = { version = "0.17.0", default-features = false, features = ["rtu", "tcp"] } # device
-tokio-serial = { version = "5.4.5" }
+tokio-modbus = { version = "0.17.0", default-features = false } # device
 async-trait = "0.1.89"
 num-traits = "0.2.19"
 
 anyhow = "1.0.102"
 serde_json = "1.0.150"
 chrono = "0.4"
-arboard = { version = "3", default-features = false }
 log = "0.4"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+ratatui = { version = "0.30.1", default-features = false, features = ["crossterm"] }
+crossterm = { version = "0.29.0", features = ["event-stream"] }
+tokio = { version = "1.52.3", features = ["full"] }
+tokio-modbus = { version = "0.17.0", default-features = false, features = ["rtu", "tcp"] }
+tokio-serial = { version = "5.4.5" }
+arboard = { version = "3", default-features = false }
 axum = "0.8"
 local-ip-address = "0.6.13"
 clap = { version = "4.6.1", features = ["derive"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+ratzilla = "0.3.1"
+critical-section = { version = "1", features = ["std"] }
+wasm-bindgen-futures = "0.4"
+chrono = { version = "0.4", features = ["wasmbind"] }
+console_error_panic_hook = "0.1"
 
 [profile.release]
 lto = "fat"

@@ -44,3 +44,16 @@ jobs:
           toolchain: "1.96.0"
           components: rustfmt
       - run: cargo fmt --check
+
+  wasm:
+    name: Wasm check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: wasm32
+      - run: cargo check --target wasm32-unknown-unknown --all-targets

@@ -1,9 +1,10 @@
 use crate::app::WriteType;
+use crate::compat::Instant;
 use crate::custom::{CustomOp, CustomRepr, EnumEntry};
 use crate::modbus::{DataBits, Parity, StopBits, WordOrder};
 use crate::register::{RegisterCell, RegisterType};
 use serde::{Deserialize, Serialize};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InterfaceKind {
@@ -50,6 +51,7 @@ pub struct DiscoveryParams {
     pub status: Option<String>,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn local_subnet_prefix() -> Option<String> {
     match local_ip_address::local_ip().ok()? {
         std::net::IpAddr::V4(ip) if !ip.is_loopback() => {
@@ -58,6 +60,11 @@ fn local_subnet_prefix() -> Option<String> {
         }
         _ => None,
     }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn local_subnet_prefix() -> Option<String> {
+    None
 }
 
 impl Default for DiscoveryParams {

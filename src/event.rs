@@ -1,15 +1,33 @@
 use crate::app::AppResult;
 use crate::constants::EVENT_HANDLER_TICKRATE;
-use crossterm::event::{Event as CrosstermEvent, KeyEvent};
+use crate::input;
+use crossterm::event::{Event as CrosstermEvent, KeyCode as CrosstermKeyCode, KeyEventKind};
 use futures::{FutureExt, StreamExt};
 use tokio::sync::mpsc;
 
 #[derive(Clone, Debug)]
 pub enum Event {
     Tick,
-    Key(KeyEvent),
+    Key(input::KeyEvent),
     Resize(u16, u16),
     Paste(String),
+}
+
+fn convert_key(code: CrosstermKeyCode) -> Option<input::KeyCode> {
+    Some(match code {
+        CrosstermKeyCode::Char(c) => input::KeyCode::Char(c),
+        CrosstermKeyCode::Esc => input::KeyCode::Esc,
+        CrosstermKeyCode::Enter => input::KeyCode::Enter,
+        CrosstermKeyCode::Backspace => input::KeyCode::Backspace,
+        CrosstermKeyCode::Tab => input::KeyCode::Tab,
+        CrosstermKeyCode::Up => input::KeyCode::Up,
+        CrosstermKeyCode::Down => input::KeyCode::Down,
+        CrosstermKeyCode::Left => input::KeyCode::Left,
+        CrosstermKeyCode::Right => input::KeyCode::Right,
+        CrosstermKeyCode::PageUp => input::KeyCode::PageUp,
+        CrosstermKeyCode::PageDown => input::KeyCode::PageDown,
+        _ => return None,
+    })
 }
 
 #[allow(dead_code)]
@@ -33,8 +51,10 @@ async fn event_processor(tx: mpsc::UnboundedSender<Event>) {
             Some(Ok(evt)) = crossterm_event => {
                 match evt {
                     CrosstermEvent::Key(key) => {
-                        if key.kind == crossterm::event::KeyEventKind::Press {
-                            let _ = tx.send(Event::Key(key));
+                        if key.kind == KeyEventKind::Press {
+                            if let Some(code) = convert_key(key.code) {
+                                let _ = tx.send(Event::Key(input::KeyEvent::new(code)));
+                            }
                         }
                     },
                     CrosstermEvent::Resize(x, y) => {

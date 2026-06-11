@@ -1,3 +1,4 @@
+use crate::app::{ApiDevice, BoundPort, ReadOnlyFlag};
 use crate::modbus::ModbusDevice;
 use crate::register::RegisterType;
 use crate::writes_log::{self, SharedWritesLog, WriteKind};
@@ -8,13 +9,8 @@ use axum::routing::post;
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use std::net::Ipv4Addr;
-use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::Ordering;
 use tokio::net::TcpListener;
-
-pub type ApiDevice = Arc<Mutex<Option<ModbusDevice>>>;
-pub type BoundPort = Arc<AtomicU16>;
-pub type ReadOnlyFlag = Arc<AtomicBool>;
 
 #[derive(Clone)]
 struct ApiState {

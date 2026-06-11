@@ -5,7 +5,7 @@ pub const CONFIG_PATH: &str = "config.json";
 pub const EVENT_HANDLER_TICKRATE: Duration = Duration::from_millis(100);
 
 pub mod keybind {
-    use crossterm::event::KeyCode;
+    use crate::input::KeyCode;
 
     pub const EXIT: KeyCode = KeyCode::Esc;
     pub const PIN: KeyCode = KeyCode::Char('p');

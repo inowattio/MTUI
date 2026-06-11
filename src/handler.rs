@@ -1,6 +1,7 @@
 use crate::app::{App, AppResult};
 use crate::config::Column;
 use crate::constants::keybind;
+use crate::input::{KeyCode, KeyEvent};
 use crate::modbus::{DataBits, Parity, StopBits, WordOrder};
 use crate::num_ops::{
     decrement_option_by, digit_add, digit_add_option, digit_remove, digit_remove_option,
@@ -10,7 +11,6 @@ use crate::state::{
     DiscoveryField, DiscoveryParams, InterfaceKind, LogsParams, Popup, PopupKind, ReadPanel,
     SettingsField,
 };
-use crossterm::event::{KeyCode, KeyEvent};
 
 pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
     let rows = app.visible_rows.get();
