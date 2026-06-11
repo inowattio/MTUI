@@ -21,7 +21,7 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
     }
 
     if app.settings().is_some() {
-        handle_settings_key(key_event, app);
+        handle_settings_key(key_event, app).await;
         return Ok(());
     }
 
@@ -483,13 +483,14 @@ fn handle_logs_view_key(key_event: KeyEvent, app: &mut App) {
     }
 }
 
-fn handle_settings_key(key_event: KeyEvent, app: &mut App) {
+async fn handle_settings_key(key_event: KeyEvent, app: &mut App) {
     let count = SettingsField::ALL.len() as u16;
     let selected = app.settings().map(|s| s.selected).unwrap_or(0);
     let field = SettingsField::ALL[selected as usize];
 
     match key_event.code {
-        keybind::EXIT | keybind::SETTINGS => app.close_settings(),
+        keybind::EXIT => app.close_settings(),
+        keybind::SETTINGS if field != SettingsField::LoadConfig => app.close_settings(),
         keybind::MOVE_UP => {
             if let Some(s) = app.settings_mut() {
                 s.selected = if s.selected == 0 { count - 1 } else { s.selected - 1 };
@@ -522,9 +523,15 @@ fn handle_settings_key(key_event: KeyEvent, app: &mut App) {
             | SettingsField::ShowContinuation
             | SettingsField::StartupPanel => app.settings_adjust(field, 1),
             SettingsField::Save => app.settings_save(),
+            SettingsField::LoadConfig => app.settings_load().await,
             _ => {}
         },
         KeyCode::Backspace => app.settings_backspace(field),
+        KeyCode::Char(c) if field == SettingsField::LoadConfig => {
+            if let Some(s) = app.settings_mut() {
+                s.load_path.push(c);
+            }
+        }
         KeyCode::Char(c) if c.is_ascii_digit() => app.settings_digit(field, c as u8 - b'0'),
         _ => {}
     }

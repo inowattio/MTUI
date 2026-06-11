@@ -760,7 +760,8 @@ impl App {
             SettingsField::ClearPins
             | SettingsField::ClearLabels
             | SettingsField::ClearCustom
-            | SettingsField::Save => return,
+            | SettingsField::Save
+            | SettingsField::LoadConfig => return,
         }
         self.refresh_writes_log_state();
         self.sync_api_read_only();
@@ -794,6 +795,12 @@ impl App {
 
     pub fn settings_backspace(&mut self, field: SettingsField) {
         match field {
+            SettingsField::LoadConfig => {
+                if let Some(s) = self.settings_mut() {
+                    s.load_path.pop();
+                }
+                return;
+            }
             SettingsField::RegistersBatch => {
                 self.config.registers_batch = (self.config.registers_batch / 10).max(1);
             }
@@ -1356,6 +1363,66 @@ impl App {
         if let Some(s) = self.settings_mut() {
             s.status = Some(result);
         }
+    }
+
+    pub async fn settings_load(&mut self) {
+        let Some(path) = self.settings().map(|s| s.load_path.trim().to_string()) else {
+            return;
+        };
+        let result = self.load_config_from(&path).await;
+        match &result {
+            Ok(message) => log::info!("{message}"),
+            Err(error) => log::error!("{error}"),
+        }
+        if let Some(s) = self.settings_mut() {
+            s.status = Some(result.unwrap_or_else(|e| e));
+        }
+    }
+
+    async fn load_config_from(&mut self, path: &str) -> Result<String, String> {
+        if path.is_empty() {
+            return Err("Load failed: enter a file name".to_string());
+        }
+        let content = fs::read_to_string(path).map_err(|e| format!("Load failed: {e}"))?;
+        let config: Config =
+            serde_json::from_str(&content).map_err(|e| format!("Load failed: {e}"))?;
+
+        let device = ModbusDevice::new(&config.device)
+            .await
+            .map_err(|e| format!("Load failed: device: {e}"))?;
+
+        self.device = Some(device);
+        self.interpreter =
+            Interpretor::new(config.interpretations.clone(), config.device.word_order);
+        self.pinned_registers = config.pinned_registers.clone().into();
+        self.labels = config.labels.clone().into();
+        self.custom_rules = config.custom_rules.clone().into();
+        self.config = config;
+
+        self.sync_api_device();
+        self.sync_api_read_only();
+        self.refresh_writes_log_state();
+
+        self.previous_values.clear();
+        self.changed.clear();
+        self.read_log.clear();
+        self.value_history.clear();
+        self.connection = ConnectionStatus::Unknown;
+        self.logged_connection = ConnectionStatus::Unknown;
+        self.dirty = true;
+
+        let read = ReadParams {
+            position: self.config.startup.address,
+            window_start: self.config.startup.address,
+            register_type: self.config.startup.register_type,
+            panel: self.config.startup.panel,
+            ..Default::default()
+        };
+        if let Some(s) = self.settings_mut() {
+            s.previous = read;
+        }
+
+        Ok(format!("Loaded {path}"))
     }
 
     pub fn commit_dump(&mut self) {

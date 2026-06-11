@@ -22,7 +22,7 @@ pub fn draw(params: &SettingsParams, app: &App, frame: &mut Frame, area: Rect, t
         if matches!(field, SettingsField::ClearPins | SettingsField::Save) {
             lines.push(Line::default());
         }
-        lines.push(render_field(app, field, i as u16 == params.selected, theme));
+        lines.push(render_field(app, params, field, i as u16 == params.selected, theme));
         if field == SettingsField::LogWrites {
             lines.push(Line::from(Span::styled(
                 format!("  {:<24} {}", "", app.writes_log_path_string()),
@@ -44,8 +44,14 @@ pub fn draw(params: &SettingsParams, app: &App, frame: &mut Frame, area: Rect, t
     frame.render_widget(Paragraph::new(lines), area);
 }
 
-fn render_field(app: &App, field: SettingsField, selected: bool, theme: &Theme) -> Line<'static> {
-    let (name, value, kind) = field_view(app, field);
+fn render_field(
+    app: &App,
+    params: &SettingsParams,
+    field: SettingsField,
+    selected: bool,
+    theme: &Theme,
+) -> Line<'static> {
+    let (name, value, kind) = field_view(app, params, field);
 
     let marker = if selected { "> " } else { "  " };
     let style = if selected {
@@ -67,7 +73,7 @@ fn render_field(app: &App, field: SettingsField, selected: bool, theme: &Theme) 
     ])
 }
 
-fn field_view(app: &App, field: SettingsField) -> (&'static str, String, Kind) {
+fn field_view(app: &App, params: &SettingsParams, field: SettingsField) -> (&'static str, String, Kind) {
     let device = &app.config;
     match field {
         SettingsField::RegistersBatch => (
@@ -135,5 +141,10 @@ fn field_view(app: &App, field: SettingsField) -> (&'static str, String, Kind) {
             Kind::Toggle,
         ),
         SettingsField::Save => ("Save configuration", CONFIG_PATH.to_string(), Kind::Action),
+        SettingsField::LoadConfig => (
+            "Load configuration",
+            params.load_path.clone(),
+            Kind::Number,
+        ),
     }
 }

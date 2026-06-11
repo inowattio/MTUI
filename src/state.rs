@@ -245,10 +245,11 @@ pub enum SettingsField {
     ClearCustom,
     ShowContinuation,
     Save,
+    LoadConfig,
 }
 
 impl SettingsField {
-    pub const ALL: [SettingsField; 12] = [
+    pub const ALL: [SettingsField; 13] = [
         SettingsField::RegistersBatch,
         SettingsField::AutoUpdate,
         SettingsField::HistoryCap,
@@ -261,6 +262,7 @@ impl SettingsField {
         SettingsField::ClearCustom,
         SettingsField::ShowContinuation,
         SettingsField::Save,
+        SettingsField::LoadConfig,
     ];
 }
 
@@ -268,6 +270,7 @@ impl SettingsField {
 pub struct SettingsParams {
     pub selected: u16,
     pub status: Option<String>,
+    pub load_path: String,
     pub previous: ReadParams,
 }
 
