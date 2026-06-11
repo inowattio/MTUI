@@ -1,5 +1,5 @@
 use crate::app::PinnedRegisters;
-use crate::custom::CustomRule;
+use crate::custom::{CustomOp, CustomRepr, CustomRule, EnumEntry, OpKind};
 use crate::modbus::{DeviceConfig, Interface, WordOrder};
 use crate::register::RegisterType;
 use crate::state::ReadPanel;
@@ -62,6 +62,124 @@ impl Config {
     }
 }
 
+fn label(address: u16, text: &str) -> Label {
+    Label {
+        address,
+        text: text.to_string(),
+    }
+}
+
+fn scaled(address: u16, repr: CustomRepr, div: f64, decimals: u8, suffix: &str) -> CustomRule {
+    CustomRule {
+        address,
+        repr,
+        ops: vec![CustomOp {
+            op: OpKind::Div,
+            v: div,
+        }],
+        decimals: Some(decimals),
+        suffix: suffix.to_string(),
+        ..Default::default()
+    }
+}
+
+fn plain(address: u16, repr: CustomRepr, decimals: Option<u8>, suffix: &str) -> CustomRule {
+    CustomRule {
+        address,
+        repr,
+        decimals,
+        suffix: suffix.to_string(),
+        ..Default::default()
+    }
+}
+
+fn switch(address: u16, entries: &[(i64, &str)]) -> CustomRule {
+    CustomRule {
+        address,
+        repr: CustomRepr::U16,
+        enum_map: entries
+            .iter()
+            .map(|&(value, text)| EnumEntry {
+                value,
+                text: text.to_string(),
+            })
+            .collect(),
+        ..Default::default()
+    }
+}
+
+fn demo_labels() -> Labels {
+    Labels {
+        holdings: vec![
+            label(0, "model (ascii)"),
+            label(8, "fw version (bcd)"),
+            label(9, "serial (u32)"),
+            label(11, "slave id"),
+            label(12, "uptime (u32 s)"),
+            label(50, "set: voltage"),
+            label(51, "set: current"),
+            label(52, "set: ripple"),
+            label(53, "set: noise"),
+            label(54, "set: time scale"),
+            label(1000, "energy (u32 Wh)"),
+            label(1002, "on-time (u32 s)"),
+            label(1004, "write count"),
+            label(1005, "energy (m10k)"),
+            label(1100, "status bits"),
+            label(1101, "alarm count"),
+        ],
+        inputs: vec![
+            label(0, "voltage L1"),
+            label(1, "voltage L2"),
+            label(2, "voltage L3"),
+            label(3, "current L1"),
+            label(4, "current L2"),
+            label(5, "current L3"),
+            label(6, "frequency"),
+            label(7, "temperature"),
+            label(8, "active power (f32)"),
+            label(10, "power factor (f32)"),
+            label(12, "apparent (u32 VA)"),
+            label(14, "reactive (i32 var)"),
+            label(16, "energy (m10k)"),
+            label(20, "energy (f64 kWh)"),
+            label(30, "seconds"),
+            label(31, "sawtooth"),
+            label(32, "square"),
+            label(33, "noise"),
+            label(34, "random walk"),
+        ],
+    }
+}
+
+fn demo_rules() -> CustomRules {
+    CustomRules {
+        holdings: vec![
+            scaled(50, CustomRepr::U16, 10.0, 1, " V"),
+            scaled(51, CustomRepr::U16, 100.0, 2, " A"),
+            switch(53, &[(0, "off"), (1, "on")]),
+            plain(54, CustomRepr::U16, None, " %"),
+            scaled(1000, CustomRepr::U32, 1000.0, 2, " kWh"),
+        ],
+        inputs: vec![
+            scaled(0, CustomRepr::U16, 10.0, 1, " V"),
+            scaled(1, CustomRepr::U16, 10.0, 1, " V"),
+            scaled(2, CustomRepr::U16, 10.0, 1, " V"),
+            scaled(3, CustomRepr::U16, 100.0, 2, " A"),
+            scaled(4, CustomRepr::U16, 100.0, 2, " A"),
+            scaled(5, CustomRepr::U16, 100.0, 2, " A"),
+            scaled(6, CustomRepr::U16, 100.0, 2, " Hz"),
+            scaled(7, CustomRepr::I16, 10.0, 1, " C"),
+            plain(8, CustomRepr::F32, Some(2), " kW"),
+            plain(10, CustomRepr::F32, Some(2), " pf"),
+            plain(12, CustomRepr::U32, None, " VA"),
+            plain(14, CustomRepr::I32, None, " var"),
+            switch(32, &[(0, "low"), (1, "high")]),
+        ],
+        show_continuation: true,
+    }
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -88,8 +206,8 @@ impl Default for Config {
             ignore_dirty: false,
             port: None,
             pinned_registers: Default::default(),
-            labels: Default::default(),
-            custom_rules: Default::default(),
+            labels: demo_labels(),
+            custom_rules: demo_rules(),
         }
     }
 }
@@ -160,7 +278,7 @@ interpretation_columns! {
     Bcd32 => bcd32 : "bcd32" = false,
     Bits => bits : "bits" = true,
     Ascii => ascii : "ascii" = true,
-    Custom => custom : "custom" = false,
+    Custom => custom : "custom" = true,
     Time => time : "time (read at)" = true,
     Ago => ago : "ago (read)" = false,
     Label => label : "label" = true,
