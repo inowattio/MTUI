@@ -155,83 +155,6 @@ pub struct InterfaceNetworkParams {
     pub port: u16,
 }
 
-pub trait ModbusDataOrder: Clone + Send + Sync {
-    fn make_word(a: u16, b: u16) -> u32;
-    fn make_dword(a: u32, b: u32) -> u64;
-    fn split_word(data: u32) -> [u16; 2];
-}
-
-#[allow(clippy::upper_case_acronyms)]
-#[derive(Clone)]
-pub struct ABCD;
-impl ModbusDataOrder for ABCD {
-    fn make_word(a: u16, b: u16) -> u32 {
-        ((a as u32) << 16) | (b as u32)
-    }
-
-    fn make_dword(a: u32, b: u32) -> u64 {
-        ((a as u64) << 32) | (b as u64)
-    }
-
-    fn split_word(data: u32) -> [u16; 2] {
-        [(data >> 16) as u16, (data & 0xFFFF) as u16]
-    }
-}
-
-#[allow(clippy::upper_case_acronyms)]
-#[derive(Clone)]
-pub struct BADC;
-impl ModbusDataOrder for BADC {
-    fn make_word(a: u16, b: u16) -> u32 {
-        ABCD::make_word(a.swap_bytes(), b.swap_bytes())
-    }
-
-    fn make_dword(a: u32, b: u32) -> u64 {
-        ABCD::make_dword(a.swap_bytes(), b.swap_bytes())
-    }
-
-    fn split_word(data: u32) -> [u16; 2] {
-        let [a, b] = ABCD::split_word(data);
-        [a.swap_bytes(), b.swap_bytes()]
-    }
-}
-
-#[allow(clippy::upper_case_acronyms)]
-#[derive(Clone)]
-pub struct CDAB;
-impl ModbusDataOrder for CDAB {
-    fn make_word(a: u16, b: u16) -> u32 {
-        ABCD::make_word(b, a)
-    }
-
-    fn make_dword(a: u32, b: u32) -> u64 {
-        ABCD::make_dword(b, a)
-    }
-
-    fn split_word(data: u32) -> [u16; 2] {
-        let [a, b] = ABCD::split_word(data);
-        [b, a]
-    }
-}
-
-#[allow(clippy::upper_case_acronyms)]
-#[derive(Clone)]
-pub struct DCBA;
-impl ModbusDataOrder for DCBA {
-    fn make_word(a: u16, b: u16) -> u32 {
-        ABCD::make_word(b.swap_bytes(), a.swap_bytes())
-    }
-
-    fn make_dword(a: u32, b: u32) -> u64 {
-        ABCD::make_dword(b.swap_bytes(), a.swap_bytes())
-    }
-
-    fn split_word(data: u32) -> [u16; 2] {
-        let [a, b] = ABCD::split_word(data);
-        [b.swap_bytes(), a.swap_bytes()]
-    }
-}
-
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
 pub enum WordOrder {
@@ -243,31 +166,46 @@ pub enum WordOrder {
 }
 
 impl WordOrder {
-    pub fn make_word(self, a: u16, b: u16) -> u32 {
+    fn swaps(self) -> (bool, bool) {
         match self {
-            Self::ABCD => ABCD::make_word(a, b),
-            Self::BADC => BADC::make_word(a, b),
-            Self::CDAB => CDAB::make_word(a, b),
-            Self::DCBA => DCBA::make_word(a, b),
+            Self::ABCD => (false, false),
+            Self::BADC => (true, false),
+            Self::CDAB => (false, true),
+            Self::DCBA => (true, true),
         }
+    }
+
+    pub fn make_word(self, a: u16, b: u16) -> u32 {
+        let (byte_swap, word_swap) = self.swaps();
+        let (mut high, mut low) = if word_swap { (b, a) } else { (a, b) };
+        if byte_swap {
+            high = high.swap_bytes();
+            low = low.swap_bytes();
+        }
+        ((high as u32) << 16) | (low as u32)
     }
 
     pub fn make_dword(self, a: u32, b: u32) -> u64 {
-        match self {
-            Self::ABCD => ABCD::make_dword(a, b),
-            Self::BADC => BADC::make_dword(a, b),
-            Self::CDAB => CDAB::make_dword(a, b),
-            Self::DCBA => DCBA::make_dword(a, b),
+        let (byte_swap, word_swap) = self.swaps();
+        let (mut high, mut low) = if word_swap { (b, a) } else { (a, b) };
+        if byte_swap {
+            high = high.swap_bytes();
+            low = low.swap_bytes();
         }
+        ((high as u64) << 32) | (low as u64)
     }
 
     pub fn split_word(self, data: u32) -> [u16; 2] {
-        match self {
-            Self::ABCD => ABCD::split_word(data),
-            Self::BADC => BADC::split_word(data),
-            Self::CDAB => CDAB::split_word(data),
-            Self::DCBA => DCBA::split_word(data),
+        let (byte_swap, word_swap) = self.swaps();
+        let (mut first, mut second) = ((data >> 16) as u16, data as u16);
+        if word_swap {
+            (first, second) = (second, first);
         }
+        if byte_swap {
+            first = first.swap_bytes();
+            second = second.swap_bytes();
+        }
+        [first, second]
     }
 
     pub fn next(self) -> Self {
@@ -276,6 +214,41 @@ impl WordOrder {
             Self::BADC => Self::CDAB,
             Self::CDAB => Self::DCBA,
             Self::DCBA => Self::ABCD,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::WordOrder;
+
+    #[test]
+    fn make_word_orders_bytes() {
+        assert_eq!(WordOrder::ABCD.make_word(0x0102, 0x0304), 0x01020304);
+        assert_eq!(WordOrder::BADC.make_word(0x0102, 0x0304), 0x02010403);
+        assert_eq!(WordOrder::CDAB.make_word(0x0102, 0x0304), 0x03040102);
+        assert_eq!(WordOrder::DCBA.make_word(0x0102, 0x0304), 0x04030201);
+    }
+
+    #[test]
+    fn make_dword_orders_bytes() {
+        let (a, b) = (0x0102_0304, 0x0506_0708);
+        assert_eq!(WordOrder::ABCD.make_dword(a, b), 0x0102_0304_0506_0708);
+        assert_eq!(WordOrder::BADC.make_dword(a, b), 0x0403_0201_0807_0605);
+        assert_eq!(WordOrder::CDAB.make_dword(a, b), 0x0506_0708_0102_0304);
+        assert_eq!(WordOrder::DCBA.make_dword(a, b), 0x0807_0605_0403_0201);
+    }
+
+    #[test]
+    fn split_word_inverts_make_word() {
+        for order in [
+            WordOrder::ABCD,
+            WordOrder::BADC,
+            WordOrder::CDAB,
+            WordOrder::DCBA,
+        ] {
+            let word = order.make_word(0x0102, 0x0304);
+            assert_eq!(order.split_word(word), [0x0102, 0x0304], "{order:?}");
         }
     }
 }
