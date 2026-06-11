@@ -7,13 +7,11 @@ mod web {
     use mtui::input;
     use mtui::tui::render;
     use mtui::{compat, logger};
-    use ratatui::backend::Backend;
-    use ratatui::layout::Rect;
-    use ratatui::{Terminal, TerminalOptions, Viewport};
+    use ratatui::Terminal;
     use ratzilla::web_sys;
     use ratzilla::web_sys::wasm_bindgen::prelude::Closure;
     use ratzilla::web_sys::wasm_bindgen::JsCast;
-    use ratzilla::DomBackend;
+    use ratzilla::CanvasBackend;
     use std::cell::{Cell, RefCell};
     use std::io;
     use std::rc::Rc;
@@ -38,18 +36,18 @@ mod web {
         Some(input::KeyEvent::new(code))
     }
 
-    /// The backend's `size()` assumes 10x20px cells, which rarely matches
-    /// the measured cell size and would leave part of the page blank; fix
-    /// the viewport to the measured DOM grid instead.
-    fn build_terminal() -> io::Result<Terminal<DomBackend>> {
-        let mut backend = DomBackend::new().map_err(|e| io::Error::other(e.to_string()))?;
-        let grid = backend.window_size()?.columns_rows;
-        Terminal::with_options(
-            backend,
-            TerminalOptions {
-                viewport: Viewport::Fixed(Rect::new(0, 0, grid.width, grid.height)),
-            },
-        )
+    /// The canvas backend renders changed cells onto a single `<canvas>`.
+    /// The DOM backend turned every cell into a styled `<span>`, and
+    /// full-area updates (the graph view, held cursor movement) forced the
+    /// browser through style recalc and layout over tens of thousands of
+    /// nodes — unusably slow outside trivial windows.
+    ///
+    /// Note: never call `Terminal::clear()` on this backend; its `clear()`
+    /// re-sizes the cell buffer with window-based math that disagrees with
+    /// the canvas-based math used at construction, and the next draw panics.
+    fn build_terminal() -> io::Result<Terminal<CanvasBackend>> {
+        let backend = CanvasBackend::new().map_err(|e| io::Error::other(e.to_string()))?;
+        Terminal::new(backend)
     }
 
     fn inner_size(window: &web_sys::Window) -> (i32, i32) {
@@ -60,16 +58,13 @@ mod web {
     }
 
     /// Drives rendering from `requestAnimationFrame`, like ratzilla's own
-    /// `draw_web`, but with the terminal owned by the loop so resizes can be
-    /// handled: the backend re-measures and rebuilds its DOM grid blank on
-    /// every browser resize event, which both desyncs a fixed viewport and
-    /// leaves ratatui's diff unaware that every cell went blank. Once the
-    /// size settles the terminal is rebuilt (re-measured, fresh buffers,
-    /// full repaint) with the app state carried over.
+    /// `draw_web`, but with the terminal owned by the loop so window
+    /// resizes can rebuild it (fresh canvas, fresh buffers, full repaint)
+    /// with the app state carried over.
     fn start_render_loop(
         window: web_sys::Window,
         app: Rc<Mutex<App>>,
-        resized: Rc<Cell<bool>>,
+        dirty: Rc<Cell<bool>>,
     ) -> io::Result<()> {
         let mut terminal = build_terminal()?;
         let mut built = inner_size(&window);
@@ -95,38 +90,46 @@ mod web {
 
                 let size = inner_size(&window);
                 if size != last_seen {
-                    // Mid-resize: don't draw on a grid that is being rebuilt.
+                    // Mid-resize: wait for the size to settle.
                     last_seen = size;
                     return;
                 }
-                if resized.replace(false) || size != built {
-                    if size != built {
-                        if let Some(body) = window.document().and_then(|d| d.body()) {
-                            body.set_inner_html("");
-                        }
-                        match build_terminal() {
-                            Ok(rebuilt) => terminal = rebuilt,
-                            Err(error) => {
-                                log::error!("failed to rebuild the terminal: {error}");
-                                return;
-                            }
-                        }
-                        built = size;
-                    } else {
-                        // Same size, but the backend still rebuilt its grid
-                        // blank; reset the buffers to force a full repaint.
-                        let _ = terminal.clear();
-                    }
-                }
 
+                // Acquire the app before consuming any redraw flags so a
+                // skipped frame (key handler holding the lock) loses nothing.
                 let Ok(mut app) = app.try_lock() else {
                     return;
                 };
+
+                // Render only when something changed: rAF runs at the
+                // monitor's refresh rate, and drawing the full frame every
+                // vsync burns a core for no visible benefit.
+                let mut must_draw = dirty.replace(false);
+
+                if size != built {
+                    if let Some(body) = window.document().and_then(|d| d.body()) {
+                        body.set_inner_html("");
+                    }
+                    match build_terminal() {
+                        Ok(rebuilt) => terminal = rebuilt,
+                        Err(error) => {
+                            log::error!("failed to rebuild the terminal: {error}");
+                            return;
+                        }
+                    }
+                    built = size;
+                    must_draw = true;
+                }
+
                 if last_tick.elapsed() >= EVENT_HANDLER_TICKRATE {
                     last_tick = compat::Instant::now();
                     futures::executor::block_on(app.tick());
+                    must_draw = true;
                 }
-                let _ = terminal.draw(|frame| render(&mut app, frame));
+
+                if must_draw {
+                    let _ = terminal.draw(|frame| render(&mut app, frame));
+                }
             }
         }));
         schedule();
@@ -151,7 +154,10 @@ mod web {
         // focused, and Tab's default action moves that focus to the browser
         // UI. Preventing the default keeps handled keys (Tab included) in
         // the app; browser shortcuts (Ctrl/Alt/Meta) are left alone.
+        let dirty = Rc::new(Cell::new(false));
+
         let key_app = app.clone();
+        let key_dirty = dirty.clone();
         let on_key = Closure::<dyn FnMut(_)>::new(move |event: web_sys::KeyboardEvent| {
             if event.ctrl_key() || event.alt_key() || event.meta_key() {
                 return;
@@ -161,9 +167,11 @@ mod web {
             };
             event.prevent_default();
             let app = key_app.clone();
+            let dirty = key_dirty.clone();
             wasm_bindgen_futures::spawn_local(async move {
                 let mut app = app.lock().await;
                 let _ = handle_key_events(key, &mut app).await;
+                dirty.set(true);
             });
         });
         window
@@ -171,17 +179,7 @@ mod web {
             .map_err(|e| io::Error::other(format!("{e:?}")))?;
         on_key.forget();
 
-        let resized = Rc::new(Cell::new(false));
-        let on_resize = Closure::<dyn FnMut()>::new({
-            let resized = resized.clone();
-            move || resized.set(true)
-        });
-        window
-            .add_event_listener_with_callback("resize", on_resize.as_ref().unchecked_ref())
-            .map_err(|e| io::Error::other(format!("{e:?}")))?;
-        on_resize.forget();
-
-        start_render_loop(window, app, resized)
+        start_render_loop(window, app, dirty)
     }
 }
 
