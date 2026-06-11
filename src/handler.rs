@@ -508,6 +508,7 @@ fn handle_settings_key(key_event: KeyEvent, app: &mut App) {
                 SettingsField::ReadOnly
                     | SettingsField::LogWrites
                     | SettingsField::ShowContinuation
+                    | SettingsField::StartupPanel
             ) =>
         {
             app.settings_adjust(field, 1)
@@ -518,7 +519,8 @@ fn handle_settings_key(key_event: KeyEvent, app: &mut App) {
             SettingsField::ClearCustom => app.clear_custom(),
             SettingsField::ReadOnly
             | SettingsField::LogWrites
-            | SettingsField::ShowContinuation => app.settings_adjust(field, 1),
+            | SettingsField::ShowContinuation
+            | SettingsField::StartupPanel => app.settings_adjust(field, 1),
             SettingsField::Save => app.settings_save(),
             _ => {}
         },

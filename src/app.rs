@@ -236,6 +236,7 @@ impl App {
                 position: config.startup.address,
                 window_start: config.startup.address,
                 register_type: config.startup.register_type,
+                panel: config.startup.panel,
                 ..Default::default()
             })
         } else {
@@ -434,6 +435,7 @@ impl App {
             position: self.config.startup.address,
             window_start: self.config.startup.address,
             register_type: self.config.startup.register_type,
+            panel: self.config.startup.panel,
             ..Default::default()
         });
     }
@@ -491,6 +493,7 @@ impl App {
                     position: self.config.startup.address,
                     window_start: self.config.startup.address,
                     register_type: self.config.startup.register_type,
+                    panel: self.config.startup.panel,
                     ..Default::default()
                 });
             }
@@ -744,6 +747,15 @@ impl App {
                 let current = self.config.port.map_or(-1, |p| p as i64);
                 let n = (current + delta).clamp(-1, u16::MAX as i64);
                 self.config.port = (n >= 0).then_some(n as u16);
+            }
+            SettingsField::StartupPanel => {
+                let panels = ReadPanel::ALL;
+                let current = panels
+                    .iter()
+                    .position(|&p| p == self.config.startup.panel)
+                    .unwrap_or(0) as i64;
+                let next = (current + delta).rem_euclid(panels.len() as i64);
+                self.config.startup.panel = panels[next as usize];
             }
             SettingsField::ClearPins
             | SettingsField::ClearLabels
@@ -1265,6 +1277,7 @@ impl App {
             self.config.startup = Startup {
                 address: p.position,
                 register_type: p.register_type,
+                panel: p.panel,
             };
         }
 

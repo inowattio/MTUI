@@ -109,6 +109,11 @@ fn field_view(app: &App, field: SettingsField) -> (&'static str, String, Kind) {
             if device.log_writes { "on" } else { "off" }.to_string(),
             Kind::Toggle,
         ),
+        SettingsField::StartupPanel => (
+            "Startup panel",
+            device.startup.panel.name().to_string(),
+            Kind::Toggle,
+        ),
         SettingsField::ClearPins => (
             "Clear pinned registers",
             format!("{} pinned", app.pinned_registers.len()),

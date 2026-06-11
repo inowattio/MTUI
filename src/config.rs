@@ -4,6 +4,7 @@ use crate::modbus::{
     DeviceConfig, Interface, WordOrder,
 };
 use crate::register::RegisterType;
+use crate::state::ReadPanel;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -34,6 +35,7 @@ pub struct Startup {
     pub address: u16,
     #[serde(rename = "type")]
     pub register_type: RegisterType,
+    pub panel: ReadPanel,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -74,6 +76,7 @@ impl Default for Config {
             startup: Startup {
                 address: 0,
                 register_type: RegisterType::Holding,
+                panel: ReadPanel::Main,
             },
             interpretations: InterpretorConfig::default(),
             registers_batch: 4,

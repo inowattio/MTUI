@@ -2,6 +2,7 @@ use crate::app::WriteType;
 use crate::custom::{CustomOp, CustomRepr, EnumEntry};
 use crate::modbus::{DataBits, Parity, StopBits, WordOrder};
 use crate::register::{RegisterCell, RegisterType};
+use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -203,13 +204,31 @@ fn scroll_window(cursor: &mut u16, top: &mut u16, rows: u16, len: u16) {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 pub enum ReadPanel {
     #[default]
     Main,
     Pinned,
     Labeled,
     Custom,
+}
+
+impl ReadPanel {
+    pub const ALL: [ReadPanel; 4] = [
+        ReadPanel::Main,
+        ReadPanel::Pinned,
+        ReadPanel::Labeled,
+        ReadPanel::Custom,
+    ];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            ReadPanel::Main => "Main",
+            ReadPanel::Pinned => "Pinned",
+            ReadPanel::Labeled => "Labeled",
+            ReadPanel::Custom => "Custom",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -220,6 +239,7 @@ pub enum SettingsField {
     ReadOnly,
     LogWrites,
     ApiPort,
+    StartupPanel,
     ClearPins,
     ClearLabels,
     ClearCustom,
@@ -228,13 +248,14 @@ pub enum SettingsField {
 }
 
 impl SettingsField {
-    pub const ALL: [SettingsField; 11] = [
+    pub const ALL: [SettingsField; 12] = [
         SettingsField::RegistersBatch,
         SettingsField::AutoUpdate,
         SettingsField::HistoryCap,
         SettingsField::ReadOnly,
         SettingsField::LogWrites,
         SettingsField::ApiPort,
+        SettingsField::StartupPanel,
         SettingsField::ClearPins,
         SettingsField::ClearLabels,
         SettingsField::ClearCustom,
