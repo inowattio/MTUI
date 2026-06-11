@@ -4,6 +4,11 @@ on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (e.g. 0.2.0); leave empty to only build artifacts"
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -13,9 +18,76 @@ env:
   BINARY: mtui
 
 jobs:
+  cut:
+    name: Cut release
+    if: github.event_name == 'workflow_dispatch' && inputs.version != ''
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate version
+        run: |
+          if ! [[ "${{ inputs.version }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "version must be X.Y.Z, got: ${{ inputs.version }}" >&2
+            exit 1
+          fi
+          if git rev-parse --verify "refs/tags/v${{ inputs.version }}" >/dev/null 2>&1; then
+            echo "tag v${{ inputs.version }} already exists" >&2
+            exit 1
+          fi
+
+      - name: Bump version, commit and tag
+        id: tag
+        run: |
+          VERSION="${{ inputs.version }}"
+          sed -i "0,/^version = /s/^version = .*/version = \"$VERSION\"/" Cargo.toml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "chore: release v$VERSION"
+          git tag "v$VERSION"
+          git push origin HEAD "refs/tags/v$VERSION"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+
+  draft:
+    name: Draft release
+    needs: cut
+    if: ${{ !failure() && !cancelled() && (needs.cut.result == 'success' || startsWith(github.ref, 'refs/tags/')) }}
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ needs.cut.outputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+          fetch-depth: 0
+
+      - name: Collect commits since previous tag
+        run: |
+          PREV=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || true)
+          {
+            echo "## Commits"
+            git log ${PREV:+$PREV..}HEAD --invert-grep --grep="^chore: release" --pretty="- %s (%h)"
+          } > changelog.md
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          draft: true
+          body_path: changelog.md
+          generate_release_notes: true
+
   build:
     name: Build ${{ matrix.target }}
+    needs: [cut, draft]
+    if: ${{ !failure() && !cancelled() }}
     runs-on: ${{ matrix.os }}
+
+    env:
+      RELEASE_TAG: ${{ needs.cut.outputs.tag || (startsWith(github.ref, 'refs/tags/') && github.ref_name) || '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -30,6 +102,8 @@ jobs:
             os: macos-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG || github.ref }}
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -51,7 +125,7 @@ jobs:
       - name: Rename binary
         shell: bash
         run: |
-          NAME="$BINARY-${{ github.ref_name }}-${{ matrix.target }}"
+          NAME="$BINARY-${RELEASE_TAG:-${{ github.ref_name }}}-${{ matrix.target }}"
           DIR="target/${{ matrix.target }}/release"
           if [[ "${{ matrix.target }}" == *windows* ]]; then
             cp "$DIR/$BINARY.exe" "$NAME.exe"
@@ -62,15 +136,28 @@ jobs:
           fi
 
       - name: Upload build artifact
-        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        if: env.RELEASE_TAG == ''
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.ASSET }}
           path: ${{ env.ASSET }}
 
       - name: Upload to release
-        if: startsWith(github.ref, 'refs/tags/')
+        if: env.RELEASE_TAG != ''
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          draft: true
           files: ${{ env.ASSET }}
-          generate_release_notes: true
+
+  # Flips the draft to a published release once every binary is attached.
+  publish:
+    name: Publish release
+    needs: [cut, draft, build]
+    if: ${{ !failure() && !cancelled() && needs.draft.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.cut.outputs.tag || github.ref_name }}
+          draft: false
