@@ -96,7 +96,7 @@ fn main_table(
 
     Table::new(table_rows, [Constraint::Percentage(100)])
         .header(Row::new([Cell::from(header.to_string())]).style(theme.header_style()))
-        .block(theme.panel("Main data"))
+        .block(theme.panel("Main"))
 }
 
 fn list_table(
