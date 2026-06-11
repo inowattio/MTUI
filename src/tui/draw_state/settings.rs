@@ -55,6 +55,18 @@ pub fn draw(params: &SettingsParams, app: &App, frame: &mut Frame, area: Rect, t
             ))),
             footer,
         );
+        if app.dirty {
+            frame.render_widget(
+                Paragraph::new(
+                    Line::from(Span::styled(
+                        "\u{25cf} unsaved changes  ",
+                        theme.warn_style(),
+                    ))
+                    .right_aligned(),
+                ),
+                footer,
+            );
+        }
     }
 }
 
