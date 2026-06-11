@@ -238,7 +238,7 @@ impl Interpretor {
         let [next1, next2, next3] = next;
         let mut row = String::new();
         if self.config.time {
-            let formatted = read_at.format("%H:%M:%S:%3f").to_string();
+            let formatted = read_at.format("%H:%M:%S.%3f").to_string();
             row.push_str(&format!("{formatted: <12} "));
         }
         if self.config.ago {

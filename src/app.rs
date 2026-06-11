@@ -554,7 +554,7 @@ impl App {
         let label = self.labels.get(&cell).map(String::as_str);
         let mut lines = vec![(
             "read at",
-            time.with_timezone(&Local).format("%H:%M:%S:%3f").to_string(),
+            time.with_timezone(&Local).format("%H:%M:%S.%3f").to_string(),
         )];
         lines.extend(self.interpreter.interpret_all(
             value,

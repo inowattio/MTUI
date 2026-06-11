@@ -59,7 +59,7 @@ where
         self.terminal.draw(|frame| {
             let mode = make_top_title(&app.state);
             let key_hints = make_bottom_title(&app.state);
-            let clock = Local::now().format("%H:%M:%S:%3f").to_string();
+            let clock = Local::now().format("%H:%M:%S.%3f").to_string();
 
             let outer = Block::default()
                 .title_top(Line::styled(format!(" {mode} "), theme.accent_style()))
