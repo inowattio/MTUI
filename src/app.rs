@@ -1,5 +1,5 @@
 use crate::api::{ApiDevice, BoundPort, ReadOnlyFlag};
-use crate::config::{Column, Config, CustomRules, Label, Labels, Startup};
+use crate::config::{Column, Config, CustomRules, InterpretorConfig, Label, Labels, Startup};
 use crate::constants::CONFIG_PATH;
 use crate::custom::{parse_enum, parse_op, CustomRepr, CustomRule};
 use crate::interpretator::{format_ago, Interpretor};
@@ -236,40 +236,21 @@ impl App {
             .await
             .inspect_err(|e| println!("Could not initialize device: {e}"))
             .ok();
-        let initial_rows = config.registers_batch.max(1);
 
-        let state = if device.is_some() {
-            State::Read(ReadParams {
-                position: config.startup.address,
-                window_start: config.startup.address,
-                register_type: config.startup.register_type,
-                panel: config.startup.panel,
-                ..Default::default()
-            })
-        } else {
-            State::Discovery(Self::discovery_params(&config))
-        };
-
-        let api_device: ApiDevice = Arc::new(Mutex::new(device.clone()));
-        let api_bound_port: BoundPort = Arc::new(std::sync::atomic::AtomicU16::new(0));
-        let api_read_only: ReadOnlyFlag =
-            Arc::new(std::sync::atomic::AtomicBool::new(config.read_only));
-        let writes_log: SharedWritesLog = Arc::new(Mutex::new(WritesLogState::default()));
-
-        let app = Self {
-            interpreter: Interpretor::new(config.interpretations.clone(), config.device.word_order),
-            pinned_registers: config.pinned_registers.clone().into(),
-            labels: config.labels.clone().into(),
-            custom_rules: config.custom_rules.clone().into(),
-            state,
-            config,
-            device,
+        let mut app = Self {
+            interpreter: Interpretor::new(InterpretorConfig::default(), WordOrder::default()),
+            pinned_registers: Vec::new(),
+            labels: BTreeMap::new(),
+            custom_rules: BTreeMap::new(),
+            state: State::Read(ReadParams::default()),
+            config: Config::default(),
+            device: None,
             running: true,
             connection: ConnectionStatus::Unknown,
             frame: 0,
             paused: false,
             dirty: false,
-            visible_rows: Cell::new(initial_rows),
+            visible_rows: Cell::new(1),
             previous_position: None,
             background_task: None,
             previous_values: BTreeMap::new(),
@@ -278,21 +259,56 @@ impl App {
             value_history: BTreeMap::new(),
             pending_write: None,
             logged_connection: ConnectionStatus::Unknown,
-            api_device,
-            api_bound_port,
-            api_read_only,
-            writes_log,
+            api_device: Arc::new(Mutex::new(None)),
+            api_bound_port: Arc::new(std::sync::atomic::AtomicU16::new(0)),
+            api_read_only: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            writes_log: Arc::new(Mutex::new(WritesLogState::default())),
         };
 
-        app.refresh_writes_log_state();
+        app.apply_config(config, device);
+        app.visible_rows.set(app.config.registers_batch.max(1));
 
         if app.device.is_some() {
+            app.state = State::Read(app.startup_read_params());
             log::info!("Started \u{b7} {}", app.config.display_device());
         } else {
+            app.state = State::Discovery(Self::discovery_params(&app.config));
             log::warn!("Started \u{b7} no device, opened Discovery");
         }
 
         app
+    }
+
+    fn apply_config(&mut self, config: Config, device: Option<ModbusDevice>) {
+        self.device = device;
+        self.interpreter =
+            Interpretor::new(config.interpretations.clone(), config.device.word_order);
+        self.pinned_registers = config.pinned_registers.clone().into();
+        self.labels = config.labels.clone().into();
+        self.custom_rules = config.custom_rules.clone().into();
+        self.config = config;
+
+        self.sync_api_device();
+        self.sync_api_read_only();
+        self.refresh_writes_log_state();
+
+        self.previous_values.clear();
+        self.changed.clear();
+        self.read_log.clear();
+        self.value_history.clear();
+        self.previous_position = None;
+        self.connection = ConnectionStatus::Unknown;
+        self.logged_connection = ConnectionStatus::Unknown;
+    }
+
+    fn startup_read_params(&self) -> ReadParams {
+        ReadParams {
+            position: self.config.startup.address,
+            window_start: self.config.startup.address,
+            register_type: self.config.startup.register_type,
+            panel: self.config.startup.panel,
+            ..Default::default()
+        }
     }
 
     pub fn read(&self) -> &ReadParams {
@@ -440,13 +456,7 @@ impl App {
         }
         self.connection = ConnectionStatus::Unknown;
         self.logged_connection = ConnectionStatus::Unknown;
-        self.state = State::Read(ReadParams {
-            position: self.config.startup.address,
-            window_start: self.config.startup.address,
-            register_type: self.config.startup.register_type,
-            panel: self.config.startup.panel,
-            ..Default::default()
-        });
+        self.state = State::Read(self.startup_read_params());
     }
 
     pub async fn discovery_connect(&mut self) {
@@ -502,13 +512,7 @@ impl App {
                 self.logged_connection = ConnectionStatus::Unknown;
                 let device = self.config.display_device();
                 log::info!("Switched device \u{b7} {device}");
-                self.state = State::Read(ReadParams {
-                    position: self.config.startup.address,
-                    window_start: self.config.startup.address,
-                    register_type: self.config.startup.register_type,
-                    panel: self.config.startup.panel,
-                    ..Default::default()
-                });
+                self.state = State::Read(self.startup_read_params());
             }
             Err(e) => {
                 log::error!("Connect failed \u{b7} {e}");
@@ -1449,33 +1453,10 @@ impl App {
             .await
             .map_err(|e| format!("Load failed: device: {e}"))?;
 
-        self.device = Some(device);
-        self.interpreter =
-            Interpretor::new(config.interpretations.clone(), config.device.word_order);
-        self.pinned_registers = config.pinned_registers.clone().into();
-        self.labels = config.labels.clone().into();
-        self.custom_rules = config.custom_rules.clone().into();
-        self.config = config;
-
-        self.sync_api_device();
-        self.sync_api_read_only();
-        self.refresh_writes_log_state();
-
-        self.previous_values.clear();
-        self.changed.clear();
-        self.read_log.clear();
-        self.value_history.clear();
-        self.connection = ConnectionStatus::Unknown;
-        self.logged_connection = ConnectionStatus::Unknown;
+        self.apply_config(config, Some(device));
         self.dirty = true;
 
-        let read = ReadParams {
-            position: self.config.startup.address,
-            window_start: self.config.startup.address,
-            register_type: self.config.startup.register_type,
-            panel: self.config.startup.panel,
-            ..Default::default()
-        };
+        let read = self.startup_read_params();
         if let Some(s) = self.settings_mut() {
             s.previous = read;
         }
