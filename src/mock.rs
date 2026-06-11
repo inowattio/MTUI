@@ -19,20 +19,36 @@ use tokio_modbus::{ExceptionCode, Request, Response, Slave, SlaveId};
 ///   9..=10     serial number (u32)
 ///   11         slave id
 ///   12..=13    uptime seconds (u32)
+///   14         register map version, 15 phase count
 ///   50..=199   writable: 50 voltage x10, 51 current x100, 52 ripple x10,
 ///              53 noise on/off, 54 time scale %, rest scratch
+///   200..=215  ASCII vendor string
+///   216..=218  per-phase calibration gain x10000
+///   250..=253  tariff rates x1000, 254 active tariff
+///   300..=305  voltage min/max per phase x10
+///   306..=308  current max per phase x100
+///   320..=327  event log, 4 x (code, age seconds) pairs
 ///   1000..=1001 energy Wh (u32), 1002..=1003 on-time s (u32),
 ///   1004       accepted-write counter, 1005..=1006 energy (m10k)
 ///   1100       status word (bit0 run, bit1 grid, bit2 warn, bit15 heartbeat)
 ///   1101       alarm count
 ///
-/// Input registers (0..=99 mapped):
+/// Input registers (0..=499 mapped):
 ///   0..=2      voltages L1-L3 x10, 3..=5 currents x100, 6 frequency x100,
 ///   7          temperature x10, 8..=9 active power kW (f32),
 ///   10..=11    power factor (f32), 12..=13 apparent power VA (u32),
 ///   14..=15    reactive power var (i32, signed), 16..=17 energy (m10k),
 ///   20..=23    total energy kWh (f64), 30 seconds, 31 sawtooth,
-///   32         square wave, 33 noise, 34 random walk
+///   32         square wave, 33 noise, 34 random walk,
+///   35..=37    THD per phase x100, 40..=42 per-phase active power W,
+///   43..=45    per-phase reactive power var (i16), 46..=48 per-phase VA,
+///   50..=52    line-to-line voltages x10, 53 neutral current x100,
+///   60         demand kW x100, 61 peak demand kW x100,
+///   62..=63    peak demand time, uptime seconds (u32),
+///   100..=131  voltage waveform snapshot, 32 samples around 2048,
+///   140..=155  harmonic spectrum, 16 bins (fundamental at 140),
+///   200..=223  hourly energy profile kWh x10, 24 hours,
+///   400..=431  counters ticking at (addr - 399) / 4 Hz
 #[derive(Debug)]
 pub struct MockContext {
     started: Instant,
@@ -43,10 +59,11 @@ pub struct MockContext {
 
 const KNOWN_SLAVES: RangeInclusive<SlaveId> = 0..=9;
 const WRITABLE: RangeInclusive<u16> = 50..=199;
-const HOLDING_ZONES: [RangeInclusive<u16>; 2] = [0..=255, 1000..=1199];
-const INPUT_ZONE: RangeInclusive<u16> = 0..=99;
+const HOLDING_ZONES: [RangeInclusive<u16>; 2] = [0..=499, 1000..=1199];
+const INPUT_ZONE: RangeInclusive<u16> = 0..=499;
 
 const MODEL_NAME: &[u8; 16] = b"MTUI SIMULATOR  ";
+const VENDOR_NAME: &[u8; 32] = b"      POWER BUS SIMULATOR!      ";
 const THIRD_PHASE: f64 = 2.0944;
 
 fn word(value: u32, index: u16) -> u16 {
@@ -150,6 +167,28 @@ impl MockContext {
             9 | 10 => word(24_000_000 + 1_111 * self.slave_id as u32, addr - 9),
             11 => self.slave_id as u16,
             12 | 13 => word(t as u32, addr - 12),
+            14 => 3, // register map version
+            15 => 3, // phase count
+            200..=215 => {
+                let i = (addr - 200) as usize * 2;
+                u16::from_be_bytes([VENDOR_NAME[i], VENDOR_NAME[i + 1]])
+            }
+            216..=218 => 10_000 + 7 * self.slave_id as u16 + 13 * (addr - 216),
+            250..=253 => [120, 180, 90, 240][(addr - 250) as usize] + self.slave_id as u16,
+            254 => ((t / 30.0) as u16) % 4,
+            300..=302 => self
+                .setpoint(50)
+                .saturating_sub(self.setpoint(52) + 8 + 3 * (addr - 300)),
+            303..=305 => self.setpoint(50) + self.setpoint(52) + 8 + 3 * (addr - 303),
+            306..=308 => (self.setpoint(51) as f64 * 1.15) as u16 + 9 * (addr - 306),
+            320..=327 => {
+                let n = (addr - 320) / 2;
+                if (addr - 320).is_multiple_of(2) {
+                    [3, 7, 2, 9][n as usize] // event code
+                } else {
+                    (t as u16).wrapping_add(137 * (n + 1)) // age in seconds
+                }
+            }
             1000 | 1001 => word(self.energy_wh(t) as u32, addr - 1000),
             1002 | 1003 => word(t as u32, addr - 1002),
             1004 => self.write_count,
@@ -201,6 +240,61 @@ impl MockContext {
                     + 256.0 * self.noise((t / 4.0).floor() * 4.0, 34);
                 walk as u16
             }
+            35..=37 => {
+                let p = (addr - 35) as f64 * THIRD_PHASE;
+                let thd = 250.0 + 150.0 * (t / 9.0 + p + phase).sin() + 20.0 * self.noise(t, addr);
+                thd.max(0.0) as u16
+            }
+            40..=42 => {
+                let imbalance = 1.0 + 0.06 * (t / 8.0 + (addr - 40) as f64 + phase).sin();
+                (self.active_power_kw(t) * 1_000.0 / 3.0 * imbalance) as u16
+            }
+            43..=45 => {
+                let p = (addr - 43) as f64;
+                let var = self.active_power_kw(t) * 110.0 * (t / 23.0 + p + phase).sin();
+                var as i16 as u16
+            }
+            46..=48 => {
+                let pf = 0.92 + 0.05 * (t / 13.0 + (addr - 46) as f64).sin();
+                (self.active_power_kw(t) * 1_000.0 / 3.0 / pf) as u16
+            }
+            50..=52 => {
+                let p = (addr - 50) as f64 * THIRD_PHASE;
+                let ripple = self.setpoint(52) as f64;
+                let v = self.setpoint(50) as f64 * 1.732 + ripple * (t / 3.7 + p + phase).sin();
+                v.max(0.0) as u16
+            }
+            53 => (self.setpoint(51) as f64 * 0.03 + 4.0 * self.noise(t, 53).abs()) as u16,
+            60 => {
+                let demand = 3.2 + 0.4 * self.slave_id as f64 + 0.5 * (t / 45.0 + phase).sin();
+                (demand * 100.0) as u16
+            }
+            61 => ((3.2 + 0.4 * self.slave_id as f64 + 0.9) * 100.0) as u16,
+            62 | 63 => word((t / 2.0) as u32, addr - 62),
+            100..=131 => {
+                let k = (addr - 100) as f64 / 32.0;
+                let fundamental = (std::f64::consts::TAU * k + t).sin();
+                let third = 0.12 * (3.0 * (std::f64::consts::TAU * k + t)).sin();
+                (2_048.0 + 1_800.0 * (fundamental + third) + 8.0 * self.noise(t, addr)) as u16
+            }
+            140..=155 => {
+                let n = (addr - 139) as f64;
+                let base = if (addr - 139) % 2 == 1 {
+                    1_000.0 / n
+                } else {
+                    90.0 / n
+                };
+                (base * (1.0 + 0.08 * (t / 3.0 + n).sin())).max(0.0) as u16
+            }
+            200..=223 => {
+                let h = (addr - 200) as f64;
+                let morning = (1.0 - ((h - 8.0) / 3.0).powi(2)).max(0.0);
+                let evening = (1.0 - ((h - 19.0) / 3.5).powi(2)).max(0.0);
+                let kwh10 =
+                    (25.0 + 70.0 * morning + 110.0 * evening) * (1.0 + 0.1 * self.slave_id as f64);
+                (kwh10 + 2.0 * (t / 30.0 + h).sin()).max(0.0) as u16
+            }
+            400..=431 => ((t * (addr - 399) as f64 / 4.0) as u32 % 10_000) as u16,
             _ => 0,
         }
     }
