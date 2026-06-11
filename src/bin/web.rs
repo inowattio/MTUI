@@ -8,10 +8,11 @@ mod web {
     use mtui::tui::render;
     use mtui::{compat, logger};
     use ratatui::Terminal;
+    use ratzilla::backend::webgl2::WebGl2BackendOptions;
     use ratzilla::web_sys;
     use ratzilla::web_sys::wasm_bindgen::prelude::Closure;
     use ratzilla::web_sys::wasm_bindgen::JsCast;
-    use ratzilla::CanvasBackend;
+    use ratzilla::{FontAtlasConfig, WebGl2Backend};
     use std::cell::{Cell, RefCell};
     use std::io;
     use std::rc::Rc;
@@ -36,17 +37,21 @@ mod web {
         Some(input::KeyEvent::new(code))
     }
 
-    /// The canvas backend renders changed cells onto a single `<canvas>`.
-    /// The DOM backend turned every cell into a styled `<span>`, and
-    /// full-area updates (the graph view, held cursor movement) forced the
-    /// browser through style recalc and layout over tens of thousands of
-    /// nodes — unusably slow outside trivial windows.
-    ///
-    /// Note: never call `Terminal::clear()` on this backend; its `clear()`
-    /// re-sizes the cell buffer with window-based math that disagrees with
-    /// the canvas-based math used at construction, and the next draw panics.
-    fn build_terminal() -> io::Result<Terminal<CanvasBackend>> {
-        let backend = CanvasBackend::new().map_err(|e| io::Error::other(e.to_string()))?;
+    /// The WebGL2 backend (beamterm) renders the grid on the GPU from a
+    /// glyph atlas — the cheapest option per frame by far. The DOM backend
+    /// turned every cell into a styled `<span>`, and full-area updates (the
+    /// graph view, held cursor movement) forced the browser through style
+    /// recalc and layout over tens of thousands of nodes.
+    fn build_terminal() -> io::Result<Terminal<WebGl2Backend>> {
+        let options = WebGl2BackendOptions::new()
+            // Rasterize glyphs on demand: the default static atlas blanks
+            // out anything it doesn't carry, and the UI needs braille (the
+            // graph), box drawing and assorted symbols.
+            .font_atlas_config(FontAtlasConfig::dynamic(&["monospace"], 16.0))
+            // index.html's CSS sizes the canvas to fill the body.
+            .disable_auto_css_resize();
+        let backend = WebGl2Backend::new_with_options(options)
+            .map_err(|e| io::Error::other(e.to_string()))?;
         Terminal::new(backend)
     }
 
@@ -58,17 +63,18 @@ mod web {
     }
 
     /// Drives rendering from `requestAnimationFrame`, like ratzilla's own
-    /// `draw_web`, but with the terminal owned by the loop so window
-    /// resizes can rebuild it (fresh canvas, fresh buffers, full repaint)
-    /// with the app state carried over.
+    /// `draw_web`, but drawing only when something changed.
+    ///
+    /// Resizes need no special handling beyond a prompt redraw: the backend
+    /// re-fits its grid to the canvas CSS size during `flush`, and ratatui's
+    /// autoresize follows on the draw after that.
     fn start_render_loop(
         window: web_sys::Window,
         app: Rc<Mutex<App>>,
         dirty: Rc<Cell<bool>>,
     ) -> io::Result<()> {
         let mut terminal = build_terminal()?;
-        let mut built = inner_size(&window);
-        let mut last_seen = built;
+        let mut last_seen = inner_size(&window);
         let mut last_tick = compat::Instant::now();
 
         type FrameCallback = Rc<RefCell<Option<Closure<dyn FnMut()>>>>;
@@ -88,13 +94,6 @@ mod web {
             move || {
                 schedule();
 
-                let size = inner_size(&window);
-                if size != last_seen {
-                    // Mid-resize: wait for the size to settle.
-                    last_seen = size;
-                    return;
-                }
-
                 // Acquire the app before consuming any redraw flags so a
                 // skipped frame (key handler holding the lock) loses nothing.
                 let Ok(mut app) = app.try_lock() else {
@@ -106,18 +105,12 @@ mod web {
                 // vsync burns a core for no visible benefit.
                 let mut must_draw = dirty.replace(false);
 
-                if size != built {
-                    if let Some(body) = window.document().and_then(|d| d.body()) {
-                        body.set_inner_html("");
-                    }
-                    match build_terminal() {
-                        Ok(rebuilt) => terminal = rebuilt,
-                        Err(error) => {
-                            log::error!("failed to rebuild the terminal: {error}");
-                            return;
-                        }
-                    }
-                    built = size;
+                let size = inner_size(&window);
+                if size != last_seen {
+                    last_seen = size;
+                    // Draw next frame too: this draw's flush re-fits the
+                    // grid, the next one renders at the final dimensions.
+                    dirty.set(true);
                     must_draw = true;
                 }
 
