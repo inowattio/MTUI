@@ -24,8 +24,12 @@ pub fn draw(params: &LogViewParams, app: &App, frame: &mut Frame, area: Rect, th
     let end = (top + visible).min(len);
 
     let shown = if len == 0 { 0 } else { end };
+    let kb = &app.config.keybinds;
     let header = Line::from(Span::styled(
-        format!(" {shown}/{len} events   \u{2191}/\u{2193} scroll \u{b7} esc back"),
+        format!(
+            " {shown}/{len} events   {}/{} scroll \u{b7} {} back",
+            kb.move_up, kb.move_down, kb.exit
+        ),
         theme.dim_style(),
     ));
 

@@ -257,7 +257,10 @@ fn draw_keybinds(params: &SettingsParams, app: &App, frame: &mut Frame, area: Re
     let hint = if params.kb_capturing {
         "Esc \u{b7} cancel".to_string()
     } else {
-        "Enter \u{b7} rebind   Backspace \u{b7} reset to default   Esc \u{b7} back".to_string()
+        format!(
+            "{} \u{b7} rebind   Backspace \u{b7} reset to default   Esc \u{b7} back",
+            kb.action
+        )
     };
     lines.push(Line::from(Span::styled(
         format!("  {hint}"),

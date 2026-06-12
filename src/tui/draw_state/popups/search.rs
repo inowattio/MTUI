@@ -1,10 +1,11 @@
+use crate::config::Keybinds;
 use crate::state::SearchParams;
 use crate::tui::theme::Theme;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::Frame;
 
-pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, search: &SearchParams) {
+pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, kb: &Keybinds, search: &SearchParams) {
     let visible = 10usize;
     let len = search.matches.len();
     let top = (search.top as usize).min(len.saturating_sub(1));
@@ -39,7 +40,10 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, search: &Search
 
     lines.push(Line::default());
     lines.push(Line::from(Span::styled(
-        " address or label \u{b7} \u{2191}/\u{2193} select \u{b7} enter go \u{b7} esc close",
+        format!(
+            " address or label \u{b7} {}/{} select \u{b7} {} go \u{b7} {} close",
+            kb.move_up, kb.move_down, kb.action, kb.exit
+        ),
         theme.dim_style(),
     )));
 

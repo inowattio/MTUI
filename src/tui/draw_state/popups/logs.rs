@@ -1,10 +1,11 @@
+use crate::config::Keybinds;
 use crate::state::LogsParams;
 use crate::tui::theme::Theme;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::Frame;
 
-pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, logs: &LogsParams) {
+pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, kb: &Keybinds, logs: &LogsParams) {
     let visible = LogsParams::VISIBLE as usize;
     let len = logs.lines.len();
     let top = (logs.top as usize).min(len.saturating_sub(1));
@@ -25,9 +26,14 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, logs: &LogsPara
     lines.push(Line::default());
     lines.push(Line::from(Span::styled(
         format!(
-            " {}/{}   \u{2191}/\u{2193} scroll \u{b7} PgUp/Dn page \u{b7} esc close",
+            " {}/{}   {}/{} scroll \u{b7} {}/{} page \u{b7} {} close",
             end.min(len),
-            len
+            len,
+            kb.move_up,
+            kb.move_down,
+            kb.page_up,
+            kb.page_down,
+            kb.exit
         ),
         theme.dim_style(),
     )));
