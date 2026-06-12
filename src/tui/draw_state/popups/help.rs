@@ -7,7 +7,6 @@ use ratatui::Frame;
 pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, kb: &Keybinds) {
     let entries: &[(String, &str)] = &[
         (format!("{}/{}", kb.move_up, kb.move_down), "Move cursor"),
-        ("PgUp/Dn".to_string(), "Jump page"),
         (format!("{}", kb.action), "Read at cursor"),
         (format!("{}", kb.refresh), "Refresh"),
         (format!("{}", kb.pause), "Pause/resume"),
@@ -31,6 +30,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, kb: &Keybinds) 
         (format!("{}", kb.settings), "Settings"),
         (format!("{}", kb.logs), "View write log"),
         (format!("{}", kb.app_logs), "App log"),
+        (format!("{}/{}", kb.page_up, kb.page_down), "Jump page"),
     ];
 
     const COLS: usize = 3;
