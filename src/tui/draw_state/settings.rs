@@ -238,7 +238,10 @@ fn draw_keybinds(params: &SettingsParams, app: &App, frame: &mut Frame, area: Re
         };
 
         let mut spans = vec![
-            Span::styled(format!("{marker}{:<22} ", action.label()), theme.dim_style()),
+            Span::styled(
+                format!("{marker}{:<22} ", action.label()),
+                theme.dim_style(),
+            ),
             Span::styled(value, style),
         ];
 
@@ -256,7 +259,10 @@ fn draw_keybinds(params: &SettingsParams, app: &App, frame: &mut Frame, area: Re
     } else {
         "Enter \u{b7} rebind   Backspace \u{b7} reset to default   Esc \u{b7} back".to_string()
     };
-    lines.push(Line::from(Span::styled(format!("  {hint}"), theme.dim_style())));
+    lines.push(Line::from(Span::styled(
+        format!("  {hint}"),
+        theme.dim_style(),
+    )));
 
     if app.dirty {
         lines.push(Line::from(Span::styled(
