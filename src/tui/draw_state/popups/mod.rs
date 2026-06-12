@@ -7,6 +7,7 @@ mod label;
 mod logs;
 mod search;
 mod slave;
+mod sweep_config;
 mod write;
 
 use crate::app::App;
@@ -39,6 +40,7 @@ pub fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup
         Popup::Columns(selected) => columns::draw(frame, area, theme, app, *selected),
         Popup::Write(write) => write::draw(frame, area, theme, kb, write),
         Popup::Slave(value) => slave::draw(frame, area, theme, kb, *value),
+        Popup::SweepConfig(s) => sweep_config::draw(frame, area, theme, kb, s),
         Popup::Logs(logs) => logs::draw(frame, area, theme, kb, logs),
         Popup::Inspect => inspect::draw(frame, area, theme, app),
         Popup::Quit => confirm::draw(

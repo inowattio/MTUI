@@ -7,10 +7,11 @@ use crate::modbus::{
     DeviceConfig, Interface, InterfaceNetworkParams, InterfaceWiredParams, ModbusDevice, WordOrder,
 };
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
+use crate::num_ops::{digit_add, digit_remove};
 use crate::state::{
     ConnectionStatus, CustomField, CustomParams, DiscoveryParams, DumpParams, InterfaceKind,
     LabelParams, LogViewParams, LogsParams, Popup, PopupKind, ReadPanel, ReadParams, SearchParams,
-    SettingsField, SettingsParams, State, WriteParams,
+    SettingsField, SettingsParams, State, SweepConfigParams, SweepField, WriteParams,
 };
 use crate::writes_log::{SharedWritesLog, WriteKind, WritesLogState};
 use chrono::{DateTime, Local, SecondsFormat, Utc};
@@ -55,6 +56,29 @@ struct PendingWrite {
     new_value: u64,
 }
 
+#[derive(Clone, Debug)]
+pub struct SweepState {
+    pub active: bool,
+    pub from: u16,
+    pub to: u16,
+    pub continuous: bool,
+    pub current: u16,
+    pub errored: bool,
+}
+
+impl Default for SweepState {
+    fn default() -> Self {
+        Self {
+            active: false,
+            from: 0,
+            to: 100,
+            continuous: true,
+            current: 0,
+            errored: false,
+        }
+    }
+}
+
 #[derive(Debug)]
 struct RefreshTaskResult {
     register_type: RegisterType,
@@ -76,6 +100,7 @@ pub struct App {
     pub frame: u64,
     pub paused: bool,
     pub dirty: bool,
+    pub sweep: SweepState,
     pub visible_rows: Cell<u16>,
     previous_position: Option<RegisterCell>,
     background_task: Option<BackgroundTask>,
@@ -272,6 +297,7 @@ impl App {
             frame: 0,
             paused: false,
             dirty: false,
+            sweep: SweepState::default(),
             visible_rows: Cell::new(1),
             previous_position: None,
             background_task: None,
@@ -309,6 +335,7 @@ impl App {
         self.labels = config.labels.clone().into();
         self.custom_rules = config.custom_rules.clone().into();
         self.config = config;
+        self.sweep.active = false;
 
         self.sync_api_device();
         self.sync_api_read_only();
@@ -1521,6 +1548,21 @@ impl App {
             self.read_mut().scroll_to_cursor(rows, cols);
         }
 
+        if self.sweep.active {
+            if matches!(self.state, State::Read(_)) {
+                let rows = self.visible_rows.get();
+                let cols = self.config.matrix_cols;
+                let current = self.sweep.current;
+                {
+                    let p = self.read_mut();
+                    p.position = current;
+                    p.scroll_to_cursor(rows, cols);
+                }
+                self.refresh().await;
+            }
+            return;
+        }
+
         let should_refresh = !self.paused
             && matches!(
                 &self.state,
@@ -1531,6 +1573,128 @@ impl App {
 
         if should_refresh {
             self.refresh().await;
+        }
+    }
+
+    pub fn toggle_sweep(&mut self) {
+        if !matches!(self.state, State::Read(_)) {
+            return;
+        }
+        self.sweep.active = !self.sweep.active;
+        if !self.sweep.active {
+            log::info!("Sweep stopped");
+            return;
+        }
+        if self.sweep.to < self.sweep.from {
+            std::mem::swap(&mut self.sweep.from, &mut self.sweep.to);
+        }
+        self.sweep.current = self.sweep.from;
+        self.sweep.errored = false;
+        let from = self.sweep.from;
+        let rows = self.visible_rows.get();
+        let cols = self.config.matrix_cols;
+        {
+            let p = self.read_mut();
+            p.position = from;
+            p.scroll_to_cursor(rows, cols);
+        }
+        log::info!(
+            "Sweep started \u{b7} {}..{}{}",
+            self.sweep.from,
+            self.sweep.to,
+            if self.sweep.continuous { " (loop)" } else { "" }
+        );
+    }
+
+    fn advance_sweep(&mut self, errored: bool) {
+        let batch = self.config.registers_batch.max(1);
+        let read_amount = if self.sweep.errored { 1 } else { batch };
+        let advance = if errored { 1 } else { read_amount };
+        self.sweep.errored = errored;
+
+        if self.sweep.current >= self.sweep.to {
+            if self.sweep.continuous {
+                self.sweep.current = self.sweep.from;
+                self.sweep.errored = false;
+            } else {
+                self.sweep.active = false;
+                log::info!("Sweep complete");
+            }
+        } else {
+            self.sweep.current = self.sweep.current.saturating_add(advance).min(self.sweep.to);
+        }
+    }
+
+    pub fn open_sweep_config(&mut self) {
+        if !matches!(self.state, State::Read(_)) {
+            return;
+        }
+        let params = SweepConfigParams {
+            from: self.sweep.from,
+            to: self.sweep.to,
+            continuous: self.sweep.continuous,
+            selected: 0,
+        };
+        self.read_mut().popup = Some(Popup::SweepConfig(params));
+    }
+
+    pub fn commit_sweep_config(&mut self) {
+        let Some(Popup::SweepConfig(p)) = &self.read().popup else {
+            return;
+        };
+        let (mut from, mut to, continuous) = (p.from, p.to, p.continuous);
+        if to < from {
+            std::mem::swap(&mut from, &mut to);
+        }
+        self.sweep.from = from;
+        self.sweep.to = to;
+        self.sweep.continuous = continuous;
+        if self.sweep.active {
+            self.sweep.current = self.sweep.current.clamp(from, to);
+        }
+        self.close_popup();
+    }
+
+    pub fn sweep_config_move(&mut self, down: bool) {
+        if let Some(Popup::SweepConfig(p)) = &mut self.read_mut().popup {
+            let n = SweepField::ALL.len() as u16;
+            p.selected = if down {
+                (p.selected + 1) % n
+            } else if p.selected == 0 {
+                n - 1
+            } else {
+                p.selected - 1
+            };
+        }
+    }
+
+    pub fn sweep_config_toggle(&mut self) {
+        if let Some(Popup::SweepConfig(p)) = &mut self.read_mut().popup {
+            p.continuous = !p.continuous;
+        }
+    }
+
+    pub fn sweep_config_digit(&mut self, field: SweepField, c: char) {
+        if !c.is_ascii_digit() {
+            return;
+        }
+        let digit = c as u8 - b'0';
+        if let Some(Popup::SweepConfig(p)) = &mut self.read_mut().popup {
+            match field {
+                SweepField::From => digit_add(&mut p.from, digit),
+                SweepField::To => digit_add(&mut p.to, digit),
+                SweepField::Mode => {}
+            }
+        }
+    }
+
+    pub fn sweep_config_backspace(&mut self, field: SweepField) {
+        if let Some(Popup::SweepConfig(p)) = &mut self.read_mut().popup {
+            match field {
+                SweepField::From => digit_remove(&mut p.from),
+                SweepField::To => digit_remove(&mut p.to),
+                SweepField::Mode => {}
+            }
         }
     }
 
@@ -1620,7 +1784,12 @@ impl App {
             return;
         };
 
-        let amount = self.config.registers_batch.max(1);
+        let sweeping = self.sweep.active;
+        let amount = if sweeping && self.sweep.errored {
+            1
+        } else {
+            self.config.registers_batch.max(1)
+        };
         let visible = self.visible_rows.get().max(1);
         let cols = self.config.matrix_cols;
         let (panel, position, register_type) = {
@@ -1631,7 +1800,14 @@ impl App {
             (p.panel, p.position, p.register_type)
         };
         let max_read_start = u16::MAX - (amount - 1);
-        let read_start = position.saturating_sub(amount / 2).min(max_read_start);
+
+        let read_start = if sweeping {
+            position.min(max_read_start)
+        } else {
+            position.saturating_sub(amount / 2).min(max_read_start)
+        };
+
+        let read_main = sweeping || matches!(panel, ReadPanel::Main | ReadPanel::Matrix);
         self.connection = ConnectionStatus::Reading;
 
         let panel_registers = {
@@ -1648,19 +1824,16 @@ impl App {
 
         self.background_task = Some(BackgroundTask::Refresh(compat::spawn(async move {
             let read_began = Instant::now();
-            let (main_data, pinned_data) = match panel {
-                ReadPanel::Main | ReadPanel::Matrix => {
-                    let main = Self::aquire_data_with(&device, amount, read_start, register_type)
-                        .await
-                        .map_err(|e| e.to_string());
-                    (Some(main), None)
-                }
-                _ => {
-                    let pinned = Self::aquire_pinned_data_with(&device, &panel_registers, amount)
-                        .await
-                        .map_err(|e| e.to_string());
-                    (None, Some(pinned))
-                }
+            let (main_data, pinned_data) = if read_main {
+                let main = Self::aquire_data_with(&device, amount, read_start, register_type)
+                    .await
+                    .map_err(|e| e.to_string());
+                (Some(main), None)
+            } else {
+                let pinned = Self::aquire_pinned_data_with(&device, &panel_registers, amount)
+                    .await
+                    .map_err(|e| e.to_string());
+                (None, Some(pinned))
             };
             let read_duration = read_began.elapsed();
 
@@ -1735,6 +1908,10 @@ impl App {
             self.logged_connection = connection.clone();
         }
         self.connection = connection;
+
+        if self.sweep.active && result.main_data.is_some() {
+            self.advance_sweep(matches!(&result.main_data, Some(Err(_))));
+        }
     }
 
     fn custom_value(
