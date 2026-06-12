@@ -19,7 +19,7 @@ use ratatui::Frame;
 
 pub fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup: &Popup) {
     match popup {
-        Popup::Help => help::draw(frame, area, theme),
+        Popup::Help => help::draw(frame, area, theme, &app.config.keybinds),
         Popup::Dump(d) => confirm::draw(
             frame,
             area,

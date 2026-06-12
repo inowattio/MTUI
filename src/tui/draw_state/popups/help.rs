@@ -1,36 +1,35 @@
-use crate::constants::keybind;
+use crate::config::Keybinds;
 use crate::tui::theme::Theme;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::Frame;
 
-pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme) {
-    use keybind::*;
+pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, kb: &Keybinds) {
     let entries: &[(String, &str)] = &[
-        (format!("{MOVE_UP}/{MOVE_DOWN}"), "Move cursor"),
+        (format!("{}/{}", kb.move_up, kb.move_down), "Move cursor"),
         ("PgUp/Dn".to_string(), "Jump page"),
-        (format!("{ACTION}"), "Read at cursor"),
-        (format!("{REFRESH}"), "Refresh"),
-        ("space".to_string(), "Pause/resume"),
-        (format!("{TOGGLE}"), "Switch reg type"),
-        (format!("{WORD_ORDER}"), "Cycle word order"),
-        (format!("{SWITCH_VIEW}"), "Cycle panel"),
-        (format!("{JUMP}"), "Go to addr/label"),
-        (format!("{CYCLE_POSITION}"), "Prev position"),
-        (format!("{COPY_ADDRESS}"), "Copy address"),
-        (format!("{GRAPH}"), "Value graph"),
-        (format!("{INSPECT}"), "Inspect register"),
-        (format!("{WRITE}"), "Write register"),
-        (format!("{SLAVE}"), "Set slave id"),
-        (format!("{DISCOVERY}"), "Switch device"),
-        (format!("{PIN}"), "Add/remove pin"),
-        (format!("{LABEL}"), "Label register"),
-        (format!("{CUSTOM}"), "Custom rule"),
-        (format!("{COLUMNS}"), "Toggle columns"),
-        (format!("{DUMP}"), "Dump read data"),
-        (format!("{SETTINGS}"), "Settings"),
-        (format!("{LOGS}"), "View write log"),
-        (format!("{APP_LOGS}"), "App log"),
+        (format!("{}", kb.action), "Read at cursor"),
+        (format!("{}", kb.refresh), "Refresh"),
+        (format!("{}", kb.pause), "Pause/resume"),
+        (format!("{}", kb.toggle), "Switch reg type"),
+        (format!("{}", kb.word_order), "Cycle word order"),
+        (format!("{}", kb.switch_view), "Cycle panel"),
+        (format!("{}", kb.jump), "Go to addr/label"),
+        (format!("{}", kb.cycle_position), "Prev position"),
+        (format!("{}", kb.copy_address), "Copy address"),
+        (format!("{}", kb.graph), "Value graph"),
+        (format!("{}", kb.inspect), "Inspect register"),
+        (format!("{}", kb.write), "Write register"),
+        (format!("{}", kb.slave), "Set slave id"),
+        (format!("{}", kb.discovery), "Switch device"),
+        (format!("{}", kb.pin), "Add/remove pin"),
+        (format!("{}", kb.label), "Label register"),
+        (format!("{}", kb.custom), "Custom rule"),
+        (format!("{}", kb.columns), "Toggle columns"),
+        (format!("{}", kb.dump), "Dump read data"),
+        (format!("{}", kb.settings), "Settings"),
+        (format!("{}", kb.logs), "View write log"),
+        (format!("{}", kb.app_logs), "App log"),
     ];
 
     const COLS: usize = 3;
@@ -53,7 +52,10 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme) {
 
     lines.push(Line::default());
     lines.push(Line::from(Span::styled(
-        format!(" {SETTINGS} \u{b7} settings (save / clear)   {EXIT} \u{b7} quit"),
+        format!(
+            " {} \u{b7} settings (save / clear)   {} \u{b7} quit",
+            kb.settings, kb.exit
+        ),
         theme.dim_style(),
     )));
 

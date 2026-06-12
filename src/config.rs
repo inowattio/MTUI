@@ -1,5 +1,6 @@
 use crate::app::PinnedRegisters;
 use crate::custom::{CustomOp, CustomRepr, CustomRule, EnumEntry, OpKind};
+use crate::input::KeyCode;
 use crate::modbus::{DeviceConfig, Interface, WordOrder};
 use crate::register::RegisterType;
 use crate::state::ReadPanel;
@@ -21,6 +22,85 @@ pub struct Config {
     pub pinned_registers: PinnedRegisters,
     pub labels: Labels,
     pub custom_rules: CustomRules,
+    pub keybinds: Keybinds,
+}
+
+macro_rules! keybinds {
+    ($($action:ident => $field:ident : $label:literal = $default:ident),+ $(,)?) => {
+        #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+        #[serde(default)]
+        pub struct Keybinds {
+            $(pub $field: KeyCode,)+
+        }
+
+        impl Default for Keybinds {
+            fn default() -> Self {
+                use crate::constants::keybind;
+                Self { $($field: keybind::$default,)+ }
+            }
+        }
+
+        impl Keybinds {
+            pub fn get(&self, action: KeybindAction) -> KeyCode {
+                match action {
+                    $(KeybindAction::$action => self.$field,)+
+                }
+            }
+
+            pub fn set(&mut self, action: KeybindAction, key: KeyCode) {
+                match action {
+                    $(KeybindAction::$action => self.$field = key,)+
+                }
+            }
+        }
+
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        pub enum KeybindAction {
+            $($action,)+
+        }
+
+        impl KeybindAction {
+            pub const ALL: &'static [KeybindAction] = &[$(KeybindAction::$action),+];
+
+            pub fn label(self) -> &'static str {
+                match self {
+                    $(KeybindAction::$action => $label,)+
+                }
+            }
+        }
+    };
+}
+
+keybinds! {
+    Exit => exit : "Quit" = EXIT,
+    Pin => pin : "Add/remove pin" = PIN,
+    Dump => dump : "Dump read data" = DUMP,
+    Help => help : "Help" = HELP,
+    Refresh => refresh : "Refresh" = REFRESH,
+    Toggle => toggle : "Switch register type" = TOGGLE,
+    Write => write : "Write register" = WRITE,
+    Jump => jump : "Go to address/label" = JUMP,
+    Label => label : "Label register" = LABEL,
+    Custom => custom : "Custom rule" = CUSTOM,
+    Columns => columns : "Toggle columns" = COLUMNS,
+    Pause => pause : "Pause/resume" = PAUSE,
+    WordOrder => word_order : "Cycle word order" = WORD_ORDER,
+    Slave => slave : "Set slave id" = SLAVE,
+    CyclePosition => cycle_position : "Previous position" = CYCLE_POSITION,
+    Inspect => inspect : "Inspect register" = INSPECT,
+    Graph => graph : "Value graph" = GRAPH,
+    Discovery => discovery : "Switch device" = DISCOVERY,
+    Settings => settings : "Settings" = SETTINGS,
+    CopyAddress => copy_address : "Copy address" = COPY_ADDRESS,
+    Logs => logs : "View write log" = LOGS,
+    AppLogs => app_logs : "App log" = APP_LOGS,
+    Negator => negator : "Negate write value" = NEGATOR,
+    SwitchView => switch_view : "Cycle panel" = SWITCH_VIEW,
+    Action => action : "Read / confirm" = ACTION,
+    MoveUp => move_up : "Move up" = MOVE_UP,
+    MoveDown => move_down : "Move down" = MOVE_DOWN,
+    PageUp => page_up : "Page up" = PAGE_UP,
+    PageDown => page_down : "Page down" = PAGE_DOWN,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -208,6 +288,7 @@ impl Default for Config {
             pinned_registers: Default::default(),
             labels: demo_labels(),
             custom_rules: demo_rules(),
+            keybinds: Keybinds::default(),
         }
     }
 }
