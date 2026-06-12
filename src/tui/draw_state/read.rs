@@ -232,6 +232,11 @@ pub fn draw(
             .unwrap_or_default()
     };
     let mut info_spans = Vec::new();
+    if !app.config.name.is_empty() {
+        info_spans.push(Span::styled(" ", theme.dim_style()));
+        info_spans.push(Span::styled(app.config.name.clone(), theme.accent_style()));
+        info_spans.push(Span::styled(" \u{b7} ", theme.dim_style()));
+    }
     if app.config.read_only {
         info_spans.push(Span::styled("READ-ONLY  ", theme.err_style()));
     }

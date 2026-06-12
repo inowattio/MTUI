@@ -541,7 +541,7 @@ async fn handle_settings_key(key_event: KeyEvent, app: &mut App) {
 
     match key_event.code {
         c if c == kb.exit => app.close_settings(),
-        c if c == kb.settings && field != SettingsField::LoadConfig => app.close_settings(),
+        c if c == kb.settings && !field.is_text_input() => app.close_settings(),
         c if c == kb.move_up => {
             if let Some(s) = app.settings_mut() {
                 s.selected = if s.selected == 0 {
@@ -589,11 +589,7 @@ async fn handle_settings_key(key_event: KeyEvent, app: &mut App) {
             _ => {}
         },
         KeyCode::Backspace => app.settings_backspace(field),
-        KeyCode::Char(c) if field == SettingsField::LoadConfig => {
-            if let Some(s) = app.settings_mut() {
-                s.load_path.push(c);
-            }
-        }
+        KeyCode::Char(c) if field.is_text_input() => app.settings_text_input(field, c),
         KeyCode::Char(c) if c.is_ascii_digit() => app.settings_digit(field, c as u8 - b'0'),
         _ => {}
     }
