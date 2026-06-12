@@ -35,6 +35,6 @@ pub mod keybind {
     pub const ACTION: KeyCode = KeyCode::Enter;
     pub const MOVE_UP: KeyCode = KeyCode::Up;
     pub const MOVE_DOWN: KeyCode = KeyCode::Down;
-    pub const PAGE_UP: KeyCode = KeyCode::PageUp;
-    pub const PAGE_DOWN: KeyCode = KeyCode::PageDown;
+    pub const PAGE_UP: KeyCode = KeyCode::Char(',');
+    pub const PAGE_DOWN: KeyCode = KeyCode::Char('.');
 }
