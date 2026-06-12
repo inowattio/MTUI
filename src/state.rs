@@ -253,6 +253,7 @@ impl ReadPanel {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SettingsField {
+    Name,
     RegistersBatch,
     AutoUpdate,
     HistoryCap,
@@ -272,7 +273,8 @@ pub enum SettingsField {
 }
 
 impl SettingsField {
-    pub const ALL: [SettingsField; 16] = [
+    pub const ALL: [SettingsField; 17] = [
+        SettingsField::Name,
         SettingsField::RegistersBatch,
         SettingsField::AutoUpdate,
         SettingsField::HistoryCap,
@@ -290,6 +292,10 @@ impl SettingsField {
         SettingsField::Save,
         SettingsField::LoadConfig,
     ];
+
+    pub fn is_text_input(self) -> bool {
+        matches!(self, SettingsField::Name | SettingsField::LoadConfig)
+    }
 }
 
 #[derive(Debug, Default, PartialEq)]

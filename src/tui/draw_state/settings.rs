@@ -115,6 +115,7 @@ fn field_view(
 ) -> (&'static str, String, Kind) {
     let device = &app.config;
     match field {
+        SettingsField::Name => ("Config name", device.name.clone(), Kind::Number),
         SettingsField::RegistersBatch => (
             "Registers batch",
             device.registers_batch.to_string(),

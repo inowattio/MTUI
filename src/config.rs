@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Config {
+    #[serde(default)]
+    pub name: String,
     pub device: DeviceConfig,
     pub startup: Startup,
     pub interpretations: InterpretorConfig,
@@ -263,6 +265,7 @@ fn demo_rules() -> CustomRules {
 impl Default for Config {
     fn default() -> Self {
         Self {
+            name: "demo".to_string(),
             device: DeviceConfig {
                 interface: Interface::Mock,
                 slave_id: 0,

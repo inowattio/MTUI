@@ -879,11 +879,31 @@ impl App {
         self.dirty = true;
     }
 
+    pub fn settings_text_input(&mut self, field: SettingsField, c: char) {
+        match field {
+            SettingsField::LoadConfig => {
+                if let Some(s) = self.settings_mut() {
+                    s.load_path.push(c);
+                }
+            }
+            SettingsField::Name => {
+                self.config.name.push(c);
+                self.dirty = true;
+            }
+            _ => {}
+        }
+    }
+
     pub fn settings_backspace(&mut self, field: SettingsField) {
         if field == SettingsField::LoadConfig {
             if let Some(s) = self.settings_mut() {
                 s.load_path.pop();
             }
+            return;
+        }
+        if field == SettingsField::Name {
+            self.config.name.pop();
+            self.dirty = true;
             return;
         }
         let Some((min, _, _)) = Self::numeric_spec(field) else {
