@@ -23,6 +23,13 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         .title_top(Line::styled(" MTUI ", theme.base()).centered())
         .title_top(Line::from(status_span(&app.connection, &theme)).right_aligned())
         .title_bottom(Line::styled(format!(" {clock} "), theme.accent_style()))
+        .title_bottom(
+            Line::styled(
+                format!(" v{} ", env!("CARGO_PKG_VERSION")),
+                theme.dim_style(),
+            )
+            .centered(),
+        )
         .title_bottom(Line::styled(key_hints, theme.dim_style()).right_aligned())
         .style(Style::default().fg(theme.border))
         .borders(Borders::ALL)
