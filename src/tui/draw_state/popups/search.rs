@@ -5,7 +5,13 @@ use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::Frame;
 
-pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, kb: &Keybinds, search: &SearchParams) {
+pub(super) fn draw(
+    frame: &mut Frame,
+    area: Rect,
+    theme: &Theme,
+    kb: &Keybinds,
+    search: &SearchParams,
+) {
     let visible = 10usize;
     let len = search.matches.len();
     let top = (search.top as usize).min(len.saturating_sub(1));

@@ -6,7 +6,13 @@ use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::Frame;
 
-pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, kb: &Keybinds, write: &WriteParams) {
+pub(super) fn draw(
+    frame: &mut Frame,
+    area: Rect,
+    theme: &Theme,
+    kb: &Keybinds,
+    write: &WriteParams,
+) {
     let value = write
         .value
         .map_or_else(|| "(none)".to_string(), |n| n.to_string());

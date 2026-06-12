@@ -28,7 +28,10 @@ pub fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup
             "Dump",
             &format!("Dump {} read register(s) to a file?", app.read_count()),
             &d.result,
-            &format!(" {} \u{b7} confirm   backspace/{} cancel", kb.action, kb.exit),
+            &format!(
+                " {} \u{b7} confirm   backspace/{} cancel",
+                kb.action, kb.exit
+            ),
         ),
         Popup::Search(s) => search::draw(frame, area, theme, kb, s),
         Popup::Label(l) => label::draw(frame, area, theme, kb, l),
@@ -45,7 +48,10 @@ pub fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup
             "Unsaved changes",
             " Quit anyway?",
             &None,
-            &format!(" {}/{} \u{b7} confirm   backspace cancel", kb.action, kb.exit),
+            &format!(
+                " {}/{} \u{b7} confirm   backspace cancel",
+                kb.action, kb.exit
+            ),
         ),
     }
 }

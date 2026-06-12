@@ -5,7 +5,13 @@ use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::Frame;
 
-pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, kb: &Keybinds, label: &LabelParams) {
+pub(super) fn draw(
+    frame: &mut Frame,
+    area: Rect,
+    theme: &Theme,
+    kb: &Keybinds,
+    label: &LabelParams,
+) {
     let (text, text_style) = if label.text.is_empty() {
         ("(empty - will remove)".to_string(), theme.dim_style())
     } else {
