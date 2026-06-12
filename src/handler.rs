@@ -62,8 +62,7 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         c if c == kb.discovery => app.open_discovery(),
         c if c == kb.settings => app.open_settings(),
         c if c == kb.graph => app.toggle_graph(),
-        c if c == kb.sweep => app.toggle_sweep(),
-        c if c == kb.sweep_config => app.open_sweep_config(),
+        c if c == kb.sweep => app.open_sweep(),
         c if c == kb.inspect => app.open_inspect(),
         c if c == kb.cycle_position => app.cycle_position(),
         c if c == kb.copy_address => app.copy_address(),
@@ -328,8 +327,8 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
                 _ => return,
             };
             match key_event.code {
-                c if c == kb.exit || c == kb.sweep_config => app.close_popup(),
-                c if c == kb.action => app.commit_sweep_config(),
+                c if c == kb.exit || c == kb.sweep => app.close_popup(),
+                c if c == kb.action => app.sweep_action(),
                 c if c == kb.move_up => app.sweep_config_move(false),
                 c if c == kb.move_down => app.sweep_config_move(true),
                 c if c == kb.pause && field == SweepField::Mode => app.sweep_config_toggle(),

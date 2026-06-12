@@ -11,6 +11,7 @@ pub(super) fn draw(
     theme: &Theme,
     kb: &Keybinds,
     params: &SweepConfigParams,
+    running: bool,
 ) {
     let sel = params.current_field();
 
@@ -44,11 +45,32 @@ pub(super) fn draw(
         mode.to_string()
     };
 
+    let action_sel = sel == SweepField::Action;
+    let action_label = if running { "Stop sweep" } else { "Start sweep" };
+    let action_text = if action_sel {
+        format!("{action_label}  \u{2190} enter")
+    } else {
+        action_label.to_string()
+    };
+    let action_style = if action_sel {
+        theme.selected_style()
+    } else if running {
+        theme.warn_style()
+    } else {
+        theme.ok_style()
+    };
+    let action_line = Line::from(Span::styled(
+        format!("{}{action_text}", if action_sel { "> " } else { "  " }),
+        action_style,
+    ));
+
     let lines = vec![
         Line::default(),
         field("From address", from_val, sel == SweepField::From),
         field("To address", to_val, sel == SweepField::To),
         field("Mode", mode_val, sel == SweepField::Mode),
+        Line::default(),
+        action_line,
         Line::default(),
         Line::from(Span::styled(
             format!(
@@ -58,7 +80,7 @@ pub(super) fn draw(
             theme.dim_style(),
         )),
         Line::from(Span::styled(
-            format!(" {} apply \u{b7} {} cancel", kb.action, kb.exit),
+            format!(" {} start/stop \u{b7} {} close", kb.action, kb.exit),
             theme.dim_style(),
         )),
     ];

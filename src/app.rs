@@ -6,8 +6,8 @@ use crate::interpretator::{format_ago, Interpretor};
 use crate::modbus::{
     DeviceConfig, Interface, InterfaceNetworkParams, InterfaceWiredParams, ModbusDevice, WordOrder,
 };
-use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
 use crate::num_ops::{digit_add, digit_remove};
+use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
 use crate::state::{
     ConnectionStatus, CustomField, CustomParams, DiscoveryParams, DumpParams, InterfaceKind,
     LabelParams, LogViewParams, LogsParams, Popup, PopupKind, ReadPanel, ReadParams, SearchParams,
@@ -1576,34 +1576,51 @@ impl App {
         }
     }
 
-    pub fn toggle_sweep(&mut self) {
+    pub fn open_sweep(&mut self) {
         if !matches!(self.state, State::Read(_)) {
             return;
         }
-        self.sweep.active = !self.sweep.active;
-        if !self.sweep.active {
-            log::info!("Sweep stopped");
+        let params = SweepConfigParams {
+            from: self.sweep.from,
+            to: self.sweep.to,
+            continuous: self.sweep.continuous,
+            selected: (SweepField::ALL.len() - 1) as u16,
+        };
+        self.read_mut().popup = Some(Popup::SweepConfig(params));
+    }
+
+    pub fn sweep_action(&mut self) {
+        let Some(Popup::SweepConfig(p)) = &self.read().popup else {
             return;
+        };
+        let (mut from, mut to, continuous) = (p.from, p.to, p.continuous);
+        if to < from {
+            std::mem::swap(&mut from, &mut to);
         }
-        if self.sweep.to < self.sweep.from {
-            std::mem::swap(&mut self.sweep.from, &mut self.sweep.to);
+        self.sweep.from = from;
+        self.sweep.to = to;
+        self.sweep.continuous = continuous;
+
+        if self.sweep.active {
+            self.sweep.active = false;
+            log::info!("Sweep stopped");
+        } else {
+            self.sweep.current = from;
+            self.sweep.errored = false;
+            self.sweep.active = true;
+            let rows = self.visible_rows.get();
+            let cols = self.config.matrix_cols;
+            {
+                let p = self.read_mut();
+                p.position = from;
+                p.scroll_to_cursor(rows, cols);
+            }
+            log::info!(
+                "Sweep started \u{b7} {from}..{to}{}",
+                if continuous { " (loop)" } else { "" }
+            );
         }
-        self.sweep.current = self.sweep.from;
-        self.sweep.errored = false;
-        let from = self.sweep.from;
-        let rows = self.visible_rows.get();
-        let cols = self.config.matrix_cols;
-        {
-            let p = self.read_mut();
-            p.position = from;
-            p.scroll_to_cursor(rows, cols);
-        }
-        log::info!(
-            "Sweep started \u{b7} {}..{}{}",
-            self.sweep.from,
-            self.sweep.to,
-            if self.sweep.continuous { " (loop)" } else { "" }
-        );
+        self.close_popup();
     }
 
     fn advance_sweep(&mut self, errored: bool) {
@@ -1621,38 +1638,12 @@ impl App {
                 log::info!("Sweep complete");
             }
         } else {
-            self.sweep.current = self.sweep.current.saturating_add(advance).min(self.sweep.to);
+            self.sweep.current = self
+                .sweep
+                .current
+                .saturating_add(advance)
+                .min(self.sweep.to);
         }
-    }
-
-    pub fn open_sweep_config(&mut self) {
-        if !matches!(self.state, State::Read(_)) {
-            return;
-        }
-        let params = SweepConfigParams {
-            from: self.sweep.from,
-            to: self.sweep.to,
-            continuous: self.sweep.continuous,
-            selected: 0,
-        };
-        self.read_mut().popup = Some(Popup::SweepConfig(params));
-    }
-
-    pub fn commit_sweep_config(&mut self) {
-        let Some(Popup::SweepConfig(p)) = &self.read().popup else {
-            return;
-        };
-        let (mut from, mut to, continuous) = (p.from, p.to, p.continuous);
-        if to < from {
-            std::mem::swap(&mut from, &mut to);
-        }
-        self.sweep.from = from;
-        self.sweep.to = to;
-        self.sweep.continuous = continuous;
-        if self.sweep.active {
-            self.sweep.current = self.sweep.current.clamp(from, to);
-        }
-        self.close_popup();
     }
 
     pub fn sweep_config_move(&mut self, down: bool) {
@@ -1683,7 +1674,7 @@ impl App {
             match field {
                 SweepField::From => digit_add(&mut p.from, digit),
                 SweepField::To => digit_add(&mut p.to, digit),
-                SweepField::Mode => {}
+                SweepField::Mode | SweepField::Action => {}
             }
         }
     }
@@ -1693,7 +1684,7 @@ impl App {
             match field {
                 SweepField::From => digit_remove(&mut p.from),
                 SweepField::To => digit_remove(&mut p.to),
-                SweepField::Mode => {}
+                SweepField::Mode | SweepField::Action => {}
             }
         }
     }

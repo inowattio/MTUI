@@ -193,10 +193,16 @@ pub enum SweepField {
     From,
     To,
     Mode,
+    Action,
 }
 
 impl SweepField {
-    pub const ALL: [SweepField; 3] = [SweepField::From, SweepField::To, SweepField::Mode];
+    pub const ALL: [SweepField; 4] = [
+        SweepField::From,
+        SweepField::To,
+        SweepField::Mode,
+        SweepField::Action,
+    ];
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
