@@ -1,11 +1,18 @@
 use crate::app::WriteType;
+use crate::config::Keybinds;
 use crate::state::WriteParams;
 use crate::tui::theme::Theme;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::Frame;
 
-pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, write: &WriteParams) {
+pub(super) fn draw(
+    frame: &mut Frame,
+    area: Rect,
+    theme: &Theme,
+    kb: &Keybinds,
+    write: &WriteParams,
+) {
     let value = write
         .value
         .map_or_else(|| "(none)".to_string(), |n| n.to_string());
@@ -63,11 +70,14 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, write: &WritePa
     }
 
     lines.push(Line::from(Span::styled(
-        " enter write \u{b7} esc exit \u{b7} w word/dword \u{b7} - negate",
+        format!(
+            " {} write \u{b7} {} exit \u{b7} {} word/dword \u{b7} {} negate",
+            kb.action, kb.exit, kb.write, kb.negator
+        ),
         theme.dim_style(),
     )));
     lines.push(Line::from(Span::styled(
-        " \u{2190}/\u{2192} bit \u{b7} space toggle",
+        format!(" \u{2190}/\u{2192} bit \u{b7} {} toggle", kb.pause),
         theme.dim_style(),
     )));
 

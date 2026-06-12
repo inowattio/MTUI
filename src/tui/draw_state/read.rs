@@ -422,8 +422,12 @@ fn draw_graph(
     frame.render_widget(block, area);
 
     if points.len() < 2 {
+        let kb = &app.config.keybinds;
         let msg = Paragraph::new(Line::from(Span::styled(
-            "Collecting samples\u{2026} read this register a few times  (enter/r read \u{b7} space pause \u{b7} esc/g close)",
+            format!(
+                "Collecting samples\u{2026} read this register a few times  ({}/{} read \u{b7} {} pause \u{b7} {}/{} close)",
+                kb.action, kb.refresh, kb.pause, kb.exit, kb.graph
+            ),
             theme.dim_style(),
         )));
         frame.render_widget(msg, inner);

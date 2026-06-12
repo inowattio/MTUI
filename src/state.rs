@@ -266,12 +266,13 @@ pub enum SettingsField {
     ClearLabels,
     ClearCustom,
     ShowContinuation,
+    EditKeybinds,
     Save,
     LoadConfig,
 }
 
 impl SettingsField {
-    pub const ALL: [SettingsField; 15] = [
+    pub const ALL: [SettingsField; 16] = [
         SettingsField::RegistersBatch,
         SettingsField::AutoUpdate,
         SettingsField::HistoryCap,
@@ -285,6 +286,7 @@ impl SettingsField {
         SettingsField::ClearLabels,
         SettingsField::ClearCustom,
         SettingsField::ShowContinuation,
+        SettingsField::EditKeybinds,
         SettingsField::Save,
         SettingsField::LoadConfig,
     ];
@@ -296,6 +298,59 @@ pub struct SettingsParams {
     pub status: Option<String>,
     pub load_path: String,
     pub previous: ReadParams,
+    pub editing_keybinds: bool,
+    pub kb_selected: u16,
+    pub kb_top: u16,
+    pub kb_capturing: bool,
+}
+
+impl SettingsParams {
+    pub const KB_VISIBLE: u16 = 14;
+
+    pub fn open_keybinds(&mut self) {
+        self.editing_keybinds = true;
+        self.kb_selected = 0;
+        self.kb_top = 0;
+        self.kb_capturing = false;
+    }
+
+    pub fn kb_move(&mut self, up: bool, count: u16) {
+        if count == 0 {
+            return;
+        }
+        self.kb_selected = if up {
+            if self.kb_selected == 0 {
+                count - 1
+            } else {
+                self.kb_selected - 1
+            }
+        } else {
+            (self.kb_selected + 1) % count
+        };
+        self.kb_scroll_into_view(count);
+    }
+
+    pub fn kb_page(&mut self, up: bool, count: u16) {
+        if count == 0 {
+            return;
+        }
+        self.kb_selected = if up {
+            self.kb_selected.saturating_sub(Self::KB_VISIBLE)
+        } else {
+            (self.kb_selected + Self::KB_VISIBLE).min(count - 1)
+        };
+        self.kb_scroll_into_view(count);
+    }
+
+    fn kb_scroll_into_view(&mut self, count: u16) {
+        let visible = Self::KB_VISIBLE.min(count);
+        if self.kb_selected < self.kb_top {
+            self.kb_top = self.kb_selected;
+        } else if self.kb_selected >= self.kb_top + visible {
+            self.kb_top = self.kb_selected + 1 - visible;
+        }
+        self.kb_top = self.kb_top.min(count.saturating_sub(visible));
+    }
 }
 
 #[derive(Debug, Default, PartialEq)]

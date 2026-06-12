@@ -18,8 +18,9 @@ use ratatui::widgets::{Clear, Paragraph};
 use ratatui::Frame;
 
 pub fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup: &Popup) {
+    let kb = &app.config.keybinds;
     match popup {
-        Popup::Help => help::draw(frame, area, theme),
+        Popup::Help => help::draw(frame, area, theme, kb),
         Popup::Dump(d) => confirm::draw(
             frame,
             area,
@@ -27,15 +28,18 @@ pub fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup
             "Dump",
             &format!("Dump {} read register(s) to a file?", app.read_count()),
             &d.result,
-            (None, Some("esc")),
+            &format!(
+                " {} \u{b7} confirm   backspace/{} cancel",
+                kb.action, kb.exit
+            ),
         ),
-        Popup::Search(s) => search::draw(frame, area, theme, s),
-        Popup::Label(l) => label::draw(frame, area, theme, l),
+        Popup::Search(s) => search::draw(frame, area, theme, kb, s),
+        Popup::Label(l) => label::draw(frame, area, theme, kb, l),
         Popup::Custom(c) => custom::draw(frame, area, theme, app, c),
         Popup::Columns(selected) => columns::draw(frame, area, theme, app, *selected),
-        Popup::Write(write) => write::draw(frame, area, theme, write),
-        Popup::Slave(value) => slave::draw(frame, area, theme, *value),
-        Popup::Logs(logs) => logs::draw(frame, area, theme, logs),
+        Popup::Write(write) => write::draw(frame, area, theme, kb, write),
+        Popup::Slave(value) => slave::draw(frame, area, theme, kb, *value),
+        Popup::Logs(logs) => logs::draw(frame, area, theme, kb, logs),
         Popup::Inspect => inspect::draw(frame, area, theme, app),
         Popup::Quit => confirm::draw(
             frame,
@@ -44,7 +48,10 @@ pub fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup
             "Unsaved changes",
             " Quit anyway?",
             &None,
-            (Some("esc"), None),
+            &format!(
+                " {}/{} \u{b7} confirm   backspace cancel",
+                kb.action, kb.exit
+            ),
         ),
     }
 }

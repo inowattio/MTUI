@@ -1,10 +1,17 @@
+use crate::config::Keybinds;
 use crate::state::LabelParams;
 use crate::tui::theme::Theme;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::Frame;
 
-pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, label: &LabelParams) {
+pub(super) fn draw(
+    frame: &mut Frame,
+    area: Rect,
+    theme: &Theme,
+    kb: &Keybinds,
+    label: &LabelParams,
+) {
     let (text, text_style) = if label.text.is_empty() {
         ("(empty - will remove)".to_string(), theme.dim_style())
     } else {
@@ -23,7 +30,10 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, label: &LabelPa
             Span::styled("_", theme.accent_style()),
         ]),
         Line::from(Span::styled(
-            " enter \u{b7} set (empty removes)   esc \u{b7} cancel",
+            format!(
+                " {} \u{b7} set (empty removes)   {} \u{b7} cancel",
+                kb.action, kb.exit
+            ),
             theme.dim_style(),
         )),
     ];

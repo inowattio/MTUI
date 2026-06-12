@@ -141,12 +141,16 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &
     }
 
     lines.push(Line::default());
+    let kb = &app.config.keybinds;
     lines.push(Line::from(Span::styled(
-        " \u{2191}/\u{2193} field \u{b7} \u{2190}/\u{2192} change",
+        format!(
+            " {}/{} field \u{b7} \u{2190}/\u{2192} change",
+            kb.move_up, kb.move_down
+        ),
         theme.dim_style(),
     )));
     lines.push(Line::from(Span::styled(
-        " type to edit \u{b7} esc close",
+        format!(" type to edit \u{b7} {} close", kb.exit),
         theme.dim_style(),
     )));
 

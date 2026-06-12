@@ -1,4 +1,5 @@
 use crate::app::App;
+use crate::config::KeybindAction;
 use crate::state::{SettingsField, SettingsParams};
 use crate::tui::theme::Theme;
 use ratatui::layout::Rect;
@@ -13,10 +14,18 @@ enum Kind {
 }
 
 pub fn draw(params: &SettingsParams, app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
+    if params.editing_keybinds {
+        draw_keybinds(params, app, frame, area, theme);
+        return;
+    }
+
     let mut lines: Vec<Line> = vec![Line::default()];
 
     for (i, &field) in SettingsField::ALL.iter().enumerate() {
-        if matches!(field, SettingsField::ClearPins | SettingsField::Save) {
+        if matches!(
+            field,
+            SettingsField::ClearPins | SettingsField::EditKeybinds | SettingsField::Save
+        ) {
             lines.push(Line::default());
         }
         lines.push(render_field(
@@ -185,6 +194,7 @@ fn field_view(
             .to_string(),
             Kind::Toggle,
         ),
+        SettingsField::EditKeybinds => ("Edit keybinds", "open".to_string(), Kind::Action),
         SettingsField::Save => (
             "Save configuration",
             app.config_path().to_string(),
@@ -192,4 +202,77 @@ fn field_view(
         ),
         SettingsField::LoadConfig => ("Load configuration", params.load_path.clone(), Kind::Number),
     }
+}
+
+fn draw_keybinds(params: &SettingsParams, app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
+    let kb = &app.config.keybinds;
+    let actions = KeybindAction::ALL;
+    let count = actions.len() as u16;
+
+    let mut lines: Vec<Line> = vec![Line::default()];
+    lines.push(Line::from(Span::styled(
+        format!("  Keybinds  ({}/{})", params.kb_selected + 1, count),
+        theme.base(),
+    )));
+    lines.push(Line::default());
+
+    let top = params.kb_top;
+    let end = (top + SettingsParams::KB_VISIBLE).min(count);
+    for idx in top..end {
+        let action = actions[idx as usize];
+        let key = kb.get(action);
+        let selected = idx == params.kb_selected;
+        let capturing = selected && params.kb_capturing;
+
+        let marker = if selected { "> " } else { "  " };
+        let style = if selected {
+            theme.selected_style()
+        } else {
+            theme.base()
+        };
+
+        let value = if capturing {
+            "press a key\u{2026}".to_string()
+        } else {
+            key.to_string()
+        };
+
+        let mut spans = vec![
+            Span::styled(
+                format!("{marker}{:<22} ", action.label()),
+                theme.dim_style(),
+            ),
+            Span::styled(value, style),
+        ];
+
+        let duplicate = actions.iter().filter(|&&a| kb.get(a) == key).count() > 1;
+        if duplicate && !capturing {
+            spans.push(Span::styled(" \u{b7} duplicate", theme.warn_style()));
+        }
+
+        lines.push(Line::from(spans));
+    }
+
+    lines.push(Line::default());
+    let hint = if params.kb_capturing {
+        "Esc \u{b7} cancel".to_string()
+    } else {
+        format!(
+            "{} \u{b7} rebind   Backspace \u{b7} reset to default   Esc \u{b7} back",
+            kb.action
+        )
+    };
+    lines.push(Line::from(Span::styled(
+        format!("  {hint}"),
+        theme.dim_style(),
+    )));
+
+    if app.dirty {
+        lines.push(Line::from(Span::styled(
+            "  \u{25cf} unsaved changes",
+            theme.warn_style(),
+        )));
+    }
+
+    frame.render_widget(Paragraph::new(lines), area);
 }

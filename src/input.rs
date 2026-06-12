@@ -1,3 +1,5 @@
+use serde::de::{self, Deserialize, Deserializer};
+use serde::{Serialize, Serializer};
 use std::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -31,6 +33,47 @@ impl fmt::Display for KeyCode {
             KeyCode::PageUp => f.write_str("PageUp"),
             KeyCode::PageDown => f.write_str("PageDown"),
         }
+    }
+}
+
+impl KeyCode {
+    pub fn from_name(s: &str) -> Option<Self> {
+        let named = match s.to_ascii_lowercase().as_str() {
+            "esc" | "escape" => Some(KeyCode::Esc),
+            "enter" | "return" => Some(KeyCode::Enter),
+            "backspace" => Some(KeyCode::Backspace),
+            "tab" => Some(KeyCode::Tab),
+            "up" => Some(KeyCode::Up),
+            "down" => Some(KeyCode::Down),
+            "left" => Some(KeyCode::Left),
+            "right" => Some(KeyCode::Right),
+            "pageup" => Some(KeyCode::PageUp),
+            "pagedown" => Some(KeyCode::PageDown),
+            "space" => Some(KeyCode::Char(' ')),
+            _ => None,
+        };
+        if named.is_some() {
+            return named;
+        }
+        let mut chars = s.chars();
+        let c = chars.next()?;
+        match chars.next() {
+            Some(_) => None,
+            None => Some(KeyCode::Char(c)),
+        }
+    }
+}
+
+impl Serialize for KeyCode {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for KeyCode {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(deserializer)?;
+        KeyCode::from_name(&s).ok_or_else(|| de::Error::custom(format!("invalid key: {s:?}")))
     }
 }
 

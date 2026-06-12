@@ -37,8 +37,12 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App) {
         }
     }
     lines.push(Line::default());
+    let kb = &app.config.keybinds;
     lines.push(Line::from(Span::styled(
-        " \u{2191}/\u{2193} move \u{b7} r refresh \u{b7} esc close",
+        format!(
+            " {}/{} move \u{b7} {} refresh \u{b7} {} close",
+            kb.move_up, kb.move_down, kb.refresh, kb.exit
+        ),
         theme.dim_style(),
     )));
 

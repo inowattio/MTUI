@@ -15,7 +15,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     let theme = Theme::default();
 
     let mode = make_top_title(&app.state);
-    let key_hints = make_bottom_title(&app.state);
+    let key_hints = make_bottom_title(&app.state, &app.config.keybinds);
     let clock = Local::now().format("%H:%M:%S.%3f").to_string();
 
     let outer = Block::default()

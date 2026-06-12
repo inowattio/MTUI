@@ -10,23 +10,11 @@ pub(super) fn draw(
     title: &str,
     prompt: &str,
     result: &Option<String>,
-    additionals: (Option<&str>, Option<&str>),
+    footer: &str,
 ) {
-    let (additional_confirm, additional_cancel) = additionals;
-    let mut info_line = String::new();
-    info_line.push_str(" enter");
-    if let Some(key) = additional_confirm {
-        info_line.push_str(&format!("/{key}"));
-    }
-    info_line.push_str(" \u{b7} confirm   backspace");
-    if let Some(key) = additional_cancel {
-        info_line.push_str(&format!("/{key}"));
-    }
-    info_line.push_str(" cancel");
-
     let mut lines = vec![
         Line::from(Span::styled(prompt.to_string(), theme.base())),
-        Line::from(Span::styled(info_line, theme.dim_style())),
+        Line::from(Span::styled(footer.to_string(), theme.dim_style())),
     ];
 
     if let Some(result) = result {
