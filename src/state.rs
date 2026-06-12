@@ -188,6 +188,38 @@ impl CustomParams {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SweepField {
+    From,
+    To,
+    Mode,
+    Action,
+}
+
+impl SweepField {
+    pub const ALL: [SweepField; 4] = [
+        SweepField::From,
+        SweepField::To,
+        SweepField::Mode,
+        SweepField::Action,
+    ];
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct SweepConfigParams {
+    pub from: u16,
+    pub to: u16,
+    pub continuous: bool,
+    pub selected: u16,
+}
+
+impl SweepConfigParams {
+    pub fn current_field(&self) -> SweepField {
+        let i = (self.selected as usize).min(SweepField::ALL.len() - 1);
+        SweepField::ALL[i]
+    }
+}
+
 #[derive(Debug, Default, PartialEq)]
 pub struct SearchParams {
     pub query: String,
@@ -391,6 +423,7 @@ pub enum Popup {
     Write(WriteParams),
     Slave(u16),
     Logs(LogsParams),
+    SweepConfig(SweepConfigParams),
     Inspect,
     Quit,
 }
@@ -406,6 +439,7 @@ pub enum PopupKind {
     Write,
     Slave,
     Logs,
+    SweepConfig,
     Inspect,
     Quit,
 }
@@ -422,6 +456,7 @@ impl Popup {
             Popup::Write(_) => PopupKind::Write,
             Popup::Slave(_) => PopupKind::Slave,
             Popup::Logs(_) => PopupKind::Logs,
+            Popup::SweepConfig(_) => PopupKind::SweepConfig,
             Popup::Inspect => PopupKind::Inspect,
             Popup::Quit => PopupKind::Quit,
         }

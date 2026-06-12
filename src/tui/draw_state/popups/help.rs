@@ -18,6 +18,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, kb: &Keybinds) 
         (format!("{}", kb.cycle_position), "Prev position"),
         (format!("{}", kb.copy_address), "Copy address"),
         (format!("{}", kb.graph), "Value graph"),
+        (format!("{}", kb.sweep), "Sweep"),
         (format!("{}", kb.inspect), "Inspect register"),
         (format!("{}", kb.write), "Write register"),
         (format!("{}", kb.slave), "Set slave id"),

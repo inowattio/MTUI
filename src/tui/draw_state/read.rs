@@ -280,6 +280,20 @@ pub fn draw(
             ));
         }
     }
+    if app.sweep.active {
+        let mode = if app.sweep.continuous { " (loop)" } else { "" };
+        info_spans.push(Span::styled(
+            format!(
+                "   {} SWEEP {}\u{2192}{} @{}{}",
+                spinner_frame(app.frame),
+                app.sweep.from,
+                app.sweep.to,
+                app.sweep.current,
+                mode,
+            ),
+            theme.accent_style(),
+        ));
+    }
     frame.render_widget(
         Paragraph::new(Line::from(info_spans)).alignment(Alignment::Left),
         rows[0],

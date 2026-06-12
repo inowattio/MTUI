@@ -8,7 +8,7 @@ use crate::num_ops::{
 };
 use crate::state::{
     DiscoveryField, DiscoveryParams, InterfaceKind, LogsParams, Popup, PopupKind, ReadPanel,
-    SettingsField,
+    SettingsField, SweepField,
 };
 
 pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
@@ -62,6 +62,7 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         c if c == kb.discovery => app.open_discovery(),
         c if c == kb.settings => app.open_settings(),
         c if c == kb.graph => app.toggle_graph(),
+        c if c == kb.sweep => app.open_sweep(),
         c if c == kb.inspect => app.open_inspect(),
         c if c == kb.cycle_position => app.cycle_position(),
         c if c == kb.copy_address => app.copy_address(),
@@ -319,6 +320,26 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
             c if c == kb.page_down => app.logs_scroll(LogsParams::VISIBLE as i32),
             _ => {}
         },
+
+        PopupKind::SweepConfig => {
+            let field = match &app.read().popup {
+                Some(Popup::SweepConfig(p)) => p.current_field(),
+                _ => return,
+            };
+            match key_event.code {
+                c if c == kb.exit || c == kb.sweep => app.close_popup(),
+                c if c == kb.action => app.sweep_action(),
+                c if c == kb.move_up => app.sweep_config_move(false),
+                c if c == kb.move_down => app.sweep_config_move(true),
+                c if c == kb.pause && field == SweepField::Mode => app.sweep_config_toggle(),
+                KeyCode::Left | KeyCode::Right if field == SweepField::Mode => {
+                    app.sweep_config_toggle()
+                }
+                KeyCode::Backspace => app.sweep_config_backspace(field),
+                KeyCode::Char(c) if c.is_ascii_digit() => app.sweep_config_digit(field, c),
+                _ => {}
+            }
+        }
 
         PopupKind::Quit => match key_event.code {
             c if c == kb.action || c == kb.exit => app.quit(),
