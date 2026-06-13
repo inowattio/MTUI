@@ -8,7 +8,6 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Config {
-    #[serde(default)]
     pub name: String,
     pub device: DeviceConfig,
     pub startup: Startup,
