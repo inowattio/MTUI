@@ -541,6 +541,32 @@ pub enum ConnectionStatus {
     Error(String),
 }
 
+impl ConnectionStatus {
+    pub fn code(&self) -> u8 {
+        match self {
+            ConnectionStatus::Unknown => 0,
+            ConnectionStatus::Reading => 1,
+            ConnectionStatus::Connected => 2,
+            ConnectionStatus::Reconnecting => 3,
+            ConnectionStatus::Error(_) => 4,
+        }
+    }
+
+    pub fn label_from_code(code: u8) -> &'static str {
+        match code {
+            1 => "reading",
+            2 => "connected",
+            3 => "reconnecting",
+            4 => "error",
+            _ => "unknown",
+        }
+    }
+
+    pub fn code_serving(code: u8) -> bool {
+        matches!(code, 0..=2)
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub struct LogViewParams {
     pub top: u16,

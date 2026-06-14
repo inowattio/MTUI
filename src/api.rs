@@ -1,11 +1,12 @@
-use crate::app::{ApiDevice, BoundPort, ReadOnlyFlag};
+use crate::app::{ApiDevice, BoundPort, ReadOnlyFlag, StatusFlag};
 use crate::modbus::ModbusDevice;
 use crate::register::RegisterType;
+use crate::state::ConnectionStatus;
 use crate::writes_log::{self, SharedWritesLog, WriteKind};
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::routing::post;
+use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use std::net::Ipv4Addr;
@@ -17,6 +18,7 @@ struct ApiState {
     device: ApiDevice,
     writes_log: SharedWritesLog,
     read_only: ReadOnlyFlag,
+    status: StatusFlag,
 }
 
 #[derive(Deserialize)]
@@ -38,20 +40,30 @@ struct WriteRequest {
     values: Vec<u16>,
 }
 
+#[derive(Serialize)]
+struct HealthResponse {
+    status: &'static str,
+    device_present: bool,
+    read_only: bool,
+}
+
 pub async fn serve(
     port: u16,
     device: ApiDevice,
     bound: BoundPort,
     writes_log: SharedWritesLog,
     read_only: ReadOnlyFlag,
+    status: StatusFlag,
 ) {
     let router = Router::new()
         .route("/read", post(read_handler))
         .route("/write", post(write_handler))
+        .route("/health", get(health_handler))
         .with_state(ApiState {
             device,
             writes_log,
             read_only,
+            status,
         });
 
     let listener = match TcpListener::bind((Ipv4Addr::UNSPECIFIED, port)).await {
@@ -127,6 +139,25 @@ async fn write_handler(
             StatusCode::BAD_GATEWAY
         }
     }
+}
+
+async fn health_handler(State(state): State<ApiState>) -> Response {
+    let device_present = current(&state.device).is_some();
+    let code = state.status.load(Ordering::Relaxed);
+    let read_only = state.read_only.load(Ordering::Relaxed);
+
+    let body = Json(HealthResponse {
+        status: ConnectionStatus::label_from_code(code),
+        device_present,
+        read_only,
+    });
+
+    let http = if device_present && ConnectionStatus::code_serving(code) {
+        StatusCode::OK
+    } else {
+        StatusCode::SERVICE_UNAVAILABLE
+    };
+    (http, body).into_response()
 }
 
 fn current(device: &ApiDevice) -> Option<ModbusDevice> {
