@@ -134,6 +134,12 @@ pub struct App {
     api_read_only: ReadOnlyFlag,
     api_status: StatusFlag,
     writes_log: SharedWritesLog,
+    #[cfg(not(target_arch = "wasm32"))]
+    api_server: Option<tokio::task::JoinHandle<()>>,
+    #[cfg(not(target_arch = "wasm32"))]
+    api_server_port: Option<u16>,
+    #[cfg(not(target_arch = "wasm32"))]
+    api_pending_port: Option<u16>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -331,6 +337,12 @@ impl App {
             api_read_only: Arc::new(AtomicBool::new(false)),
             api_status: Arc::new(AtomicU8::new(0)),
             writes_log: Arc::new(Mutex::new(WritesLogState::default())),
+            #[cfg(not(target_arch = "wasm32"))]
+            api_server: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            api_server_port: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            api_pending_port: None,
         };
 
         app.apply_config(config, device);
@@ -343,6 +355,9 @@ impl App {
             app.state = State::Discovery(Self::discovery_params(&app.config));
             log::warn!("Started \u{b7} no device, opened Discovery");
         }
+
+        #[cfg(not(target_arch = "wasm32"))]
+        app.reconcile_api_server();
 
         app
     }
@@ -464,6 +479,38 @@ impl App {
     fn sync_api_status(&self) {
         self.api_status
             .store(self.connection.code(), std::sync::atomic::Ordering::Relaxed);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn reconcile_api_server(&mut self) {
+        let desired = self.config.port;
+        if desired == self.api_server_port {
+            self.api_pending_port = desired;
+            return;
+        }
+        if self.api_pending_port != desired {
+            self.api_pending_port = desired;
+            return;
+        }
+
+        if let Some(handle) = self.api_server.take() {
+            handle.abort();
+            log::info!("API server stopped");
+        }
+        self.api_bound_port
+            .store(0, std::sync::atomic::Ordering::Relaxed);
+        self.api_server_port = desired;
+
+        if let Some(port) = desired {
+            self.api_server = Some(tokio::spawn(crate::api::serve(
+                port,
+                self.api_device(),
+                self.api_bound_port_handle(),
+                self.writes_log_handle(),
+                self.api_read_only_handle(),
+                self.api_status_handle(),
+            )));
+        }
     }
 
     pub fn api_bound_port(&self) -> Option<u16> {
@@ -1570,6 +1617,8 @@ impl App {
     pub async fn tick(&mut self) {
         self.frame = self.frame.wrapping_add(1);
         self.sync_api_status();
+        #[cfg(not(target_arch = "wasm32"))]
+        self.reconcile_api_server();
         self.complete_background_task().await;
         if self.background_task.is_some() {
             return;
