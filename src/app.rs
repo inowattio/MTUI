@@ -18,7 +18,7 @@ use chrono::{DateTime, Local, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 use std::cell::Cell;
 use std::collections::{BTreeMap, VecDeque};
-use std::sync::atomic::{AtomicBool, AtomicU16};
+use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU8};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::{error, fs};
@@ -26,6 +26,7 @@ use std::{error, fs};
 pub type ApiDevice = Arc<Mutex<Option<ModbusDevice>>>;
 pub type BoundPort = Arc<AtomicU16>;
 pub type ReadOnlyFlag = Arc<AtomicBool>;
+pub type StatusFlag = Arc<AtomicU8>;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum WriteType {
@@ -131,6 +132,7 @@ pub struct App {
     api_device: ApiDevice,
     api_bound_port: BoundPort,
     api_read_only: ReadOnlyFlag,
+    api_status: StatusFlag,
     writes_log: SharedWritesLog,
 }
 
@@ -327,6 +329,7 @@ impl App {
             api_device: Arc::new(Mutex::new(None)),
             api_bound_port: Arc::new(AtomicU16::new(0)),
             api_read_only: Arc::new(AtomicBool::new(false)),
+            api_status: Arc::new(AtomicU8::new(0)),
             writes_log: Arc::new(Mutex::new(WritesLogState::default())),
         };
 
@@ -449,9 +452,18 @@ impl App {
         self.api_read_only.clone()
     }
 
+    pub fn api_status_handle(&self) -> StatusFlag {
+        self.api_status.clone()
+    }
+
     fn sync_api_read_only(&self) {
         self.api_read_only
             .store(self.config.read_only, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    fn sync_api_status(&self) {
+        self.api_status
+            .store(self.connection.code(), std::sync::atomic::Ordering::Relaxed);
     }
 
     pub fn api_bound_port(&self) -> Option<u16> {
@@ -1557,6 +1569,7 @@ impl App {
 
     pub async fn tick(&mut self) {
         self.frame = self.frame.wrapping_add(1);
+        self.sync_api_status();
         self.complete_background_task().await;
         if self.background_task.is_some() {
             return;
