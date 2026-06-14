@@ -325,8 +325,8 @@ impl App {
             pending_write: None,
             logged_connection: ConnectionStatus::Unknown,
             api_device: Arc::new(Mutex::new(None)),
-            api_bound_port: Arc::new(std::sync::atomic::AtomicU16::new(0)),
-            api_read_only: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            api_bound_port: Arc::new(AtomicU16::new(0)),
+            api_read_only: Arc::new(AtomicBool::new(false)),
             writes_log: Arc::new(Mutex::new(WritesLogState::default())),
         };
 
