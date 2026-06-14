@@ -100,6 +100,7 @@ pub fn status_span(status: &ConnectionStatus, theme: &Theme) -> Span<'static> {
         ConnectionStatus::Unknown => ("○", "no data", theme.dim),
         ConnectionStatus::Reading => ("◍", "reading", theme.warn),
         ConnectionStatus::Connected => ("●", "connected", theme.ok),
+        ConnectionStatus::Reconnecting => ("↻", "reconnecting", theme.warn),
         ConnectionStatus::Error(_) => ("●", "error", theme.err),
     };
     Span::styled(

@@ -537,6 +537,7 @@ pub enum ConnectionStatus {
     Unknown,
     Reading,
     Connected,
+    Reconnecting,
     Error(String),
 }
 
