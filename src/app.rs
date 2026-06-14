@@ -40,6 +40,21 @@ pub type AppResult<T> = Result<T, Box<dyn error::Error>>;
 enum BackgroundTask {
     Refresh(TaskHandle<RefreshTaskResult>),
     Write(TaskHandle<WriteOutcome>),
+    Reconnect(TaskHandle<Result<ModbusDevice, String>>),
+}
+
+const RECONNECT_BASE_MS: u64 = 1_000;
+const RECONNECT_CAP_MS: u64 = 30_000;
+
+fn reconnect_backoff(attempts: u32) -> Duration {
+    let shift = attempts.saturating_sub(1).min(5);
+    Duration::from_millis((RECONNECT_BASE_MS << shift).min(RECONNECT_CAP_MS))
+}
+
+#[derive(Debug, Default)]
+struct ReconnectState {
+    attempts: u32,
+    next_at: Option<Instant>,
 }
 
 #[derive(Debug)]
@@ -101,6 +116,7 @@ pub struct App {
     pub paused: bool,
     pub dirty: bool,
     pub sweep: SweepState,
+    reconnect: ReconnectState,
     pub visible_rows: Cell<u16>,
     previous_position: Option<RegisterCell>,
     background_task: Option<BackgroundTask>,
@@ -298,6 +314,7 @@ impl App {
             paused: false,
             dirty: false,
             sweep: SweepState::default(),
+            reconnect: ReconnectState::default(),
             visible_rows: Cell::new(1),
             previous_position: None,
             background_task: None,
@@ -348,6 +365,7 @@ impl App {
         self.previous_position = None;
         self.connection = ConnectionStatus::Unknown;
         self.logged_connection = ConnectionStatus::Unknown;
+        self.reconnect = ReconnectState::default();
     }
 
     fn startup_read_params(&self) -> ReadParams {
@@ -511,6 +529,7 @@ impl App {
         }
         self.connection = ConnectionStatus::Unknown;
         self.logged_connection = ConnectionStatus::Unknown;
+        self.reconnect = ReconnectState::default();
         self.state = State::Read(self.startup_read_params());
     }
 
@@ -565,6 +584,7 @@ impl App {
                 self.value_history.clear();
                 self.connection = ConnectionStatus::Unknown;
                 self.logged_connection = ConnectionStatus::Unknown;
+                self.reconnect = ReconnectState::default();
                 let device = self.config.display_device();
                 log::info!("Switched device \u{b7} {device}");
                 self.state = State::Read(self.startup_read_params());
@@ -1548,6 +1568,10 @@ impl App {
             self.read_mut().scroll_to_cursor(rows, cols);
         }
 
+        if self.maybe_reconnect() {
+            return;
+        }
+
         if self.sweep.active {
             if matches!(self.state, State::Read(_)) {
                 let rows = self.visible_rows.get();
@@ -1573,6 +1597,74 @@ impl App {
 
         if should_refresh {
             self.refresh().await;
+        }
+    }
+
+    fn maybe_reconnect(&mut self) -> bool {
+        if self.device.is_none() || !matches!(self.state, State::Read(_)) {
+            return false;
+        }
+
+        if !matches!(self.config.device.interface, Interface::Network(_)) {
+            return false;
+        }
+        if !matches!(
+            self.connection,
+            ConnectionStatus::Error(_) | ConnectionStatus::Reconnecting
+        ) {
+            return false;
+        }
+
+        let now = Instant::now();
+        let due = match self.reconnect.next_at {
+            None => true,
+            Some(at) => now >= at,
+        };
+        if !due {
+            return true;
+        }
+
+        self.spawn_reconnect();
+        true
+    }
+
+    fn spawn_reconnect(&mut self) {
+        self.connection = ConnectionStatus::Reconnecting;
+        self.reconnect.next_at = None;
+        if self.reconnect.attempts == 0 {
+            log::warn!("Connection lost \u{b7} reconnecting\u{2026}");
+        }
+        let config = self.config.device.clone();
+        self.background_task = Some(BackgroundTask::Reconnect(compat::spawn(async move {
+            ModbusDevice::new(&config).await.map_err(|e| e.to_string())
+        })));
+    }
+
+    fn apply_reconnect_result(&mut self, result: Option<Result<ModbusDevice, String>>) {
+        match result {
+            Some(Ok(device)) => {
+                self.device = Some(device);
+                self.sync_api_device();
+                self.reconnect = ReconnectState::default();
+                self.connection = ConnectionStatus::Unknown;
+                self.logged_connection = ConnectionStatus::Unknown;
+                log::info!("Reconnected \u{b7} {}", self.config.display_device());
+            }
+            other => {
+                let error = match other {
+                    Some(Err(e)) => e,
+                    _ => "reconnect task stopped unexpectedly".to_string(),
+                };
+                self.reconnect.attempts = self.reconnect.attempts.saturating_add(1);
+                let delay = reconnect_backoff(self.reconnect.attempts);
+                self.reconnect.next_at = Some(Instant::now() + delay);
+                log::warn!(
+                    "Reconnect attempt {} failed \u{b7} {error}; retrying in {}s",
+                    self.reconnect.attempts,
+                    delay.as_secs()
+                );
+                self.connection = ConnectionStatus::Error(error);
+            }
         }
     }
 
@@ -1879,6 +1971,9 @@ impl App {
             (Some(Err(e)), _) | (_, Some(Err(e))) => ConnectionStatus::Error(e.clone()),
             _ => self.connection.clone(),
         };
+        if matches!(connection, ConnectionStatus::Connected) {
+            self.reconnect = ReconnectState::default();
+        }
         {
             let params = self.read_mut();
             params.read_duration = Some(result.read_duration);
@@ -2126,6 +2221,7 @@ impl App {
         enum Done {
             Refresh(Option<RefreshTaskResult>),
             Write(Option<WriteOutcome>),
+            Reconnect(Option<Result<ModbusDevice, String>>),
         }
 
         let done = match self.background_task.as_mut() {
@@ -2140,10 +2236,16 @@ impl App {
                 TaskPoll::Finished(outcome) => Done::Write(Some(outcome)),
                 TaskPoll::Gone => Done::Write(None),
             },
+            Some(BackgroundTask::Reconnect(handle)) => match handle.poll_result() {
+                TaskPoll::Pending => return,
+                TaskPoll::Finished(result) => Done::Reconnect(Some(result)),
+                TaskPoll::Gone => Done::Reconnect(None),
+            },
         };
         self.background_task = None;
 
         match done {
+            Done::Reconnect(result) => self.apply_reconnect_result(result),
             Done::Refresh(Some(result)) => self.apply_refresh_result(result),
             Done::Refresh(None) => {
                 let message = "read task stopped unexpectedly".to_string();
