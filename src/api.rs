@@ -1,4 +1,4 @@
-use crate::app::{ApiDevice, BoundPort, ReadOnlyFlag, StatusFlag};
+use crate::app::{ApiBindState, ApiDevice, BindStateFlag, BoundPort, ReadOnlyFlag, StatusFlag};
 use crate::modbus::ModbusDevice;
 use crate::register::RegisterType;
 use crate::state::ConnectionStatus;
@@ -9,9 +9,9 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
-use std::net::Ipv4Addr;
+use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::atomic::Ordering;
-use tokio::net::TcpListener;
+use tokio::net::{TcpListener, TcpSocket};
 
 #[derive(Clone)]
 struct ApiState {
@@ -54,6 +54,7 @@ pub async fn serve(
     writes_log: SharedWritesLog,
     read_only: ReadOnlyFlag,
     status: StatusFlag,
+    bind: BindStateFlag,
 ) {
     let router = Router::new()
         .route("/read", post(read_handler))
@@ -66,13 +67,15 @@ pub async fn serve(
             status,
         });
 
-    let listener = match TcpListener::bind((Ipv4Addr::UNSPECIFIED, port)).await {
+    let listener = match bind_reusable(SocketAddr::from((Ipv4Addr::UNSPECIFIED, port))) {
         Ok(listener) => listener,
         Err(e) => {
             log::error!("API server failed to bind port {port}: {e}");
+            bind.store(ApiBindState::Failed.code(), Ordering::Relaxed);
             return;
         }
     };
+    bind.store(ApiBindState::Bound.code(), Ordering::Relaxed);
     match listener.local_addr() {
         Ok(addr) => {
             bound.store(addr.port(), Ordering::Relaxed);
@@ -158,6 +161,13 @@ async fn health_handler(State(state): State<ApiState>) -> Response {
         StatusCode::SERVICE_UNAVAILABLE
     };
     (http, body).into_response()
+}
+
+fn bind_reusable(addr: SocketAddr) -> std::io::Result<TcpListener> {
+    let socket = TcpSocket::new_v4()?;
+    socket.set_reuseaddr(true)?;
+    socket.bind(addr)?;
+    socket.listen(1024)
 }
 
 fn current(device: &ApiDevice) -> Option<ModbusDevice> {

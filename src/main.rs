@@ -4,8 +4,8 @@ mod native {
     use mtui::app::{App, AppResult};
     use mtui::event::{Event, EventHandler};
     use mtui::handler::{handle_key_events, handle_paste};
+    use mtui::logger;
     use mtui::tui::Tui;
-    use mtui::{api, logger};
     use ratatui::backend::CrosstermBackend;
     use ratatui::Terminal;
     use std::io;
@@ -24,17 +24,6 @@ mod native {
         let args = Args::parse();
         logger::init();
         let mut app = App::new(args.config).await;
-
-        if let Some(port) = app.config.port {
-            tokio::spawn(api::serve(
-                port,
-                app.api_device(),
-                app.api_bound_port_handle(),
-                app.writes_log_handle(),
-                app.api_read_only_handle(),
-                app.api_status_handle(),
-            ));
-        }
 
         let backend = CrosstermBackend::new(io::stderr());
         let terminal = Terminal::new(backend)?;
