@@ -4,8 +4,8 @@ mod native {
     use mtui::app::{App, AppResult};
     use mtui::event::{Event, EventHandler};
     use mtui::handler::{handle_key_events, handle_paste};
-    use mtui::tui::Tui;
     use mtui::logger;
+    use mtui::tui::Tui;
     use ratatui::backend::CrosstermBackend;
     use ratatui::Terminal;
     use std::io;
