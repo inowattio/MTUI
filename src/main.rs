@@ -58,6 +58,7 @@ mod native {
     async fn run_headless(config: Option<String>) -> AppResult<()> {
         logger::enable_echo();
         let mut app = App::new(config).await;
+        app.headless = true;
 
         match app.config.port {
             Some(port) => log::info!("Headless mode - API server on port {port}"),
