@@ -158,10 +158,64 @@ fn move_read_cursor(app: &mut App, code: KeyCode) {
     }
 }
 
+async fn run_action(app: &mut App, action: KeybindAction) {
+    use KeybindAction::*;
+    match action {
+        Exit => app.request_quit(),
+        Pin => app.pin(),
+        Dump => app.open_dump(),
+        Help => app.open_help(),
+        Refresh | Action => app.refresh().await,
+        Toggle => app.toggle_type(),
+        Write => app.open_write(),
+        Jump => app.open_search(),
+        Label => app.open_label(),
+        Custom => app.open_custom(),
+        Columns => app.open_columns(),
+        Pause => app.toggle_pause(),
+        WordOrder => app.toggle_word_order(),
+        Slave => app.open_slave(),
+        CyclePosition => app.cycle_position(),
+        Inspect => app.open_inspect(),
+        Graph => app.toggle_graph(),
+        Discovery => app.open_discovery(),
+        Settings => app.open_settings(),
+        CopyAddress => app.copy_address(),
+        Logs => app.open_logs(),
+        AppLogs => app.open_log_view(),
+        Sweep => app.open_sweep(),
+        SwitchView => {
+            let rows = app.visible_rows.get();
+            app.read_mut().toggle_panel();
+            let len = app.panel_len();
+            let cols = app.config.matrix_cols;
+            let p = app.read_mut();
+            p.scroll_pinned(rows, len);
+            p.scroll_to_cursor(rows, cols);
+        }
+        Negator => {}
+        MoveUp | MoveDown | PageUp | PageDown => {
+            move_read_cursor(app, app.config.keybinds.get(action));
+        }
+    }
+}
+
 async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
     let kb = app.config.keybinds;
     match kind {
-        PopupKind::Help => app.close_popup(),
+        PopupKind::Help => match key_event.code {
+            c if c == kb.exit => app.close_popup(),
+            c if c == kb.action => {
+                if let Some(action) = app.help_commit() {
+                    run_action(app, action).await;
+                }
+            }
+            c if c == kb.move_up => app.help_move(false),
+            c if c == kb.move_down => app.help_move(true),
+            KeyCode::Backspace => app.help_backspace(),
+            KeyCode::Char(c) => app.help_input(c),
+            _ => {}
+        },
 
         PopupKind::Inspect => match key_event.code {
             c if c == kb.exit || c == kb.inspect => app.close_popup(),

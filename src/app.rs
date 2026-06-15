@@ -1,5 +1,7 @@
 use crate::compat::{self, Instant, TaskHandle, TaskPoll};
-use crate::config::{Column, Config, CustomRules, InterpretorConfig, Label, Labels, Startup};
+use crate::config::{
+    Column, Config, CustomRules, InterpretorConfig, KeybindAction, Label, Labels, Startup,
+};
 use crate::constants::CONFIG_PATH;
 use crate::custom::{parse_enum, parse_op, CustomRepr, CustomRule};
 use crate::interpretator::{format_ago, Interpretor};
@@ -9,9 +11,9 @@ use crate::modbus::{
 use crate::num_ops::{digit_add, digit_remove};
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
 use crate::state::{
-    ConnectionStatus, CustomField, CustomParams, DiscoveryParams, DumpParams, InterfaceKind,
-    LabelParams, LogViewParams, LogsParams, Popup, PopupKind, ReadPanel, ReadParams, SearchParams,
-    SettingsField, SettingsParams, State, SweepConfigParams, SweepField, WriteParams,
+    ConnectionStatus, CustomField, CustomParams, DiscoveryParams, DumpParams, HelpParams,
+    InterfaceKind, LabelParams, LogViewParams, LogsParams, Popup, PopupKind, ReadPanel, ReadParams,
+    SearchParams, SettingsField, SettingsParams, State, SweepConfigParams, SweepField, WriteParams,
 };
 use crate::writes_log::{SharedWritesLog, WriteKind, WritesLogState};
 use chrono::{DateTime, Local, SecondsFormat, Utc};
@@ -76,6 +78,30 @@ const RECONNECT_CAP_MS: u64 = 30_000;
 fn reconnect_backoff(attempts: u32) -> Duration {
     let shift = attempts.saturating_sub(1).min(5);
     Duration::from_millis((RECONNECT_BASE_MS << shift).min(RECONNECT_CAP_MS))
+}
+
+fn fuzzy_score(query: &str, text: &str) -> Option<i32> {
+    if query.is_empty() {
+        return Some(0);
+    }
+    let text = text.to_ascii_lowercase();
+    let query = query.to_ascii_lowercase();
+
+    if let Some(pos) = text.find(&query) {
+        return Some(1000 - pos as i32);
+    }
+
+    let mut chars = text.chars();
+    for qc in query.chars() {
+        loop {
+            match chars.next() {
+                Some(tc) if tc == qc => break,
+                Some(_) => continue,
+                None => return None,
+            }
+        }
+    }
+    Some(0)
 }
 
 #[derive(Debug, Default)]
@@ -709,7 +735,67 @@ impl App {
     }
 
     pub fn open_help(&mut self) {
-        self.read_mut().popup = Some(Popup::Help);
+        self.read_mut().popup = Some(Popup::Help(HelpParams::default()));
+    }
+
+    pub fn help_input(&mut self, c: char) {
+        if let Some(Popup::Help(h)) = &mut self.read_mut().popup {
+            h.query.push(c);
+            h.selected = 0;
+        }
+    }
+
+    pub fn help_backspace(&mut self) {
+        if let Some(Popup::Help(h)) = &mut self.read_mut().popup {
+            h.query.pop();
+            h.selected = 0;
+        }
+    }
+
+    pub fn help_move(&mut self, down: bool) {
+        let count = self.help_matches().len() as u16;
+        if let Some(Popup::Help(h)) = &mut self.read_mut().popup {
+            if count == 0 {
+                h.selected = 0;
+            } else if down {
+                h.selected = (h.selected + 1) % count;
+            } else {
+                h.selected = (h.selected + count - 1) % count;
+            }
+        }
+    }
+
+    pub fn help_matches(&self) -> Vec<KeybindAction> {
+        let Some(Popup::Help(h)) = &self.read().popup else {
+            return Vec::new();
+        };
+        let mut scored: Vec<(i32, usize, KeybindAction)> = KeybindAction::ALL
+            .iter()
+            .copied()
+            .filter(|a| a.in_help())
+            .enumerate()
+            .filter_map(|(i, a)| fuzzy_score(&h.query, a.label()).map(|score| (score, i, a)))
+            .collect();
+
+        scored.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
+        scored.into_iter().map(|(_, _, a)| a).collect()
+    }
+
+    pub fn help_selected_action(&self) -> Option<KeybindAction> {
+        match &self.read().popup {
+            Some(Popup::Help(h)) if !h.query.is_empty() => {
+                self.help_matches().get(h.selected as usize).copied()
+            }
+            _ => None,
+        }
+    }
+
+    pub fn help_commit(&mut self) -> Option<KeybindAction> {
+        let action = self.help_selected_action();
+        if action.is_some() {
+            self.close_popup();
+        }
+        action
     }
 
     pub fn open_dump(&mut self) {
