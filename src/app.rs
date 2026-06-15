@@ -141,6 +141,7 @@ pub struct App {
     pub connection: ConnectionStatus,
     pub frame: u64,
     pub paused: bool,
+    pub headless: bool,
     pub dirty: bool,
     pub sweep: SweepState,
     reconnect: ReconnectState,
@@ -347,6 +348,7 @@ impl App {
             connection: ConnectionStatus::Unknown,
             frame: 0,
             paused: false,
+            headless: false,
             dirty: false,
             sweep: SweepState::default(),
             reconnect: ReconnectState::default(),
@@ -1691,6 +1693,7 @@ impl App {
         }
 
         let should_refresh = !self.paused
+            && !self.headless
             && matches!(
                 &self.state,
                 State::Read(p)
