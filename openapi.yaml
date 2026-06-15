@@ -1,0 +1,208 @@
+openapi: 3.1.0
+info:
+  title: mtui HTTP API
+  description: |
+    HTTP API exposed by mtui (modbus-tui) for reading and writing Modbus
+    registers on the currently connected device, plus a health probe.
+
+    The server binds to `0.0.0.0` on a configurable port and proxies requests
+    to the live Modbus device backing the TUI. When no device is connected,
+    register operations return `503 Service Unavailable`.
+  version: 0.2.1
+  license:
+    name: See repository
+
+servers:
+  - url: http://{host}:{port}
+    description: mtui API server
+    variables:
+      host:
+        default: localhost
+      port:
+        default: "8080"
+        description: Configured API port (set in mtui; 0 selects an ephemeral port)
+
+paths:
+  /read:
+    post:
+      summary: Read registers
+      description: |
+        Reads `count` registers of the given `type` starting at `address`
+        from the connected device.
+      operationId: readRegisters
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReadRequest"
+            examples:
+              holdings:
+                summary: Read 4 holding registers from address 0
+                value:
+                  type: Holding
+                  address: 0
+                  count: 4
+      responses:
+        "200":
+          description: Register values read successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadResponse"
+              examples:
+                values:
+                  value:
+                    values: [230, 0, 4998, 12]
+        "503":
+          description: No device is currently connected
+        "502":
+          description: The device read failed (Modbus / transport error)
+
+  /write:
+    post:
+      summary: Write registers
+      description: |
+        Writes one or more consecutive holding registers starting at
+        `address`. Rejected with `403` when the server is in read-only mode.
+      operationId: writeRegisters
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WriteRequest"
+            examples:
+              single:
+                summary: Write one register
+                value:
+                  address: 40001
+                  values: [1234]
+              multiple:
+                summary: Write three consecutive registers
+                value:
+                  address: 40001
+                  values: [1234, 5678, 9012]
+      responses:
+        "204":
+          description: Registers written successfully (no body)
+        "403":
+          description: Server is in read-only mode; writes are forbidden
+        "503":
+          description: No device is currently connected
+        "502":
+          description: The device write failed (Modbus / transport error)
+
+  /health:
+    get:
+      summary: Health probe
+      description: |
+        Reports server health. Returns `200` only when a device is present and
+        its connection status is serving (`unknown`, `reading`, or
+        `connected`); otherwise `503` with the same body.
+      operationId: health
+      responses:
+        "200":
+          description: Device present and serving
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              examples:
+                connected:
+                  value:
+                    status: connected
+                    device_present: true
+                    read_only: false
+        "503":
+          description: No device present, or status is not serving
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              examples:
+                disconnected:
+                  value:
+                    status: error
+                    device_present: false
+                    read_only: false
+
+components:
+  schemas:
+    RegisterType:
+      type: string
+      description: Modbus register class.
+      enum:
+        - Holding
+        - Input
+
+    ReadRequest:
+      type: object
+      required: [type, address, count]
+      properties:
+        type:
+          $ref: "#/components/schemas/RegisterType"
+        address:
+          type: integer
+          format: uint16
+          minimum: 0
+          maximum: 65535
+          description: Starting register address.
+        count:
+          type: integer
+          format: uint16
+          minimum: 0
+          maximum: 65535
+          description: Number of registers to read.
+
+    ReadResponse:
+      type: object
+      required: [values]
+      properties:
+        values:
+          type: array
+          description: Raw register values, in address order.
+          items:
+            type: integer
+            format: uint16
+            minimum: 0
+            maximum: 65535
+
+    WriteRequest:
+      type: object
+      required: [address, values]
+      properties:
+        address:
+          type: integer
+          format: uint16
+          minimum: 0
+          maximum: 65535
+          description: Starting register address.
+        values:
+          type: array
+          description: Values to write to consecutive registers.
+          items:
+            type: integer
+            format: uint16
+            minimum: 0
+            maximum: 65535
+
+    HealthResponse:
+      type: object
+      required: [status, device_present, read_only]
+      properties:
+        status:
+          type: string
+          description: Connection status label.
+          enum:
+            - unknown
+            - reading
+            - connected
+            - reconnecting
+            - error
+        device_present:
+          type: boolean
+          description: Whether a Modbus device is currently connected.
+        read_only:
+          type: boolean
+          description: Whether the server rejects writes.

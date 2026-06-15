@@ -14,7 +14,7 @@ Play the GIF to see a quick tour, or better yet, try it in your browser (mock de
 - Pin, label and custom-rule registers; jump to address or label
 - Value graph for a register over time
 - Register writes, with a write log and an optional read-only mode
-- HTTP API (`POST /read`, `POST /write`, `GET /health`)
+- HTTP API (`POST /read`, `POST /write`, `GET /health`, see [openapi.yaml](./openapi.yaml))
 - Dump read data to a file, copy addresses to the clipboard
 - Configurable via `config.json` (or `--config <path>`) and an in-app settings screen
 
