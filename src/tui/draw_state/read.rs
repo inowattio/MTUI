@@ -7,7 +7,7 @@ use chrono::Local;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::symbols;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Axis, Cell, Chart, Dataset, GraphType, Paragraph, Row, Table, Wrap};
+use ratatui::widgets::{Axis, Cell, Chart, Dataset, GraphType, Paragraph, Row, Table};
 use ratatui::Frame;
 
 fn rows_to_table(
@@ -40,12 +40,21 @@ fn rows_to_table(
         .block(theme.panel(title))
 }
 
+fn ascii_title(ascii: &str, theme: &Theme) -> Line<'static> {
+    Line::from(vec![
+        Span::styled(" ASCII ", theme.dim_style()),
+        Span::styled(format!("'{ascii}' "), theme.base()),
+    ])
+    .left_aligned()
+}
+
 fn main_table(
     params: &ReadParams,
     app: &App,
     visible: u16,
     header: &str,
     theme: &Theme,
+    ascii: Option<&str>,
 ) -> Table<'static> {
     let now = Local::now();
     let mut table_rows = Vec::with_capacity(visible as usize);
@@ -89,6 +98,8 @@ fn main_table(
         block = block.title_bottom(
             Line::styled(format!(" \u{26a0} {error} "), theme.err_style()).left_aligned(),
         );
+    } else if let Some(ascii) = ascii {
+        block = block.title_bottom(ascii_title(ascii, theme));
     }
 
     Table::new(table_rows, [Constraint::Percentage(100)])
@@ -99,14 +110,14 @@ fn main_table(
 fn list_table(
     params: &ReadParams,
     app: &App,
-    header: &str,
     theme: &Theme,
     cells: &[RegisterCell],
     top: usize,
     title: &str,
+    ascii: Option<&str>,
 ) -> Table<'static> {
     let now = Local::now();
-    let header = format!("{:<2}{header}", "T");
+    let header = format!("{:<2}{}", "T", app.interpreter.header());
 
     let mut table_rows = Vec::with_capacity(cells.len());
     for (offset, &(kind, address)) in cells.iter().enumerate() {
@@ -139,9 +150,14 @@ fn list_table(
         table_rows.push(Row::new([Cell::from(text)]).style(style));
     }
 
+    let mut block = theme.panel(title);
+    if let Some(ascii) = ascii {
+        block = block.title_bottom(ascii_title(ascii, theme));
+    }
+
     Table::new(table_rows, [Constraint::Percentage(100)])
         .header(Row::new([Cell::from(header)]).style(theme.header_style()))
-        .block(theme.panel(title))
+        .block(block)
 }
 
 fn matrix_table(params: &ReadParams, app: &App, visible: u16, theme: &Theme) -> Table<'static> {
@@ -210,18 +226,9 @@ pub fn draw(
         .any(|&(kind, address)| kind == info_type && address == info_addr);
 
     let show_ascii = app.interpreter.shows_ascii() && !params.graph;
-    let row_constraints = if show_ascii {
-        vec![
-            Constraint::Length(2),
-            Constraint::Min(0),
-            Constraint::Length(1),
-        ]
-    } else {
-        vec![Constraint::Length(2), Constraint::Min(0)]
-    };
     let rows = Layout::default()
         .direction(Direction::Vertical)
-        .constraints(row_constraints)
+        .constraints([Constraint::Length(2), Constraint::Min(0)])
         .split(area);
 
     let read_time = if params.loading {
@@ -320,22 +327,22 @@ pub fn draw(
         return;
     }
 
-    let ascii_string: String = match params.panel {
+    match params.panel {
         ReadPanel::Main => {
-            frame.render_widget(main_table(params, app, visible, header, theme), rows[1]);
-            if show_ascii {
+            let ascii = show_ascii.then(|| {
                 app.ascii_string_for(
                     (0..visible)
                         .filter_map(|i| params.window_start.checked_add(i))
                         .map(|addr| (params.register_type, addr)),
                 )
-            } else {
-                String::new()
-            }
+            });
+            frame.render_widget(
+                main_table(params, app, visible, header, theme, ascii.as_deref()),
+                rows[1],
+            );
         }
         ReadPanel::Matrix => {
             frame.render_widget(matrix_table(params, app, visible, theme), rows[1]);
-            String::new()
         }
         _ => {
             let (title, empty_message) = match params.panel {
@@ -356,34 +363,16 @@ pub fn draw(
                     ),
                     rows[1],
                 );
-                String::new()
             } else {
                 let top = (params.pinned_top as usize).min(len - 1);
                 let cells = app.panel_window(top, visible as usize);
+                let ascii = show_ascii.then(|| app.ascii_string_for(cells.iter().copied()));
                 frame.render_widget(
-                    list_table(params, app, header, theme, &cells, top, title),
+                    list_table(params, app, theme, &cells, top, title, ascii.as_deref()),
                     rows[1],
                 );
-                if show_ascii {
-                    app.ascii_string_for(cells.iter().copied())
-                } else {
-                    String::new()
-                }
             }
         }
-    };
-
-    if show_ascii {
-        let ascii_line = Line::from(vec![
-            Span::styled("ASCII: ", theme.dim_style()),
-            Span::styled(format!("'{ascii_string}'"), theme.base()),
-        ]);
-        frame.render_widget(
-            Paragraph::new(ascii_line)
-                .alignment(Alignment::Left)
-                .wrap(Wrap { trim: false }),
-            rows[2],
-        );
     }
 
     if let Some(popup) = &params.popup {
