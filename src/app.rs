@@ -535,8 +535,10 @@ impl App {
         }
         self.api_bound_port
             .store(0, std::sync::atomic::Ordering::Relaxed);
-        self.api_bind
-            .store(ApiBindState::Pending.code(), std::sync::atomic::Ordering::Relaxed);
+        self.api_bind.store(
+            ApiBindState::Pending.code(),
+            std::sync::atomic::Ordering::Relaxed,
+        );
         self.api_server_port = desired;
 
         if let Some(port) = desired {
