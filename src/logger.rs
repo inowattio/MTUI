@@ -1,6 +1,7 @@
 use chrono::{DateTime, Local};
 use log::{Level, LevelFilter, Log, Metadata, Record};
 use std::collections::VecDeque;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 
 const CAP: usize = 1000;
@@ -33,6 +34,8 @@ pub struct LogEntry {
 static ENTRIES: Mutex<VecDeque<LogEntry>> = Mutex::new(VecDeque::new());
 static LOGGER: TuiLogger = TuiLogger;
 
+static ECHO: AtomicBool = AtomicBool::new(false);
+
 struct TuiLogger;
 
 impl Log for TuiLogger {
@@ -44,11 +47,22 @@ impl Log for TuiLogger {
         if !self.enabled(record.metadata()) {
             return;
         }
+        let now = Local::now();
+        let message = record.args().to_string();
+
+        if ECHO.load(Ordering::Relaxed) {
+            eprintln!(
+                "{} {:<5} {message}",
+                now.format("%H:%M:%S%.3f"),
+                record.level()
+            );
+        }
+
         if let Ok(mut entries) = ENTRIES.lock() {
             entries.push_back(LogEntry {
-                time: Local::now(),
+                time: now,
                 level: record.level().into(),
-                message: record.args().to_string(),
+                message,
             });
             while entries.len() > CAP {
                 entries.pop_front();
@@ -62,6 +76,10 @@ impl Log for TuiLogger {
 pub fn init() {
     let _ = log::set_logger(&LOGGER);
     log::set_max_level(LevelFilter::Info);
+}
+
+pub fn enable_echo() {
+    ECHO.store(true, Ordering::Relaxed);
 }
 
 pub fn count() -> usize {
