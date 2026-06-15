@@ -2,6 +2,7 @@
 mod native {
     use clap::Parser;
     use mtui::app::{App, AppResult};
+    use mtui::constants::EVENT_HANDLER_TICKRATE;
     use mtui::event::{Event, EventHandler};
     use mtui::handler::{handle_key_events, handle_paste};
     use mtui::logger;
@@ -17,12 +18,21 @@ mod native {
         /// Path to the configuration file [default: config.json]
         #[arg(long)]
         config: Option<String>,
+
+        /// Run as an API server only, with no TUI; logs are printed to stderr.
+        #[arg(long)]
+        headless: bool,
     }
 
     #[tokio::main]
     pub async fn run() -> AppResult<()> {
         let args = Args::parse();
         logger::init();
+
+        if args.headless {
+            return run_headless(args.config).await;
+        }
+
         let mut app = App::new(args.config).await;
 
         let backend = CrosstermBackend::new(io::stderr());
@@ -42,6 +52,31 @@ mod native {
         }
 
         tui.exit()?;
+        Ok(())
+    }
+
+    async fn run_headless(config: Option<String>) -> AppResult<()> {
+        logger::enable_echo();
+        let mut app = App::new(config).await;
+
+        match app.config.port {
+            Some(port) => log::info!("Headless mode \u{b7} API server on port {port}"),
+            None => log::warn!(
+                "Headless mode \u{b7} no API port configured; set \"port\" in the config file"
+            ),
+        }
+
+        let mut ticker = tokio::time::interval(EVENT_HANDLER_TICKRATE);
+        while app.running {
+            tokio::select! {
+                _ = ticker.tick() => app.tick().await,
+                _ = tokio::signal::ctrl_c() => {
+                    log::info!("Shutdown requested, stopping");
+                    break;
+                }
+            }
+        }
+
         Ok(())
     }
 }
