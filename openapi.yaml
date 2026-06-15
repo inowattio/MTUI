@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: mtui HTTP API
   description: |
-    HTTP API exposed by mtui (modbus-tui) for reading and writing Modbus
+    HTTP API exposed by MTUI for reading and writing Modbus
     registers on the currently connected device, plus a health probe.
 
     The server binds to `0.0.0.0` on a configurable port and proxies requests

@@ -2,7 +2,7 @@
 name = "mtui"
 version = "0.2.1"
 edition = "2021"
-repository = "https://github.com/inowattio/modbus-tui"
+repository = "https://github.com/inowattio/mtui"
 default-run = "mtui"
 
 [[bin]]
