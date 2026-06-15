@@ -84,15 +84,16 @@ fn main_table(
         table_rows.push(Row::new([Cell::from(text)]).style(style));
     }
 
+    let mut block = theme.panel("Main");
     if let Some(error) = &params.read_error {
-        if let Some(first) = table_rows.first_mut() {
-            *first = Row::new([Cell::from(error.clone())]).style(theme.err_style());
-        }
+        block = block.title_bottom(
+            Line::styled(format!(" \u{26a0} {error} "), theme.err_style()).left_aligned(),
+        );
     }
 
     Table::new(table_rows, [Constraint::Percentage(100)])
         .header(Row::new([Cell::from(header.to_string())]).style(theme.header_style()))
-        .block(theme.panel("Main"))
+        .block(block)
 }
 
 fn list_table(
