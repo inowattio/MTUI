@@ -235,6 +235,12 @@ impl SearchParams {
     }
 }
 
+#[derive(Debug, Default, PartialEq)]
+pub struct HelpParams {
+    pub query: String,
+    pub selected: u16,
+}
+
 fn scroll_window(cursor: &mut u16, top: &mut u16, rows: u16, len: u16) {
     let rows = rows.max(1);
     if len == 0 {
@@ -414,7 +420,7 @@ impl LogsParams {
 
 #[derive(Debug, PartialEq)]
 pub enum Popup {
-    Help,
+    Help(HelpParams),
     Dump(DumpParams),
     Search(SearchParams),
     Label(LabelParams),
@@ -447,7 +453,7 @@ pub enum PopupKind {
 impl Popup {
     pub fn kind(&self) -> PopupKind {
         match self {
-            Popup::Help => PopupKind::Help,
+            Popup::Help(_) => PopupKind::Help,
             Popup::Dump(_) => PopupKind::Dump,
             Popup::Search(_) => PopupKind::Search,
             Popup::Label(_) => PopupKind::Label,

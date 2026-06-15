@@ -105,6 +105,12 @@ keybinds! {
     PageDown => page_down : "Page down" = PAGE_DOWN,
 }
 
+impl KeybindAction {
+    pub fn in_help(self) -> bool {
+        !matches!(self, KeybindAction::Negator)
+    }
+}
+
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct CustomRules {
     pub holdings: Vec<CustomRule>,

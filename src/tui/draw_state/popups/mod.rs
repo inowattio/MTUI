@@ -21,7 +21,7 @@ use ratatui::Frame;
 pub fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup: &Popup) {
     let kb = &app.config.keybinds;
     match popup {
-        Popup::Help => help::draw(frame, area, theme, kb),
+        Popup::Help(h) => help::draw(frame, area, theme, kb, app, h),
         Popup::Dump(d) => confirm::draw(
             frame,
             area,
