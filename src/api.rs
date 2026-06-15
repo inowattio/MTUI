@@ -1,4 +1,4 @@
-use crate::app::{ApiDevice, BoundPort, ReadOnlyFlag, StatusFlag};
+use crate::app::{ApiBindState, ApiDevice, BindStateFlag, BoundPort, ReadOnlyFlag, StatusFlag};
 use crate::modbus::ModbusDevice;
 use crate::register::RegisterType;
 use crate::state::ConnectionStatus;
@@ -54,6 +54,7 @@ pub async fn serve(
     writes_log: SharedWritesLog,
     read_only: ReadOnlyFlag,
     status: StatusFlag,
+    bind: BindStateFlag,
 ) {
     let router = Router::new()
         .route("/read", post(read_handler))
@@ -70,9 +71,11 @@ pub async fn serve(
         Ok(listener) => listener,
         Err(e) => {
             log::error!("API server failed to bind port {port}: {e}");
+            bind.store(ApiBindState::Failed.code(), Ordering::Relaxed);
             return;
         }
     };
+    bind.store(ApiBindState::Bound.code(), Ordering::Relaxed);
     match listener.local_addr() {
         Ok(addr) => {
             bound.store(addr.port(), Ordering::Relaxed);

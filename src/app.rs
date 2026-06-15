@@ -27,6 +27,32 @@ pub type ApiDevice = Arc<Mutex<Option<ModbusDevice>>>;
 pub type BoundPort = Arc<AtomicU16>;
 pub type ReadOnlyFlag = Arc<AtomicBool>;
 pub type StatusFlag = Arc<AtomicU8>;
+pub type BindStateFlag = Arc<AtomicU8>;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ApiBindState {
+    Pending,
+    Bound,
+    Failed,
+}
+
+impl ApiBindState {
+    pub fn code(self) -> u8 {
+        match self {
+            ApiBindState::Pending => 0,
+            ApiBindState::Bound => 1,
+            ApiBindState::Failed => 2,
+        }
+    }
+
+    pub fn from_code(code: u8) -> Self {
+        match code {
+            1 => ApiBindState::Bound,
+            2 => ApiBindState::Failed,
+            _ => ApiBindState::Pending,
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum WriteType {
@@ -133,6 +159,7 @@ pub struct App {
     api_bound_port: BoundPort,
     api_read_only: ReadOnlyFlag,
     api_status: StatusFlag,
+    api_bind: BindStateFlag,
     writes_log: SharedWritesLog,
     #[cfg(not(target_arch = "wasm32"))]
     api_server: Option<tokio::task::JoinHandle<()>>,
@@ -336,6 +363,7 @@ impl App {
             api_bound_port: Arc::new(AtomicU16::new(0)),
             api_read_only: Arc::new(AtomicBool::new(false)),
             api_status: Arc::new(AtomicU8::new(0)),
+            api_bind: Arc::new(AtomicU8::new(0)),
             writes_log: Arc::new(Mutex::new(WritesLogState::default())),
             #[cfg(not(target_arch = "wasm32"))]
             api_server: None,
@@ -471,6 +499,14 @@ impl App {
         self.api_status.clone()
     }
 
+    pub fn api_bind_handle(&self) -> BindStateFlag {
+        self.api_bind.clone()
+    }
+
+    pub fn api_bind_state(&self) -> ApiBindState {
+        ApiBindState::from_code(self.api_bind.load(std::sync::atomic::Ordering::Relaxed))
+    }
+
     fn sync_api_read_only(&self) {
         self.api_read_only
             .store(self.config.read_only, std::sync::atomic::Ordering::Relaxed);
@@ -499,6 +535,8 @@ impl App {
         }
         self.api_bound_port
             .store(0, std::sync::atomic::Ordering::Relaxed);
+        self.api_bind
+            .store(ApiBindState::Pending.code(), std::sync::atomic::Ordering::Relaxed);
         self.api_server_port = desired;
 
         if let Some(port) = desired {
@@ -509,6 +547,7 @@ impl App {
                 self.writes_log_handle(),
                 self.api_read_only_handle(),
                 self.api_status_handle(),
+                self.api_bind_handle(),
             )));
         }
     }
