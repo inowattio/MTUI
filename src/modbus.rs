@@ -334,11 +334,7 @@ impl ModbusDevice {
                     interface.port,
                 ));
                 let connection = tcp::connect_slave(socket_addr, slave);
-                let context = timeout(connection, timeout_connect, Duration::default()).await??;
-
-                compat::sleep(Duration::from_secs(2)).await;
-
-                context
+                timeout(connection, timeout_connect, Duration::default()).await??
             }
             Interface::Mock => MockContext::make(),
         };
