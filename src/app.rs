@@ -1361,13 +1361,15 @@ impl App {
             matches.push(((register_type, address), "jump to this address".to_string()));
         }
 
-        let lower = query.to_lowercase();
-        matches.extend(
-            self.labels
-                .iter()
-                .filter(|(_, text)| lower.is_empty() || text.to_lowercase().contains(&lower))
-                .map(|(&cell, text)| (cell, text.clone())),
-        );
+        let mut scored: Vec<(i32, RegisterCell, String)> = self
+            .labels
+            .iter()
+            .filter_map(|(&cell, text)| {
+                fuzzy_score(&query, text).map(|score| (score, cell, text.clone()))
+            })
+            .collect();
+        scored.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
+        matches.extend(scored.into_iter().map(|(_, cell, text)| (cell, text)));
 
         let rows = self.visible_rows.get();
         if let Some(Popup::Search(s)) = &mut self.read_mut().popup {
