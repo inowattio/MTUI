@@ -4,6 +4,7 @@ use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
+use std::net::Ipv4Addr;
 
 pub fn draw(params: &DiscoveryParams, frame: &mut Frame, area: Rect, theme: &Theme) {
     let mut lines: Vec<Line> = vec![Line::default()];
@@ -57,9 +58,15 @@ fn render_field(
         value
     };
 
+    let value_style = if field == DiscoveryField::Ip && params.ip.parse::<Ipv4Addr>().is_err() {
+        theme.err_style()
+    } else {
+        style
+    };
+
     Line::from(vec![
         Span::styled(format!("{marker}{name:<22} "), theme.dim_style()),
-        Span::styled(value_text, style),
+        Span::styled(value_text, value_style),
     ])
 }
 
