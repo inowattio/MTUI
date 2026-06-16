@@ -60,13 +60,10 @@ mod native {
         let mut app = App::new(config).await;
         app.headless = true;
 
-        match app.config.port {
-            Some(port) => log::info!("Headless mode - API server on port {port}"),
-            None => {
-                log::error!("Headless mode with no API port configured.");
-                return Ok(());
-            }
-        }
+        app.config
+            .port
+            .inspect(|port| log::info!("Headless mode - API server on port {port}"))
+            .ok_or_else(|| "Headless mode requires an API port; set `port` in the config")?;
 
         let mut ticker = tokio::time::interval(EVENT_HANDLER_TICKRATE);
         while app.running {
