@@ -336,10 +336,25 @@ impl SettingsField {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct StatusMessage {
+    pub text: String,
+    pub ok: bool,
+}
+
+impl From<Result<String, String>> for StatusMessage {
+    fn from(result: Result<String, String>) -> Self {
+        match result {
+            Ok(text) => Self { text, ok: true },
+            Err(text) => Self { text, ok: false },
+        }
+    }
+}
+
 #[derive(Debug, Default, PartialEq)]
 pub struct SettingsParams {
     pub selected: u16,
-    pub status: Option<String>,
+    pub status: Option<StatusMessage>,
     pub load_path: String,
     pub previous: ReadParams,
     pub editing_keybinds: bool,

@@ -1589,7 +1589,7 @@ impl App {
         self.read_mut().popup = None;
     }
 
-    fn persist_config(&mut self) -> String {
+    fn persist_config(&mut self) -> Result<String, String> {
         self.config.labels = (&self.labels).into();
 
         let rebuilt: CustomRules = (&self.custom_rules).into();
@@ -1614,10 +1614,9 @@ impl App {
             };
         }
 
-        match save_config(&self.config_path, &self.config) {
-            Ok(()) => format!("Saved to {}", self.config_path),
-            Err(e) => format!("Save failed: {e}"),
-        }
+        save_config(&self.config_path, &self.config)
+            .map(|()| format!("Saved to {}", self.config_path))
+            .map_err(|e| format!("Save failed: {e}"))
     }
 
     pub fn config_path(&self) -> &str {
@@ -1688,14 +1687,15 @@ impl App {
 
     pub fn settings_save(&mut self) {
         let result = self.persist_config();
-        if result.starts_with("Saved") {
-            self.dirty = false;
-            log::info!("Configuration saved");
-        } else {
-            log::error!("Save failed \u{b7} {result}");
+        match &result {
+            Ok(_) => {
+                self.dirty = false;
+                log::info!("Configuration saved");
+            }
+            Err(error) => log::error!("Save failed \u{b7} {error}"),
         }
         if let Some(s) = self.settings_mut() {
-            s.status = Some(result);
+            s.status = Some(result.into());
         }
     }
 
@@ -1709,7 +1709,7 @@ impl App {
             Err(error) => log::error!("{error}"),
         }
         if let Some(s) = self.settings_mut() {
-            s.status = Some(result.unwrap_or_else(|e| e));
+            s.status = Some(result.into());
         }
     }
 
