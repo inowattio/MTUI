@@ -131,7 +131,6 @@ pub struct LabelParams {
     pub position: u16,
     pub register_type: RegisterType,
     pub text: String,
-    pub result: Option<String>,
 }
 
 #[derive(Debug, Default, PartialEq)]

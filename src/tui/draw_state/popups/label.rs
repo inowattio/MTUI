@@ -18,7 +18,7 @@ pub(super) fn draw(
         (label.text.clone(), theme.base())
     };
 
-    let mut lines = vec![
+    let lines = vec![
         Line::from(vec![
             Span::styled("Label ", theme.dim_style()),
             Span::styled(label.position.to_string(), theme.accent_style()),
@@ -37,10 +37,6 @@ pub(super) fn draw(
             theme.dim_style(),
         )),
     ];
-
-    if let Some(result) = &label.result {
-        lines.push(Line::from(Span::styled(result.clone(), theme.err_style())));
-    }
 
     super::render(frame, area, theme, "Label", 48, lines);
 }

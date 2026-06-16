@@ -1252,7 +1252,6 @@ impl App {
             position: label_pos,
             register_type: label_type,
             text,
-            result: None,
         }));
     }
 
@@ -1381,14 +1380,12 @@ impl App {
 
     pub fn label_input(&mut self, c: char) {
         if let Some(Popup::Label(l)) = &mut self.read_mut().popup {
-            l.result = None;
             l.text.push(c);
         }
     }
 
     pub fn label_backspace(&mut self) {
         if let Some(Popup::Label(l)) = &mut self.read_mut().popup {
-            l.result = None;
             l.text.pop();
         }
     }
