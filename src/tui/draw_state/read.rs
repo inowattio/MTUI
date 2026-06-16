@@ -290,13 +290,21 @@ pub fn draw(
     }
     if app.sweep.active {
         let mode = if app.sweep.continuous { " (loop)" } else { "" };
+        let span = app.sweep.to.saturating_sub(app.sweep.from);
+        let done = app.sweep.current.saturating_sub(app.sweep.from);
+        let percent = if span == 0 {
+            100
+        } else {
+            (done as u32 * 100 / span as u32).min(100)
+        };
         info_spans.push(Span::styled(
             format!(
-                "   {} SWEEP {}\u{2192}{} @{}{}",
+                "   {} SWEEP {}\u{2192}{} @{} ({}%){}",
                 spinner_frame(app.frame),
                 app.sweep.from,
                 app.sweep.to,
                 app.sweep.current,
+                percent,
                 mode,
             ),
             theme.accent_style(),
