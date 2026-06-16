@@ -1,4 +1,4 @@
-use crate::state::ConnectionStatus;
+use crate::state::{ConnectionStatus, MessageKind};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders};
@@ -80,6 +80,15 @@ impl Theme {
 
     pub fn warn_style(&self) -> Style {
         Style::default().fg(self.warn)
+    }
+
+    pub fn message_style(&self, kind: MessageKind) -> Style {
+        match kind {
+            MessageKind::Ok => self.ok_style(),
+            MessageKind::Warn => self.warn_style(),
+            MessageKind::Err => self.err_style(),
+            MessageKind::Info => self.dim_style(),
+        }
     }
 
     pub fn panel(&self, title: &str) -> Block<'static> {

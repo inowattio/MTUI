@@ -1,3 +1,4 @@
+use crate::state::StatusMessage;
 use crate::tui::theme::Theme;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
@@ -9,7 +10,7 @@ pub(super) fn draw(
     theme: &Theme,
     title: &str,
     prompt: &str,
-    result: &Option<String>,
+    result: &Option<StatusMessage>,
     footer: &str,
 ) {
     let mut lines = vec![
@@ -18,15 +19,11 @@ pub(super) fn draw(
     ];
 
     if let Some(result) = result {
-        let style = if result.starts_with("Saved") || result.starts_with("Dumped") {
-            theme.ok_style()
-        } else if result.contains("failed") {
-            theme.err_style()
-        } else {
-            theme.dim_style()
-        };
         lines.push(Line::default());
-        lines.push(Line::from(Span::styled(result.clone(), style)));
+        lines.push(Line::from(Span::styled(
+            result.text.clone(),
+            theme.message_style(result.kind),
+        )));
     }
 
     super::render(frame, area, theme, title, 60, lines);

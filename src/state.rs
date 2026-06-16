@@ -48,7 +48,7 @@ pub struct DiscoveryParams {
     pub command_timeout_ms: u64,
     pub between_commands_ms: u64,
     pub word_order: WordOrder,
-    pub status: Option<String>,
+    pub status: Option<StatusMessage>,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -120,7 +120,7 @@ impl DiscoveryParams {
 #[derive(Debug, Default, PartialEq)]
 pub struct WriteParams {
     pub position: u16,
-    pub result: Option<String>,
+    pub result: Option<StatusMessage>,
     pub value: Option<i64>,
     pub write_type: WriteType,
     pub bit_cursor: u16,
@@ -136,7 +136,7 @@ pub struct LabelParams {
 
 #[derive(Debug, Default, PartialEq)]
 pub struct DumpParams {
-    pub result: Option<String>,
+    pub result: Option<StatusMessage>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -336,17 +336,55 @@ impl SettingsField {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MessageKind {
+    Ok,
+    Warn,
+    Err,
+    Info,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct StatusMessage {
     pub text: String,
-    pub ok: bool,
+    pub kind: MessageKind,
+}
+
+impl StatusMessage {
+    pub fn ok(text: impl Into<String>) -> Self {
+        Self {
+            text: text.into(),
+            kind: MessageKind::Ok,
+        }
+    }
+
+    pub fn warn(text: impl Into<String>) -> Self {
+        Self {
+            text: text.into(),
+            kind: MessageKind::Warn,
+        }
+    }
+
+    pub fn err(text: impl Into<String>) -> Self {
+        Self {
+            text: text.into(),
+            kind: MessageKind::Err,
+        }
+    }
+
+    pub fn info(text: impl Into<String>) -> Self {
+        Self {
+            text: text.into(),
+            kind: MessageKind::Info,
+        }
+    }
 }
 
 impl From<Result<String, String>> for StatusMessage {
     fn from(result: Result<String, String>) -> Self {
         match result {
-            Ok(text) => Self { text, ok: true },
-            Err(text) => Self { text, ok: false },
+            Ok(text) => Self::ok(text),
+            Err(text) => Self::err(text),
         }
     }
 }

@@ -22,12 +22,10 @@ pub fn draw(params: &DiscoveryParams, frame: &mut Frame, area: Rect, theme: &The
 
     if let Some(status) = &params.status {
         lines.push(Line::default());
-        let style = if status.to_lowercase().contains("fail") {
-            theme.err_style()
-        } else {
-            theme.warn_style()
-        };
-        lines.push(Line::from(Span::styled(status.clone(), style)));
+        lines.push(Line::from(Span::styled(
+            status.text.clone(),
+            theme.message_style(status.kind),
+        )));
     }
 
     frame.render_widget(Paragraph::new(lines), area);

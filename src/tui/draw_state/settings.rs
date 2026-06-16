@@ -45,12 +45,10 @@ pub fn draw(params: &SettingsParams, app: &App, frame: &mut Frame, area: Rect, t
 
     if let Some(status) = &params.status {
         lines.push(Line::default());
-        let style = if status.ok {
-            theme.ok_style()
-        } else {
-            theme.err_style()
-        };
-        lines.push(Line::from(Span::styled(status.text.clone(), style)));
+        lines.push(Line::from(Span::styled(
+            status.text.clone(),
+            theme.message_style(status.kind),
+        )));
     }
 
     frame.render_widget(Paragraph::new(lines), area);

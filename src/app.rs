@@ -13,7 +13,8 @@ use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
 use crate::state::{
     ConnectionStatus, CustomField, CustomParams, DiscoveryParams, DumpParams, HelpParams,
     InterfaceKind, LabelParams, LogViewParams, LogsParams, Popup, PopupKind, ReadPanel, ReadParams,
-    SearchParams, SettingsField, SettingsParams, State, SweepConfigParams, SweepField, WriteParams,
+    SearchParams, SettingsField, SettingsParams, State, StatusMessage, SweepConfigParams,
+    SweepField, WriteParams,
 };
 use crate::writes_log::{SharedWritesLog, WriteKind, WritesLogState};
 use chrono::{DateTime, Local, SecondsFormat, Utc};
@@ -695,7 +696,7 @@ impl App {
         };
 
         if let Some(d) = self.discovery_mut() {
-            d.status = Some("Connecting\u{2026}".to_string());
+            d.status = Some(StatusMessage::warn("Connecting\u{2026}"));
         }
 
         match ModbusDevice::new(&device_config).await {
@@ -720,7 +721,7 @@ impl App {
             Err(e) => {
                 log::error!("Connect failed \u{b7} {e}");
                 if let Some(d) = self.discovery_mut() {
-                    d.status = Some(format!("Connection failed: {e}"));
+                    d.status = Some(StatusMessage::err(format!("Connection failed: {e}")));
                 }
             }
         }
@@ -1631,9 +1632,9 @@ impl App {
         self.labels.len()
     }
 
-    fn dump_read_log(&self) -> String {
+    fn dump_read_log(&self) -> StatusMessage {
         if self.read_log.is_empty() {
-            return "Nothing read yet to dump.".to_string();
+            return StatusMessage::info("Nothing read yet to dump.");
         }
 
         let filename = format!("dump_{}.txt", Local::now().format("%Y%m%d_%H%M%S"));
@@ -1652,8 +1653,11 @@ impl App {
         }
 
         match fs::write(&filename, out) {
-            Ok(()) => format!("Dumped {} registers to {filename}", self.read_log.len()),
-            Err(e) => format!("Dump failed: {e}"),
+            Ok(()) => StatusMessage::ok(format!(
+                "Dumped {} registers to {filename}",
+                self.read_log.len()
+            )),
+            Err(e) => StatusMessage::err(format!("Dump failed: {e}")),
         }
     }
 
@@ -2282,13 +2286,13 @@ impl App {
     pub fn commit_write(&mut self) {
         if self.config.read_only {
             if let Some(Popup::Write(w)) = &mut self.read_mut().popup {
-                w.result = Some("Read-only mode.".to_string());
+                w.result = Some(StatusMessage::info("Read-only mode."));
             }
             return;
         }
         if self.background_task.is_some() {
             if let Some(Popup::Write(w)) = &mut self.read_mut().popup {
-                w.result = Some("Device is busy.".to_string());
+                w.result = Some(StatusMessage::info("Device is busy."));
             }
             return;
         }
@@ -2298,10 +2302,10 @@ impl App {
                 return;
             };
             let Some(number) = w.value else {
-                w.result = Some("Enter a value first.".to_string());
+                w.result = Some(StatusMessage::info("Enter a value first."));
                 return;
             };
-            w.result = Some("Writing...".to_string());
+            w.result = Some(StatusMessage::info("Writing..."));
             (w.position, number, w.write_type)
         };
 
@@ -2473,7 +2477,11 @@ impl App {
                 self.pending_write = None;
                 if self.is_reading() {
                     if let Some(Popup::Write(w)) = &mut self.read_mut().popup {
-                        w.result = Some(outcome.message);
+                        w.result = Some(if outcome.ok {
+                            StatusMessage::ok(outcome.message)
+                        } else {
+                            StatusMessage::err(outcome.message)
+                        });
                     }
                 }
             }

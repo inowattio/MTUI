@@ -58,15 +58,11 @@ pub(super) fn draw(
     ];
 
     if let Some(result) = &write.result {
-        let style = if result.starts_with("Write OK") {
-            theme.ok_style()
-        } else if result.starts_with("Write failed") {
-            theme.err_style()
-        } else {
-            theme.dim_style()
-        };
         lines.push(Line::default());
-        lines.push(Line::from(Span::styled(result.clone(), style)));
+        lines.push(Line::from(Span::styled(
+            result.text.clone(),
+            theme.message_style(result.kind),
+        )));
     }
 
     lines.push(Line::from(Span::styled(
