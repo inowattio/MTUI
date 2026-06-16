@@ -1,5 +1,5 @@
 use crate::app::{App, AppResult};
-use crate::config::{Column, KeybindAction, Keybinds};
+use crate::config::{KeybindAction, Keybinds};
 use crate::input::{KeyCode, KeyEvent};
 use crate::modbus::{DataBits, Parity, StopBits, WordOrder};
 use crate::num_ops::{
@@ -232,42 +232,17 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
             _ => {}
         },
 
-        PopupKind::Columns => {
-            let count = Column::ALL.len() as u16;
-            match key_event.code {
-                c if c == kb.exit || c == kb.columns => app.close_popup(),
-                c if c == kb.move_up => {
-                    let p = app.read_mut();
-                    if let Some(Popup::Columns(i)) = &mut p.popup {
-                        if *i == 0 {
-                            *i = count - 1;
-                        } else {
-                            *i -= 1;
-                        }
-                    }
-                }
-                c if c == kb.move_down => {
-                    let p = app.read_mut();
-                    if let Some(Popup::Columns(i)) = &mut p.popup {
-                        if *i == count - 1 {
-                            *i = 0;
-                        } else {
-                            *i += 1;
-                        }
-                    }
-                }
-                c if c == kb.action || c == KeyCode::Char(' ') => {
-                    let selected = match &app.read().popup {
-                        Some(Popup::Columns(i)) => *i as usize,
-                        _ => 0,
-                    };
-                    if let Some(&column) = Column::ALL.get(selected) {
-                        app.toggle_column(column);
-                    }
-                }
-                _ => {}
-            }
-        }
+        PopupKind::Columns => match key_event.code {
+            c if c == kb.exit => app.close_popup(),
+            c if c == kb.action => app.columns_toggle_selected(),
+            c if c == kb.move_up => app.columns_move(false),
+            c if c == kb.move_down => app.columns_move(true),
+            KeyCode::Left => app.columns_switch(false),
+            KeyCode::Right => app.columns_switch(true),
+            KeyCode::Backspace => app.columns_backspace(),
+            KeyCode::Char(c) => app.columns_input(c),
+            _ => {}
+        },
 
         PopupKind::Write => match key_event.code {
             c if c == kb.exit => app.close_popup(),

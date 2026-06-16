@@ -11,10 +11,10 @@ use crate::modbus::{
 use crate::num_ops::{digit_add, digit_remove};
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
 use crate::state::{
-    ConnectionStatus, CustomField, CustomParams, DiscoveryParams, DumpParams, HelpParams,
-    InterfaceKind, LabelParams, LogViewParams, LogsParams, Popup, PopupKind, ReadPanel, ReadParams,
-    SearchParams, SettingsField, SettingsParams, State, StatusMessage, SweepConfigParams,
-    SweepField, WriteParams,
+    ColumnsParams, ConnectionStatus, CustomField, CustomParams, DiscoveryParams, DumpParams,
+    HelpParams, InterfaceKind, LabelParams, LogViewParams, LogsParams, Popup, PopupKind, ReadPanel,
+    ReadParams, SearchParams, SettingsField, SettingsParams, State, StatusMessage,
+    SweepConfigParams, SweepField, WriteParams,
 };
 use crate::writes_log::{SharedWritesLog, WriteKind, WritesLogState};
 use chrono::{DateTime, Local, SecondsFormat, Utc};
@@ -804,7 +804,88 @@ impl App {
     }
 
     pub fn open_columns(&mut self) {
-        self.read_mut().popup = Some(Popup::Columns(0));
+        self.read_mut().popup = Some(Popup::Columns(ColumnsParams::default()));
+    }
+
+    pub fn column_matches(&self) -> Vec<Column> {
+        let Some(Popup::Columns(c)) = &self.read().popup else {
+            return Vec::new();
+        };
+        let mut scored: Vec<(i32, usize, Column)> = Column::ALL
+            .iter()
+            .copied()
+            .enumerate()
+            .filter_map(|(i, col)| fuzzy_score(&c.query, col.name()).map(|score| (score, i, col)))
+            .collect();
+
+        scored.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
+        scored.into_iter().map(|(_, _, col)| col).collect()
+    }
+
+    pub fn columns_input(&mut self, c: char) {
+        if let Some(Popup::Columns(p)) = &mut self.read_mut().popup {
+            p.query.push(c);
+            p.selected = 0;
+        }
+    }
+
+    pub fn columns_backspace(&mut self) {
+        if let Some(Popup::Columns(p)) = &mut self.read_mut().popup {
+            p.query.pop();
+            p.selected = 0;
+        }
+    }
+
+    pub fn columns_toggle_selected(&mut self) {
+        let matches = self.column_matches();
+        let selected = match &self.read().popup {
+            Some(Popup::Columns(p)) => p.selected as usize,
+            _ => return,
+        };
+        if let Some(&column) = matches.get(selected) {
+            self.toggle_column(column);
+        }
+    }
+
+    pub fn columns_move(&mut self, down: bool) {
+        let count = self.column_matches().len() as u16;
+        if count == 0 {
+            return;
+        }
+        if let Some(Popup::Columns(p)) = &mut self.read_mut().popup {
+            let rows = count.div_ceil(2);
+            let (col_start, col_len, row) = if p.selected < rows {
+                (0, rows, p.selected)
+            } else {
+                (rows, count - rows, p.selected - rows)
+            };
+            let new_row = if down {
+                (row + 1) % col_len
+            } else {
+                (row + col_len - 1) % col_len
+            };
+            p.selected = col_start + new_row;
+        }
+    }
+
+    pub fn columns_switch(&mut self, right: bool) {
+        let count = self.column_matches().len() as u16;
+        if count == 0 {
+            return;
+        }
+        if let Some(Popup::Columns(p)) = &mut self.read_mut().popup {
+            let rows = count.div_ceil(2);
+            let row = if p.selected < rows {
+                p.selected
+            } else {
+                p.selected - rows
+            };
+            p.selected = if right {
+                (rows + row).min(count - 1)
+            } else {
+                row
+            };
+        }
     }
 
     pub fn open_inspect(&mut self) {

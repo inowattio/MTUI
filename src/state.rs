@@ -240,6 +240,12 @@ pub struct HelpParams {
     pub selected: u16,
 }
 
+#[derive(Debug, Default, PartialEq)]
+pub struct ColumnsParams {
+    pub query: String,
+    pub selected: u16,
+}
+
 fn scroll_window(cursor: &mut u16, top: &mut u16, rows: u16, len: u16) {
     let rows = rows.max(1);
     if len == 0 {
@@ -477,7 +483,7 @@ pub enum Popup {
     Search(SearchParams),
     Label(LabelParams),
     Custom(CustomParams),
-    Columns(u16),
+    Columns(ColumnsParams),
     Write(WriteParams),
     Slave(u16),
     Logs(LogsParams),

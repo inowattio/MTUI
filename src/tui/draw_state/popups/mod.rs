@@ -37,7 +37,7 @@ pub fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup
         Popup::Search(s) => search::draw(frame, area, theme, kb, s),
         Popup::Label(l) => label::draw(frame, area, theme, kb, l),
         Popup::Custom(c) => custom::draw(frame, area, theme, app, c),
-        Popup::Columns(selected) => columns::draw(frame, area, theme, app, *selected),
+        Popup::Columns(params) => columns::draw(frame, area, theme, app, params),
         Popup::Write(write) => write::draw(frame, area, theme, kb, write),
         Popup::Slave(value) => slave::draw(frame, area, theme, kb, *value),
         Popup::SweepConfig(s) => sweep_config::draw(frame, area, theme, kb, s, app.sweep.active),
