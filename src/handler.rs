@@ -64,6 +64,7 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         c if c == kb.graph => app.toggle_graph(),
         c if c == kb.sweep => app.open_sweep(),
         c if c == kb.inspect => app.open_inspect(),
+        c if c == kb.device_id => app.open_device_id().await,
         c if c == kb.cycle_position => app.cycle_position(),
         c if c == kb.copy_address => app.copy_address(),
         c if c == kb.logs => app.open_logs(),
@@ -177,6 +178,7 @@ async fn run_action(app: &mut App, action: KeybindAction) {
         Slave => app.open_slave(),
         CyclePosition => app.cycle_position(),
         Inspect => app.open_inspect(),
+        DeviceId => app.open_device_id().await,
         Graph => app.toggle_graph(),
         Discovery => app.open_discovery(),
         Settings => app.open_settings(),
@@ -223,6 +225,14 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
             c if c == kb.move_up || c == kb.move_down || c == kb.page_up || c == kb.page_down => {
                 move_read_cursor(app, key_event.code);
             }
+            _ => {}
+        },
+
+        PopupKind::DeviceId => match key_event.code {
+            c if c == kb.exit || c == kb.device_id => app.close_popup(),
+            c if c == kb.refresh || c == kb.action => app.device_id_refresh().await,
+            KeyCode::Left => app.device_id_cycle(false).await,
+            KeyCode::Right => app.device_id_cycle(true).await,
             _ => {}
         },
 

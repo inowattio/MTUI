@@ -4,6 +4,9 @@ use std::collections::HashMap;
 use std::ops::RangeInclusive;
 use std::time::Duration;
 use tokio_modbus::client::{Client, Context};
+use tokio_modbus::prelude::{
+    ConformityLevel, DeviceIdObject, ReadCode, ReadDeviceIdentificationResponse,
+};
 use tokio_modbus::slave::SlaveContext;
 use tokio_modbus::{ExceptionCode, Request, Response, Slave, SlaveId};
 
@@ -299,6 +302,62 @@ impl MockContext {
         }
     }
 
+    fn device_id_objects(&self) -> [(u8, Vec<u8>); 8] {
+        [
+            (0x00, b"POWER BUS SIMULATOR".to_vec()),
+            (0x01, b"MTUI-SIM".to_vec()),
+            (0x02, b"v1.42".to_vec()),
+            (0x03, b"https://github.com/inowattio/mtui".to_vec()),
+            (0x04, b"MTUI Simulator".to_vec()),
+            (0x05, b"MTUI SIMULATOR".to_vec()),
+            (
+                0x06,
+                format!("Power Bus Sim Slave {}", self.slave_id).into_bytes(),
+            ),
+            (0x07, b" TF2! ".to_vec()),
+        ]
+    }
+
+    fn device_id_response(
+        &self,
+        read_code: ReadCode,
+        object_id: u8,
+    ) -> Result<Response, ExceptionCode> {
+        let make = |(id, value): (u8, Vec<u8>)| DeviceIdObject {
+            id,
+            value: value.into(),
+        };
+        let objects: Vec<DeviceIdObject> = match read_code {
+            ReadCode::Basic => self
+                .device_id_objects()
+                .into_iter()
+                .filter(|(id, _)| *id <= 0x02)
+                .map(make)
+                .collect(),
+            ReadCode::Regular | ReadCode::Extended => {
+                self.device_id_objects().into_iter().map(make).collect()
+            }
+            ReadCode::Specific => match self
+                .device_id_objects()
+                .into_iter()
+                .find(|(id, _)| *id == object_id)
+            {
+                Some(object) => vec![make(object)],
+                None => return Err(ExceptionCode::IllegalDataAddress),
+            },
+        };
+
+        Ok(Response::ReadDeviceIdentification(
+            ReadDeviceIdentificationResponse {
+                read_code,
+                conformity_level: ConformityLevel::ExtendedIdentification,
+                more_follows: false,
+                next_object_id: 0,
+                device_id_objects: objects,
+            },
+        ))
+    }
+
     async fn simulate_latency(&self) {
         let jitter = (self.started.elapsed().as_micros() as u64).wrapping_mul(2_654_435_761) % 12;
         compat::sleep(Duration::from_millis(4 + jitter)).await;
@@ -370,6 +429,10 @@ impl Client for MockContext {
                 }
                 self.write_count = self.write_count.wrapping_add(1);
                 Ok(Ok(Response::WriteMultipleRegisters(addr, quantity)))
+            }
+
+            Request::ReadDeviceIdentification(read_code, object_id) => {
+                Ok(self.device_id_response(read_code, object_id))
             }
 
             _ => Ok(Err(ExceptionCode::IllegalFunction)),

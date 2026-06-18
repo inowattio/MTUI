@@ -89,6 +89,7 @@ keybinds! {
     Slave => slave : "Set slave id" = SLAVE,
     CyclePosition => cycle_position : "Previous position" = CYCLE_POSITION,
     Inspect => inspect : "Inspect register" = INSPECT,
+    DeviceId => device_id : "Device identification" = DEVICE_ID,
     Graph => graph : "Value graph" = GRAPH,
     Discovery => discovery : "Switch device" = DISCOVERY,
     Settings => settings : "Settings" = SETTINGS,

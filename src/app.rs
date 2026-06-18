@@ -6,14 +6,15 @@ use crate::constants::CONFIG_PATH;
 use crate::custom::{parse_enum, parse_op, CustomRepr, CustomRule};
 use crate::interpretator::{format_ago, Interpretor};
 use crate::modbus::{
-    DeviceConfig, Interface, InterfaceNetworkParams, InterfaceWiredParams, ModbusDevice, WordOrder,
+    DeviceConfig, DeviceIdAccess, Interface, InterfaceNetworkParams, InterfaceWiredParams,
+    ModbusDevice, WordOrder,
 };
 use crate::num_ops::{digit_add, digit_remove};
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
 use crate::state::{
-    ColumnsParams, ConnectionStatus, CustomField, CustomParams, DiscoveryParams, DumpParams,
-    HelpParams, InterfaceKind, LabelParams, LogViewParams, LogsParams, Popup, PopupKind, ReadPanel,
-    ReadParams, SearchParams, SettingsField, SettingsParams, State, StatusMessage,
+    ColumnsParams, ConnectionStatus, CustomField, CustomParams, DeviceIdParams, DiscoveryParams,
+    DumpParams, HelpParams, InterfaceKind, LabelParams, LogViewParams, LogsParams, Popup, PopupKind,
+    ReadPanel, ReadParams, SearchParams, SettingsField, SettingsParams, State, StatusMessage,
     SweepConfigParams, SweepField, WriteParams,
 };
 use crate::writes_log::{SharedWritesLog, WriteKind, WritesLogState};
@@ -1346,6 +1347,86 @@ impl App {
             log::info!("Slave id set to {id}");
             self.read_mut().popup = None;
             self.refresh().await;
+        }
+    }
+
+    pub async fn open_device_id(&mut self) {
+        self.read_mut().popup = Some(Popup::DeviceId(DeviceIdParams {
+            access: DeviceIdAccess::Basic,
+            ..Default::default()
+        }));
+        self.device_id_refresh().await;
+    }
+
+    fn device_id_mut(&mut self) -> Option<&mut DeviceIdParams> {
+        match &mut self.state {
+            State::Read(p) => match &mut p.popup {
+                Some(Popup::DeviceId(d)) => Some(d),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    pub async fn device_id_cycle(&mut self, forward: bool) {
+        let Some(params) = self.device_id_mut() else {
+            return;
+        };
+        let all = DeviceIdAccess::ALL;
+        let i = all.iter().position(|&a| a == params.access).unwrap_or(0);
+        let n = all.len();
+        params.access = if forward {
+            all[(i + 1) % n]
+        } else {
+            all[(i + n - 1) % n]
+        };
+        self.device_id_refresh().await;
+    }
+
+    pub async fn device_id_refresh(&mut self) {
+        let access = match self.device_id_mut() {
+            Some(params) => {
+                params.loading = true;
+                params.status = Some(StatusMessage::info("Reading\u{2026}"));
+                params.access
+            }
+            None => return,
+        };
+
+        let Some(device) = self.device.clone() else {
+            if let Some(params) = self.device_id_mut() {
+                params.loading = false;
+                params.objects.clear();
+                params.status = Some(StatusMessage::err("No device connected"));
+            }
+            return;
+        };
+
+        let result = device.device_identity(access).await;
+
+        let Some(params) = self.device_id_mut() else {
+            return;
+        };
+        params.loading = false;
+        match result {
+            Ok(objects) => {
+                log::info!(
+                    "Device identification ({}) \u{b7} {} object(s)",
+                    access.label(),
+                    objects.len()
+                );
+                params.status = Some(if objects.is_empty() {
+                    StatusMessage::warn("No identification objects returned")
+                } else {
+                    StatusMessage::ok(format!("Read {} object(s)", objects.len()))
+                });
+                params.objects = objects;
+            }
+            Err(e) => {
+                log::error!("Device identification failed \u{b7} {e}");
+                params.objects.clear();
+                params.status = Some(StatusMessage::err(format!("Read failed: {e}")));
+            }
         }
     }
 

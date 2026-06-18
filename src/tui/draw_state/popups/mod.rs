@@ -1,6 +1,7 @@
 mod columns;
 mod confirm;
 mod custom;
+mod device_id;
 mod help;
 mod inspect;
 mod label;
@@ -47,6 +48,7 @@ pub fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup
         Popup::SweepConfig(s) => sweep_config::draw(frame, area, theme, kb, s, app.sweep.active),
         Popup::Logs(logs) => logs::draw(frame, area, theme, kb, logs),
         Popup::Inspect => inspect::draw(frame, area, theme, app),
+        Popup::DeviceId(params) => device_id::draw(frame, area, theme, kb, params),
         Popup::Quit => confirm::draw(
             frame,
             area,

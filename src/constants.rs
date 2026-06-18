@@ -23,6 +23,7 @@ pub mod keybind {
     pub const SLAVE: KeyCode = KeyCode::Char('i');
     pub const CYCLE_POSITION: KeyCode = KeyCode::Char('b');
     pub const INSPECT: KeyCode = KeyCode::Char('v');
+    pub const DEVICE_ID: KeyCode = KeyCode::Char('D');
     pub const GRAPH: KeyCode = KeyCode::Char('g');
     pub const DISCOVERY: KeyCode = KeyCode::Char('n');
     pub const SETTINGS: KeyCode = KeyCode::Char('s');

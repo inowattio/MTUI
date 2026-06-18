@@ -1,7 +1,7 @@
 use crate::app::WriteType;
 use crate::compat::Instant;
 use crate::custom::{CustomOp, CustomRepr, EnumEntry};
-use crate::modbus::{DataBits, Parity, StopBits, WordOrder};
+use crate::modbus::{DataBits, DeviceIdAccess, Parity, StopBits, WordOrder};
 use crate::register::{RegisterCell, RegisterType};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
@@ -136,6 +136,14 @@ pub struct LabelParams {
 #[derive(Debug, Default, PartialEq)]
 pub struct DumpParams {
     pub result: Option<StatusMessage>,
+}
+
+#[derive(Debug, Default, PartialEq)]
+pub struct DeviceIdParams {
+    pub access: DeviceIdAccess,
+    pub objects: Vec<(u8, String)>,
+    pub status: Option<StatusMessage>,
+    pub loading: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -489,6 +497,7 @@ pub enum Popup {
     Logs(LogsParams),
     SweepConfig(SweepConfigParams),
     Inspect,
+    DeviceId(DeviceIdParams),
     Quit,
 }
 
@@ -505,6 +514,7 @@ pub enum PopupKind {
     Logs,
     SweepConfig,
     Inspect,
+    DeviceId,
     Quit,
 }
 
@@ -522,6 +532,7 @@ impl Popup {
             Popup::Logs(_) => PopupKind::Logs,
             Popup::SweepConfig(_) => PopupKind::SweepConfig,
             Popup::Inspect => PopupKind::Inspect,
+            Popup::DeviceId(_) => PopupKind::DeviceId,
             Popup::Quit => PopupKind::Quit,
         }
     }

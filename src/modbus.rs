@@ -14,7 +14,7 @@ use tokio::sync::Mutex;
 #[cfg(not(target_arch = "wasm32"))]
 use tokio_modbus::client::{rtu, tcp};
 use tokio_modbus::client::{Context, Reader, Writer};
-use tokio_modbus::prelude::SlaveContext;
+use tokio_modbus::prelude::{ReadCode, ReadDeviceIdentificationResponse, SlaveContext};
 use tokio_modbus::slave::{Slave, SlaveId};
 #[cfg(not(target_arch = "wasm32"))]
 use tokio_serial::SerialStream;
@@ -297,6 +297,41 @@ macro_rules! timeout {
     };
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum DeviceIdAccess {
+    #[default]
+    Basic,
+    Regular,
+    Extended,
+    Specific,
+}
+
+impl DeviceIdAccess {
+    pub const ALL: [DeviceIdAccess; 3] = [
+        DeviceIdAccess::Basic,
+        DeviceIdAccess::Regular,
+        DeviceIdAccess::Extended,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            DeviceIdAccess::Basic => "Basic",
+            DeviceIdAccess::Regular => "Regular",
+            DeviceIdAccess::Extended => "Extended",
+            DeviceIdAccess::Specific => "Specific",
+        }
+    }
+
+    fn into_read_code(self) -> ReadCode {
+        match self {
+            DeviceIdAccess::Basic => ReadCode::Basic,
+            DeviceIdAccess::Regular => ReadCode::Regular,
+            DeviceIdAccess::Extended => ReadCode::Extended,
+            DeviceIdAccess::Specific => ReadCode::Specific,
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct ModbusDevice {
     context: Arc<Mutex<Context>>,
@@ -453,5 +488,50 @@ impl ModbusDevice {
         }
 
         Ok(())
+    }
+
+    pub async fn device_identification(
+        &self,
+        access: DeviceIdAccess,
+        object_id: u8,
+    ) -> Result<ReadDeviceIdentificationResponse> {
+        timeout!(
+            self,
+            read_device_identification,
+            (access.into_read_code(), object_id)
+        )
+    }
+
+    pub async fn device_identity(&self, access: DeviceIdAccess) -> Result<Vec<(u8, String)>> {
+        let mut objects: Vec<(u8, String)> = Vec::new();
+        let mut next_id = 0u8;
+
+        loop {
+            let response = self.device_identification(access, next_id).await?;
+            for object in &response.device_id_objects {
+                let value = match object.value_as_str() {
+                    Some(text) => text
+                        .trim_matches(|c: char| c == '\0' || c.is_whitespace())
+                        .to_string(),
+                    None => object
+                        .value
+                        .iter()
+                        .map(|byte| format!("{byte:02X}"))
+                        .collect::<Vec<_>>()
+                        .join(" "),
+                };
+                objects.push((object.id, value));
+            }
+
+            if !response.more_follows
+                || response.next_object_id == next_id
+                || objects.len() >= 256
+            {
+                break;
+            }
+            next_id = response.next_object_id;
+        }
+
+        Ok(objects)
     }
 }
