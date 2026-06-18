@@ -18,7 +18,6 @@ pub(super) fn draw(
     let entries: Vec<(KeybindAction, String, &'static str)> = KeybindAction::ALL
         .iter()
         .copied()
-        .filter(|a| a.in_help())
         .map(|a| (a, kb.get(a).to_string(), a.label()))
         .collect();
 

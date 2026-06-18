@@ -96,7 +96,6 @@ keybinds! {
     CopyAddress => copy_address : "Copy address" = COPY_ADDRESS,
     Logs => logs : "View write log" = LOGS,
     AppLogs => app_logs : "App log" = APP_LOGS,
-    Negator => negator : "Negate write value" = NEGATOR,
     Sweep => sweep : "Sweep" = SWEEP,
     SwitchView => switch_view : "Cycle panel" = SWITCH_VIEW,
     Action => action : "Read / confirm" = ACTION,
@@ -104,12 +103,6 @@ keybinds! {
     MoveDown => move_down : "Move down" = MOVE_DOWN,
     PageUp => page_up : "Page up" = PAGE_UP,
     PageDown => page_down : "Page down" = PAGE_DOWN,
-}
-
-impl KeybindAction {
-    pub fn in_help(self) -> bool {
-        !matches!(self, KeybindAction::Negator)
-    }
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]

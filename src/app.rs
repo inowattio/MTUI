@@ -805,7 +805,6 @@ impl App {
         let mut scored: Vec<(i32, usize, KeybindAction)> = KeybindAction::ALL
             .iter()
             .copied()
-            .filter(|a| a.in_help())
             .enumerate()
             .filter_map(|(i, a)| fuzzy_score(&h.query, a.label()).map(|score| (score, i, a)))
             .collect();

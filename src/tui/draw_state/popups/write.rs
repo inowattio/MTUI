@@ -1,5 +1,6 @@
 use crate::app::WriteType;
 use crate::config::Keybinds;
+use crate::input::KeyCode;
 use crate::state::WriteParams;
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
@@ -70,7 +71,7 @@ pub(super) fn draw(
         Hint::key(kb.action, "Write"),
         Hint::key(kb.exit, "Exit"),
         Hint::key(kb.write, "Word/DWord"),
-        Hint::key(kb.negator, "Negate"),
+        Hint::key(KeyCode::Char('-'), "Negate"),
     ];
     let footer2 = [
         Hint::keys("\u{2190}\u{2192}", "Bit"),

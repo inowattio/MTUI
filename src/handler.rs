@@ -197,7 +197,6 @@ async fn run_action(app: &mut App, action: KeybindAction) {
             p.scroll_pinned(rows, len);
             p.scroll_to_cursor(rows, cols);
         }
-        Negator => {}
         MoveUp | MoveDown | PageUp | PageDown => {
             move_read_cursor(app, app.config.keybinds.get(action));
         }
@@ -285,7 +284,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
             KeyCode::Left => app.write_move_bit(true),
             KeyCode::Right => app.write_move_bit(false),
             c if c == kb.pause => app.write_toggle_bit(),
-            c if c == kb.negator => {
+            KeyCode::Char('-') => {
                 if let Some(Popup::Write(w)) = &mut app.read_mut().popup {
                     negate_opt_option(&mut w.value);
                 }
