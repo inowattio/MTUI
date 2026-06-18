@@ -57,7 +57,10 @@ pub fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup
             hints::footer(
                 theme,
                 &[
-                    Hint::keys(format!("{}/{}", hints::glyph(kb.action), hints::glyph(kb.exit)), "Confirm"),
+                    Hint::keys(
+                        format!("{}/{}", hints::glyph(kb.action), hints::glyph(kb.exit)),
+                        "Confirm",
+                    ),
                     Hint::keys("Backspace", "Cancel"),
                 ],
             ),

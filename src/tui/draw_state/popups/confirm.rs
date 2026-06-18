@@ -13,7 +13,10 @@ pub(super) fn draw(
     result: &Option<StatusMessage>,
     footer: Line<'static>,
 ) {
-    let mut lines = vec![Line::from(Span::styled(prompt.to_string(), theme.base())), footer];
+    let mut lines = vec![
+        Line::from(Span::styled(prompt.to_string(), theme.base())),
+        footer,
+    ];
 
     if let Some(result) = result {
         lines.push(Line::default());
