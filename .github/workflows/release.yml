@@ -73,7 +73,7 @@ jobs:
             git log ${PREV:+$PREV..}HEAD --invert-grep --grep="^chore: release" --pretty="- %s (%h)"
           } > changelog.md
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ env.TAG }}
           draft: true
@@ -144,7 +144,7 @@ jobs:
 
       - name: Upload to release
         if: env.RELEASE_TAG != ''
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ env.RELEASE_TAG }}
           draft: true
@@ -157,7 +157,7 @@ jobs:
     if: ${{ !failure() && !cancelled() && needs.draft.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.cut.outputs.tag || github.ref_name }}
           draft: false
