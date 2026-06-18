@@ -52,10 +52,20 @@ use tokio_modbus::{ExceptionCode, Request, Response, Slave, SlaveId};
 ///   140..=155  harmonic spectrum, 16 bins (fundamental at 140),
 ///   200..=223  hourly energy profile kWh x10, 24 hours,
 ///   400..=431  counters ticking at (addr - 399) / 4 Hz
+///
+/// Coils (0..=63, all writable):
+///   0          main breaker (default closed), 1..=3 phase L1-L3 enable,
+///   4          maintenance bypass, 5 auto mode, rest scratch
+///
+/// Discrete inputs (0..=63, read-only):
+///   0          device ready, 1 grid present (brief dropouts),
+///   2          warning toggle, 3 heartbeat (1 Hz), 7 noise enabled,
+///   8          fault (clear), rest assorted bits
 #[derive(Debug)]
 pub struct MockContext {
     started: Instant,
     written: HashMap<u16, u16>,
+    written_coils: HashMap<u16, bool>,
     write_count: u16,
     slave_id: SlaveId,
 }
@@ -64,6 +74,8 @@ const KNOWN_SLAVES: RangeInclusive<SlaveId> = 0..=9;
 const WRITABLE: RangeInclusive<u16> = 50..=199;
 const HOLDING_ZONES: [RangeInclusive<u16>; 2] = [0..=499, 1000..=1199];
 const INPUT_ZONE: RangeInclusive<u16> = 0..=499;
+const COIL_ZONE: RangeInclusive<u16> = 0..=255;
+const DISCRETE_ZONE: RangeInclusive<u16> = 0..=255;
 
 const MODEL_NAME: &[u8; 16] = b"MTUI SIMULATOR  ";
 const VENDOR_NAME: &[u8; 32] = b"      POWER BUS SIMULATOR!      ";
@@ -94,6 +106,7 @@ impl MockContext {
         let client: Box<dyn Client> = Box::new(Self {
             started: Instant::now(),
             written: HashMap::new(),
+            written_coils: HashMap::new(),
             write_count: 0,
             slave_id: 0,
         });
@@ -302,6 +315,32 @@ impl MockContext {
         }
     }
 
+    fn coil_value(&self, addr: u16) -> bool {
+        if let Some(&value) = self.written_coils.get(&addr) {
+            return value;
+        }
+        match addr {
+            0 => true,      // main breaker closed
+            1..=3 => true,  // phases L1-L3 enabled
+            4 => false,     // maintenance bypass off
+            5 => true,      // auto mode
+            _ => addr.is_multiple_of(2),
+        }
+    }
+
+    fn discrete_value(&self, addr: u16, t: f64) -> bool {
+        let phase = self.phase();
+        match addr {
+            0 => true,                                      // device ready
+            1 => (t + phase) % 47.0 > 1.5,                  // grid present, brief dropouts
+            2 => ((t / 19.0) as u64).is_multiple_of(2), // slow warning toggle
+            3 => (t as u64).is_multiple_of(2),          // 1 Hz heartbeat
+            7 => self.setpoint(53) != 0,               // noise enabled flag
+            8 => false,                                     // no fault
+            _ => (t as u64).wrapping_add(addr as u64).is_multiple_of(3),
+        }
+    }
+
     fn device_id_objects(&self) -> [(u8, Vec<u8>); 8] {
         [
             (0x00, b"POWER BUS SIMULATOR".to_vec()),
@@ -406,6 +445,47 @@ impl Client for MockContext {
                 }
                 let regs = (0..count).map(|i| self.input_value(addr + i, t)).collect();
                 Ok(Ok(Response::ReadInputRegisters(regs)))
+            }
+
+            Request::ReadCoils(addr, count) => {
+                if !mapped(&[COIL_ZONE], addr, count) {
+                    return Ok(Err(ExceptionCode::IllegalDataAddress));
+                }
+                let coils = (0..count).map(|i| self.coil_value(addr + i)).collect();
+                Ok(Ok(Response::ReadCoils(coils)))
+            }
+
+            Request::ReadDiscreteInputs(addr, count) => {
+                if !mapped(&[DISCRETE_ZONE], addr, count) {
+                    return Ok(Err(ExceptionCode::IllegalDataAddress));
+                }
+                let inputs = (0..count)
+                    .map(|i| self.discrete_value(addr + i, t))
+                    .collect();
+                Ok(Ok(Response::ReadDiscreteInputs(inputs)))
+            }
+
+            Request::WriteSingleCoil(addr, value) => {
+                if !COIL_ZONE.contains(&addr) {
+                    return Ok(Err(ExceptionCode::IllegalDataAddress));
+                }
+                self.written_coils.insert(addr, value);
+                self.write_count = self.write_count.wrapping_add(1);
+                Ok(Ok(Response::WriteSingleCoil(addr, value)))
+            }
+
+            Request::WriteMultipleCoils(addr, values) => {
+                let quantity = values.len() as u16;
+                let writable = (0..quantity)
+                    .all(|i| addr.checked_add(i).is_some_and(|a| COIL_ZONE.contains(&a)));
+                if !writable {
+                    return Ok(Err(ExceptionCode::IllegalDataAddress));
+                }
+                for (i, value) in values.iter().enumerate() {
+                    self.written_coils.insert(addr + i as u16, *value);
+                }
+                self.write_count = self.write_count.wrapping_add(1);
+                Ok(Ok(Response::WriteMultipleCoils(addr, quantity)))
             }
 
             Request::WriteSingleRegister(addr, value) => {

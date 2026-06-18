@@ -400,6 +400,14 @@ impl ModbusDevice {
         timeout!(self, read_holding_registers, (address, quantity))
     }
 
+    pub async fn coils(&self, address: u16, quantity: u16) -> Result<Vec<bool>> {
+        timeout!(self, read_coils, (address, quantity))
+    }
+
+    pub async fn discretes(&self, address: u16, quantity: u16) -> Result<Vec<bool>> {
+        timeout!(self, read_discrete_inputs, (address, quantity))
+    }
+
     pub async fn input_word(&self, address: u16) -> Result<u32> {
         let data = self.inputs(address, 2).await?;
         anyhow::ensure!(data.len() == 2, "Expected 2 values.");
@@ -475,6 +483,14 @@ impl ModbusDevice {
 
     pub async fn write_registers(&self, address: u16, data: &[u16]) -> Result<()> {
         timeout!(self, write_multiple_registers, (address, data))
+    }
+
+    pub async fn write_coil(&self, address: u16, data: bool) -> Result<()> {
+        timeout!(self, write_single_coil, (address, data))
+    }
+
+    pub async fn write_coils(&self, address: u16, data: &[bool]) -> Result<()> {
+        timeout!(self, write_multiple_coils, (address, data))
     }
 
     pub async fn write_register_word(&self, address: u16, data: i32) -> Result<()> {

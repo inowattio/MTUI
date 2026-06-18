@@ -1,6 +1,6 @@
 use super::popups::draw_popup;
 use crate::app::App;
-use crate::register::{RegisterCell, RegisterType};
+use crate::register::RegisterCell;
 use crate::state::{ReadPanel, ReadParams};
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::{spinner_frame, Theme};
@@ -133,11 +133,7 @@ fn list_table(
             }
         };
 
-        let marker = match kind {
-            RegisterType::Holding => "H",
-            RegisterType::Input => "I",
-        };
-        let text = format!("{marker:<2}{text}");
+        let text = format!("{:<2}{text}", kind.marker());
 
         let style = if (top + offset) as u16 == params.pinned_index {
             theme.selected_style()
@@ -261,11 +257,15 @@ pub fn draw(
     if is_pinned {
         info_spans.push(Span::styled(" (pinned)", theme.changed_style()));
     }
-    let (access, access_style) = match info_type {
-        RegisterType::Holding => ("RW", theme.ok_style()),
-        RegisterType::Input => ("RO", theme.warn_style()),
+    let access_style = if info_type.is_writable() {
+        theme.ok_style()
+    } else {
+        theme.warn_style()
     };
-    info_spans.push(Span::styled(format!(" {access}"), access_style));
+    info_spans.push(Span::styled(
+        format!(" {}", info_type.access()),
+        access_style,
+    ));
     info_spans.push(Span::styled("   order ", theme.dim_style()));
     info_spans.push(Span::styled(
         format!("{:?}", app.config.device.word_order),

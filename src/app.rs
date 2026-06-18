@@ -63,6 +63,7 @@ pub enum WriteType {
     #[default]
     Word,
     DWord,
+    Coil,
 }
 
 pub type AppResult<T> = Result<T, Box<dyn error::Error>>;
@@ -214,6 +215,8 @@ pub struct App {
 pub struct PinnedRegisters {
     pub holdings: Vec<u16>,
     pub inputs: Vec<u16>,
+    pub coils: Vec<u16>,
+    pub discretes: Vec<u16>,
 }
 
 impl From<PinnedRegisters> for Vec<RegisterCell> {
@@ -226,6 +229,14 @@ impl From<PinnedRegisters> for Vec<RegisterCell> {
 
         for input in value.inputs {
             collection.push((RegisterType::Input, input));
+        }
+
+        for coil in value.coils {
+            collection.push((RegisterType::Coil, coil));
+        }
+
+        for discrete in value.discretes {
+            collection.push((RegisterType::Discrete, discrete));
         }
 
         collection
@@ -244,14 +255,21 @@ impl From<Labels> for BTreeMap<RegisterCell, String> {
             map.insert((RegisterType::Input, label.address), label.text);
         }
 
+        for label in value.coils {
+            map.insert((RegisterType::Coil, label.address), label.text);
+        }
+
+        for label in value.discretes {
+            map.insert((RegisterType::Discrete, label.address), label.text);
+        }
+
         map
     }
 }
 
 impl From<&BTreeMap<RegisterCell, String>> for Labels {
     fn from(map: &BTreeMap<RegisterCell, String>) -> Self {
-        let mut holdings = Vec::new();
-        let mut inputs = Vec::new();
+        let mut labels = Labels::default();
 
         for ((kind, address), text) in map {
             let label = Label {
@@ -259,12 +277,14 @@ impl From<&BTreeMap<RegisterCell, String>> for Labels {
                 text: text.clone(),
             };
             match kind {
-                RegisterType::Holding => holdings.push(label),
-                RegisterType::Input => inputs.push(label),
+                RegisterType::Holding => labels.holdings.push(label),
+                RegisterType::Input => labels.inputs.push(label),
+                RegisterType::Coil => labels.coils.push(label),
+                RegisterType::Discrete => labels.discretes.push(label),
             }
         }
 
-        Self { holdings, inputs }
+        labels
     }
 }
 
@@ -280,30 +300,39 @@ impl From<CustomRules> for BTreeMap<RegisterCell, CustomRule> {
             map.insert((RegisterType::Input, rule.address), rule);
         }
 
+        for rule in value.coils {
+            map.insert((RegisterType::Coil, rule.address), rule);
+        }
+
+        for rule in value.discretes {
+            map.insert((RegisterType::Discrete, rule.address), rule);
+        }
+
         map
     }
 }
 
 impl From<&BTreeMap<RegisterCell, CustomRule>> for CustomRules {
     fn from(map: &BTreeMap<RegisterCell, CustomRule>) -> Self {
-        let mut holdings = Vec::new();
-        let mut inputs = Vec::new();
+        let mut rules = CustomRules::default();
 
         for ((kind, address), rule) in map {
             let mut rule = rule.clone();
             rule.address = *address;
             match kind {
-                RegisterType::Holding => holdings.push(rule),
-                RegisterType::Input => inputs.push(rule),
+                RegisterType::Holding => rules.holdings.push(rule),
+                RegisterType::Input => rules.inputs.push(rule),
+                RegisterType::Coil => rules.coils.push(rule),
+                RegisterType::Discrete => rules.discretes.push(rule),
             }
         }
 
-        Self {
-            holdings,
-            inputs,
-            ..Default::default()
-        }
+        rules
     }
+}
+
+fn bits_to_words(bits: Vec<bool>) -> Vec<u16> {
+    bits.into_iter().map(u16::from).collect()
 }
 
 fn save_config(path: &str, config: &Config) -> Result<(), String> {
@@ -1157,6 +1186,7 @@ impl App {
         let kind = match pending.write_type {
             WriteType::Word => WriteKind::Word(pending.new_value as u16),
             WriteType::DWord => WriteKind::DWord(pending.new_value as u32),
+            WriteType::Coil => WriteKind::Coil(pending.new_value != 0),
         };
         crate::writes_log::append(&self.writes_log, pending.address, kind, pending.previous);
     }
@@ -1321,25 +1351,37 @@ impl App {
             return;
         }
 
-        let (write_type, write_pos) = self.cursor_cell();
+        let (kind, write_pos) = self.cursor_cell();
 
-        if write_type == RegisterType::Input {
-            self.set_read_status(StatusMessage::warn(
-                "Input registers are read-only \u{2014} cannot write",
-            ));
+        if !kind.is_writable() {
+            let what = match kind {
+                RegisterType::Input => "Input registers",
+                RegisterType::Discrete => "Discrete inputs",
+                _ => "These registers",
+            };
+            self.set_read_status(StatusMessage::warn(format!(
+                "{what} are read-only \u{2014} cannot write"
+            )));
             return;
         }
 
         let value = self
             .previous_values
-            .get(&(write_type, write_pos))
+            .get(&(kind, write_pos))
             .map(|&v| v as i64);
+
+        let write_type = if kind == RegisterType::Coil {
+            WriteType::Coil
+        } else {
+            WriteType::Word
+        };
 
         let p = self.read_mut();
         p.status = None;
         p.popup = Some(Popup::Write(WriteParams {
             position: write_pos,
             value,
+            write_type,
             ..Default::default()
         }));
     }
@@ -1696,6 +1738,8 @@ impl App {
         let (register_type, has_explicit_type) = match query.chars().next() {
             Some('h') | Some('H') => (RegisterType::Holding, true),
             Some('i') | Some('I') => (RegisterType::Input, true),
+            Some('c') | Some('C') => (RegisterType::Coil, true),
+            Some('d') | Some('D') => (RegisterType::Discrete, true),
             _ => (read.register_type, false),
         };
 
@@ -1951,12 +1995,16 @@ impl App {
         let rebuilt: CustomRules = (&self.custom_rules).into();
         self.config.custom_rules.holdings = rebuilt.holdings;
         self.config.custom_rules.inputs = rebuilt.inputs;
+        self.config.custom_rules.coils = rebuilt.coils;
+        self.config.custom_rules.discretes = rebuilt.discretes;
 
         let mut pinned = PinnedRegisters::default();
         for (kind, address) in &self.pinned_registers {
             match kind {
                 RegisterType::Holding => pinned.holdings.push(*address),
                 RegisterType::Input => pinned.inputs.push(*address),
+                RegisterType::Coil => pinned.coils.push(*address),
+                RegisterType::Discrete => pinned.discretes.push(*address),
             }
         }
         self.config.pinned_registers = pinned;
@@ -2357,10 +2405,11 @@ impl App {
         position: u16,
         register_type: RegisterType,
     ) -> Result<Vec<RegisterCellValue>, anyhow::Error> {
-        let values = if register_type == RegisterType::Holding {
-            device.holdings(position, amount).await?
-        } else {
-            device.inputs(position, amount).await?
+        let values = match register_type {
+            RegisterType::Holding => device.holdings(position, amount).await?,
+            RegisterType::Input => device.inputs(position, amount).await?,
+            RegisterType::Coil => bits_to_words(device.coils(position, amount).await?),
+            RegisterType::Discrete => bits_to_words(device.discretes(position, amount).await?),
         };
 
         Ok(values
@@ -2396,6 +2445,12 @@ impl App {
             let values = match kind {
                 RegisterType::Holding => device.holdings(start_addr, run_len as u16).await?,
                 RegisterType::Input => device.inputs(start_addr, run_len as u16).await?,
+                RegisterType::Coil => {
+                    bits_to_words(device.coils(start_addr, run_len as u16).await?)
+                }
+                RegisterType::Discrete => {
+                    bits_to_words(device.discretes(start_addr, run_len as u16).await?)
+                }
             };
             anyhow::ensure!(
                 values.len() == run_len,
@@ -2674,11 +2729,20 @@ impl App {
             return;
         };
 
-        let cell = (RegisterType::Holding, position);
+        let kind = if write_type == WriteType::Coil {
+            RegisterType::Coil
+        } else {
+            RegisterType::Holding
+        };
+        let cell = (kind, position);
         let (previous, new_value) = match write_type {
             WriteType::Word => (
                 self.previous_values.get(&cell).map(|&v| v as u64),
                 (number as u16) as u64,
+            ),
+            WriteType::Coil => (
+                self.previous_values.get(&cell).map(|&v| v as u64),
+                (number != 0) as u64,
             ),
             WriteType::DWord => {
                 let order = self.config.device.word_order;
@@ -2704,6 +2768,7 @@ impl App {
             let result = match write_type {
                 WriteType::Word => device.write_register(position, number as u16).await,
                 WriteType::DWord => device.write_register_word(position, number as i32).await,
+                WriteType::Coil => device.write_coil(position, number != 0).await,
             };
             match result {
                 Ok(()) => WriteOutcome {
@@ -2721,6 +2786,7 @@ impl App {
     fn write_bit_count(&self) -> u16 {
         match &self.read().popup {
             Some(Popup::Write(w)) => match w.write_type {
+                WriteType::Coil => 1,
                 WriteType::Word => 16,
                 WriteType::DWord => 32,
             },
@@ -2733,8 +2799,10 @@ impl App {
             w.write_type = match w.write_type {
                 WriteType::Word => WriteType::DWord,
                 WriteType::DWord => WriteType::Word,
+                WriteType::Coil => WriteType::Coil,
             };
             let bits = match w.write_type {
+                WriteType::Coil => 1,
                 WriteType::Word => 16,
                 WriteType::DWord => 32,
             };
@@ -2747,6 +2815,7 @@ impl App {
         if let Some(Popup::Write(w)) = &mut self.read_mut().popup {
             if let Some(value) = w.value {
                 let (lo, hi) = match w.write_type {
+                    WriteType::Coil => (0, 1),
                     WriteType::Word => (i16::MIN as i64, u16::MAX as i64),
                     WriteType::DWord => (i32::MIN as i64, u32::MAX as i64),
                 };

@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex};
 pub enum WriteKind {
     Word(u16),
     DWord(u32),
+    Coil(bool),
     Multiple(Vec<u16>),
 }
 
@@ -16,6 +17,7 @@ impl fmt::Display for WriteKind {
         f.write_str(match self {
             WriteKind::Word(_) => "word",
             WriteKind::DWord(_) => "dword",
+            WriteKind::Coil(_) => "coil",
             WriteKind::Multiple(_) => "multiple",
         })
     }
@@ -51,6 +53,7 @@ pub fn append(shared: &SharedWritesLog, address: u16, kind: WriteKind, previous:
         let val = match &kind {
             WriteKind::Word(w) => w.to_string(),
             WriteKind::DWord(d) => d.to_string(),
+            WriteKind::Coil(c) => if *c { "on" } else { "off" }.to_string(),
             WriteKind::Multiple(v) => format!("{v:?}"),
         };
 

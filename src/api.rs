@@ -36,6 +36,8 @@ struct ReadResponse {
 
 #[derive(Deserialize)]
 struct WriteRequest {
+    #[serde(rename = "type", default)]
+    register_type: RegisterType,
     address: u16,
     values: Vec<u16>,
 }
@@ -99,9 +101,18 @@ async fn read_handler(State(state): State<ApiState>, Json(request): Json<ReadReq
     let Some(device) = current(&state.device) else {
         return StatusCode::SERVICE_UNAVAILABLE.into_response();
     };
+    let bits_to_words = |bits: Vec<bool>| bits.into_iter().map(u16::from).collect::<Vec<u16>>();
     let result = match request.register_type {
         RegisterType::Holding => device.holdings(request.address, request.count).await,
         RegisterType::Input => device.inputs(request.address, request.count).await,
+        RegisterType::Coil => device
+            .coils(request.address, request.count)
+            .await
+            .map(bits_to_words),
+        RegisterType::Discrete => device
+            .discretes(request.address, request.count)
+            .await
+            .map(bits_to_words),
     };
     match result {
         Ok(values) => Json(ReadResponse { values }).into_response(),
@@ -121,13 +132,28 @@ async fn write_handler(
         log::warn!("API write rejected due to read-only mode");
         return StatusCode::FORBIDDEN;
     }
+    if !request.register_type.is_writable() {
+        log::warn!(
+            "API write rejected: {:?} is read-only",
+            request.register_type
+        );
+        return StatusCode::BAD_REQUEST;
+    }
     let Some(device) = current(&state.device) else {
         return StatusCode::SERVICE_UNAVAILABLE;
     };
-    match device
-        .write_registers(request.address, &request.values)
-        .await
-    {
+    let result = match request.register_type {
+        RegisterType::Coil => {
+            let coils: Vec<bool> = request.values.iter().map(|&v| v != 0).collect();
+            device.write_coils(request.address, &coils).await
+        }
+        _ => {
+            device
+                .write_registers(request.address, &request.values)
+                .await
+        }
+    };
+    match result {
         Ok(()) => {
             writes_log::append(
                 &state.writes_log,
