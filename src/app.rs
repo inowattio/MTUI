@@ -156,6 +156,16 @@ struct RefreshTaskResult {
     read_duration: Duration,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+struct ClipboardHandle(arboard::Clipboard);
+
+#[cfg(not(target_arch = "wasm32"))]
+impl std::fmt::Debug for ClipboardHandle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("ClipboardHandle")
+    }
+}
+
 #[derive(Debug)]
 pub struct App {
     pub config: Config,
@@ -195,6 +205,8 @@ pub struct App {
     api_server_port: Option<u16>,
     #[cfg(not(target_arch = "wasm32"))]
     api_pending_port: Option<u16>,
+    #[cfg(not(target_arch = "wasm32"))]
+    clipboard: Option<ClipboardHandle>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -400,6 +412,8 @@ impl App {
             api_server_port: None,
             #[cfg(not(target_arch = "wasm32"))]
             api_pending_port: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            clipboard: None,
         };
 
         app.apply_config(config, device);
@@ -1246,13 +1260,22 @@ impl App {
     }
 
     pub fn copy_address(&mut self) {
-        let (_, address) = self.cursor_cell();
         #[cfg(not(target_arch = "wasm32"))]
-        let message =
-            match arboard::Clipboard::new().and_then(|mut c| c.set_text(address.to_string())) {
-                Ok(()) => StatusMessage::ok(format!("Copied address {address} to clipboard")),
-                Err(_) => StatusMessage::err("Clipboard unavailable"),
-            };
+        let message = {
+            let (_, address) = self.cursor_cell();
+
+            if self.clipboard.is_none() {
+                self.clipboard = arboard::Clipboard::new().ok().map(ClipboardHandle);
+            }
+            match self
+                .clipboard
+                .as_mut()
+                .map(|c| c.0.set_text(address.to_string()))
+            {
+                Some(Ok(())) => StatusMessage::ok(format!("Copied address {address} to clipboard")),
+                _ => StatusMessage::err("Clipboard unavailable"),
+            }
+        };
         #[cfg(target_arch = "wasm32")]
         let message = StatusMessage::err("Clipboard unavailable");
         self.set_read_status(message);
