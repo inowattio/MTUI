@@ -523,9 +523,7 @@ impl ModbusDevice {
                 objects.push((object.id, value));
             }
 
-            if !response.more_follows
-                || response.next_object_id == next_id
-                || objects.len() >= 256
+            if !response.more_follows || response.next_object_id == next_id || objects.len() >= 256
             {
                 break;
             }

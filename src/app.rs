@@ -13,9 +13,9 @@ use crate::num_ops::{digit_add, digit_remove};
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
 use crate::state::{
     ColumnsParams, ConnectionStatus, CustomField, CustomParams, DeviceIdParams, DiscoveryParams,
-    DumpParams, HelpParams, InterfaceKind, LabelParams, LogViewParams, LogsParams, Popup, PopupKind,
-    ReadPanel, ReadParams, SearchParams, SettingsField, SettingsParams, State, StatusMessage,
-    SweepConfigParams, SweepField, WriteParams,
+    DumpParams, HelpParams, InterfaceKind, LabelParams, LogViewParams, LogsParams, Popup,
+    PopupKind, ReadPanel, ReadParams, SearchParams, SettingsField, SettingsParams, State,
+    StatusMessage, SweepConfigParams, SweepField, WriteParams,
 };
 use crate::writes_log::{SharedWritesLog, WriteKind, WritesLogState};
 use chrono::{DateTime, Local, SecondsFormat, Utc};
