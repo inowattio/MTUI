@@ -316,6 +316,24 @@ pub fn draw(
         rows[0],
     );
 
+    if let Some(status) = params.active_status() {
+        if rows[0].height > 1 {
+            let status_area = Rect {
+                x: rows[0].x,
+                y: rows[0].y + 1,
+                width: rows[0].width,
+                height: 1,
+            };
+            frame.render_widget(
+                Paragraph::new(Line::from(Span::styled(
+                    format!(" {}", status.text),
+                    theme.message_style(status.kind),
+                ))),
+                status_area,
+            );
+        }
+    }
+
     let header = app.interpreter.header();
 
     let visible = rows[1].height.saturating_sub(3).max(1);

@@ -542,7 +542,11 @@ pub struct ReadParams {
     pub read_duration: Option<Duration>,
     pub loading: bool,
     pub read_error: Option<String>,
+    pub status: Option<StatusMessage>,
+    pub status_at: Instant,
 }
+
+const STATUS_TTL: Duration = Duration::from_secs(4);
 
 impl Default for ReadParams {
     fn default() -> Self {
@@ -560,11 +564,19 @@ impl Default for ReadParams {
             read_duration: None,
             loading: false,
             read_error: None,
+            status: None,
+            status_at: Instant::now(),
         }
     }
 }
 
 impl ReadParams {
+    pub fn active_status(&self) -> Option<&StatusMessage> {
+        self.status
+            .as_ref()
+            .filter(|_| self.status_at.elapsed() < STATUS_TTL)
+    }
+
     pub fn scroll_to_cursor(&mut self, rows: u16, matrix_cols: u16) {
         let rows = rows.max(1);
         if self.panel == ReadPanel::Matrix {

@@ -1255,14 +1255,27 @@ impl App {
         self.value_history.get(&cell)
     }
 
+    /// Show a short-lived feedback message in the Read view.
+    pub fn set_read_status(&mut self, message: StatusMessage) {
+        let p = self.read_mut();
+        p.status = Some(message);
+        p.status_at = Instant::now();
+    }
+
     pub fn open_write(&mut self) {
         if self.config.read_only {
+            self.set_read_status(StatusMessage::warn(
+                "Read-only mode is on \u{2014} writes are disabled (toggle in settings)",
+            ));
             return;
         }
 
         let (write_type, write_pos) = self.cursor_cell();
 
         if write_type == RegisterType::Input {
+            self.set_read_status(StatusMessage::warn(
+                "Input registers are read-only \u{2014} cannot write",
+            ));
             return;
         }
 
@@ -1271,7 +1284,9 @@ impl App {
             .get(&(write_type, write_pos))
             .map(|&v| v as i64);
 
-        self.read_mut().popup = Some(Popup::Write(WriteParams {
+        let p = self.read_mut();
+        p.status = None;
+        p.popup = Some(Popup::Write(WriteParams {
             position: write_pos,
             value,
             ..Default::default()
