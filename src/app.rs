@@ -1248,10 +1248,11 @@ impl App {
     pub fn copy_address(&mut self) {
         let (_, address) = self.cursor_cell();
         #[cfg(not(target_arch = "wasm32"))]
-        let message = match arboard::Clipboard::new().and_then(|mut c| c.set_text(address.to_string())) {
-            Ok(()) => StatusMessage::ok(format!("Copied address {address} to clipboard")),
-            Err(_) => StatusMessage::err("Clipboard unavailable"),
-        };
+        let message =
+            match arboard::Clipboard::new().and_then(|mut c| c.set_text(address.to_string())) {
+                Ok(()) => StatusMessage::ok(format!("Copied address {address} to clipboard")),
+                Err(_) => StatusMessage::err("Clipboard unavailable"),
+            };
         #[cfg(target_arch = "wasm32")]
         let message = StatusMessage::err("Clipboard unavailable");
         self.set_read_status(message);
@@ -1266,7 +1267,6 @@ impl App {
         self.value_history.get(&cell)
     }
 
-    /// Show a short-lived feedback message in the Read view.
     pub fn set_read_status(&mut self, message: StatusMessage) {
         let p = self.read_mut();
         p.status = Some(message);
