@@ -25,10 +25,11 @@ servers:
 paths:
   /read:
     post:
-      summary: Read registers
+      summary: Read registers or bits
       description: |
-        Reads `count` registers of the given `type` starting at `address`
-        from the connected device.
+        Reads `count` items of the given `type` starting at `address` from the
+        connected device. `Holding` and `Input` return raw 16-bit values;
+        `Coil` and `Discrete` return `0` or `1` per bit.
       operationId: readRegisters
       requestBody:
         required: true
@@ -43,17 +44,28 @@ paths:
                   type: Holding
                   address: 0
                   count: 4
+              coils:
+                summary: Read 8 coils from address 0
+                value:
+                  type: Coil
+                  address: 0
+                  count: 8
       responses:
         "200":
-          description: Register values read successfully
+          description: Values read successfully
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ReadResponse"
               examples:
-                values:
+                registers:
+                  summary: Holding/Input register values
                   value:
                     values: [230, 0, 4998, 12]
+                bits:
+                  summary: Coil/Discrete values (0 or 1)
+                  value:
+                    values: [1, 1, 1, 1, 0, 1, 1, 0]
         "503":
           description: No device is currently connected
         "502":
@@ -61,10 +73,14 @@ paths:
 
   /write:
     post:
-      summary: Write registers
+      summary: Write registers or coils
       description: |
-        Writes one or more consecutive holding registers starting at
-        `address`. Rejected with `403` when the server is in read-only mode.
+        Writes one or more consecutive items starting at `address`. The
+        optional `type` selects `Holding` (default, 16-bit registers) or
+        `Coil` (bits, where `0` is off and any non-zero value is on).
+        Read-only types (`Input`, `Discrete`) are rejected with `400`, and
+        all writes are rejected with `403` when the server is in read-only
+        mode.
       operationId: writeRegisters
       requestBody:
         required: true
@@ -74,18 +90,27 @@ paths:
               $ref: "#/components/schemas/WriteRequest"
             examples:
               single:
-                summary: Write one register
+                summary: Write one holding register (type defaults to Holding)
                 value:
                   address: 40001
                   values: [1234]
               multiple:
-                summary: Write three consecutive registers
+                summary: Write three consecutive holding registers
                 value:
+                  type: Holding
                   address: 40001
                   values: [1234, 5678, 9012]
+              coils:
+                summary: Write three consecutive coils (on, off, on)
+                value:
+                  type: Coil
+                  address: 0
+                  values: [1, 0, 1]
       responses:
         "204":
-          description: Registers written successfully (no body)
+          description: Values written successfully (no body)
+        "400":
+          description: The requested type is read-only (Input or Discrete)
         "403":
           description: Server is in read-only mode; writes are forbidden
         "503":
@@ -131,10 +156,16 @@ components:
   schemas:
     RegisterType:
       type: string
-      description: Modbus register class.
+      description: |
+        Modbus data class. `Holding` (16-bit, read/write) and `Input` (16-bit,
+        read-only) are register types; `Coil` (1-bit, read/write) and
+        `Discrete` (1-bit, read-only) are bit types. Reads of bit types return
+        `0` or `1` per item.
       enum:
         - Holding
         - Input
+        - Coil
+        - Discrete
 
     ReadRequest:
       type: object
@@ -161,7 +192,9 @@ components:
       properties:
         values:
           type: array
-          description: Raw register values, in address order.
+          description: |
+            Values in address order: raw 16-bit for `Holding`/`Input`, or
+            `0`/`1` for `Coil`/`Discrete`.
           items:
             type: integer
             format: uint16
@@ -172,15 +205,25 @@ components:
       type: object
       required: [address, values]
       properties:
+        type:
+          allOf:
+            - $ref: "#/components/schemas/RegisterType"
+          default: Holding
+          description: |
+            Target data class. Defaults to `Holding` when omitted. Only
+            `Holding` and `Coil` are writable; `Input` and `Discrete` are
+            rejected with `400`.
         address:
           type: integer
           format: uint16
           minimum: 0
           maximum: 65535
-          description: Starting register address.
+          description: Starting address.
         values:
           type: array
-          description: Values to write to consecutive registers.
+          description: |
+            Values to write to consecutive items. For coils, `0` is off and
+            any non-zero value is on.
           items:
             type: integer
             format: uint16
