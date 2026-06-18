@@ -320,10 +320,10 @@ impl MockContext {
             return value;
         }
         match addr {
-            0 => true,      // main breaker closed
-            1..=3 => true,  // phases L1-L3 enabled
-            4 => false,     // maintenance bypass off
-            5 => true,      // auto mode
+            0 => true,     // main breaker closed
+            1..=3 => true, // phases L1-L3 enabled
+            4 => false,    // maintenance bypass off
+            5 => true,     // auto mode
             _ => addr.is_multiple_of(2),
         }
     }
@@ -331,12 +331,12 @@ impl MockContext {
     fn discrete_value(&self, addr: u16, t: f64) -> bool {
         let phase = self.phase();
         match addr {
-            0 => true,                                      // device ready
-            1 => (t + phase) % 47.0 > 1.5,                  // grid present, brief dropouts
+            0 => true,                                  // device ready
+            1 => (t + phase) % 47.0 > 1.5,              // grid present, brief dropouts
             2 => ((t / 19.0) as u64).is_multiple_of(2), // slow warning toggle
             3 => (t as u64).is_multiple_of(2),          // 1 Hz heartbeat
-            7 => self.setpoint(53) != 0,               // noise enabled flag
-            8 => false,                                     // no fault
+            7 => self.setpoint(53) != 0,                // noise enabled flag
+            8 => false,                                 // no fault
             _ => (t as u64).wrapping_add(addr as u64).is_multiple_of(3),
         }
     }

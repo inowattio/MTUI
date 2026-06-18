@@ -27,7 +27,7 @@ pub(super) fn draw(
     let bits: u16 = match write.write_type {
         WriteType::Word => 16,
         WriteType::DWord => 32,
-        WriteType::Coil => 1,   // handled by draw_coil above
+        WriteType::Coil => 1, // handled by draw_coil above
     };
     let raw = write.value.unwrap_or(0) as u32;
 
