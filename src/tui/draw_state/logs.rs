@@ -1,6 +1,7 @@
 use crate::app::App;
 use crate::logger::{self, LogLevel};
 use crate::state::LogViewParams;
+use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
@@ -25,13 +26,21 @@ pub fn draw(params: &LogViewParams, app: &App, frame: &mut Frame, area: Rect, th
 
     let shown = if len == 0 { 0 } else { end };
     let kb = &app.config.keybinds;
-    let header = Line::from(Span::styled(
-        format!(
-            " {shown}/{len} events   {}/{} scroll \u{b7} {} back",
-            kb.move_up, kb.move_down, kb.exit
-        ),
+    let mut header_spans = vec![Span::styled(
+        format!(" {shown}/{len} events  "),
         theme.dim_style(),
-    ));
+    )];
+    header_spans.extend(
+        hints::footer(
+            theme,
+            &[
+                Hint::keys(hints::pair(kb.move_up, kb.move_down), "Scroll"),
+                Hint::key(kb.exit, "Back"),
+            ],
+        )
+        .spans,
+    );
+    let header = Line::from(header_spans);
 
     let mut lines = vec![header];
 

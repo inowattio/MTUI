@@ -1,4 +1,5 @@
 use crate::app::App;
+use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
@@ -38,13 +39,14 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App) {
     }
     lines.push(Line::default());
     let kb = &app.config.keybinds;
-    lines.push(Line::from(Span::styled(
-        format!(
-            " {}/{} move \u{b7} {} refresh \u{b7} {} close",
-            kb.move_up, kb.move_down, kb.refresh, kb.exit
-        ),
-        theme.dim_style(),
-    )));
+    lines.push(hints::footer(
+        theme,
+        &[
+            Hint::keys(hints::pair(kb.move_up, kb.move_down), "Move"),
+            Hint::key(kb.refresh, "Refresh"),
+            Hint::key(kb.exit, "Close"),
+        ],
+    ));
 
     let width = ((NAME + VALUE + 3) as u16) * 2 + 3;
     super::render(frame, area, theme, "Inspect", width, lines);

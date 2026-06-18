@@ -1,6 +1,7 @@
 use crate::app::WriteType;
 use crate::config::Keybinds;
 use crate::state::WriteParams;
+use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
@@ -65,17 +66,19 @@ pub(super) fn draw(
         )));
     }
 
-    lines.push(Line::from(Span::styled(
-        format!(
-            " {} write \u{b7} {} exit \u{b7} {} word/dword \u{b7} {} negate",
-            kb.action, kb.exit, kb.write, kb.negator
-        ),
-        theme.dim_style(),
-    )));
-    lines.push(Line::from(Span::styled(
-        format!(" \u{2190}/\u{2192} bit \u{b7} {} toggle", kb.pause),
-        theme.dim_style(),
-    )));
+    let footer1 = [
+        Hint::key(kb.action, "Write"),
+        Hint::key(kb.exit, "Exit"),
+        Hint::key(kb.write, "Word/DWord"),
+        Hint::key(kb.negator, "Negate"),
+    ];
+    let footer2 = [
+        Hint::keys("\u{2190}\u{2192}", "Bit"),
+        Hint::key(kb.pause, "Toggle"),
+    ];
+    lines.push(hints::footer(theme, &footer1));
+    lines.push(hints::footer(theme, &footer2));
 
-    super::render(frame, area, theme, "Write", 58, lines);
+    let width = 58.max(hints::width(&footer1) as u16);
+    super::render(frame, area, theme, "Write", width, lines);
 }

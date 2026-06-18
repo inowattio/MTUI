@@ -1,5 +1,6 @@
 use crate::app::App;
 use crate::state::{CustomField, CustomParams};
+use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
@@ -142,17 +143,17 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &
 
     lines.push(Line::default());
     let kb = &app.config.keybinds;
-    lines.push(Line::from(Span::styled(
-        format!(
-            " {}/{} field \u{b7} \u{2190}/\u{2192} change",
-            kb.move_up, kb.move_down
-        ),
-        theme.dim_style(),
-    )));
-    lines.push(Line::from(Span::styled(
-        format!(" type to edit \u{b7} {} close", kb.exit),
-        theme.dim_style(),
-    )));
+    lines.push(hints::footer(
+        theme,
+        &[
+            Hint::keys(hints::pair(kb.move_up, kb.move_down), "Field"),
+            Hint::keys("\u{2190}\u{2192}", "Change"),
+        ],
+    ));
+    lines.push(hints::footer(
+        theme,
+        &[Hint::note("Type to edit"), Hint::key(kb.exit, "Close")],
+    ));
 
     super::render(frame, area, theme, "Custom rule", 48, lines);
 }

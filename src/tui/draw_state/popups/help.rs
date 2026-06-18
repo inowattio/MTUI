@@ -1,6 +1,7 @@
 use crate::app::App;
 use crate::config::{KeybindAction, Keybinds};
 use crate::state::HelpParams;
+use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
@@ -85,14 +86,15 @@ pub(super) fn draw(
         lines.push(Line::from(spans));
     }
 
-    let footer = format!(
-        " type to filter \u{b7} {}/{} select \u{b7} {} run \u{b7} {} close",
-        kb.move_up, kb.move_down, kb.action, kb.exit
-    );
+    let footer = [
+        Hint::keys(hints::pair(kb.move_up, kb.move_down), "Select"),
+        Hint::key(kb.action, "Run"),
+        Hint::key(kb.exit, "Close"),
+    ];
     lines.push(Line::default());
-    lines.push(Line::from(Span::styled(footer.clone(), theme.dim_style())));
+    lines.push(hints::footer(theme, &footer));
 
     let grid_w = 2 + col_key_w.iter().map(|&kw| cell_w(kw)).sum::<usize>();
-    let width = grid_w.max(footer.chars().count() + 2) as u16;
+    let width = grid_w.max(hints::width(&footer)) as u16;
     super::render(frame, area, theme, "Help", width, lines);
 }

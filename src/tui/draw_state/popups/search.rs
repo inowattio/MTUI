@@ -1,5 +1,6 @@
 use crate::config::Keybinds;
 use crate::state::SearchParams;
+use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
@@ -44,14 +45,14 @@ pub(super) fn draw(
         }
     }
 
-    lines.push(Line::default());
-    lines.push(Line::from(Span::styled(
-        format!(
-            " address or label \u{b7} {}/{} select \u{b7} {} go \u{b7} {} close",
-            kb.move_up, kb.move_down, kb.action, kb.exit
-        ),
-        theme.dim_style(),
-    )));
+    let footer = [
+        Hint::keys(hints::pair(kb.move_up, kb.move_down), "Select"),
+        Hint::key(kb.action, "Go"),
+        Hint::key(kb.exit, "Close"),
+    ];
+    lines.push(hints::more(theme, top, len.saturating_sub(end)));
+    lines.push(hints::footer(theme, &footer));
 
-    super::render(frame, area, theme, "Go to", 54, lines);
+    let width = 54.max(hints::width(&footer) as u16);
+    super::render(frame, area, theme, "Go to", width, lines);
 }

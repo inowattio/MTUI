@@ -1,5 +1,6 @@
 use crate::app::App;
 use crate::state::ColumnsParams;
+use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
@@ -61,14 +62,18 @@ pub(super) fn draw(
 
     lines.push(Line::default());
     let kb = &app.config.keybinds;
-    lines.push(Line::from(Span::styled(
-        format!(
-            " type to filter \u{b7} {}/{} \u{2190}/\u{2192} move \u{b7} {} toggle \u{b7} {} close",
-            kb.move_up, kb.move_down, kb.action, kb.exit
-        ),
-        theme.dim_style(),
-    )));
+    let move_token = format!(
+        "{} {}",
+        hints::pair(kb.move_up, kb.move_down),
+        hints::pair(crate::input::KeyCode::Left, crate::input::KeyCode::Right)
+    );
+    let footer = [
+        Hint::keys(move_token, "Move"),
+        Hint::key(kb.action, "Toggle"),
+        Hint::key(kb.exit, "Close"),
+    ];
+    lines.push(hints::footer(theme, &footer));
 
-    let width = (CELL as u16 + 6) * 2 + 3;
+    let width = ((CELL as u16 + 6) * 2 + 3).max(hints::width(&footer) as u16);
     super::render(frame, area, theme, "Columns", width, lines);
 }

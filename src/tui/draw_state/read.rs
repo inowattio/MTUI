@@ -2,6 +2,7 @@ use super::popups::draw_popup;
 use crate::app::App;
 use crate::register::{RegisterCell, RegisterType};
 use crate::state::{ReadPanel, ReadParams};
+use crate::tui::hints::{self, Hint};
 use crate::tui::theme::{spinner_frame, Theme};
 use chrono::Local;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
@@ -440,14 +441,22 @@ fn draw_graph(
 
     if points.len() < 2 {
         let kb = &app.config.keybinds;
-        let msg = Paragraph::new(Line::from(Span::styled(
-            format!(
-                "Collecting samples\u{2026} read this register a few times  ({}/{} read \u{b7} {} pause \u{b7} {}/{} close)",
-                kb.action, kb.refresh, kb.pause, kb.exit, kb.graph
-            ),
+        let mut spans = vec![Span::styled(
+            "Collecting samples\u{2026} read this register a few times  ",
             theme.dim_style(),
-        )));
-        frame.render_widget(msg, inner);
+        )];
+        spans.extend(
+            hints::footer(
+                theme,
+                &[
+                    Hint::keys(hints::pair(kb.action, kb.refresh), "Read"),
+                    Hint::key(kb.pause, "Pause"),
+                    Hint::keys(hints::pair(kb.exit, kb.graph), "Close"),
+                ],
+            )
+            .spans,
+        );
+        frame.render_widget(Paragraph::new(Line::from(spans)), inner);
         return;
     }
 

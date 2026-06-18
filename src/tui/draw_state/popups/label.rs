@@ -1,5 +1,6 @@
 use crate::config::Keybinds;
 use crate::state::LabelParams;
+use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
@@ -29,13 +30,10 @@ pub(super) fn draw(
             Span::styled(text, text_style),
             Span::styled("_", theme.accent_style()),
         ]),
-        Line::from(Span::styled(
-            format!(
-                " {} \u{b7} set (empty removes)   {} \u{b7} cancel",
-                kb.action, kb.exit
-            ),
-            theme.dim_style(),
-        )),
+        hints::footer(
+            theme,
+            &[Hint::key(kb.action, "Set"), Hint::key(kb.exit, "Cancel")],
+        ),
     ];
 
     super::render(frame, area, theme, "Label", 48, lines);

@@ -1,4 +1,5 @@
 mod draw_state;
+mod hints;
 mod make_bottom_title;
 mod make_top_title;
 mod render;

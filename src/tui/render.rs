@@ -15,7 +15,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     let theme = Theme::default();
 
     let mode = make_top_title(&app.state);
-    let key_hints = make_bottom_title(&app.state, &app.config.keybinds);
+    let key_hints = make_bottom_title(&theme, &app.state, &app.config.keybinds);
     let clock = Local::now().format("%H:%M:%S.%3f").to_string();
 
     let outer = Block::default()
@@ -30,7 +30,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
             )
             .centered(),
         )
-        .title_bottom(Line::styled(key_hints, theme.dim_style()).right_aligned())
+        .title_bottom(key_hints.right_aligned())
         .style(Style::default().fg(theme.border))
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded);

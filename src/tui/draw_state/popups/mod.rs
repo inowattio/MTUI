@@ -12,6 +12,7 @@ mod write;
 
 use crate::app::App;
 use crate::state::Popup;
+use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
 use ratatui::layout::Rect;
 use ratatui::text::Line;
@@ -29,9 +30,12 @@ pub fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup
             "Dump",
             &format!("Dump {} read register(s) to a file?", app.read_count()),
             &d.result,
-            &format!(
-                " {} \u{b7} confirm   backspace/{} cancel",
-                kb.action, kb.exit
+            hints::footer(
+                theme,
+                &[
+                    Hint::key(kb.action, "Confirm"),
+                    Hint::keys(format!("Backspace/{}", hints::glyph(kb.exit)), "Cancel"),
+                ],
             ),
         ),
         Popup::Search(s) => search::draw(frame, area, theme, kb, s),
@@ -50,9 +54,12 @@ pub fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup
             "Unsaved changes",
             " Quit anyway?",
             &None,
-            &format!(
-                " {}/{} \u{b7} confirm   backspace cancel",
-                kb.action, kb.exit
+            hints::footer(
+                theme,
+                &[
+                    Hint::keys(format!("{}/{}", hints::glyph(kb.action), hints::glyph(kb.exit)), "Confirm"),
+                    Hint::keys("Backspace", "Cancel"),
+                ],
             ),
         ),
     }

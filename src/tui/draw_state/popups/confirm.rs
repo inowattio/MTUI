@@ -11,12 +11,9 @@ pub(super) fn draw(
     title: &str,
     prompt: &str,
     result: &Option<StatusMessage>,
-    footer: &str,
+    footer: Line<'static>,
 ) {
-    let mut lines = vec![
-        Line::from(Span::styled(prompt.to_string(), theme.base())),
-        Line::from(Span::styled(footer.to_string(), theme.dim_style())),
-    ];
+    let mut lines = vec![Line::from(Span::styled(prompt.to_string(), theme.base())), footer];
 
     if let Some(result) = result {
         lines.push(Line::default());

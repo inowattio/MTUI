@@ -1,6 +1,7 @@
 use crate::app::{ApiBindState, App};
 use crate::config::KeybindAction;
 use crate::state::{SettingsField, SettingsParams};
+use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
@@ -259,17 +260,18 @@ fn draw_keybinds(params: &SettingsParams, app: &App, frame: &mut Frame, area: Re
 
     lines.push(Line::default());
     let hint = if params.kb_capturing {
-        "Esc \u{b7} cancel".to_string()
+        hints::footer(theme, &[Hint::keys("Esc", "Cancel")])
     } else {
-        format!(
-            "{} \u{b7} rebind   Backspace \u{b7} reset to default   Esc \u{b7} back",
-            kb.action
+        hints::footer(
+            theme,
+            &[
+                Hint::key(kb.action, "Rebind"),
+                Hint::keys("Backspace", "Reset to default"),
+                Hint::keys("Esc", "Back"),
+            ],
         )
     };
-    lines.push(Line::from(Span::styled(
-        format!("  {hint}"),
-        theme.dim_style(),
-    )));
+    lines.push(hint);
 
     if app.dirty {
         lines.push(Line::from(Span::styled(

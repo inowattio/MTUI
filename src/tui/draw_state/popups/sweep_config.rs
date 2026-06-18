@@ -1,5 +1,6 @@
 use crate::config::Keybinds;
 use crate::state::{SweepConfigParams, SweepField};
+use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
@@ -72,17 +73,20 @@ pub(super) fn draw(
         Line::default(),
         action_line,
         Line::default(),
-        Line::from(Span::styled(
-            format!(
-                " {}/{} field \u{b7} {} toggle mode",
-                kb.move_up, kb.move_down, kb.pause
-            ),
-            theme.dim_style(),
-        )),
-        Line::from(Span::styled(
-            format!(" {} start/stop \u{b7} {} close", kb.action, kb.exit),
-            theme.dim_style(),
-        )),
+        hints::footer(
+            theme,
+            &[
+                Hint::keys(hints::pair(kb.move_up, kb.move_down), "Field"),
+                Hint::key(kb.pause, "Toggle mode"),
+            ],
+        ),
+        hints::footer(
+            theme,
+            &[
+                Hint::key(kb.action, "Start/Stop"),
+                Hint::key(kb.exit, "Close"),
+            ],
+        ),
     ];
 
     super::render(frame, area, theme, "Sweep", 46, lines);

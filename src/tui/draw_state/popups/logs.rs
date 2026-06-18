@@ -1,5 +1,6 @@
 use crate::config::Keybinds;
 use crate::state::LogsParams;
+use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
@@ -23,20 +24,15 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, kb: &Keybinds, 
         lines.push(Line::default());
     }
 
-    lines.push(Line::default());
-    lines.push(Line::from(Span::styled(
-        format!(
-            " {}/{}   {}/{} scroll \u{b7} {}/{} page \u{b7} {} close",
-            end.min(len),
-            len,
-            kb.move_up,
-            kb.move_down,
-            kb.page_up,
-            kb.page_down,
-            kb.exit
-        ),
-        theme.dim_style(),
-    )));
+    lines.push(hints::more(theme, top, len.saturating_sub(end)));
+    lines.push(hints::footer(
+        theme,
+        &[
+            Hint::keys(hints::pair(kb.move_up, kb.move_down), "Scroll"),
+            Hint::keys(hints::pair(kb.page_up, kb.page_down), "Page"),
+            Hint::key(kb.exit, "Close"),
+        ],
+    ));
 
     super::render(frame, area, theme, "Write log", 78, lines);
 }
