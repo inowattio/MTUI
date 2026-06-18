@@ -65,6 +65,7 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         c if c == kb.sweep => app.open_sweep(),
         c if c == kb.inspect => app.open_inspect(),
         c if c == kb.device_id => app.open_device_id().await,
+        c if c == kb.raw => app.open_raw(),
         c if c == kb.cycle_position => app.cycle_position(),
         c if c == kb.copy_address => app.copy_address(),
         c if c == kb.logs => app.open_logs(),
@@ -179,6 +180,7 @@ async fn run_action(app: &mut App, action: KeybindAction) {
         CyclePosition => app.cycle_position(),
         Inspect => app.open_inspect(),
         DeviceId => app.open_device_id().await,
+        Raw => app.open_raw(),
         Graph => app.toggle_graph(),
         Discovery => app.open_discovery(),
         Settings => app.open_settings(),
@@ -233,6 +235,16 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
             c if c == kb.refresh || c == kb.action => app.device_id_refresh().await,
             KeyCode::Left => app.device_id_cycle(false).await,
             KeyCode::Right => app.device_id_cycle(true).await,
+            _ => {}
+        },
+
+        PopupKind::Raw => match key_event.code {
+            c if c == kb.exit => app.close_popup(),
+            c if c == kb.action => app.raw_send().await,
+            c if c == kb.move_up => app.raw_move(false),
+            c if c == kb.move_down => app.raw_move(true),
+            KeyCode::Backspace => app.raw_backspace(),
+            KeyCode::Char(c) => app.raw_input(c),
             _ => {}
         },
 

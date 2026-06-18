@@ -147,6 +147,32 @@ pub struct DeviceIdParams {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RawField {
+    Code,
+    Data,
+}
+
+impl RawField {
+    pub const ALL: [RawField; 2] = [RawField::Code, RawField::Data];
+}
+
+#[derive(Debug, Default, PartialEq)]
+pub struct RawParams {
+    pub code: String,
+    pub data: String,
+    pub selected: u16,
+    pub response: Option<String>,
+    pub status: Option<StatusMessage>,
+}
+
+impl RawParams {
+    pub fn current_field(&self) -> RawField {
+        let i = (self.selected as usize).min(RawField::ALL.len() - 1);
+        RawField::ALL[i]
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CustomField {
     Repr,
     Ops,
@@ -498,6 +524,7 @@ pub enum Popup {
     SweepConfig(SweepConfigParams),
     Inspect,
     DeviceId(DeviceIdParams),
+    Raw(RawParams),
     Quit,
 }
 
@@ -515,6 +542,7 @@ pub enum PopupKind {
     SweepConfig,
     Inspect,
     DeviceId,
+    Raw,
     Quit,
 }
 
@@ -533,6 +561,7 @@ impl Popup {
             Popup::SweepConfig(_) => PopupKind::SweepConfig,
             Popup::Inspect => PopupKind::Inspect,
             Popup::DeviceId(_) => PopupKind::DeviceId,
+            Popup::Raw(_) => PopupKind::Raw,
             Popup::Quit => PopupKind::Quit,
         }
     }

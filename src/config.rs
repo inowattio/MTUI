@@ -29,7 +29,6 @@ pub struct Config {
 macro_rules! keybinds {
     ($($action:ident => $field:ident : $label:literal = $default:ident),+ $(,)?) => {
         #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
-        #[serde(default)]
         pub struct Keybinds {
             $(pub $field: KeyCode,)+
         }
@@ -90,6 +89,7 @@ keybinds! {
     CyclePosition => cycle_position : "Previous position" = CYCLE_POSITION,
     Inspect => inspect : "Inspect register" = INSPECT,
     DeviceId => device_id : "Device identification" = DEVICE_ID,
+    Raw => raw : "Raw function call" = RAW,
     Graph => graph : "Value graph" = GRAPH,
     Discovery => discovery : "Switch device" = DISCOVERY,
     Settings => settings : "Settings" = SETTINGS,

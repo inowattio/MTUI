@@ -435,6 +435,8 @@ impl Client for MockContext {
                 Ok(self.device_id_response(read_code, object_id))
             }
 
+            Request::Custom(code, data) => Ok(Ok(Response::Custom(code, data.into_owned().into()))),
+
             _ => Ok(Err(ExceptionCode::IllegalFunction)),
         }
     }

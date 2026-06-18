@@ -13,9 +13,10 @@ use std::time::Duration;
 use tokio::sync::Mutex;
 #[cfg(not(target_arch = "wasm32"))]
 use tokio_modbus::client::{rtu, tcp};
-use tokio_modbus::client::{Context, Reader, Writer};
+use tokio_modbus::client::{Client, Context, Reader, Writer};
 use tokio_modbus::prelude::{ReadCode, ReadDeviceIdentificationResponse, SlaveContext};
 use tokio_modbus::slave::{Slave, SlaveId};
+use tokio_modbus::{Request, Response};
 #[cfg(not(target_arch = "wasm32"))]
 use tokio_serial::SerialStream;
 
@@ -531,5 +532,13 @@ impl ModbusDevice {
         }
 
         Ok(objects)
+    }
+
+    pub async fn custom(&self, code: u8, data: &[u8]) -> Result<Vec<u8>> {
+        let response = timeout!(self, call, (Request::Custom(code, data.into())))?;
+        match response {
+            Response::Custom(_, bytes) => Ok(bytes.to_vec()),
+            _ => anyhow::bail!("Unexpected response type."),
+        }
     }
 }

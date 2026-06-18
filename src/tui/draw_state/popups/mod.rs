@@ -6,6 +6,7 @@ mod help;
 mod inspect;
 mod label;
 mod logs;
+mod raw;
 mod search;
 mod slave;
 mod sweep_config;
@@ -49,6 +50,7 @@ pub fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup
         Popup::Logs(logs) => logs::draw(frame, area, theme, kb, logs),
         Popup::Inspect => inspect::draw(frame, area, theme, app),
         Popup::DeviceId(params) => device_id::draw(frame, area, theme, kb, params),
+        Popup::Raw(params) => raw::draw(frame, area, theme, kb, params),
         Popup::Quit => confirm::draw(
             frame,
             area,
