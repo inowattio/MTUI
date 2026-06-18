@@ -989,11 +989,18 @@ impl App {
         (cell, lines)
     }
 
+    fn set_settings_status(&mut self, message: StatusMessage) {
+        if let Some(s) = self.settings_mut() {
+            s.status = Some(message);
+        }
+    }
+
     pub fn clear_pins(&mut self) {
         let n = self.pinned_registers.len();
         self.pinned_registers.clear();
         self.dirty = true;
         log::info!("Cleared {n} pinned register(s)");
+        self.set_settings_status(StatusMessage::ok(format!("Cleared {n} pinned register(s)")));
     }
 
     pub fn clear_labels(&mut self) {
@@ -1001,6 +1008,7 @@ impl App {
         self.labels.clear();
         self.dirty = true;
         log::info!("Cleared {n} label(s)");
+        self.set_settings_status(StatusMessage::ok(format!("Cleared {n} label(s)")));
     }
 
     pub fn clear_custom(&mut self) {
@@ -1008,6 +1016,7 @@ impl App {
         self.custom_rules.clear();
         self.dirty = true;
         log::info!("Cleared {n} custom rule(s)");
+        self.set_settings_status(StatusMessage::ok(format!("Cleared {n} custom rule(s)")));
     }
 
     pub fn custom_count(&self) -> usize {
@@ -1239,11 +1248,13 @@ impl App {
     pub fn copy_address(&mut self) {
         let (_, address) = self.cursor_cell();
         #[cfg(not(target_arch = "wasm32"))]
-        if let Ok(mut clipboard) = arboard::Clipboard::new() {
-            let _ = clipboard.set_text(address.to_string());
-        }
+        let message = match arboard::Clipboard::new().and_then(|mut c| c.set_text(address.to_string())) {
+            Ok(()) => StatusMessage::ok(format!("Copied address {address} to clipboard")),
+            Err(_) => StatusMessage::err("Clipboard unavailable"),
+        };
         #[cfg(target_arch = "wasm32")]
-        let _ = address;
+        let message = StatusMessage::err("Clipboard unavailable");
+        self.set_read_status(message);
     }
 
     pub fn toggle_graph_width(&mut self) {
@@ -1770,11 +1781,13 @@ impl App {
             },
         };
 
-        if let Some(pos) = self.pinned_registers.iter().position(|x| *x == selection) {
+        let pinned = if let Some(pos) = self.pinned_registers.iter().position(|x| *x == selection) {
             self.pinned_registers.remove(pos);
+            false
         } else {
             self.pinned_registers.push(selection);
-        }
+            true
+        };
 
         self.pinned_registers.sort();
         self.dirty = true;
@@ -1782,6 +1795,10 @@ impl App {
         let rows = self.visible_rows.get();
         let len = self.panel_len();
         self.read_mut().scroll_pinned(rows, len);
+
+        let (kind, addr) = selection;
+        let verb = if pinned { "Pinned" } else { "Unpinned" };
+        self.set_read_status(StatusMessage::ok(format!("{verb} {kind:?} @{addr}")));
     }
 
     pub fn settings_save(&mut self) {
