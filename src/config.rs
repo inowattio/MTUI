@@ -109,6 +109,8 @@ keybinds! {
 pub struct CustomRules {
     pub holdings: Vec<CustomRule>,
     pub inputs: Vec<CustomRule>,
+    pub coils: Vec<CustomRule>,
+    pub discretes: Vec<CustomRule>,
     pub show_continuation: bool,
 }
 
@@ -124,6 +126,8 @@ pub struct Startup {
 pub struct Labels {
     pub holdings: Vec<Label>,
     pub inputs: Vec<Label>,
+    pub coils: Vec<Label>,
+    pub discretes: Vec<Label>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -231,6 +235,22 @@ fn demo_labels() -> Labels {
             label(33, "noise"),
             label(34, "random walk"),
         ],
+        coils: vec![
+            label(0, "main breaker"),
+            label(1, "phase L1 enable"),
+            label(2, "phase L2 enable"),
+            label(3, "phase L3 enable"),
+            label(4, "maintenance bypass"),
+            label(5, "auto mode"),
+        ],
+        discretes: vec![
+            label(0, "device ready"),
+            label(1, "grid present"),
+            label(2, "warning"),
+            label(3, "heartbeat"),
+            label(7, "noise enabled"),
+            label(8, "fault"),
+        ],
     }
 }
 
@@ -257,6 +277,14 @@ fn demo_rules() -> CustomRules {
             plain(12, CustomRepr::U32, None, " VA"),
             plain(14, CustomRepr::I32, None, " var"),
             switch(32, &[(0, "low"), (1, "high")]),
+        ],
+        coils: vec![
+            switch(0, &[(0, "open"), (1, "closed")]),
+            switch(4, &[(0, "normal"), (1, "bypass")]),
+        ],
+        discretes: vec![
+            switch(0, &[(0, "no"), (1, "yes")]),
+            switch(8, &[(0, "ok"), (1, "FAULT")]),
         ],
         show_continuation: true,
     }

@@ -15,6 +15,11 @@ pub(super) fn draw(
     kb: &Keybinds,
     write: &WriteParams,
 ) {
+    if write.write_type == WriteType::Coil {
+        draw_coil(frame, area, theme, kb, write);
+        return;
+    }
+
     let value = write
         .value
         .map_or_else(|| "(none)".to_string(), |n| n.to_string());
@@ -22,6 +27,7 @@ pub(super) fn draw(
     let bits: u16 = match write.write_type {
         WriteType::Word => 16,
         WriteType::DWord => 32,
+        WriteType::Coil => 1, // handled by draw_coil above
     };
     let raw = write.value.unwrap_or(0) as u32;
 
@@ -82,4 +88,43 @@ pub(super) fn draw(
 
     let width = 58.max(hints::width(&footer1) as u16);
     super::render(frame, area, theme, "Write", width, lines);
+}
+
+fn draw_coil(frame: &mut Frame, area: Rect, theme: &Theme, kb: &Keybinds, write: &WriteParams) {
+    let on = write.value.unwrap_or(0) != 0;
+    let (state, state_style) = if on {
+        ("ON", theme.ok_style())
+    } else {
+        ("OFF", theme.dim_style())
+    };
+
+    let mut lines = vec![
+        Line::from(vec![
+            Span::styled("[Coil] ", theme.dim_style()),
+            Span::styled("to ", theme.dim_style()),
+            Span::styled(write.position.to_string(), theme.accent_style()),
+        ]),
+        Line::from(vec![
+            Span::styled("State: ", theme.dim_style()),
+            Span::styled(state, state_style),
+        ]),
+    ];
+
+    if let Some(result) = &write.result {
+        lines.push(Line::default());
+        lines.push(Line::from(Span::styled(
+            result.text.clone(),
+            theme.message_style(result.kind),
+        )));
+    }
+
+    let footer = [
+        Hint::key(kb.action, "Write"),
+        Hint::key(kb.pause, "Toggle on/off"),
+        Hint::key(kb.exit, "Exit"),
+    ];
+    lines.push(hints::footer(theme, &footer));
+
+    let width = 44.max(hints::width(&footer) as u16);
+    super::render(frame, area, theme, "Write coil", width, lines);
 }

@@ -1,6 +1,6 @@
 use super::popups::draw_popup;
 use crate::app::App;
-use crate::register::{RegisterCell, RegisterType};
+use crate::register::RegisterCell;
 use crate::state::{ReadPanel, ReadParams};
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::{spinner_frame, Theme};
@@ -133,11 +133,7 @@ fn list_table(
             }
         };
 
-        let marker = match kind {
-            RegisterType::Holding => "H",
-            RegisterType::Input => "I",
-        };
-        let text = format!("{marker:<2}{text}");
+        let text = format!("{:<2}{text}", kind.marker());
 
         let style = if (top + offset) as u16 == params.pinned_index {
             theme.selected_style()
@@ -261,11 +257,15 @@ pub fn draw(
     if is_pinned {
         info_spans.push(Span::styled(" (pinned)", theme.changed_style()));
     }
-    let (access, access_style) = match info_type {
-        RegisterType::Holding => ("RW", theme.ok_style()),
-        RegisterType::Input => ("RO", theme.warn_style()),
+    let access_style = if info_type.is_writable() {
+        theme.ok_style()
+    } else {
+        theme.warn_style()
     };
-    info_spans.push(Span::styled(format!(" {access}"), access_style));
+    info_spans.push(Span::styled(
+        format!(" {}", info_type.access()),
+        access_style,
+    ));
     info_spans.push(Span::styled("   order ", theme.dim_style()));
     info_spans.push(Span::styled(
         format!("{:?}", app.config.device.word_order),
@@ -416,7 +416,16 @@ fn draw_graph(
     dword: bool,
 ) {
     let (kind, address) = cell;
-    let width = if dword { "DWord" } else { "Word" };
+    // Coils/discrete inputs are 0/1; plot them as a square wave on a fixed
+    // 0..1 axis. DWord graphing combines two registers, so it never applies.
+    let bit_plot = kind.is_bit() && !dword;
+    let width = if dword {
+        "DWord"
+    } else if bit_plot {
+        "Bit"
+    } else {
+        "Word"
+    };
     let label = app.label_text(kind, address);
     let title = match &label {
         Some(l) => format!(" Graph [{width}] \u{201c}{l}\u{201d} "),
@@ -497,7 +506,9 @@ fn draw_graph(
     }
     let avg = sum / count as f64;
     let span = max - min;
-    let (y_lo, y_hi) = if span < f64::EPSILON {
+    let (y_lo, y_hi) = if bit_plot {
+        (0.0, 1.0)
+    } else if span < f64::EPSILON {
         (min - 1.0, max + 1.0)
     } else {
         let pad = span * 0.08;
@@ -505,23 +516,50 @@ fn draw_graph(
     };
     let x_hi = (count - 1) as f64;
 
-    let y_labels: Vec<Span> = (0..=4)
-        .map(|i| {
-            let v = y_lo + (y_hi - y_lo) * (i as f64 / 4.0);
-            Span::styled(format!("{v:.0}"), theme.dim_style())
-        })
-        .collect();
+    let y_labels: Vec<Span> = if bit_plot {
+        vec![
+            Span::styled("0", theme.dim_style()),
+            Span::styled("1", theme.dim_style()),
+        ]
+    } else {
+        (0..=4)
+            .map(|i| {
+                let v = y_lo + (y_hi - y_lo) * (i as f64 / 4.0);
+                Span::styled(format!("{v:.0}"), theme.dim_style())
+            })
+            .collect()
+    };
     let x_labels = vec![
         Span::styled(format!("-{}", count - 1), theme.dim_style()),
         Span::styled(format!("-{}", (count - 1) / 2), theme.dim_style()),
         Span::styled("now", theme.accent_style()),
     ];
 
+    // For a square wave, hold each sample's value until the next sample so
+    // the connecting line steps rather than ramps between levels.
+    let stepped: Vec<(f64, f64)>;
+    let plot_data: &[(f64, f64)] = if bit_plot {
+        let mut steps = Vec::with_capacity(points.len() * 2);
+        for pair in points.windows(2) {
+            let (x0, y0) = pair[0];
+            let (x1, _) = pair[1];
+            steps.push((x0, y0));
+            steps.push((x1, y0));
+        }
+        if let Some(&last) = points.last() {
+            steps.push(last);
+        }
+        stepped = steps;
+        &stepped
+    } else {
+        &points
+    };
+
     let datasets = vec![Dataset::default()
         .marker(symbols::Marker::Braille)
         .graph_type(GraphType::Line)
         .style(theme.accent_style())
-        .data(&points)];
+        .data(plot_data)];
 
     let chart = Chart::new(datasets)
         .x_axis(
