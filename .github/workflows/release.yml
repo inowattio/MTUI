@@ -150,10 +150,52 @@ jobs:
           draft: true
           files: ${{ env.ASSET }}
 
-  # Flips the draft to a published release once every binary is attached.
+  snap:
+    name: Snap ${{ matrix.arch }}
+    needs: [cut, draft]
+    if: ${{ !failure() && !cancelled() }}
+    runs-on: ${{ matrix.runner }}
+
+    env:
+      RELEASE_TAG: ${{ needs.cut.outputs.tag || (startsWith(github.ref, 'refs/tags/') && github.ref_name) || '' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.RELEASE_TAG || github.ref }}
+
+      - name: Build snap
+        id: build
+        uses: snapcore/action-build@v1
+
+      - name: Upload build artifact
+        if: env.RELEASE_TAG == ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: snap-${{ matrix.arch }}
+          path: ${{ steps.build.outputs.snap }}
+
+      - name: Publish to the Snap Store
+        if: env.RELEASE_TAG != ''
+        uses: snapcore/action-publish@v1
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+        with:
+          snap: ${{ steps.build.outputs.snap }}
+          release: stable
+
+  # Flips the draft to a published release once every binary is attached
+  # and the snaps are live in the store.
   publish:
     name: Publish release
-    needs: [cut, draft, build]
+    needs: [cut, draft, build, snap]
     if: ${{ !failure() && !cancelled() && needs.draft.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
