@@ -727,6 +727,10 @@ impl App {
         self.connection = ConnectionStatus::Unknown;
         self.logged_connection = ConnectionStatus::Unknown;
         self.reconnect = ReconnectState::default();
+        self.restore_previous_read();
+    }
+
+    fn restore_previous_read(&mut self) {
         let previous = match &mut self.state {
             State::Discovery(d) => d.previous.take(),
             _ => None,
@@ -788,7 +792,7 @@ impl App {
                 self.reconnect = ReconnectState::default();
                 let device = self.config.display_device();
                 log::info!("Switched device \u{b7} {device}");
-                self.state = State::Read(self.startup_read_params());
+                self.restore_previous_read();
             }
             Err(e) => {
                 log::error!("Connect failed \u{b7} {e}");
