@@ -60,28 +60,6 @@ fn hscroll(text: &str, prefix: u16, offset: u16) -> String {
     out
 }
 
-fn horizontal_offset(
-    app: &App,
-    rows: &[(String, Style)],
-    header: &str,
-    prefix: u16,
-    inner_width: u16,
-    col_offset: u16,
-) -> u16 {
-    let prefix = prefix as usize;
-    let content_rest = rows
-        .iter()
-        .map(|(t, _)| t.chars().count())
-        .chain(std::iter::once(header.chars().count()))
-        .max()
-        .unwrap_or(0)
-        .saturating_sub(prefix);
-    let visible_rest = (inner_width as usize).saturating_sub(prefix);
-    let max_offset = content_rest.saturating_sub(visible_rest) as u16;
-    app.h_max_offset.set(max_offset);
-    col_offset.min(max_offset)
-}
-
 fn with_hscroll_hint(
     block: Block<'static>,
     theme: &Theme,
@@ -98,183 +76,200 @@ fn with_hscroll_hint(
     )
 }
 
-fn main_table(
-    params: &ReadParams,
-    app: &App,
-    visible: u16,
-    header: &str,
-    theme: &Theme,
-    ascii: Option<&str>,
+struct TableCtx<'a> {
+    params: &'a ReadParams,
+    app: &'a App,
+    theme: &'a Theme,
     inner_width: u16,
-) -> Table<'static> {
-    let now = Local::now();
-    let mut full: Vec<(String, Style)> = Vec::with_capacity(visible as usize);
-
-    for i in 0..visible {
-        let Some(addr) = params.window_start.checked_add(i) else {
-            break;
-        };
-        let selected = addr == params.position;
-        let zebra = i % 2 == 1;
-
-        let (text, style) = match app.cell_row((params.register_type, addr), now) {
-            Some((text, changed)) => {
-                let style = if selected {
-                    theme.selected_style()
-                } else if changed {
-                    theme.changed_style()
-                } else if zebra {
-                    theme.zebra_style()
-                } else {
-                    theme.base()
-                };
-                (text, style)
-            }
-            None => {
-                let style = if selected {
-                    theme.selected_style()
-                } else {
-                    theme.dim_style()
-                };
-                let label = app.label_text(params.register_type, addr);
-                (app.interpreter.placeholder(addr, label.as_deref()), style)
-            }
-        };
-
-        full.push((text, style));
-    }
-
-    let prefix = app.interpreter.prefix_width();
-    let h_off = horizontal_offset(app, &full, header, prefix, inner_width, params.col_offset);
-
-    let table_rows: Vec<Row> = full
-        .into_iter()
-        .map(|(text, style)| Row::new([Cell::from(hscroll(&text, prefix, h_off))]).style(style))
-        .collect();
-
-    let mut block = theme.panel("Main");
-    if let Some(error) = &params.read_error {
-        block = block.title_bottom(
-            Line::styled(format!(" \u{26a0} {error} "), theme.err_style()).left_aligned(),
-        );
-    } else if let Some(ascii) = ascii {
-        block = block.title_bottom(ascii_title(ascii, theme));
-    }
-    block = with_hscroll_hint(block, theme, h_off, app.h_max_offset.get());
-
-    Table::new(table_rows, [Constraint::Percentage(100)])
-        .header(Row::new([Cell::from(hscroll(header, prefix, h_off))]).style(theme.header_style()))
-        .block(block)
 }
 
-fn list_table(
-    params: &ReadParams,
-    app: &App,
-    theme: &Theme,
-    cells: &[RegisterCell],
-    top: usize,
-    title: &str,
-    ascii: Option<&str>,
-    inner_width: u16,
-) -> Table<'static> {
-    let now = Local::now();
-    let header = format!("{:<2}{}", "T", app.interpreter.header());
-
-    let mut full: Vec<(String, Style)> = Vec::with_capacity(cells.len());
-    for (row_idx, &(kind, address)) in cells.iter().enumerate() {
-        let (text, changed) = match app.cell_row((kind, address), now) {
-            Some(row) => row,
-            None => {
-                let label = app.label_text(kind, address);
-                (
-                    app.interpreter.placeholder(address, label.as_deref()),
-                    false,
-                )
-            }
-        };
-
-        let text = format!("{:<2}{text}", kind.marker());
-
-        let style = if (top + row_idx) as u16 == params.pinned_index {
-            theme.selected_style()
-        } else if changed {
-            theme.changed_style()
-        } else if row_idx % 2 == 1 {
-            theme.zebra_style()
-        } else {
-            theme.base()
-        };
-        full.push((text, style));
+impl TableCtx<'_> {
+    fn horizontal_offset(&self, rows: &[(String, Style)], header: &str, prefix: u16) -> u16 {
+        let prefix = prefix as usize;
+        let content_rest = rows
+            .iter()
+            .map(|(t, _)| t.chars().count())
+            .chain(std::iter::once(header.chars().count()))
+            .max()
+            .unwrap_or(0)
+            .saturating_sub(prefix);
+        let visible_rest = (self.inner_width as usize).saturating_sub(prefix);
+        let max_offset = content_rest.saturating_sub(visible_rest) as u16;
+        self.app.h_max_offset.set(max_offset);
+        self.params.col_offset.min(max_offset)
     }
 
-    let prefix = 2 + app.interpreter.prefix_width();
-    let h_off = horizontal_offset(app, &full, &header, prefix, inner_width, params.col_offset);
+    fn scrollable_table(
+        &self,
+        rows: Vec<(String, Style)>,
+        header: &str,
+        prefix: u16,
+        block: Block<'static>,
+    ) -> Table<'static> {
+        let h_off = self.horizontal_offset(&rows, header, prefix);
+        let table_rows: Vec<Row> = rows
+            .into_iter()
+            .map(|(text, style)| Row::new([Cell::from(hscroll(&text, prefix, h_off))]).style(style))
+            .collect();
+        let block = with_hscroll_hint(block, self.theme, h_off, self.app.h_max_offset.get());
 
-    let table_rows: Vec<Row> = full
-        .into_iter()
-        .map(|(text, style)| Row::new([Cell::from(hscroll(&text, prefix, h_off))]).style(style))
-        .collect();
-
-    let mut block = theme.panel(title);
-    if let Some(ascii) = ascii {
-        block = block.title_bottom(ascii_title(ascii, theme));
-    }
-    block = with_hscroll_hint(block, theme, h_off, app.h_max_offset.get());
-
-    Table::new(table_rows, [Constraint::Percentage(100)])
-        .header(Row::new([Cell::from(hscroll(&header, prefix, h_off))]).style(theme.header_style()))
-        .block(block)
-}
-
-fn matrix_table(params: &ReadParams, app: &App, visible: u16, theme: &Theme) -> Table<'static> {
-    let cols = app.config.matrix_cols.max(1);
-    let base = params.window_start - (params.window_start % cols);
-
-    let mut header = format!("{: >5}  ", "");
-    for c in 0..cols {
-        header.push_str(&format!("{: >5} ", format!("+{c}")));
+        Table::new(table_rows, [Constraint::Percentage(100)])
+            .header(
+                Row::new([Cell::from(hscroll(header, prefix, h_off))])
+                    .style(self.theme.header_style()),
+            )
+            .block(block)
     }
 
-    let mut table_rows: Vec<Row> = Vec::with_capacity(visible as usize);
-    for r in 0..visible {
-        let row_base = (base as u32) + (r as u32) * (cols as u32);
-        if row_base > u16::MAX as u32 {
-            break;
-        }
-        let row_base = row_base as u16;
-        let zebra = r % 2 == 1;
+    fn main_table(&self, visible: u16, header: &str, ascii: Option<&str>) -> Table<'static> {
+        let (params, app, theme) = (self.params, self.app, self.theme);
+        let now = Local::now();
+        let mut rows: Vec<(String, Style)> = Vec::with_capacity(visible as usize);
 
-        let mut spans = vec![Span::styled(format!("{row_base: >5}: "), theme.dim_style())];
-        for c in 0..cols {
-            let Some(addr) = row_base.checked_add(c) else {
+        for i in 0..visible {
+            let Some(addr) = params.window_start.checked_add(i) else {
                 break;
             };
-            let cell = (params.register_type, addr);
-            let (text, mut style) = match app.cell_value(cell) {
-                Some(value) => {
-                    let style = if app.cell_changed(cell) {
+            let selected = addr == params.position;
+            let zebra = i % 2 == 1;
+
+            let (text, style) = match app.cell_row((params.register_type, addr), now) {
+                Some((text, changed)) => {
+                    let style = if selected {
+                        theme.selected_style()
+                    } else if changed {
                         theme.changed_style()
                     } else if zebra {
                         theme.zebra_style()
                     } else {
                         theme.base()
                     };
-                    (format!("{value: >5}"), style)
+                    (text, style)
                 }
-                None => (format!("{: >5}", "--"), theme.dim_style()),
+                None => {
+                    let style = if selected {
+                        theme.selected_style()
+                    } else {
+                        theme.dim_style()
+                    };
+                    let label = app.label_text(params.register_type, addr);
+                    (app.interpreter.placeholder(addr, label.as_deref()), style)
+                }
             };
-            if addr == params.position {
-                style = theme.selected_style();
-            }
-            spans.push(Span::styled(text, style));
-            spans.push(Span::raw(" "));
+
+            rows.push((text, style));
         }
-        table_rows.push(Row::new([Cell::from(Line::from(spans))]));
+
+        let mut block = theme.panel("Main");
+        if let Some(error) = &params.read_error {
+            block = block.title_bottom(
+                Line::styled(format!(" \u{26a0} {error} "), theme.err_style()).left_aligned(),
+            );
+        } else if let Some(ascii) = ascii {
+            block = block.title_bottom(ascii_title(ascii, theme));
+        }
+
+        self.scrollable_table(rows, header, app.interpreter.prefix_width(), block)
     }
 
-    Table::new(table_rows, [Constraint::Percentage(100)])
-        .header(Row::new([Cell::from(header)]).style(theme.header_style()))
-        .block(theme.panel("Matrix"))
+    fn list_table(
+        &self,
+        cells: &[RegisterCell],
+        top: usize,
+        title: &str,
+        ascii: Option<&str>,
+    ) -> Table<'static> {
+        let (params, app, theme) = (self.params, self.app, self.theme);
+        let now = Local::now();
+        let header = format!("{:<2}{}", "T", app.interpreter.header());
+
+        let mut rows: Vec<(String, Style)> = Vec::with_capacity(cells.len());
+        for (row_idx, &(kind, address)) in cells.iter().enumerate() {
+            let (text, changed) = match app.cell_row((kind, address), now) {
+                Some(row) => row,
+                None => {
+                    let label = app.label_text(kind, address);
+                    (
+                        app.interpreter.placeholder(address, label.as_deref()),
+                        false,
+                    )
+                }
+            };
+
+            let text = format!("{:<2}{text}", kind.marker());
+
+            let style = if (top + row_idx) as u16 == params.pinned_index {
+                theme.selected_style()
+            } else if changed {
+                theme.changed_style()
+            } else if row_idx % 2 == 1 {
+                theme.zebra_style()
+            } else {
+                theme.base()
+            };
+            rows.push((text, style));
+        }
+
+        let mut block = theme.panel(title);
+        if let Some(ascii) = ascii {
+            block = block.title_bottom(ascii_title(ascii, theme));
+        }
+
+        // 2-char type marker alongside the index.
+        self.scrollable_table(rows, &header, 2 + app.interpreter.prefix_width(), block)
+    }
+
+    fn matrix_table(&self, visible: u16) -> Table<'static> {
+        let (params, app, theme) = (self.params, self.app, self.theme);
+        let cols = app.config.matrix_cols.max(1);
+        let base = params.window_start - (params.window_start % cols);
+
+        let mut header = format!("{: >5}  ", "");
+        for c in 0..cols {
+            header.push_str(&format!("{: >5} ", format!("+{c}")));
+        }
+
+        let mut table_rows: Vec<Row> = Vec::with_capacity(visible as usize);
+        for r in 0..visible {
+            let row_base = (base as u32) + (r as u32) * (cols as u32);
+            if row_base > u16::MAX as u32 {
+                break;
+            }
+            let row_base = row_base as u16;
+            let zebra = r % 2 == 1;
+
+            let mut spans = vec![Span::styled(format!("{row_base: >5}: "), theme.dim_style())];
+            for c in 0..cols {
+                let Some(addr) = row_base.checked_add(c) else {
+                    break;
+                };
+                let cell = (params.register_type, addr);
+                let (text, mut style) = match app.cell_value(cell) {
+                    Some(value) => {
+                        let style = if app.cell_changed(cell) {
+                            theme.changed_style()
+                        } else if zebra {
+                            theme.zebra_style()
+                        } else {
+                            theme.base()
+                        };
+                        (format!("{value: >5}"), style)
+                    }
+                    None => (format!("{: >5}", "--"), theme.dim_style()),
+                };
+                if addr == params.position {
+                    style = theme.selected_style();
+                }
+                spans.push(Span::styled(text, style));
+                spans.push(Span::raw(" "));
+            }
+            table_rows.push(Row::new([Cell::from(Line::from(spans))]));
+        }
+
+        Table::new(table_rows, [Constraint::Percentage(100)])
+            .header(Row::new([Cell::from(header)]).style(theme.header_style()))
+            .block(theme.panel("Matrix"))
+    }
 }
 
 pub fn draw(
@@ -426,6 +421,13 @@ pub fn draw(
         return;
     }
 
+    let ctx = TableCtx {
+        params,
+        app,
+        theme,
+        inner_width,
+    };
+
     match params.panel {
         ReadPanel::Main => {
             let ascii = show_ascii.then(|| {
@@ -435,21 +437,10 @@ pub fn draw(
                         .map(|addr| (params.register_type, addr)),
                 )
             });
-            frame.render_widget(
-                main_table(
-                    params,
-                    app,
-                    visible,
-                    header,
-                    theme,
-                    ascii.as_deref(),
-                    inner_width,
-                ),
-                rows[1],
-            );
+            frame.render_widget(ctx.main_table(visible, header, ascii.as_deref()), rows[1]);
         }
         ReadPanel::Matrix => {
-            frame.render_widget(matrix_table(params, app, visible, theme), rows[1]);
+            frame.render_widget(ctx.matrix_table(visible), rows[1]);
         }
         _ => {
             let (title, empty_message) = match params.panel {
@@ -475,16 +466,7 @@ pub fn draw(
                 let cells = app.panel_window(top, visible as usize);
                 let ascii = show_ascii.then(|| app.ascii_string_for(cells.iter().copied()));
                 frame.render_widget(
-                    list_table(
-                        params,
-                        app,
-                        theme,
-                        &cells,
-                        top,
-                        title,
-                        ascii.as_deref(),
-                        inner_width,
-                    ),
+                    ctx.list_table(&cells, top, title, ascii.as_deref()),
                     rows[1],
                 );
             }
