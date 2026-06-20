@@ -11,6 +11,71 @@ pub struct Interpretor {
     header: String,
 }
 
+const INDEX_W: usize = 5;
+const TIME_W: usize = 12;
+const AGO_W: usize = 9;
+
+struct ColumnSpec {
+    name: &'static str,
+    width: usize,
+    enabled: fn(&InterpretorConfig) -> bool,
+    render: fn(&RowCtx) -> String,
+}
+
+struct RowCtx {
+    value: u16,
+    next: [Option<u16>; 3],
+    word: u32,
+    dword: u64,
+    custom: String,
+}
+
+impl RowCtx {
+    fn new(order: WordOrder, value: u16, next: [Option<u16>; 3], custom: Option<&str>) -> Self {
+        let word = order.make_word(value, next[0].unwrap_or_default());
+        let second = order.make_word(next[1].unwrap_or_default(), next[2].unwrap_or_default());
+        Self {
+            value,
+            next,
+            word,
+            dword: order.make_dword(word, second),
+            custom: custom.unwrap_or("--").to_string(),
+        }
+    }
+
+    fn two(&self) -> bool {
+        self.next[0].is_some()
+    }
+
+    fn four(&self) -> bool {
+        self.next.iter().all(Option::is_some)
+    }
+}
+
+#[rustfmt::skip]
+const COLUMNS: &[ColumnSpec] = &[
+    ColumnSpec { name: "u16",     width: 5,  enabled: |c| c.u16,      render: |c| c.value.to_string() },
+    ColumnSpec { name: "i16",     width: 6,  enabled: |c| c.i16,      render: |c| (c.value as i16).to_string() },
+    ColumnSpec { name: "u8s",     width: 8,  enabled: |c| c.u8s,      render: |c| format!("{}/{}", (c.value >> 8) as u8, (c.value & 0xFF) as u8) },
+    ColumnSpec { name: "i8s",     width: 9,  enabled: |c| c.i8s,      render: |c| format!("{}/{}", (c.value >> 8) as u8 as i8, (c.value & 0xFF) as u8 as i8) },
+    ColumnSpec { name: "hex",     width: 4,  enabled: |c| c.hex,      render: |c| format!("{:04X}", c.value) },
+    ColumnSpec { name: "hex32",   width: 9,  enabled: |c| c.hex32,    render: |c| if c.two() { format!("{:08X}", c.word) } else { "-".to_string() } },
+    ColumnSpec { name: "f16",     width: 10, enabled: |c| c.f16,      render: |c| float_cell(f16_to_f32(c.value), 10) },
+    ColumnSpec { name: "bcd",     width: 6,  enabled: |c| c.bcd,      render: |c| bcd_to_decimal(c.value).map_or_else(|| "--".to_string(), |n| n.to_string()) },
+    ColumnSpec { name: "bcd32",   width: 10, enabled: |c| c.bcd32,    render: |c| if c.two() { bcd_to_decimal_u32(c.word).map_or_else(|| "--".to_string(), |n| n.to_string()) } else { "-".to_string() } },
+    ColumnSpec { name: "u32",     width: 10, enabled: |c| c.u32,      render: |c| if c.two() { c.word.to_string() } else { "-".to_string() } },
+    ColumnSpec { name: "i32",     width: 11, enabled: |c| c.i32,      render: |c| if c.two() { (c.word as i32).to_string() } else { "-".to_string() } },
+    ColumnSpec { name: "u32m10k", width: 11, enabled: |c| c.u32_m10k, render: |c| if c.two() { m10k_to_u32(c.word).map_or_else(|| "--".to_string(), |(h, l)| format!("{h}/{l}")) } else { "-".to_string() } },
+    ColumnSpec { name: "i32m10k", width: 14, enabled: |c| c.i32_m10k, render: |c| if c.two() { m10k_to_i32(c.word).map_or_else(|| "--".to_string(), |(h, l)| format!("{h}/{l}")) } else { "-".to_string() } },
+    ColumnSpec { name: "u64",     width: 20, enabled: |c| c.u64,      render: |c| if c.four() { c.dword.to_string() } else { "-".to_string() } },
+    ColumnSpec { name: "i64",     width: 21, enabled: |c| c.i64,      render: |c| if c.four() { (c.dword as i64).to_string() } else { "-".to_string() } },
+    ColumnSpec { name: "f32",     width: 10, enabled: |c| c.f32,      render: |c| if c.two() { float_cell(f32::from_bits(c.word), 10) } else { "-".to_string() } },
+    ColumnSpec { name: "f64",     width: 12, enabled: |c| c.f64,      render: |c| if c.four() { float_cell(f64::from_bits(c.dword), 12) } else { "-".to_string() } },
+    ColumnSpec { name: "ascii",   width: 5,  enabled: |c| c.ascii,    render: |c| ascii_cell(c.value, c.next[0].unwrap_or_default()) },
+    ColumnSpec { name: "bits",    width: 19, enabled: |c| c.bits,     render: |c| bits_cell(c.value) },
+    ColumnSpec { name: "custom",  width: 18, enabled: |c| c.custom,   render: |c| c.custom.clone() },
+];
+
 impl Interpretor {
     pub fn new(interpretation: InterpretorConfig, word_order: WordOrder) -> Self {
         let mut interpretor = Self {
@@ -26,71 +91,17 @@ impl Interpretor {
         let mut header = String::new();
 
         if self.config.time {
-            let _ = write!(header, "{0: <12} ", "time");
+            let _ = write!(header, "{:<w$} ", "time", w = TIME_W);
         }
         if self.config.ago {
-            let _ = write!(header, "{0: <9} ", "ago");
+            let _ = write!(header, "{:<w$} ", "ago", w = AGO_W);
         }
-        let _ = write!(header, "{0: >5}: ", "index");
-        if self.config.u16 {
-            let _ = write!(header, "{0: <5} ", "u16");
-        }
-        if self.config.i16 {
-            let _ = write!(header, "{0: <6} ", "i16");
-        }
-        if self.config.u8s {
-            let _ = write!(header, "{0: <8} ", "u8s");
-        }
-        if self.config.i8s {
-            let _ = write!(header, "{0: <9} ", "i8s");
-        }
-        if self.config.hex {
-            let _ = write!(header, "{0: <4} ", "hex");
-        }
-        if self.config.hex32 {
-            let _ = write!(header, "{0: <9} ", "hex32");
-        }
-        if self.config.f16 {
-            let _ = write!(header, "{0: <10} ", "f16");
-        }
-        if self.config.bcd {
-            let _ = write!(header, "{0: <6} ", "bcd");
-        }
-        if self.config.bcd32 {
-            let _ = write!(header, "{0: <10} ", "bcd32");
-        }
-        if self.config.u32 {
-            let _ = write!(header, "{0: <10} ", "u32");
-        }
-        if self.config.i32 {
-            let _ = write!(header, "{0: <11} ", "i32");
-        }
-        if self.config.u32_m10k {
-            let _ = write!(header, "{0: <11} ", "u32m10k");
-        }
-        if self.config.i32_m10k {
-            let _ = write!(header, "{0: <14} ", "i32m10k");
-        }
-        if self.config.u64 {
-            let _ = write!(header, "{0: <20} ", "u64");
-        }
-        if self.config.i64 {
-            let _ = write!(header, "{0: <21} ", "i64");
-        }
-        if self.config.f32 {
-            let _ = write!(header, "{0: <10} ", "f32");
-        }
-        if self.config.f64 {
-            let _ = write!(header, "{0: <12} ", "f64");
-        }
-        if self.config.ascii {
-            let _ = write!(header, "{0: <5} ", "ascii");
-        }
-        if self.config.bits {
-            let _ = write!(header, "{0: <19} ", "bits");
-        }
-        if self.config.custom {
-            let _ = write!(header, "{0: <18} ", "custom");
+        let _ = write!(header, "{:>w$}: ", "index", w = INDEX_W);
+
+        for col in COLUMNS {
+            if (col.enabled)(&self.config) {
+                let _ = write!(header, "{:<w$} ", col.name, w = col.width);
+            }
         }
         if self.config.label {
             header.push_str("label");
@@ -121,12 +132,12 @@ impl Interpretor {
     }
 
     pub fn prefix_width(&self) -> u16 {
-        let mut width = 7; // "index" (>5) + ": "
+        let mut width = (INDEX_W + 2) as u16; // index + ": "
         if self.config.time {
-            width += 13; // "{:<12} "
+            width += (TIME_W + 1) as u16; // value + trailing space
         }
         if self.config.ago {
-            width += 10; // "{:<9} "
+            width += (AGO_W + 1) as u16;
         }
         width
     }
@@ -154,81 +165,26 @@ impl Interpretor {
         let mut row = String::new();
 
         if self.config.time {
-            let _ = write!(row, "{dash: <12} ");
+            let _ = write!(row, "{dash:<w$} ", w = TIME_W);
         }
         if self.config.ago {
-            let _ = write!(row, "{dash: <9} ");
+            let _ = write!(row, "{dash:<w$} ", w = AGO_W);
         }
         if self.config.index_hex {
-            let _ = write!(row, "{index: >5X}: ");
+            let _ = write!(row, "{index:>w$X}: ", w = INDEX_W);
         } else {
-            let _ = write!(row, "{index: >5}: ");
+            let _ = write!(row, "{index:>w$}: ", w = INDEX_W);
         }
-        if self.config.u16 {
-            let _ = write!(row, "{dash: <5} ");
-        }
-        if self.config.i16 {
-            let _ = write!(row, "{dash: <6} ");
-        }
-        if self.config.u8s {
-            let _ = write!(row, "{dash: <8} ");
-        }
-        if self.config.i8s {
-            let _ = write!(row, "{dash: <9} ");
-        }
-        if self.config.hex {
-            let _ = write!(row, "{dash: <4} ");
-        }
-        if self.config.hex32 {
-            let _ = write!(row, "{dash: <9} ");
-        }
-        if self.config.f16 {
-            let _ = write!(row, "{dash: <10} ");
-        }
-        if self.config.bcd {
-            let _ = write!(row, "{dash: <6} ");
-        }
-        if self.config.bcd32 {
-            let _ = write!(row, "{dash: <10} ");
-        }
-        if self.config.u32 {
-            let _ = write!(row, "{dash: <10} ");
-        }
-        if self.config.i32 {
-            let _ = write!(row, "{dash: <11} ");
-        }
-        if self.config.u32_m10k {
-            let _ = write!(row, "{dash: <11} ");
-        }
-        if self.config.i32_m10k {
-            let _ = write!(row, "{dash: <14} ");
-        }
-        if self.config.u64 {
-            let _ = write!(row, "{dash: <20} ");
-        }
-        if self.config.i64 {
-            let _ = write!(row, "{dash: <21} ");
-        }
-        if self.config.f32 {
-            let _ = write!(row, "{dash: <10} ");
-        }
-        if self.config.f64 {
-            let _ = write!(row, "{dash: <12} ");
-        }
-        if self.config.ascii {
-            let _ = write!(row, "{dash: <5} ");
-        }
-        if self.config.bits {
-            let _ = write!(row, "{dash: <19} ");
-        }
-        if self.config.custom {
-            let _ = write!(row, "{dash: <18} ");
+
+        for col in COLUMNS {
+            if (col.enabled)(&self.config) {
+                let _ = write!(row, "{dash:<w$} ", w = col.width);
+            }
         }
 
         if self.config.label {
-            match label {
-                Some(text) => row.push_str(text),
-                None => row.push_str(""),
+            if let Some(text) = label {
+                row.push_str(text);
             }
         }
 
@@ -246,170 +202,27 @@ impl Interpretor {
         custom: Option<&str>,
         label: Option<&str>,
     ) -> String {
-        let byte = value;
-        let [next1, next2, next3] = next;
         let mut row = String::new();
         if self.config.time {
             let formatted = read_at.format("%H:%M:%S.%3f").to_string();
-            let _ = write!(row, "{formatted: <12} ");
+            let _ = write!(row, "{formatted:<w$} ", w = TIME_W);
         }
         if self.config.ago {
             let ago = format_ago(now.signed_duration_since(read_at));
-            let _ = write!(row, "{ago: <9} ");
+            let _ = write!(row, "{ago:<w$} ", w = AGO_W);
         }
         if self.config.index_hex {
-            let _ = write!(row, "{address: >5X}: ");
+            let _ = write!(row, "{address:>w$X}: ", w = INDEX_W);
         } else {
-            let _ = write!(row, "{address: >5}: ");
-        }
-        if self.config.u16 {
-            let _ = write!(row, "{byte: <5} ");
-        }
-        if self.config.i16 {
-            let _ = write!(row, "{: <6} ", byte as i16);
-        }
-        if self.config.u8s {
-            let high = (byte >> 8) as u8;
-            let low = (byte & 0xFF) as u8;
-            let _ = write!(row, "{: <8} ", format!("{high}/{low}"));
-        }
-        if self.config.i8s {
-            let high = (byte >> 8) as u8 as i8;
-            let low = (byte & 0xFF) as u8 as i8;
-            let _ = write!(row, "{: <9} ", format!("{high}/{low}"));
+            let _ = write!(row, "{address:>w$}: ", w = INDEX_W);
         }
 
-        let word = self.word_order.make_word(byte, next1.unwrap_or_default());
-        let second_word = self
-            .word_order
-            .make_word(next2.unwrap_or_default(), next3.unwrap_or_default());
-        let dword = self.word_order.make_dword(word, second_word);
-        if self.config.hex {
-            let _ = write!(row, "{byte:<04X} ");
-        }
-        if self.config.hex32 {
-            if next1.is_none() {
-                let _ = write!(row, "{: <9} ", "-");
-            } else {
-                let s = format!("{word:08X}");
-                let _ = write!(row, "{s: <9} ");
+        let ctx = RowCtx::new(self.word_order, value, next, custom);
+        for col in COLUMNS {
+            if (col.enabled)(&self.config) {
+                let cell = (col.render)(&ctx);
+                let _ = write!(row, "{cell:<w$} ", w = col.width);
             }
-        }
-        if self.config.f16 {
-            let x = f16_to_f32(byte);
-            let mut s = format!("{x}");
-            if s.len() > 10 {
-                s = format!("{x:.3e}");
-            }
-            let _ = write!(row, "{s: <10} ");
-        }
-        if self.config.bcd {
-            let s = bcd_to_decimal(byte).map_or_else(|| "--".to_string(), |n| n.to_string());
-            let _ = write!(row, "{s: <6} ");
-        }
-        if self.config.bcd32 {
-            if next1.is_none() {
-                let _ = write!(row, "{: <10} ", "-");
-            } else {
-                let s =
-                    bcd_to_decimal_u32(word).map_or_else(|| "--".to_string(), |n| n.to_string());
-                let _ = write!(row, "{s: <10} ");
-            }
-        }
-        if self.config.u32 {
-            if next1.is_none() {
-                let _ = write!(row, "{: <10} ", "-");
-            } else {
-                let _ = write!(row, "{word: <10} ");
-            }
-        }
-        if self.config.i32 {
-            if next1.is_none() {
-                let _ = write!(row, "{: <11} ", "-");
-            } else {
-                let _ = write!(row, "{: <11} ", word as i32);
-            }
-        }
-        if self.config.u32_m10k {
-            if next1.is_none() {
-                let _ = write!(row, "{: <11} ", "-");
-            } else {
-                let s =
-                    m10k_to_u32(word).map_or_else(|| "--".to_string(), |(h, l)| format!("{h}/{l}"));
-                let _ = write!(row, "{s: <11} ");
-            }
-        }
-        if self.config.i32_m10k {
-            if next1.is_none() {
-                let _ = write!(row, "{: <14} ", "-");
-            } else {
-                let s =
-                    m10k_to_i32(word).map_or_else(|| "--".to_string(), |(h, l)| format!("{h}/{l}"));
-                let _ = write!(row, "{s: <14} ");
-            }
-        }
-        if self.config.u64 {
-            if next1.is_none() || next2.is_none() || next3.is_none() {
-                let _ = write!(row, "{: <20} ", "-");
-            } else {
-                let _ = write!(row, "{dword: <20} ");
-            }
-        }
-        if self.config.i64 {
-            if next1.is_none() || next2.is_none() || next3.is_none() {
-                let _ = write!(row, "{: <21} ", "-");
-            } else {
-                let _ = write!(row, "{: <21} ", dword as i64);
-            }
-        }
-        if self.config.f32 {
-            if next1.is_none() {
-                let _ = write!(row, "{: <10} ", "-");
-            } else {
-                let x = f32::from_bits(word);
-                let mut s = format!("{x}");
-                if s.len() > 10 {
-                    s = format!("{x:.3e}");
-                }
-                let _ = write!(row, "{s: <10} ");
-            }
-        }
-        if self.config.f64 {
-            if next1.is_none() || next2.is_none() || next3.is_none() {
-                let _ = write!(row, "{: <12} ", "-");
-            } else {
-                let x = f64::from_bits(dword);
-                let mut s = format!("{x}");
-                if s.len() > 12 {
-                    s = format!("{x:.3e}");
-                }
-                let _ = write!(row, "{s: <12} ");
-            }
-        }
-        if self.config.ascii {
-            let s: String = [byte, next1.unwrap_or_default()]
-                .iter()
-                .flat_map(|n| [(n >> 8) as u8, (n & 0xFF) as u8])
-                .map(|b| {
-                    let c = b as char;
-                    if c.is_ascii_graphic() {
-                        c
-                    } else {
-                        '·'
-                    }
-                })
-                .collect();
-
-            let _ = write!(row, "{s:<5} ");
-        }
-        if self.config.bits {
-            let b = format!("{byte:016b}");
-            let grouped = format!("{} {} {} {}", &b[0..4], &b[4..8], &b[8..12], &b[12..16]);
-            let _ = write!(row, "{grouped: <19} ");
-        }
-        if self.config.custom {
-            let s = custom.unwrap_or("--");
-            let _ = write!(row, "{s: <18} ");
         }
 
         if self.config.label {
@@ -502,13 +315,37 @@ impl Interpretor {
     }
 }
 
-fn float_repr<T: std::fmt::Display + std::fmt::LowerExp>(x: T) -> String {
+fn float_cell<T: std::fmt::Display + std::fmt::LowerExp>(x: T, width: usize) -> String {
     let s = format!("{x}");
-    if s.len() > 21 {
+    if s.len() > width {
         format!("{x:.3e}")
     } else {
         s
     }
+}
+
+fn float_repr<T: std::fmt::Display + std::fmt::LowerExp>(x: T) -> String {
+    float_cell(x, 21)
+}
+
+fn ascii_cell(a: u16, b: u16) -> String {
+    [a, b]
+        .iter()
+        .flat_map(|n| [(n >> 8) as u8, (n & 0xFF) as u8])
+        .map(|byte| {
+            let ch = byte as char;
+            if ch.is_ascii_graphic() {
+                ch
+            } else {
+                '·'
+            }
+        })
+        .collect()
+}
+
+fn bits_cell(value: u16) -> String {
+    let b = format!("{value:016b}");
+    format!("{} {} {} {}", &b[0..4], &b[4..8], &b[8..12], &b[12..16])
 }
 
 pub(crate) fn format_ago(elapsed: chrono::Duration) -> String {
