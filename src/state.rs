@@ -49,6 +49,7 @@ pub struct DiscoveryParams {
     pub between_commands_ms: u64,
     pub word_order: WordOrder,
     pub status: Option<StatusMessage>,
+    pub previous: Option<ReadParams>,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -86,6 +87,7 @@ impl Default for DiscoveryParams {
             between_commands_ms: 3,
             word_order: WordOrder::default(),
             status: None,
+            previous: None,
         }
     }
 }

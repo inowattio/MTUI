@@ -710,7 +710,10 @@ impl App {
 
     pub fn open_discovery(&mut self) {
         self.background_task = None;
-        self.state = State::Discovery(Self::discovery_params(&self.config));
+        let previous = std::mem::take(self.read_mut());
+        let mut params = Self::discovery_params(&self.config);
+        params.previous = Some(previous);
+        self.state = State::Discovery(params);
     }
 
     pub fn return_to_read(&mut self) {
@@ -720,7 +723,14 @@ impl App {
         self.connection = ConnectionStatus::Unknown;
         self.logged_connection = ConnectionStatus::Unknown;
         self.reconnect = ReconnectState::default();
-        self.state = State::Read(self.startup_read_params());
+        let previous = match &mut self.state {
+            State::Discovery(d) => d.previous.take(),
+            _ => None,
+        };
+        let mut read = previous.unwrap_or_else(|| self.startup_read_params());
+        read.loading = false;
+        read.popup = None;
+        self.state = State::Read(read);
     }
 
     pub async fn discovery_connect(&mut self) {
