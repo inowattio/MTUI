@@ -97,6 +97,7 @@ keybinds! {
     Logs => logs : "View write log" = LOGS,
     AppLogs => app_logs : "App log" = APP_LOGS,
     Sweep => sweep : "Sweep" = SWEEP,
+    Clear => clear : "Clear session data" = CLEAR,
     SwitchView => switch_view : "Cycle panel" = SWITCH_VIEW,
     Action => action : "Read / confirm" = ACTION,
     MoveUp => move_up : "Move up" = MOVE_UP,

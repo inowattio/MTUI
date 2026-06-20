@@ -63,6 +63,7 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         c if c == kb.settings => app.open_settings(),
         c if c == kb.graph => app.toggle_graph(),
         c if c == kb.sweep => app.open_sweep(),
+        c if c == kb.clear => app.clear_session_data(),
         c if c == kb.inspect => app.open_inspect(),
         c if c == kb.device_id => app.open_device_id().await,
         c if c == kb.raw => app.open_raw(),
@@ -188,6 +189,7 @@ async fn run_action(app: &mut App, action: KeybindAction) {
         Logs => app.open_logs(),
         AppLogs => app.open_log_view(),
         Sweep => app.open_sweep(),
+        Clear => app.clear_session_data(),
         SwitchView => {
             let rows = app.visible_rows.get();
             app.read_mut().toggle_panel();

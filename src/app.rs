@@ -494,14 +494,18 @@ impl App {
         self.sync_api_read_only();
         self.refresh_writes_log_state();
 
-        self.previous_values.clear();
-        self.changed.clear();
-        self.read_log.clear();
-        self.value_history.clear();
+        self.clear_read_accumulation();
         self.previous_position = None;
         self.connection = ConnectionStatus::Unknown;
         self.logged_connection = ConnectionStatus::Unknown;
         self.reconnect = ReconnectState::default();
+    }
+
+    fn clear_read_accumulation(&mut self) {
+        self.previous_values.clear();
+        self.changed.clear();
+        self.read_log.clear();
+        self.value_history.clear();
     }
 
     fn startup_read_params(&self) -> ReadParams {
@@ -778,10 +782,7 @@ impl App {
                 self.interpreter.set_word_order(device_config.word_order);
                 self.config.device = device_config;
                 self.dirty = true;
-                self.previous_values.clear();
-                self.changed.clear();
-                self.read_log.clear();
-                self.value_history.clear();
+                self.clear_read_accumulation();
                 self.connection = ConnectionStatus::Unknown;
                 self.logged_connection = ConnectionStatus::Unknown;
                 self.reconnect = ReconnectState::default();
@@ -1087,6 +1088,12 @@ impl App {
         self.dirty = true;
         log::info!("Cleared {n} custom rule(s)");
         self.set_settings_status(StatusMessage::ok(format!("Cleared {n} custom rule(s)")));
+    }
+
+    pub fn clear_session_data(&mut self) {
+        self.clear_read_accumulation();
+        log::info!("Cleared session read data");
+        self.set_read_status(StatusMessage::ok("Cleared session read data"));
     }
 
     pub fn custom_count(&self) -> usize {
