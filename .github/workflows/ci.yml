@@ -56,4 +56,5 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: wasm32
-      - run: cargo check --target wasm32-unknown-unknown --all-targets
+      # --features web so the (feature-gated) mtui-web wasm bin is still checked.
+      - run: cargo check --target wasm32-unknown-unknown --all-targets --features web

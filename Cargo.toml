@@ -3,8 +3,18 @@ name = "mtui"
 version = "0.4.0"
 edition = "2021"
 license = "GPL-2.0-only"
+description = "An extensive Modbus client (TCP, RTU & mock) for your terminal."
 repository = "https://github.com/inowattio/mtui"
+homepage = "https://inowattio.github.io/MTUI/"
+readme = "README.md"
+keywords = ["modbus", "tui", "rtu", "terminal", "client"]
+categories = ["command-line-utilities", "network-programming"]
 default-run = "mtui"
+exclude = [".github/"]
+
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/{ name }-v{ version }-{ target }{ binary-ext }"
+pkg-fmt = "bin"
 
 [[bin]]
 name = "mtui"
@@ -13,6 +23,10 @@ path = "src/main.rs"
 [[bin]]
 name = "mtui-web"
 path = "src/bin/web.rs"
+required-features = ["web"]
+
+[features]
+web = []
 
 [dependencies]
 ratatui = { version = "0.30.2", default-features = false }

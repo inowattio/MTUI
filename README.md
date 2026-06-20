@@ -2,7 +2,7 @@
 A very extensive Modbus client available in pretty much any terminal.  
 Made in pure safe Rust, based on [tokio-modbus](https://crates.io/crates/tokio-modbus) and [ratatui](https://crates.io/crates/ratatui) (with [ratzilla](https://crates.io/crates/ratzilla) for the web demo).
 
-![Demo](.github/resources/demo.gif)
+![Demo](https://raw.githubusercontent.com/inowattio/MTUI/main/.github/resources/demo.gif)
 
 Play the GIF to see a quick tour, or better yet, try it in your browser (mock device only): **<https://inowattio.github.io/MTUI/>**
 
@@ -20,8 +20,9 @@ Play the GIF to see a quick tour, or better yet, try it in your browser (mock de
 
 Press `h` inside the app for all available keybinds.
 
-## Run / Build
+## Running
 Multiple options are available:
-* clone the repository and then `cargo run`
-* grab a binary from [releases](https://github.com/inowattio/mtui/releases)
 * (Linux) install via `snap install mtui`
+* download a binary from [releases](https://github.com/inowattio/mtui/releases)
+* install via `cargo install mtui` or with prebuilds as `cargo binstall mtui`
+* clone the repository and then `cargo run`
