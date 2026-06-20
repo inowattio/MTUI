@@ -21,5 +21,7 @@ Play the GIF to see a quick tour, or better yet, try it in your browser (mock de
 Press `h` inside the app for all available keybinds.
 
 ## Run / Build
-Grab a binary from [releases](https://github.com/inowattio/mtui/releases) (Windows, Linux x86/Arm, Apple)  
-... or just clone the repository and then `cargo run`!
+Multiple options are available:
+* clone the repository and then `cargo run`
+* grab a binary from [releases](https://github.com/inowattio/mtui/releases)
+* (Linux) install via `snap install mtui`
