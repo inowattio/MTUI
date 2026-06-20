@@ -1,0 +1,74 @@
+name: mtui
+base: core24
+adopt-info: mtui
+summary: Extensive Modbus client for your terminal (TCP, RTU & mock)
+license: GPL-2.0-only
+description: |
+  MTUI is an extensive Modbus client that runs in pretty much any terminal,
+  written in pure safe Rust on top of tokio-modbus and ratatui.
+
+  Features:
+    - Modbus TCP and RTU, plus a built-in mock device for experimenting
+    - Live register reading with auto-refresh, pause/resume and slave-id
+      selection
+    - Interpretation columns with configurable word order: u16, i16, hex,
+      binary, ASCII, u32, i32, f32, f64, M10K and more
+    - Panels: main view, pinned, labeled, custom rules and an address matrix
+    - Pin, label and custom-rule registers; jump to an address or label
+    - Value graph for a register over time
+    - Register writes, with a write log and an optional read-only mode
+    - HTTP API (POST /read, POST /write, GET /health), runnable standalone
+      with --headless
+    - Dump read data to a file and copy addresses to the clipboard
+    - Configurable via config.json (or --config <path>) and an in-app
+      settings screen
+
+  Press "h" inside the app for all available keybinds.
+
+  Modbus RTU (serial) and the clipboard rely on interfaces that snapd does
+  not auto-connect. After installing, run:
+
+      snap connect mtui:serial-port
+      snap connect mtui:raw-usb
+
+grade: stable
+confinement: strict
+
+platforms:
+  amd64:
+  arm64:
+
+apps:
+  mtui:
+    command: bin/mtui
+    plugs:
+      # Modbus TCP client and the built-in HTTP API server.
+      - network
+      - network-bind
+      # Modbus RTU over a hardware/USB serial port. These are hardware
+      # interfaces and are NOT auto-connected; after install run:
+      #   snap connect mtui:serial-port
+      #   snap connect mtui:raw-usb
+      # (on systems with several serial ports, pick the matching slot).
+      - serial-port
+      - raw-usb
+      # Read config.json / write dumps under the user's home directory and
+      # from mounted removable media.
+      - home
+      - removable-media
+      # Clipboard ("copy address"); arboard talks to the X11 server.
+      - x11
+
+parts:
+  mtui:
+    plugin: rust
+    source: .
+    build-packages:
+      - libudev-dev   # tokio-serial / serialport: serial port enumeration
+      - pkg-config
+    stage-packages:
+      - libudev1      # runtime counterpart of libudev-dev
+    override-pull: |
+      craftctl default
+      # Take the snap version straight from Cargo.toml's [package] version.
+      craftctl set version="$(grep -m1 '^version *=' Cargo.toml | cut -d'"' -f2)"
