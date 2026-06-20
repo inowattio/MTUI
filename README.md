@@ -24,5 +24,5 @@ Press `h` inside the app for all available keybinds.
 Multiple options are available:
 * (Linux) install via `snap install mtui`
 * download a binary from [releases](https://github.com/inowattio/mtui/releases)
-* install via `cargo install mtui` or with prebuilds as `cargo binstall mtui`
+* with cargo via `cargo install mtui`
 * clone the repository and then `cargo run`
