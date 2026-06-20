@@ -10,7 +10,7 @@ Cargo.lock
 /stage/
 /prime/
 *.snap
-snapcraft*
+snapcraft-*
 
 # IDE
 .idea/
