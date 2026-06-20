@@ -21,6 +21,7 @@ pub fn draw(params: &SettingsParams, app: &App, frame: &mut Frame, area: Rect, t
     }
 
     let mut lines: Vec<Line> = vec![Line::default()];
+    let mut selected_line = 0u16;
 
     for (i, &field) in SettingsField::ALL.iter().enumerate() {
         if matches!(
@@ -28,6 +29,9 @@ pub fn draw(params: &SettingsParams, app: &App, frame: &mut Frame, area: Rect, t
             SettingsField::ClearPins | SettingsField::EditKeybinds | SettingsField::Save
         ) {
             lines.push(Line::default());
+        }
+        if i as u16 == params.selected {
+            selected_line = lines.len() as u16;
         }
         lines.push(render_field(
             app,
@@ -52,29 +56,34 @@ pub fn draw(params: &SettingsParams, app: &App, frame: &mut Frame, area: Rect, t
         )));
     }
 
-    frame.render_widget(Paragraph::new(lines), area);
+    if area.height == 0 {
+        return;
+    }
 
-    if area.height > 0 {
-        let footer = Rect::new(area.x, area.y + area.height - 1, area.width, 1);
+    let list_height = area.height - 1;
+    let offset = selected_line.saturating_sub(list_height.saturating_sub(1));
+    let list_area = Rect::new(area.x, area.y, area.width, list_height);
+    frame.render_widget(Paragraph::new(lines).scroll((offset, 0)), list_area);
+
+    let footer = Rect::new(area.x, area.y + area.height - 1, area.width, 1);
+    frame.render_widget(
+        Paragraph::new(Line::from(Span::styled(
+            concat!("  ", env!("CARGO_PKG_REPOSITORY")),
+            theme.dim_style(),
+        ))),
+        footer,
+    );
+    if app.dirty {
         frame.render_widget(
-            Paragraph::new(Line::from(Span::styled(
-                concat!("  ", env!("CARGO_PKG_REPOSITORY")),
-                theme.dim_style(),
-            ))),
+            Paragraph::new(
+                Line::from(Span::styled(
+                    "\u{25cf} unsaved changes  ",
+                    theme.warn_style(),
+                ))
+                .right_aligned(),
+            ),
             footer,
         );
-        if app.dirty {
-            frame.render_widget(
-                Paragraph::new(
-                    Line::from(Span::styled(
-                        "\u{25cf} unsaved changes  ",
-                        theme.warn_style(),
-                    ))
-                    .right_aligned(),
-                ),
-                footer,
-            );
-        }
     }
 }
 
