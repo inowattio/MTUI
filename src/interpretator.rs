@@ -66,10 +66,10 @@ impl Interpretor {
             let _ = write!(header, "{0: <11} ", "i32");
         }
         if self.config.u32_m10k {
-            let _ = write!(header, "{0: <8} ", "u32m10k");
+            let _ = write!(header, "{0: <11} ", "u32m10k");
         }
         if self.config.i32_m10k {
-            let _ = write!(header, "{0: <9} ", "i32m10k");
+            let _ = write!(header, "{0: <14} ", "i32m10k");
         }
         if self.config.u64 {
             let _ = write!(header, "{0: <20} ", "u64");
@@ -198,10 +198,10 @@ impl Interpretor {
             let _ = write!(row, "{dash: <11} ");
         }
         if self.config.u32_m10k {
-            let _ = write!(row, "{dash: <8} ");
+            let _ = write!(row, "{dash: <11} ");
         }
         if self.config.i32_m10k {
-            let _ = write!(row, "{dash: <9} ");
+            let _ = write!(row, "{dash: <14} ");
         }
         if self.config.u64 {
             let _ = write!(row, "{dash: <20} ");
@@ -332,20 +332,20 @@ impl Interpretor {
         }
         if self.config.u32_m10k {
             if next1.is_none() {
-                let _ = write!(row, "{: <8} ", "-");
+                let _ = write!(row, "{: <11} ", "-");
             } else {
                 let s =
                     m10k_to_u32(word).map_or_else(|| "--".to_string(), |(h, l)| format!("{h}/{l}"));
-                let _ = write!(row, "{s: <8} ");
+                let _ = write!(row, "{s: <11} ");
             }
         }
         if self.config.i32_m10k {
             if next1.is_none() {
-                let _ = write!(row, "{: <9} ", "-");
+                let _ = write!(row, "{: <14} ", "-");
             } else {
                 let s =
                     m10k_to_i32(word).map_or_else(|| "--".to_string(), |(h, l)| format!("{h}/{l}"));
-                let _ = write!(row, "{s: <9} ");
+                let _ = write!(row, "{s: <14} ");
             }
         }
         if self.config.u64 {
