@@ -120,6 +120,17 @@ impl Interpretor {
         &self.header
     }
 
+    pub fn prefix_width(&self) -> u16 {
+        let mut width = 7; // "index" (>5) + ": "
+        if self.config.time {
+            width += 13; // "{:<12} "
+        }
+        if self.config.ago {
+            width += 10; // "{:<9} "
+        }
+        width
+    }
+
     pub fn shows_ascii(&self) -> bool {
         self.config.ascii
     }

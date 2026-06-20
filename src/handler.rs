@@ -97,6 +97,8 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
             };
             p.scroll_to_cursor(rows, cols);
         }
+        KeyCode::Left => app.scroll_columns(false),
+        KeyCode::Right => app.scroll_columns(true),
         KeyCode::Char(c) => {
             if !c.is_ascii_digit() {
                 return Ok(());

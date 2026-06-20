@@ -6,9 +6,10 @@ use crate::tui::hints::{self, Hint};
 use crate::tui::theme::{spinner_frame, Theme};
 use chrono::Local;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
+use ratatui::style::Style;
 use ratatui::symbols;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Axis, Cell, Chart, Dataset, GraphType, Paragraph, Row, Table};
+use ratatui::widgets::{Axis, Block, Cell, Chart, Dataset, GraphType, Paragraph, Row, Table};
 use ratatui::Frame;
 
 fn rows_to_table(
@@ -49,6 +50,54 @@ fn ascii_title(ascii: &str, theme: &Theme) -> Line<'static> {
     .left_aligned()
 }
 
+fn hscroll(text: &str, prefix: u16, offset: u16) -> String {
+    if offset == 0 {
+        return text.to_string();
+    }
+    let prefix = prefix as usize;
+    let mut out: String = text.chars().take(prefix).collect();
+    out.extend(text.chars().skip(prefix + offset as usize));
+    out
+}
+
+fn horizontal_offset(
+    app: &App,
+    rows: &[(String, Style)],
+    header: &str,
+    prefix: u16,
+    inner_width: u16,
+    col_offset: u16,
+) -> u16 {
+    let prefix = prefix as usize;
+    let content_rest = rows
+        .iter()
+        .map(|(t, _)| t.chars().count())
+        .chain(std::iter::once(header.chars().count()))
+        .max()
+        .unwrap_or(0)
+        .saturating_sub(prefix);
+    let visible_rest = (inner_width as usize).saturating_sub(prefix);
+    let max_offset = content_rest.saturating_sub(visible_rest) as u16;
+    app.h_max_offset.set(max_offset);
+    col_offset.min(max_offset)
+}
+
+fn with_hscroll_hint(
+    block: Block<'static>,
+    theme: &Theme,
+    offset: u16,
+    max_offset: u16,
+) -> Block<'static> {
+    if max_offset == 0 {
+        return block;
+    }
+    let left = if offset > 0 { '\u{25c2}' } else { ' ' };
+    let right = if offset < max_offset { '\u{25b8}' } else { ' ' };
+    block.title_bottom(
+        Line::styled(format!(" {left} cols {right} "), theme.dim_style()).right_aligned(),
+    )
+}
+
 fn main_table(
     params: &ReadParams,
     app: &App,
@@ -56,9 +105,10 @@ fn main_table(
     header: &str,
     theme: &Theme,
     ascii: Option<&str>,
+    inner_width: u16,
 ) -> Table<'static> {
     let now = Local::now();
-    let mut table_rows = Vec::with_capacity(visible as usize);
+    let mut full: Vec<(String, Style)> = Vec::with_capacity(visible as usize);
 
     for i in 0..visible {
         let Some(addr) = params.window_start.checked_add(i) else {
@@ -91,8 +141,16 @@ fn main_table(
             }
         };
 
-        table_rows.push(Row::new([Cell::from(text)]).style(style));
+        full.push((text, style));
     }
+
+    let prefix = app.interpreter.prefix_width();
+    let h_off = horizontal_offset(app, &full, header, prefix, inner_width, params.col_offset);
+
+    let table_rows: Vec<Row> = full
+        .into_iter()
+        .map(|(text, style)| Row::new([Cell::from(hscroll(&text, prefix, h_off))]).style(style))
+        .collect();
 
     let mut block = theme.panel("Main");
     if let Some(error) = &params.read_error {
@@ -102,9 +160,10 @@ fn main_table(
     } else if let Some(ascii) = ascii {
         block = block.title_bottom(ascii_title(ascii, theme));
     }
+    block = with_hscroll_hint(block, theme, h_off, app.h_max_offset.get());
 
     Table::new(table_rows, [Constraint::Percentage(100)])
-        .header(Row::new([Cell::from(header.to_string())]).style(theme.header_style()))
+        .header(Row::new([Cell::from(hscroll(header, prefix, h_off))]).style(theme.header_style()))
         .block(block)
 }
 
@@ -116,12 +175,13 @@ fn list_table(
     top: usize,
     title: &str,
     ascii: Option<&str>,
+    inner_width: u16,
 ) -> Table<'static> {
     let now = Local::now();
     let header = format!("{:<2}{}", "T", app.interpreter.header());
 
-    let mut table_rows = Vec::with_capacity(cells.len());
-    for (offset, &(kind, address)) in cells.iter().enumerate() {
+    let mut full: Vec<(String, Style)> = Vec::with_capacity(cells.len());
+    for (row_idx, &(kind, address)) in cells.iter().enumerate() {
         let (text, changed) = match app.cell_row((kind, address), now) {
             Some(row) => row,
             None => {
@@ -135,25 +195,34 @@ fn list_table(
 
         let text = format!("{:<2}{text}", kind.marker());
 
-        let style = if (top + offset) as u16 == params.pinned_index {
+        let style = if (top + row_idx) as u16 == params.pinned_index {
             theme.selected_style()
         } else if changed {
             theme.changed_style()
-        } else if offset % 2 == 1 {
+        } else if row_idx % 2 == 1 {
             theme.zebra_style()
         } else {
             theme.base()
         };
-        table_rows.push(Row::new([Cell::from(text)]).style(style));
+        full.push((text, style));
     }
+
+    let prefix = 2 + app.interpreter.prefix_width();
+    let h_off = horizontal_offset(app, &full, &header, prefix, inner_width, params.col_offset);
+
+    let table_rows: Vec<Row> = full
+        .into_iter()
+        .map(|(text, style)| Row::new([Cell::from(hscroll(&text, prefix, h_off))]).style(style))
+        .collect();
 
     let mut block = theme.panel(title);
     if let Some(ascii) = ascii {
         block = block.title_bottom(ascii_title(ascii, theme));
     }
+    block = with_hscroll_hint(block, theme, h_off, app.h_max_offset.get());
 
     Table::new(table_rows, [Constraint::Percentage(100)])
-        .header(Row::new([Cell::from(header)]).style(theme.header_style()))
+        .header(Row::new([Cell::from(hscroll(&header, prefix, h_off))]).style(theme.header_style()))
         .block(block)
 }
 
@@ -338,6 +407,9 @@ pub fn draw(
 
     let visible = rows[1].height.saturating_sub(3).max(1);
     app.visible_rows.set(visible);
+    // Inner table width. Panels without interpretation columns leave the offset at zero.
+    let inner_width = rows[1].width.saturating_sub(2);
+    app.h_max_offset.set(0);
 
     if params.graph {
         draw_graph(
@@ -364,7 +436,15 @@ pub fn draw(
                 )
             });
             frame.render_widget(
-                main_table(params, app, visible, header, theme, ascii.as_deref()),
+                main_table(
+                    params,
+                    app,
+                    visible,
+                    header,
+                    theme,
+                    ascii.as_deref(),
+                    inner_width,
+                ),
                 rows[1],
             );
         }
@@ -395,7 +475,16 @@ pub fn draw(
                 let cells = app.panel_window(top, visible as usize);
                 let ascii = show_ascii.then(|| app.ascii_string_for(cells.iter().copied()));
                 frame.render_widget(
-                    list_table(params, app, theme, &cells, top, title, ascii.as_deref()),
+                    list_table(
+                        params,
+                        app,
+                        theme,
+                        &cells,
+                        top,
+                        title,
+                        ascii.as_deref(),
+                        inner_width,
+                    ),
                     rows[1],
                 );
             }

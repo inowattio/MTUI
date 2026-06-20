@@ -573,6 +573,7 @@ impl Popup {
 pub struct ReadParams {
     pub position: u16,
     pub window_start: u16,
+    pub col_offset: u16,
     pub panel: ReadPanel,
     pub pinned_index: u16,
     pub pinned_top: u16,
@@ -595,6 +596,7 @@ impl Default for ReadParams {
         Self {
             position: 0,
             window_start: 0,
+            col_offset: 0,
             panel: ReadPanel::Main,
             pinned_index: 0,
             pinned_top: 0,

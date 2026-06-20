@@ -185,6 +185,7 @@ pub struct App {
     pub sweep: SweepState,
     reconnect: ReconnectState,
     pub visible_rows: Cell<u16>,
+    pub h_max_offset: Cell<u16>,
     previous_position: Option<RegisterCell>,
     background_task: Option<BackgroundTask>,
     previous_values: BTreeMap<RegisterCell, u16>,
@@ -439,6 +440,7 @@ impl App {
             sweep: SweepState::default(),
             reconnect: ReconnectState::default(),
             visible_rows: Cell::new(1),
+            h_max_offset: Cell::new(0),
             previous_position: None,
             background_task: None,
             previous_values: BTreeMap::new(),
@@ -1747,6 +1749,19 @@ impl App {
         p.register_type = register_type;
         p.position = position;
         p.scroll_to_cursor(rows, cols);
+    }
+
+    pub fn scroll_columns(&mut self, right: bool) {
+        const STEP: u16 = 8;
+        let max = self.h_max_offset.get();
+        let p = self.read_mut();
+        // Re-clamp first so a stale offset responds on the first key press.
+        let current = p.col_offset.min(max);
+        p.col_offset = if right {
+            (current + STEP).min(max)
+        } else {
+            current.saturating_sub(STEP)
+        };
     }
 
     fn recompute_search(&mut self) {
