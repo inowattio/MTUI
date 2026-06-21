@@ -48,45 +48,12 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         }
     }
 
+    if let Some(action) = kb.action_for(key_event.code) {
+        run_action(app, action).await;
+        return Ok(());
+    }
+
     match key_event.code {
-        c if c == kb.exit => app.request_quit(),
-        c if c == kb.pin => app.pin(),
-        c if c == kb.dump => app.open_dump(),
-        c if c == kb.help => app.open_help(),
-        c if c == kb.columns => app.open_columns(),
-        c if c == kb.jump => app.open_search(),
-        c if c == kb.write => app.open_write(),
-        c if c == kb.label => app.open_label(),
-        c if c == kb.custom => app.open_custom(),
-        c if c == kb.slave => app.open_slave(),
-        c if c == kb.discovery => app.open_discovery(),
-        c if c == kb.settings => app.open_settings(),
-        c if c == kb.graph => app.toggle_graph(),
-        c if c == kb.sweep => app.open_sweep(),
-        c if c == kb.clear => app.clear_session_data(),
-        c if c == kb.inspect => app.open_inspect(),
-        c if c == kb.device_id => app.open_device_id().await,
-        c if c == kb.raw => app.open_raw(),
-        c if c == kb.cycle_position => app.cycle_position(),
-        c if c == kb.copy_address => app.copy_address(),
-        c if c == kb.logs => app.open_logs(),
-        c if c == kb.app_logs => app.open_log_view(),
-        c if c == kb.word_order => app.toggle_word_order(),
-        c if c == kb.refresh => app.refresh().await,
-        c if c == kb.toggle => app.toggle_type(),
-        c if c == kb.pause => app.toggle_pause(),
-        c if c == kb.action => app.refresh().await,
-        c if c == kb.switch_view => {
-            app.read_mut().toggle_panel();
-            let len = app.panel_len();
-            let cols = app.config.matrix_cols;
-            let p = app.read_mut();
-            p.scroll_pinned(rows, len);
-            p.scroll_to_cursor(rows, cols);
-        }
-        c if c == kb.move_up || c == kb.move_down || c == kb.page_up || c == kb.page_down => {
-            move_read_cursor(app, key_event.code);
-        }
         KeyCode::Left | KeyCode::Right if app.read().panel == ReadPanel::Matrix => {
             let cols = app.config.matrix_cols;
             let p = app.read_mut();

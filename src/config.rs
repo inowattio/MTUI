@@ -106,6 +106,15 @@ keybinds! {
     PageDown => page_down : "Page down" = PAGE_DOWN,
 }
 
+impl Keybinds {
+    pub fn action_for(&self, code: KeyCode) -> Option<KeybindAction> {
+        KeybindAction::ALL
+            .iter()
+            .copied()
+            .find(|&action| self.get(action) == code)
+    }
+}
+
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct CustomRules {
     pub holdings: Vec<CustomRule>,
