@@ -62,8 +62,18 @@ impl Theme {
             .add_modifier(Modifier::BOLD)
     }
 
-    pub fn zebra_style(&self) -> Style {
-        Style::default().fg(self.text).bg(self.zebra)
+    pub fn row_style(&self, zebra: bool, changed: bool) -> Style {
+        let base = if zebra {
+            Style::default().fg(self.text).bg(self.zebra)
+        } else {
+            self.base()
+        };
+
+        if changed {
+            base.patch(self.changed_style())
+        } else {
+            base
+        }
     }
 
     pub fn header_style(&self) -> Style {

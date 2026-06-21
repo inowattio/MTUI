@@ -107,12 +107,8 @@ impl TableCtx<'_> {
                 Some((text, changed)) => {
                     let style = if selected {
                         theme.selected_style()
-                    } else if changed {
-                        theme.changed_style()
-                    } else if zebra {
-                        theme.zebra_style()
                     } else {
-                        theme.base()
+                        theme.row_style(zebra, changed)
                     };
                     (text, style)
                 }
@@ -170,12 +166,8 @@ impl TableCtx<'_> {
 
             let style = if (top + row_idx) as u16 == params.pinned_index {
                 theme.selected_style()
-            } else if changed {
-                theme.changed_style()
-            } else if row_idx % 2 == 1 {
-                theme.zebra_style()
             } else {
-                theme.base()
+                theme.row_style(row_idx % 2 == 1, changed)
             };
             rows.push((text, style));
         }
@@ -216,13 +208,7 @@ impl TableCtx<'_> {
                 let cell = (params.register_type, addr);
                 let (text, mut style) = match app.cell_value(cell) {
                     Some(value) => {
-                        let style = if app.cell_changed(cell) {
-                            theme.changed_style()
-                        } else if zebra {
-                            theme.zebra_style()
-                        } else {
-                            theme.base()
-                        };
+                        let style = theme.row_style(zebra, app.cell_changed(cell));
                         (format!("{value: >5}"), style)
                     }
                     None => (format!("{: >5}", "--"), theme.dim_style()),
