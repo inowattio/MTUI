@@ -336,8 +336,38 @@ fn bits_to_words(bits: Vec<bool>) -> Vec<u16> {
     bits.into_iter().map(u16::from).collect()
 }
 
+fn ensure_parent_dir(path: &str) -> Result<(), String> {
+    match std::path::Path::new(path).parent() {
+        Some(parent) if !parent.as_os_str().is_empty() => {
+            fs::create_dir_all(parent).map_err(|e| e.to_string())
+        }
+        _ => Ok(()),
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn default_config_path() -> String {
+    if std::path::Path::new(CONFIG_PATH).exists() {
+        return CONFIG_PATH.to_string();
+    }
+    directories::ProjectDirs::from("io", "inowattio", "mtui")
+        .map(|dirs| {
+            dirs.config_dir()
+                .join(CONFIG_PATH)
+                .to_string_lossy()
+                .into_owned()
+        })
+        .unwrap_or_else(|| CONFIG_PATH.to_string())
+}
+
+#[cfg(target_arch = "wasm32")]
+fn default_config_path() -> String {
+    CONFIG_PATH.to_string()
+}
+
 fn save_config(path: &str, config: &Config) -> Result<(), String> {
     let content = serde_json::to_string_pretty(config).map_err(|e| e.to_string())?;
+    ensure_parent_dir(path)?;
     fs::write(path, content).map_err(|e| e.to_string())
 }
 
@@ -380,13 +410,16 @@ fn parse_hex_bytes(input: &str) -> Result<Vec<u8>, String> {
         .collect()
 }
 
-fn dump_example_config_and_exit(path: &str) {
-    let example_config = Config::default();
-    let config_string = serde_json::to_string_pretty(&example_config).unwrap();
+fn create_default_config(path: &str) -> Config {
+    let config = Config::default();
+    let serialized = serde_json::to_string_pretty(&config).expect("serialize default config");
 
-    fs::write(path, config_string).unwrap();
-    println!("No config file found, dumped example to {path}.");
-    std::process::exit(1)
+    let _ = ensure_parent_dir(path);
+    match fs::write(path, serialized) {
+        Ok(()) => log::info!("No config found; created a default one at {path}"),
+        Err(e) => log::warn!("No config found and could not write {path}: {e}; using defaults"),
+    }
+    config
 }
 
 fn fetch_config_or_exit(path: &str, dump_example_if_missing: bool) -> Config {
@@ -394,7 +427,7 @@ fn fetch_config_or_exit(path: &str, dump_example_if_missing: bool) -> Config {
         Ok(content) => content,
         Err(e) => {
             if dump_example_if_missing {
-                dump_example_config_and_exit(path);
+                return create_default_config(path);
             }
             println!("Could not read config {path}: {e}");
             std::process::exit(2)
@@ -408,10 +441,8 @@ fn fetch_config_or_exit(path: &str, dump_example_if_missing: bool) -> Config {
 
 impl App {
     pub async fn new(config_path: Option<String>) -> Self {
-        // A missing file is only auto-created at the default path; an
-        // explicitly requested config that does not exist is an error.
         let dump_example_if_missing = config_path.is_none();
-        let config_path = config_path.unwrap_or_else(|| CONFIG_PATH.to_string());
+        let config_path = config_path.unwrap_or_else(default_config_path);
         let config = fetch_config_or_exit(&config_path, dump_example_if_missing);
         Self::boot(config, config_path).await
     }

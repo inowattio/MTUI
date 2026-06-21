@@ -16,7 +16,7 @@ Play the GIF to see a quick tour, or better yet, try it in your browser (mock de
 - Register writes, with a write log and an optional read-only mode
 - HTTP API (`POST /read`, `POST /write`, `GET /health`, see [openapi.yaml](./openapi.yaml), can run standalone with `--headless`)
 - Dump read data to a file, copy addresses to the clipboard
-- Configurable via `config.json` (or `--config <path>`) and an in-app settings screen
+- Configurable via files, a user-located `config.json` file will be created on the first startup (`~/.config/mtui/` on Linux, `%APPDATA%\inowattio\mtui\config\` on Windows, `~/Library/Application Support/io.inowattio.mtui/` on macOS), overridable with `--config <path>` and can also be modified in-app.
 
 Press `h` inside the app for all available keybinds.
 
