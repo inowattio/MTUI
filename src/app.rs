@@ -13,7 +13,7 @@ use crate::num_ops::{digit_add, digit_remove};
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
 use crate::state::{
     ColumnsParams, ConnectionStatus, CustomField, CustomParams, DeviceIdParams, DiscoveryParams,
-    DumpParams, HelpParams, InterfaceKind, LabelParams, LogViewParams, LogsParams, Popup,
+    DumpParams, HelpParams, InterfaceKind, LabelParams, LogViewParams, LogsParams, Outcome, Popup,
     PopupKind, RawField, RawParams, ReadPanel, ReadParams, SearchParams, SettingsField,
     SettingsParams, State, StatusMessage, SweepConfigParams, SweepField, WriteParams,
 };
@@ -22,10 +22,10 @@ use chrono::{DateTime, Local, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 use std::cell::Cell;
 use std::collections::{BTreeMap, VecDeque};
+use std::fs;
 use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU8};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use std::{error, fs};
 
 pub type ApiDevice = Arc<Mutex<Option<ModbusDevice>>>;
 pub type BoundPort = Arc<AtomicU16>;
@@ -66,7 +66,7 @@ pub enum WriteType {
     Coil,
 }
 
-pub type AppResult<T> = Result<T, Box<dyn error::Error>>;
+pub type AppResult<T> = anyhow::Result<T>;
 
 #[derive(Debug)]
 enum BackgroundTask {
@@ -2025,7 +2025,7 @@ impl App {
         self.read_mut().popup = None;
     }
 
-    fn persist_config(&mut self) -> Result<String, String> {
+    fn persist_config(&mut self) -> Outcome {
         self.config.labels = (&self.labels).into();
 
         let rebuilt: CustomRules = (&self.custom_rules).into();
@@ -2162,7 +2162,7 @@ impl App {
         }
     }
 
-    async fn load_config_from(&mut self, path: &str) -> Result<String, String> {
+    async fn load_config_from(&mut self, path: &str) -> Outcome {
         if path.is_empty() {
             return Err("Load failed: enter a file name".to_string());
         }

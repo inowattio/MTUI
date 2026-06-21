@@ -63,7 +63,9 @@ mod native {
         app.config
             .port
             .inspect(|port| log::info!("Headless mode - API server on port {port}"))
-            .ok_or("Headless mode requires an API port; set `port` in the config")?;
+            .ok_or_else(|| {
+                anyhow::anyhow!("Headless mode requires an API port; set `port` in the config")
+            })?;
 
         let mut ticker = tokio::time::interval(EVENT_HANDLER_TICKRATE);
         while app.running {

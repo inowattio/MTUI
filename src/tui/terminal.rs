@@ -16,7 +16,7 @@ pub struct Tui<B: Backend> {
 
 impl<B: Backend> Tui<B>
 where
-    <B as Backend>::Error: 'static,
+    <B as Backend>::Error: std::error::Error + Send + Sync + 'static,
 {
     pub fn new(mut terminal: Terminal<B>, events: EventHandler) -> AppResult<Self> {
         terminal::enable_raw_mode()?;

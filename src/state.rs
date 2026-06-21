@@ -421,8 +421,10 @@ impl StatusMessage {
     }
 }
 
-impl From<Result<String, String>> for StatusMessage {
-    fn from(result: Result<String, String>) -> Self {
+pub type Outcome = Result<String, String>;
+
+impl From<Outcome> for StatusMessage {
+    fn from(result: Outcome) -> Self {
         match result {
             Ok(text) => Self::ok(text),
             Err(text) => Self::err(text),
