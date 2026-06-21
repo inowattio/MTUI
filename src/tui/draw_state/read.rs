@@ -12,36 +12,6 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Axis, Block, Cell, Chart, Dataset, GraphType, Paragraph, Row, Table};
 use ratatui::Frame;
 
-fn rows_to_table(
-    title: &str,
-    header: String,
-    rows: &[String],
-    changed: &[bool],
-    selected: Option<usize>,
-    theme: &Theme,
-) -> Table<'static> {
-    let table_rows: Vec<Row> = rows
-        .iter()
-        .enumerate()
-        .map(|(i, text)| {
-            let style = if selected == Some(i) {
-                theme.selected_style()
-            } else if changed.get(i).copied().unwrap_or(false) {
-                theme.changed_style()
-            } else if i % 2 == 1 {
-                theme.zebra_style()
-            } else {
-                theme.base()
-            };
-            Row::new([Cell::from(text.clone())]).style(style)
-        })
-        .collect();
-
-    Table::new(table_rows, [Constraint::Percentage(100)])
-        .header(Row::new([Cell::from(header)]).style(theme.header_style()))
-        .block(theme.panel(title))
-}
-
 fn ascii_title(ascii: &str, theme: &Theme) -> Line<'static> {
     Line::from(vec![
         Span::styled(" ASCII ", theme.dim_style()),
@@ -450,17 +420,13 @@ pub fn draw(
             };
             let len = app.panel_len() as usize;
             if len == 0 {
-                frame.render_widget(
-                    rows_to_table(
-                        title,
-                        header.to_string(),
-                        &[empty_message.to_string()],
-                        &[],
-                        None,
-                        theme,
-                    ),
-                    rows[1],
-                );
+                let table_rows = vec![Row::new([Cell::from(empty_message)]).style(theme.base())];
+
+                let t = Table::new(table_rows, [Constraint::Percentage(100)])
+                    .header(Row::new([Cell::from(header)]).style(theme.header_style()))
+                    .block(theme.panel(title));
+
+                frame.render_widget(t, rows[1]);
             } else {
                 let top = (params.pinned_top as usize).min(len - 1);
                 let cells = app.panel_window(top, visible as usize);
