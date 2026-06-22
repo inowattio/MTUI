@@ -215,6 +215,7 @@ pub struct App {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(default)]
 pub struct PinnedRegisters {
     pub holdings: Vec<u16>,
     pub inputs: Vec<u16>,

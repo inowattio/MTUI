@@ -264,6 +264,7 @@ mod tests {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(default)]
 pub struct DeviceConfig {
     pub interface: Interface,
     pub slave_id: SlaveId,
@@ -271,6 +272,19 @@ pub struct DeviceConfig {
     pub timeout_command_ms: u64,
     pub time_between_commands_ms: u64,
     pub word_order: WordOrder,
+}
+
+impl Default for DeviceConfig {
+    fn default() -> Self {
+        Self {
+            interface: Interface::Mock,
+            slave_id: 0,
+            timeout_connect_ms: 1000,
+            timeout_command_ms: 2000,
+            time_between_commands_ms: 0,
+            word_order: WordOrder::default(),
+        }
+    }
 }
 
 async fn timeout<F, D>(future: F, timeout: Duration, between: Duration) -> Result<D>

@@ -1,12 +1,13 @@
 use crate::app::PinnedRegisters;
 use crate::custom::{CustomOp, CustomRepr, CustomRule, EnumEntry, OpKind};
 use crate::input::KeyCode;
-use crate::modbus::{DeviceConfig, Interface, WordOrder};
+use crate::modbus::{DeviceConfig, Interface};
 use crate::register::RegisterType;
 use crate::state::ReadPanel;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(default)]
 pub struct Config {
     pub name: String,
     pub device: DeviceConfig,
@@ -29,6 +30,7 @@ pub struct Config {
 macro_rules! keybinds {
     ($($action:ident => $field:ident : $label:literal = $default:ident),+ $(,)?) => {
         #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+        #[serde(default)]
         pub struct Keybinds {
             $(pub $field: KeyCode,)+
         }
@@ -116,6 +118,7 @@ impl Keybinds {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(default)]
 pub struct CustomRules {
     pub holdings: Vec<CustomRule>,
     pub inputs: Vec<CustomRule>,
@@ -124,7 +127,8 @@ pub struct CustomRules {
     pub show_continuation: bool,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
+#[serde(default)]
 pub struct Startup {
     pub address: u16,
     #[serde(rename = "type")]
@@ -133,6 +137,7 @@ pub struct Startup {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(default)]
 pub struct Labels {
     pub holdings: Vec<Label>,
     pub inputs: Vec<Label>,
@@ -304,14 +309,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             name: "demo".to_string(),
-            device: DeviceConfig {
-                interface: Interface::Mock,
-                slave_id: 0,
-                timeout_connect_ms: 1000,
-                timeout_command_ms: 2000,
-                time_between_commands_ms: 3,
-                word_order: WordOrder::default(),
-            },
+            device: DeviceConfig::default(),
             startup: Startup {
                 address: 5,
                 register_type: RegisterType::Input,
