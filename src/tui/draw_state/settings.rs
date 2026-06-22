@@ -155,14 +155,10 @@ fn field_view(
         ),
         SettingsField::IgnoreDirty => (
             "Ignore unsaved warning",
-            if device.ignore_dirty { "on" } else { "off" }.to_string(),
+            on_off(device.ignore_dirty),
             Kind::Toggle,
         ),
-        SettingsField::ReadOnly => (
-            "Read-only",
-            if device.read_only { "on" } else { "off" }.to_string(),
-            Kind::Toggle,
-        ),
+        SettingsField::ReadOnly => ("Read-only", on_off(device.read_only), Kind::Toggle),
         SettingsField::ApiPort => (
             "API port",
             match device.port {
@@ -182,7 +178,7 @@ fn field_view(
         ),
         SettingsField::LogWrites => (
             "Log writes to file",
-            if device.log_writes { "on" } else { "off" }.to_string(),
+            on_off(device.log_writes),
             Kind::Toggle,
         ),
         SettingsField::StartupPanel => (
@@ -227,12 +223,7 @@ fn field_view(
         ),
         SettingsField::ShowContinuation => (
             "Show \"part of\" marker",
-            if device.custom_rules.show_continuation {
-                "on"
-            } else {
-                "off"
-            }
-            .to_string(),
+            on_off(device.custom_rules.show_continuation),
             Kind::Toggle,
         ),
         SettingsField::EditKeybinds => ("Edit keybinds", "open".to_string(), Kind::Action),
