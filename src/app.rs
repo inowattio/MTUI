@@ -15,7 +15,8 @@ use crate::state::{
     ColumnsParams, ConnectionStatus, CustomField, CustomParams, DeviceIdParams, DiscoveryParams,
     DumpParams, HelpParams, ImportParams, InterfaceKind, LabelParams, LogViewParams, LogsParams,
     Outcome, Popup, PopupKind, RawField, RawParams, ReadPanel, ReadParams, SearchParams,
-    SettingsField, SettingsParams, State, StatusMessage, SweepConfigParams, SweepField, WriteParams,
+    SettingsField, SettingsParams, State, StatusMessage, SweepConfigParams, SweepField,
+    WriteParams,
 };
 use crate::writes_log::{SharedWritesLog, WriteKind, WritesLogState};
 use chrono::{DateTime, Local, SecondsFormat, Utc};
@@ -234,21 +235,21 @@ fn section_count<T>(section: &[T], rest: [&[T]; 3]) -> usize {
 
 impl ImportPayload {
     fn pins(&self) -> usize {
-        self.pinned_registers
-            .as_ref()
-            .map_or(0, |p| section_count(&p.holdings, [&p.inputs, &p.coils, &p.discretes]))
+        self.pinned_registers.as_ref().map_or(0, |p| {
+            section_count(&p.holdings, [&p.inputs, &p.coils, &p.discretes])
+        })
     }
 
     fn labels(&self) -> usize {
-        self.labels
-            .as_ref()
-            .map_or(0, |l| section_count(&l.holdings, [&l.inputs, &l.coils, &l.discretes]))
+        self.labels.as_ref().map_or(0, |l| {
+            section_count(&l.holdings, [&l.inputs, &l.coils, &l.discretes])
+        })
     }
 
     fn rules(&self) -> usize {
-        self.custom_rules
-            .as_ref()
-            .map_or(0, |r| section_count(&r.holdings, [&r.inputs, &r.coils, &r.discretes]))
+        self.custom_rules.as_ref().map_or(0, |r| {
+            section_count(&r.holdings, [&r.inputs, &r.coils, &r.discretes])
+        })
     }
 
     fn total(&self) -> usize {
