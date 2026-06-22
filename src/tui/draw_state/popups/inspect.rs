@@ -44,6 +44,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App) {
         &[
             Hint::keys(hints::pair(kb.move_up, kb.move_down), "Move"),
             Hint::key(kb.refresh, "Refresh"),
+            Hint::key(kb.word_order, "Cycle order"),
             Hint::key(kb.exit, "Close"),
         ],
     ));
