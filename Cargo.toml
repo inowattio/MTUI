@@ -1,6 +1,6 @@
 [package]
 name = "mtui"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2021"
 license = "GPL-2.0-only"
 description = "An extensive Modbus client (TCP, RTU & mock) for your terminal."
