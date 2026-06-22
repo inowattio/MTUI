@@ -348,6 +348,10 @@ pub enum SettingsField {
     LogWrites,
     ApiPort,
     StartupPanel,
+    CycleHoldings,
+    CycleInputs,
+    CycleCoils,
+    CycleDiscretes,
     IgnoreDirty,
     ClearPins,
     ClearLabels,
@@ -359,7 +363,7 @@ pub enum SettingsField {
 }
 
 impl SettingsField {
-    pub const ALL: [SettingsField; 17] = [
+    pub const ALL: [SettingsField; 21] = [
         SettingsField::Name,
         SettingsField::RegistersBatch,
         SettingsField::AutoUpdate,
@@ -369,6 +373,10 @@ impl SettingsField {
         SettingsField::LogWrites,
         SettingsField::ApiPort,
         SettingsField::StartupPanel,
+        SettingsField::CycleHoldings,
+        SettingsField::CycleInputs,
+        SettingsField::CycleCoils,
+        SettingsField::CycleDiscretes,
         SettingsField::IgnoreDirty,
         SettingsField::ClearPins,
         SettingsField::ClearLabels,
@@ -381,6 +389,16 @@ impl SettingsField {
 
     pub fn is_text_input(self) -> bool {
         matches!(self, SettingsField::Name | SettingsField::LoadConfig)
+    }
+
+    pub fn cycle_register_type(self) -> Option<RegisterType> {
+        Some(match self {
+            SettingsField::CycleHoldings => RegisterType::Holding,
+            SettingsField::CycleInputs => RegisterType::Input,
+            SettingsField::CycleCoils => RegisterType::Coil,
+            SettingsField::CycleDiscretes => RegisterType::Discrete,
+            _ => return None,
+        })
     }
 }
 

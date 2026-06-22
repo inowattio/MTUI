@@ -14,6 +14,10 @@ enum Kind {
     Action,
 }
 
+fn on_off(value: bool) -> String {
+    if value { "on" } else { "off" }.to_string()
+}
+
 pub fn draw(params: &SettingsParams, app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
     if params.editing_keybinds {
         draw_keybinds(params, app, frame, area, theme);
@@ -26,7 +30,10 @@ pub fn draw(params: &SettingsParams, app: &App, frame: &mut Frame, area: Rect, t
     for (i, &field) in SettingsField::ALL.iter().enumerate() {
         if matches!(
             field,
-            SettingsField::ClearPins | SettingsField::EditKeybinds | SettingsField::Save
+            SettingsField::CycleHoldings
+                | SettingsField::ClearPins
+                | SettingsField::EditKeybinds
+                | SettingsField::Save
         ) {
             lines.push(Line::default());
         }
@@ -181,6 +188,26 @@ fn field_view(
         SettingsField::StartupPanel => (
             "Startup panel",
             device.startup.panel.name().to_string(),
+            Kind::Toggle,
+        ),
+        SettingsField::CycleHoldings => (
+            "Cycle holdings",
+            on_off(device.cycle_types.holdings),
+            Kind::Toggle,
+        ),
+        SettingsField::CycleInputs => (
+            "Cycle inputs",
+            on_off(device.cycle_types.inputs),
+            Kind::Toggle,
+        ),
+        SettingsField::CycleCoils => (
+            "Cycle coils",
+            on_off(device.cycle_types.coils),
+            Kind::Toggle,
+        ),
+        SettingsField::CycleDiscretes => (
+            "Cycle discretes",
+            on_off(device.cycle_types.discretes),
             Kind::Toggle,
         ),
         SettingsField::ClearPins => (

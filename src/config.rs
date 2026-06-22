@@ -20,6 +20,7 @@ pub struct Config {
     pub read_only: bool,
     pub log_writes: bool,
     pub ignore_dirty: bool,
+    pub cycle_types: CycleTypes,
     pub port: Option<u16>,
     pub pinned_registers: PinnedRegisters,
     pub labels: Labels,
@@ -151,6 +152,53 @@ pub struct Label {
     pub address: u16,
     #[serde(rename = "t")]
     pub text: String,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[serde(default)]
+pub struct CycleTypes {
+    pub holdings: bool,
+    pub inputs: bool,
+    pub coils: bool,
+    pub discretes: bool,
+}
+
+impl Default for CycleTypes {
+    fn default() -> Self {
+        Self {
+            holdings: true,
+            inputs: true,
+            coils: true,
+            discretes: true,
+        }
+    }
+}
+
+impl CycleTypes {
+    pub fn enabled(&self, register_type: RegisterType) -> bool {
+        match register_type {
+            RegisterType::Holding => self.holdings,
+            RegisterType::Input => self.inputs,
+            RegisterType::Coil => self.coils,
+            RegisterType::Discrete => self.discretes,
+        }
+    }
+
+    pub fn toggle(&mut self, register_type: RegisterType) {
+        match register_type {
+            RegisterType::Holding => self.holdings = !self.holdings,
+            RegisterType::Input => self.inputs = !self.inputs,
+            RegisterType::Coil => self.coils = !self.coils,
+            RegisterType::Discrete => self.discretes = !self.discretes,
+        }
+    }
+
+    pub fn enabled_count(&self) -> usize {
+        RegisterType::ALL
+            .iter()
+            .filter(|&&t| self.enabled(t))
+            .count()
+    }
 }
 
 impl Config {
@@ -323,6 +371,7 @@ impl Default for Config {
             read_only: false,
             log_writes: false,
             ignore_dirty: false,
+            cycle_types: CycleTypes::default(),
             port: None,
             pinned_registers: Default::default(),
             labels: demo_labels(),

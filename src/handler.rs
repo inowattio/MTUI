@@ -622,6 +622,10 @@ async fn handle_settings_key(key_event: KeyEvent, app: &mut App) {
                     | SettingsField::ShowContinuation
                     | SettingsField::StartupPanel
                     | SettingsField::IgnoreDirty
+                    | SettingsField::CycleHoldings
+                    | SettingsField::CycleInputs
+                    | SettingsField::CycleCoils
+                    | SettingsField::CycleDiscretes
             ) =>
         {
             app.settings_adjust(field, 1)
@@ -634,7 +638,11 @@ async fn handle_settings_key(key_event: KeyEvent, app: &mut App) {
             | SettingsField::LogWrites
             | SettingsField::ShowContinuation
             | SettingsField::StartupPanel
-            | SettingsField::IgnoreDirty => app.settings_adjust(field, 1),
+            | SettingsField::IgnoreDirty
+            | SettingsField::CycleHoldings
+            | SettingsField::CycleInputs
+            | SettingsField::CycleCoils
+            | SettingsField::CycleDiscretes => app.settings_adjust(field, 1),
             SettingsField::EditKeybinds => {
                 if let Some(s) = app.settings_mut() {
                     s.open_keybinds();

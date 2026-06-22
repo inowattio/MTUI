@@ -546,6 +546,9 @@ impl App {
         if app.device.is_some() {
             app.state = State::Read(app.startup_read_params());
             log::info!("Started \u{b7} {}", app.config.display_device());
+            if app.config.cycle_types.enabled_count() == 0 {
+                app.notify_no_cycle_types();
+            }
         } else {
             app.state = State::Discovery(Self::discovery_params(&app.config));
             log::warn!("Started \u{b7} no device, opened Discovery");
@@ -1409,6 +1412,13 @@ impl App {
                     .unwrap_or(0) as i64;
                 let next = (current + delta).rem_euclid(panels.len() as i64);
                 self.config.startup.panel = panels[next as usize];
+            }
+            SettingsField::CycleHoldings
+            | SettingsField::CycleInputs
+            | SettingsField::CycleCoils
+            | SettingsField::CycleDiscretes => {
+                let rt = field.cycle_register_type().expect("cycle field");
+                self.config.cycle_types.toggle(rt);
             }
             _ => {
                 let Some((min, max, step)) = Self::numeric_spec(field) else {
@@ -3098,9 +3108,35 @@ impl App {
     }
 
     pub fn toggle_type(&mut self) {
+        let current = self.read().register_type;
+        let next = self.next_cycle_type(current);
+        if next == current {
+            self.notify_no_cycle_types();
+            return;
+        }
         let p = self.read_mut();
         p.read_duration = None;
         p.read_error = None;
-        p.register_type.toggle();
+        p.register_type = next;
+    }
+
+    fn notify_no_cycle_types(&mut self) {
+        let jump = self.config.keybinds.jump;
+        let settings = self.config.keybinds.settings;
+        self.set_read_status(StatusMessage::warn(format!(
+            "No other register type to cycle to \u{2014} jump to one with [{jump}] or change in settings [{settings}]"
+        )));
+    }
+
+    fn next_cycle_type(&self, from: RegisterType) -> RegisterType {
+        let cycle = self.config.cycle_types;
+        let mut next = from;
+        for _ in 0..RegisterType::ALL.len() {
+            next.toggle();
+            if cycle.enabled(next) {
+                return next;
+            }
+        }
+        from
     }
 }
