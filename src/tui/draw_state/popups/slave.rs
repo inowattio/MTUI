@@ -14,7 +14,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, kb: &Keybinds, 
         ]),
         hints::footer(
             theme,
-            &[Hint::key(kb.action, "Set"), Hint::key(kb.exit, "Cancel")],
+            [Hint::key(kb.action, "Set"), Hint::key(kb.exit, "Cancel")],
         ),
     ];
 

@@ -75,14 +75,14 @@ pub(super) fn draw(
         Line::default(),
         hints::footer(
             theme,
-            &[
-                Hint::keys(hints::pair(kb.move_up, kb.move_down), "Field"),
+            [
+                Hint::pair(kb.move_up, kb.move_down, "Field"),
                 Hint::key(kb.pause, "Toggle mode"),
             ],
         ),
         hints::footer(
             theme,
-            &[
+            [
                 Hint::key(kb.action, "Start/Stop"),
                 Hint::key(kb.exit, "Close"),
             ],

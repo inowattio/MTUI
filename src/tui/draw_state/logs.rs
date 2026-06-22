@@ -33,8 +33,8 @@ pub fn draw(params: &LogViewParams, app: &App, frame: &mut Frame, area: Rect, th
     header_spans.extend(
         hints::footer(
             theme,
-            &[
-                Hint::keys(hints::pair(kb.move_up, kb.move_down), "Scroll"),
+            [
+                Hint::pair(kb.move_up, kb.move_down, "Scroll"),
                 Hint::key(kb.exit, "Back"),
             ],
         )

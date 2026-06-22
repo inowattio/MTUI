@@ -86,14 +86,14 @@ pub(super) fn draw(
     }
 
     let footer = [
-        Hint::keys(hints::pair(kb.move_up, kb.move_down), "Select"),
+        Hint::pair(kb.move_up, kb.move_down, "Select"),
         Hint::key(kb.action, "Run"),
         Hint::key(kb.exit, "Close"),
     ];
-    lines.push(Line::default());
-    lines.push(hints::footer(theme, &footer));
-
     let grid_w = 2 + col_key_w.iter().map(|&kw| cell_w(kw)).sum::<usize>();
     let width = grid_w.max(hints::width(&footer)) as u16;
+    lines.push(Line::default());
+    lines.push(hints::footer(theme, footer));
+
     super::render(frame, area, theme, "Help", width, lines);
 }

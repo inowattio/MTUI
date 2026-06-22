@@ -14,6 +14,7 @@ mod sweep_config;
 mod write;
 
 use crate::app::App;
+use crate::input::KeyCode;
 use crate::state::Popup;
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
@@ -35,9 +36,9 @@ pub fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup
             &d.result,
             hints::footer(
                 theme,
-                &[
+                [
                     Hint::key(kb.action, "Confirm"),
-                    Hint::keys(format!("Backspace/{}", hints::glyph(kb.exit)), "Cancel"),
+                    Hint::pair(KeyCode::Backspace, kb.exit, "Cancel"),
                 ],
             ),
         ),
@@ -62,12 +63,9 @@ pub fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup
             &None,
             hints::footer(
                 theme,
-                &[
-                    Hint::keys(
-                        format!("{}/{}", hints::glyph(kb.action), hints::glyph(kb.exit)),
-                        "Confirm",
-                    ),
-                    Hint::keys("Backspace", "Cancel"),
+                [
+                    Hint::pair(kb.action, kb.exit, "Confirm"),
+                    Hint::key(KeyCode::Backspace, "Cancel"),
                 ],
             ),
         ),

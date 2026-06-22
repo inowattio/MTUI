@@ -46,13 +46,13 @@ pub(super) fn draw(
     }
 
     let footer = [
-        Hint::keys(hints::pair(kb.move_up, kb.move_down), "Select"),
+        Hint::pair(kb.move_up, kb.move_down, "Select"),
         Hint::key(kb.action, "Go"),
         Hint::key(kb.exit, "Close"),
     ];
     lines.push(hints::more(theme, top, len.saturating_sub(end)));
-    lines.push(hints::footer(theme, &footer));
-
     let width = 54.max(hints::width(&footer) as u16);
+    lines.push(hints::footer(theme, footer));
+
     super::render(frame, area, theme, "Go to", width, lines);
 }

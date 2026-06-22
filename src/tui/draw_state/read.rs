@@ -498,10 +498,10 @@ fn draw_graph(
         spans.extend(
             hints::footer(
                 theme,
-                &[
-                    Hint::keys(hints::pair(kb.action, kb.refresh), "Read"),
+                [
+                    Hint::pair(kb.action, kb.refresh, "Read"),
                     Hint::key(kb.pause, "Pause"),
-                    Hint::keys(hints::pair(kb.exit, kb.graph), "Close"),
+                    Hint::pair(kb.exit, kb.graph, "Close"),
                 ],
             )
             .spans,

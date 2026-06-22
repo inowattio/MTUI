@@ -77,16 +77,16 @@ pub(super) fn draw(
         Hint::key(kb.action, "Write"),
         Hint::key(kb.exit, "Exit"),
         Hint::key(kb.write, "Word/DWord"),
-        Hint::key(KeyCode::Char('-'), "Negate"),
     ];
     let footer2 = [
-        Hint::keys("\u{2190}\u{2192}", "Bit"),
+        Hint::key(KeyCode::Char('-'), "Negate"),
+        Hint::pair(KeyCode::Left, KeyCode::Right, "Bit"),
         Hint::key(kb.pause, "Toggle"),
     ];
-    lines.push(hints::footer(theme, &footer1));
-    lines.push(hints::footer(theme, &footer2));
+    let width = 50.max(hints::width(&footer1) as u16);
+    lines.push(hints::footer(theme, footer1));
+    lines.push(hints::footer(theme, footer2));
 
-    let width = 58.max(hints::width(&footer1) as u16);
     super::render(frame, area, theme, "Write", width, lines);
 }
 
@@ -123,8 +123,8 @@ fn draw_coil(frame: &mut Frame, area: Rect, theme: &Theme, kb: &Keybinds, write:
         Hint::key(kb.pause, "Toggle on/off"),
         Hint::key(kb.exit, "Exit"),
     ];
-    lines.push(hints::footer(theme, &footer));
-
     let width = 44.max(hints::width(&footer) as u16);
+    lines.push(hints::footer(theme, footer));
+
     super::render(frame, area, theme, "Write coil", width, lines);
 }

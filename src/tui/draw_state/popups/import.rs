@@ -1,4 +1,5 @@
 use crate::config::Keybinds;
+use crate::input::KeyCode;
 use crate::state::ImportParams;
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
@@ -39,9 +40,9 @@ pub(super) fn draw(
     )));
     lines.push(hints::footer(
         theme,
-        &[
+        [
             Hint::key(kb.action, "Import"),
-            Hint::keys(format!("Backspace/{}", hints::glyph(kb.exit)), "Cancel"),
+            Hint::pair(KeyCode::Backspace, kb.exit, "Cancel"),
         ],
     ));
 

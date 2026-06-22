@@ -32,7 +32,7 @@ pub(super) fn draw(
         ]),
         hints::footer(
             theme,
-            &[Hint::key(kb.action, "Set"), Hint::key(kb.exit, "Cancel")],
+            [Hint::key(kb.action, "Set"), Hint::key(kb.exit, "Cancel")],
         ),
     ];
 

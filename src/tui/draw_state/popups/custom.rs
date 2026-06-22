@@ -1,4 +1,5 @@
 use crate::app::App;
+use crate::input::KeyCode;
 use crate::state::{CustomField, CustomParams};
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
@@ -145,14 +146,11 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &
     let kb = &app.config.keybinds;
     lines.push(hints::footer(
         theme,
-        &[
-            Hint::keys(hints::pair(kb.move_up, kb.move_down), "Field"),
-            Hint::keys("\u{2190}\u{2192}", "Change"),
+        [
+            Hint::pair(kb.move_up, kb.move_down, "Field"),
+            Hint::pair(KeyCode::Left, KeyCode::Right, "Change"),
+            Hint::key(kb.exit, "Close"),
         ],
-    ));
-    lines.push(hints::footer(
-        theme,
-        &[Hint::note("Type to edit"), Hint::key(kb.exit, "Close")],
     ));
 
     super::render(frame, area, theme, "Custom rule", 48, lines);

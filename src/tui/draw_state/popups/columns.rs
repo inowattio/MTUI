@@ -1,4 +1,5 @@
 use crate::app::App;
+use crate::input::KeyCode;
 use crate::state::ColumnsParams;
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
@@ -62,18 +63,13 @@ pub(super) fn draw(
 
     lines.push(Line::default());
     let kb = &app.config.keybinds;
-    let move_token = format!(
-        "{} {}",
-        hints::pair(kb.move_up, kb.move_down),
-        hints::pair(crate::input::KeyCode::Left, crate::input::KeyCode::Right)
-    );
     let footer = [
-        Hint::keys(move_token, "Move"),
+        Hint::pair(kb.move_down, KeyCode::Right, "Move"),
         Hint::key(kb.action, "Toggle"),
         Hint::key(kb.exit, "Close"),
     ];
-    lines.push(hints::footer(theme, &footer));
-
     let width = ((CELL as u16 + 6) * 2 + 3).max(hints::width(&footer) as u16);
+    lines.push(hints::footer(theme, footer));
+
     super::render(frame, area, theme, "Columns", width, lines);
 }

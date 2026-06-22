@@ -52,8 +52,8 @@ pub(super) fn draw(
     lines.push(Line::default());
     lines.push(hints::footer(
         theme,
-        &[
-            Hint::keys(hints::pair(kb.move_up, kb.move_down), "Field"),
+        [
+            Hint::pair(kb.move_up, kb.move_down, "Field"),
             Hint::key(kb.action, "Send"),
             Hint::key(kb.exit, "Close"),
         ],

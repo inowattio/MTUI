@@ -1,5 +1,6 @@
 use crate::app::{ApiBindState, App};
 use crate::config::KeybindAction;
+use crate::input::KeyCode;
 use crate::state::{SettingsField, SettingsParams};
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
@@ -287,14 +288,14 @@ fn draw_keybinds(params: &SettingsParams, app: &App, frame: &mut Frame, area: Re
 
     lines.push(Line::default());
     let hint = if params.kb_capturing {
-        hints::footer(theme, &[Hint::keys("Esc", "Cancel")])
+        hints::footer(theme, [Hint::key(KeyCode::Esc, "Cancel")])
     } else {
         hints::footer(
             theme,
-            &[
+            [
                 Hint::key(kb.action, "Rebind"),
-                Hint::keys("Backspace", "Reset to default"),
-                Hint::keys("Esc", "Back"),
+                Hint::key(KeyCode::Backspace, "Reset to default"),
+                Hint::key(KeyCode::Esc, "Back"),
             ],
         )
     };

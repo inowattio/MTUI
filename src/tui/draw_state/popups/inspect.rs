@@ -41,8 +41,8 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App) {
     let kb = &app.config.keybinds;
     lines.push(hints::footer(
         theme,
-        &[
-            Hint::keys(hints::pair(kb.move_up, kb.move_down), "Move"),
+        [
+            Hint::pair(kb.move_up, kb.move_down, "Move"),
             Hint::key(kb.refresh, "Refresh"),
             Hint::key(kb.word_order, "Cycle order"),
             Hint::key(kb.exit, "Close"),

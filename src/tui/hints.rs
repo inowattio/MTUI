@@ -5,28 +5,21 @@ use ratatui::text::{Line, Span};
 
 pub struct Hint {
     key: String,
-    label: String,
+    label: &'static str,
 }
 
 impl Hint {
-    pub fn key(kc: KeyCode, label: &str) -> Self {
+    pub fn key(kc: KeyCode, label: &'static str) -> Self {
         Self {
             key: glyph(kc),
-            label: label.to_string(),
+            label,
         }
     }
 
-    pub fn keys(key: impl Into<String>, label: &str) -> Self {
+    pub fn pair(a: KeyCode, b: KeyCode, label: &'static str) -> Self {
         Self {
-            key: key.into(),
-            label: label.to_string(),
-        }
-    }
-
-    pub fn note(label: &str) -> Self {
-        Self {
-            key: String::new(),
-            label: label.to_string(),
+            key: format!("{}/{}", glyph(a), glyph(b)),
+            label,
         }
     }
 
@@ -39,7 +32,7 @@ impl Hint {
     }
 }
 
-pub fn glyph(kc: KeyCode) -> String {
+fn glyph(kc: KeyCode) -> String {
     match kc {
         KeyCode::Up => "\u{2191}".to_string(),
         KeyCode::Down => "\u{2193}".to_string(),
@@ -51,20 +44,6 @@ pub fn glyph(kc: KeyCode) -> String {
     }
 }
 
-pub fn pair(a: KeyCode, b: KeyCode) -> String {
-    let arrow = |k| {
-        matches!(
-            k,
-            KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right
-        )
-    };
-    if arrow(a) && arrow(b) {
-        format!("{}{}", glyph(a), glyph(b))
-    } else {
-        format!("{}/{}", glyph(a), glyph(b))
-    }
-}
-
 const SEP: &str = " ";
 
 pub fn width(items: &[Hint]) -> usize {
@@ -73,23 +52,20 @@ pub fn width(items: &[Hint]) -> usize {
     tokens + 2 + 2
 }
 
-pub fn footer(theme: &Theme, items: &[Hint]) -> Line<'static> {
+pub fn footer<const N: usize>(theme: &Theme, items: [Hint; N]) -> Line<'static> {
     let key_style = Style::default().fg(theme.accent);
     let dim = theme.dim_style();
     let mut spans: Vec<Span<'static>> = Vec::with_capacity(items.len() * 5 + 2);
     spans.push(Span::styled(" ", dim));
-    for (i, h) in items.iter().enumerate() {
+    for (i, h) in items.into_iter().enumerate() {
         if i > 0 {
             spans.push(Span::styled(SEP, dim));
         }
-        if h.key.is_empty() {
-            spans.push(Span::styled(h.label.clone(), dim));
-        } else {
-            spans.push(Span::styled("[", dim));
-            spans.push(Span::styled(h.key.clone(), key_style));
-            spans.push(Span::styled("] ", dim));
-            spans.push(Span::styled(h.label.clone(), dim));
-        }
+
+        spans.push(Span::styled("[", dim));
+        spans.push(Span::styled(h.key, key_style));
+        spans.push(Span::styled("] ", dim));
+        spans.push(Span::styled(h.label, dim));
     }
     spans.push(Span::styled(" ", dim));
     Line::from(spans)

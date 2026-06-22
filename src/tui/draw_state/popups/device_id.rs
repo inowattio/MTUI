@@ -53,8 +53,8 @@ pub(super) fn draw(
     lines.push(Line::default());
     lines.push(hints::footer(
         theme,
-        &[
-            Hint::keys(hints::pair(KeyCode::Left, KeyCode::Right), "Access"),
+        [
+            Hint::pair(KeyCode::Left, KeyCode::Right, "Access"),
             Hint::key(kb.refresh, "Reread"),
             Hint::key(kb.exit, "Close"),
         ],

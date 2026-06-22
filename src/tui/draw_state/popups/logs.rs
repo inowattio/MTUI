@@ -27,9 +27,9 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, kb: &Keybinds, 
     lines.push(hints::more(theme, top, len.saturating_sub(end)));
     lines.push(hints::footer(
         theme,
-        &[
-            Hint::keys(hints::pair(kb.move_up, kb.move_down), "Scroll"),
-            Hint::keys(hints::pair(kb.page_up, kb.page_down), "Page"),
+        [
+            Hint::pair(kb.move_up, kb.move_down, "Scroll"),
+            Hint::pair(kb.page_up, kb.page_down, "Page"),
             Hint::key(kb.exit, "Close"),
         ],
     ));
