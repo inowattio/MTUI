@@ -3,6 +3,7 @@ mod confirm;
 mod custom;
 mod device_id;
 mod help;
+mod import;
 mod inspect;
 mod label;
 mod logs;
@@ -51,6 +52,7 @@ pub fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup
         Popup::Inspect => inspect::draw(frame, area, theme, app),
         Popup::DeviceId(params) => device_id::draw(frame, area, theme, kb, params),
         Popup::Raw(params) => raw::draw(frame, area, theme, kb, params),
+        Popup::Import(params) => import::draw(frame, area, theme, kb, params),
         Popup::Quit => confirm::draw(
             frame,
             area,

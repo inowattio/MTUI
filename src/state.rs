@@ -141,6 +141,13 @@ pub struct DumpParams {
 }
 
 #[derive(Debug, Default, PartialEq)]
+pub struct ImportParams {
+    pub pins: usize,
+    pub labels: usize,
+    pub rules: usize,
+}
+
+#[derive(Debug, Default, PartialEq)]
 pub struct DeviceIdParams {
     pub access: DeviceIdAccess,
     pub objects: Vec<(u8, String)>,
@@ -529,6 +536,7 @@ pub enum Popup {
     Inspect,
     DeviceId(DeviceIdParams),
     Raw(RawParams),
+    Import(ImportParams),
     Quit,
 }
 
@@ -547,6 +555,7 @@ pub enum PopupKind {
     Inspect,
     DeviceId,
     Raw,
+    Import,
     Quit,
 }
 
@@ -566,6 +575,7 @@ impl Popup {
             Popup::Inspect => PopupKind::Inspect,
             Popup::DeviceId(_) => PopupKind::DeviceId,
             Popup::Raw(_) => PopupKind::Raw,
+            Popup::Import(_) => PopupKind::Import,
             Popup::Quit => PopupKind::Quit,
         }
     }

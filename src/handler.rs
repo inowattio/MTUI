@@ -362,6 +362,13 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
             }
         }
 
+        PopupKind::Import => match key_event.code {
+            c if c == kb.action => app.apply_import(),
+            c if c == kb.exit => app.cancel_import(),
+            KeyCode::Backspace => app.cancel_import(),
+            _ => {}
+        },
+
         PopupKind::Quit => match key_event.code {
             c if c == kb.action || c == kb.exit => app.quit(),
             KeyCode::Backspace => app.close_popup(),
@@ -371,20 +378,27 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
 }
 
 pub fn handle_paste(data: String, app: &mut App) {
-    if app.discovery().is_some() || app.settings().is_some() {
-        return;
-    }
-    let original_size = data.len();
-    let digits = data
-        .chars()
-        .filter(char::is_ascii_digit)
-        .map(|c| c as u8 - b'0')
-        .collect::<Vec<_>>();
-
-    if digits.len() != original_size {
+    if app.discovery().is_some() || app.settings().is_some() || app.log_view().is_some() {
         return;
     }
 
+    let trimmed = data.trim();
+    if trimmed.is_empty() {
+        return;
+    }
+
+    if trimmed.bytes().all(|b| b.is_ascii_digit()) {
+        paste_digits(trimmed, app);
+        return;
+    }
+
+    if app.popup_kind().is_none() {
+        app.paste_import(trimmed);
+    }
+}
+
+fn paste_digits(digits: &str, app: &mut App) {
+    let digits = digits.bytes().map(|b| b - b'0');
     let rows = app.visible_rows.get();
 
     match app.popup_kind() {

@@ -13,9 +13,9 @@ use crate::num_ops::{digit_add, digit_remove};
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
 use crate::state::{
     ColumnsParams, ConnectionStatus, CustomField, CustomParams, DeviceIdParams, DiscoveryParams,
-    DumpParams, HelpParams, InterfaceKind, LabelParams, LogViewParams, LogsParams, Outcome, Popup,
-    PopupKind, RawField, RawParams, ReadPanel, ReadParams, SearchParams, SettingsField,
-    SettingsParams, State, StatusMessage, SweepConfigParams, SweepField, WriteParams,
+    DumpParams, HelpParams, ImportParams, InterfaceKind, LabelParams, LogViewParams, LogsParams,
+    Outcome, Popup, PopupKind, RawField, RawParams, ReadPanel, ReadParams, SearchParams,
+    SettingsField, SettingsParams, State, StatusMessage, SweepConfigParams, SweepField, WriteParams,
 };
 use crate::writes_log::{SharedWritesLog, WriteKind, WritesLogState};
 use chrono::{DateTime, Local, SecondsFormat, Utc};
@@ -195,6 +195,7 @@ pub struct App {
     labels: BTreeMap<RegisterCell, String>,
     custom_rules: BTreeMap<RegisterCell, CustomRule>,
     pending_write: Option<PendingWrite>,
+    pending_import: Option<ImportPayload>,
     logged_connection: ConnectionStatus,
     api_device: ApiDevice,
     api_bound_port: BoundPort,
@@ -218,6 +219,41 @@ pub struct PinnedRegisters {
     pub inputs: Vec<u16>,
     pub coils: Vec<u16>,
     pub discretes: Vec<u16>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct ImportPayload {
+    pinned_registers: Option<PinnedRegisters>,
+    labels: Option<Labels>,
+    custom_rules: Option<CustomRules>,
+}
+
+fn section_count<T>(section: &[T], rest: [&[T]; 3]) -> usize {
+    section.len() + rest.iter().map(|s| s.len()).sum::<usize>()
+}
+
+impl ImportPayload {
+    fn pins(&self) -> usize {
+        self.pinned_registers
+            .as_ref()
+            .map_or(0, |p| section_count(&p.holdings, [&p.inputs, &p.coils, &p.discretes]))
+    }
+
+    fn labels(&self) -> usize {
+        self.labels
+            .as_ref()
+            .map_or(0, |l| section_count(&l.holdings, [&l.inputs, &l.coils, &l.discretes]))
+    }
+
+    fn rules(&self) -> usize {
+        self.custom_rules
+            .as_ref()
+            .map_or(0, |r| section_count(&r.holdings, [&r.inputs, &r.coils, &r.discretes]))
+    }
+
+    fn total(&self) -> usize {
+        self.pins() + self.labels() + self.rules()
+    }
 }
 
 impl From<PinnedRegisters> for Vec<RegisterCell> {
@@ -479,6 +515,7 @@ impl App {
             read_log: BTreeMap::new(),
             value_history: BTreeMap::new(),
             pending_write: None,
+            pending_import: None,
             logged_connection: ConnectionStatus::Unknown,
             api_device: Arc::new(Mutex::new(None)),
             api_bound_port: Arc::new(AtomicU16::new(0)),
@@ -909,6 +946,74 @@ impl App {
 
     pub fn open_dump(&mut self) {
         self.read_mut().popup = Some(Popup::Dump(DumpParams::default()));
+    }
+
+    fn parse_import(data: &str) -> Option<ImportPayload> {
+        let payload: ImportPayload = serde_json::from_str(data.trim()).ok()?;
+        (payload.total() > 0).then_some(payload)
+    }
+
+    pub fn paste_import(&mut self, data: &str) {
+        match Self::parse_import(data) {
+            Some(payload) => {
+                let params = ImportParams {
+                    pins: payload.pins(),
+                    labels: payload.labels(),
+                    rules: payload.rules(),
+                };
+                self.pending_import = Some(payload);
+                self.read_mut().popup = Some(Popup::Import(params));
+            }
+            None => self.set_read_status(StatusMessage::warn(
+                "Pasted text isn't pinned/labels/custom data",
+            )),
+        }
+    }
+
+    pub fn cancel_import(&mut self) {
+        self.pending_import = None;
+        self.close_popup();
+    }
+
+    pub fn apply_import(&mut self) {
+        let Some(payload) = self.pending_import.take() else {
+            self.close_popup();
+            return;
+        };
+
+        let mut pins = 0;
+        if let Some(p) = payload.pinned_registers {
+            let incoming: Vec<RegisterCell> = p.into();
+            pins = incoming.len();
+            for cell in incoming {
+                if !self.pinned_registers.contains(&cell) {
+                    self.pinned_registers.push(cell);
+                }
+            }
+            self.pinned_registers.sort();
+            self.pinned_registers.dedup();
+        }
+
+        let mut labels = 0;
+        if let Some(l) = payload.labels {
+            let incoming: BTreeMap<RegisterCell, String> = l.into();
+            labels = incoming.len();
+            self.labels.extend(incoming);
+        }
+
+        let mut rules = 0;
+        if let Some(r) = payload.custom_rules {
+            let incoming: BTreeMap<RegisterCell, CustomRule> = r.into();
+            rules = incoming.len();
+            self.custom_rules.extend(incoming);
+        }
+
+        self.dirty = true;
+        self.close_popup();
+        log::info!("Imported {pins} pin(s), {labels} label(s), {rules} rule(s) from clipboard");
+        self.set_read_status(StatusMessage::ok(format!(
+            "Imported {pins} pin(s), {labels} label(s), {rules} rule(s)"
+        )));
     }
 
     pub fn open_columns(&mut self) {
