@@ -66,20 +66,7 @@ where
 {
     let zero = T::from(0);
 
-    *v = v.map_or(Some(zero), |n| {
-        let mut c = n;
-        decrement_by(&mut c, by);
-        Some(c)
-    });
-}
-
-pub fn decrement_by<T>(v: &mut T, by: u16)
-where
-    T: Copy + From<u16> + CheckedSub<Output = T>,
-{
-    if let Some(c) = v.checked_sub(&by.into()) {
-        *v = c;
-    }
+    *v = v.map_or(Some(zero), |c| c.checked_sub(&by.into()).or(Some(c)));
 }
 
 pub fn increment_option_by<T>(v: &mut Option<T>, by: u16)
@@ -88,20 +75,7 @@ where
 {
     let zero = T::from(0);
 
-    *v = v.map_or(Some(zero), |n| {
-        let mut c = n;
-        increment_by(&mut c, by);
-        Some(c)
-    });
-}
-
-pub fn increment_by<T>(v: &mut T, by: u16)
-where
-    T: Copy + From<u16> + CheckedAdd<Output = T>,
-{
-    if let Some(c) = v.checked_add(&by.into()) {
-        *v = c;
-    }
+    *v = v.map_or(Some(zero), |c| c.checked_add(&by.into()).or(Some(c)));
 }
 
 pub fn set_to_zero<T>(v: &mut T)
