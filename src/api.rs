@@ -3,8 +3,9 @@ use crate::modbus::ModbusDevice;
 use crate::register::RegisterType;
 use crate::state::ConnectionStatus;
 use crate::writes_log::{self, SharedWritesLog, WriteKind};
-use axum::extract::State;
+use axum::extract::{Request, State};
 use axum::http::StatusCode;
+use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -62,6 +63,7 @@ pub async fn serve(
         .route("/read", post(read_handler))
         .route("/write", post(write_handler))
         .route("/health", get(health_handler))
+        .layer(middleware::from_fn(log_requests))
         .with_state(ApiState {
             device,
             writes_log,
@@ -89,6 +91,15 @@ pub async fn serve(
     if let Err(e) = axum::serve(listener, router).await {
         log::error!("API server error: {e}");
     }
+}
+
+async fn log_requests(request: Request, next: Next) -> Response {
+    let method = request.method().clone();
+    let uri = request.uri().clone();
+    log::info!("API in: {method} {uri}");
+    let response = next.run(request).await;
+    log::info!("API out: {method} {uri} {}", response.status());
+    response
 }
 
 async fn read_handler(State(state): State<ApiState>, Json(request): Json<ReadRequest>) -> Response {
