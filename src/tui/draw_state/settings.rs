@@ -177,6 +177,11 @@ fn field_view(
             },
             Kind::Number,
         ),
+        SettingsField::ApiSlaveOverride => (
+            "API slave id override",
+            on_off(device.allow_api_slave_id),
+            Kind::Toggle,
+        ),
         SettingsField::LogWrites => (
             "Log writes to file",
             on_off(device.log_writes),

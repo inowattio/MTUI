@@ -1,4 +1,6 @@
-use crate::app::{ApiBindState, ApiDevice, BindStateFlag, BoundPort, ReadOnlyFlag, StatusFlag};
+use crate::app::{
+    AllowSlaveFlag, ApiBindState, ApiDevice, BindStateFlag, BoundPort, ReadOnlyFlag, StatusFlag,
+};
 use crate::modbus::ModbusDevice;
 use crate::register::RegisterType;
 use crate::state::ConnectionStatus;
@@ -19,6 +21,7 @@ struct ApiState {
     device: ApiDevice,
     writes_log: SharedWritesLog,
     read_only: ReadOnlyFlag,
+    allow_slave_id: AllowSlaveFlag,
     status: StatusFlag,
 }
 
@@ -28,6 +31,8 @@ struct ReadRequest {
     register_type: RegisterType,
     address: u16,
     count: u16,
+    #[serde(default)]
+    slave_id: Option<u8>,
 }
 
 #[derive(Serialize)]
@@ -37,10 +42,12 @@ struct ReadResponse {
 
 #[derive(Deserialize)]
 struct WriteRequest {
-    #[serde(rename = "type", default)]
+    #[serde(rename = "type")]
     register_type: RegisterType,
     address: u16,
     values: Vec<u16>,
+    #[serde(default)]
+    slave_id: Option<u8>,
 }
 
 #[derive(Serialize)]
@@ -50,12 +57,14 @@ struct HealthResponse {
     read_only: bool,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn serve(
     port: u16,
     device: ApiDevice,
     bound: BoundPort,
     writes_log: SharedWritesLog,
     read_only: ReadOnlyFlag,
+    allow_slave_id: AllowSlaveFlag,
     status: StatusFlag,
     bind: BindStateFlag,
 ) {
@@ -68,6 +77,7 @@ pub async fn serve(
             device,
             writes_log,
             read_only,
+            allow_slave_id,
             status,
         });
 
@@ -104,27 +114,27 @@ async fn log_requests(request: Request, next: Next) -> Response {
 
 async fn read_handler(State(state): State<ApiState>, Json(request): Json<ReadRequest>) -> Response {
     log::info!(
-        "API read {:?}@{}:{}",
+        "API read {:?}@{}:{} slave={}",
         request.register_type,
         request.address,
-        request.count
+        request.count,
+        describe_slave(request.slave_id)
     );
+    if slave_override_forbidden(&state, request.slave_id) {
+        log::warn!("API read rejected: slave id override is disabled");
+        return StatusCode::FORBIDDEN.into_response();
+    }
     let Some(device) = current(&state.device) else {
         return StatusCode::SERVICE_UNAVAILABLE.into_response();
     };
-    let bits_to_words = |bits: Vec<bool>| bits.into_iter().map(u16::from).collect::<Vec<u16>>();
-    let result = match request.register_type {
-        RegisterType::Holding => device.holdings(request.address, request.count).await,
-        RegisterType::Input => device.inputs(request.address, request.count).await,
-        RegisterType::Coil => device
-            .coils(request.address, request.count)
-            .await
-            .map(bits_to_words),
-        RegisterType::Discrete => device
-            .discretes(request.address, request.count)
-            .await
-            .map(bits_to_words),
-    };
+    let result = device
+        .read_typed(
+            request.slave_id,
+            request.register_type,
+            request.address,
+            request.count,
+        )
+        .await;
     match result {
         Ok(values) => Json(ReadResponse { values }).into_response(),
         Err(e) => {
@@ -138,9 +148,19 @@ async fn write_handler(
     State(state): State<ApiState>,
     Json(request): Json<WriteRequest>,
 ) -> StatusCode {
-    log::info!("API write {}:{:?}", request.address, request.values);
+    log::info!(
+        "API write {:?}@{} slave={} {:?}",
+        request.register_type,
+        request.address,
+        describe_slave(request.slave_id),
+        request.values
+    );
     if state.read_only.load(Ordering::Relaxed) {
         log::warn!("API write rejected due to read-only mode");
+        return StatusCode::FORBIDDEN;
+    }
+    if slave_override_forbidden(&state, request.slave_id) {
+        log::warn!("API write rejected: slave id override is disabled");
         return StatusCode::FORBIDDEN;
     }
     if !request.register_type.is_writable() {
@@ -153,17 +173,14 @@ async fn write_handler(
     let Some(device) = current(&state.device) else {
         return StatusCode::SERVICE_UNAVAILABLE;
     };
-    let result = match request.register_type {
-        RegisterType::Coil => {
-            let coils: Vec<bool> = request.values.iter().map(|&v| v != 0).collect();
-            device.write_coils(request.address, &coils).await
-        }
-        _ => {
-            device
-                .write_registers(request.address, &request.values)
-                .await
-        }
-    };
+    let result = device
+        .write_typed(
+            request.slave_id,
+            request.register_type,
+            request.address,
+            &request.values,
+        )
+        .await;
     match result {
         Ok(()) => {
             writes_log::append(
@@ -209,4 +226,15 @@ fn bind_reusable(addr: SocketAddr) -> std::io::Result<TcpListener> {
 
 fn current(device: &ApiDevice) -> Option<ModbusDevice> {
     device.lock().ok().and_then(|guard| guard.clone())
+}
+
+fn describe_slave(slave: Option<u8>) -> String {
+    match slave {
+        Some(id) => id.to_string(),
+        None => "default".to_string(),
+    }
+}
+
+fn slave_override_forbidden(state: &ApiState, slave: Option<u8>) -> bool {
+    slave.is_some() && !state.allow_slave_id.load(Ordering::Relaxed)
 }

@@ -1,5 +1,6 @@
 use crate::compat;
 use crate::mock::MockContext;
+use crate::register::RegisterType;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
@@ -8,6 +9,7 @@ use std::future::Future;
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 #[cfg(not(target_arch = "wasm32"))]
 use std::str::FromStr;
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
@@ -312,6 +314,31 @@ macro_rules! timeout {
     };
 }
 
+macro_rules! timeout_as {
+    ($this:ident, $slave:expr, $action:ident, ($($arg:expr),* $(,)?)) => {
+        {
+            let mut hold = $this.context.lock().await;
+            let timeout_command = Duration::from_millis($this.config.timeout_command_ms);
+            let time_between = Duration::from_millis($this.config.time_between_commands_ms);
+            let override_slave = $slave;
+            if let Some(id) = override_slave {
+                hold.set_slave(Slave(id));
+            }
+            let outcome =
+                timeout(hold.$action($($arg),*), timeout_command, time_between).await;
+            if override_slave.is_some() {
+                hold.set_slave(Slave($this.default_slave.load(Ordering::Relaxed)));
+            }
+            match outcome {
+                Ok(Ok(Ok(value))) => Ok(value),
+                Ok(Ok(Err(error))) => Err(anyhow::Error::from(error)),
+                Ok(Err(error)) => Err(anyhow::Error::from(error)),
+                Err(error) => Err(error),
+            }
+        }
+    };
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum DeviceIdAccess {
     #[default]
@@ -351,6 +378,7 @@ impl DeviceIdAccess {
 pub struct ModbusDevice {
     context: Arc<Mutex<Context>>,
     config: DeviceConfig,
+    default_slave: Arc<AtomicU8>,
 }
 
 impl Debug for ModbusDevice {
@@ -364,10 +392,10 @@ impl ModbusDevice {
         let timeout_connect = Duration::from_millis(config.timeout_connect_ms);
         let slave = Slave(config.slave_id);
         #[cfg(target_arch = "wasm32")]
-        let _ = (timeout_connect, slave);
+        let _ = timeout_connect;
 
         #[cfg(not(target_arch = "wasm32"))]
-        let context = match &config.interface {
+        let mut context = match &config.interface {
             Interface::Wired(interface) => {
                 let builder = tokio_serial::new(&interface.path, interface.baud_rate)
                     .timeout(timeout_connect)
@@ -390,16 +418,60 @@ impl ModbusDevice {
         };
 
         #[cfg(target_arch = "wasm32")]
-        let context = MockContext::make();
+        let mut context = MockContext::make();
+
+        context.set_slave(slave);
 
         Ok(Self {
             context: Arc::new(Mutex::new(context)),
+            default_slave: Arc::new(AtomicU8::new(config.slave_id)),
             config: config.clone(),
         })
     }
 
     pub async fn set_slave(&self, slave_id: SlaveId) {
+        self.default_slave.store(slave_id, Ordering::Relaxed);
         self.context.lock().await.set_slave(Slave(slave_id));
+    }
+
+    pub async fn read_typed(
+        &self,
+        slave: Option<SlaveId>,
+        register_type: RegisterType,
+        address: u16,
+        count: u16,
+    ) -> Result<Vec<u16>> {
+        let bits_to_words = |bits: Vec<bool>| bits.into_iter().map(u16::from).collect();
+        match register_type {
+            RegisterType::Holding => {
+                timeout_as!(self, slave, read_holding_registers, (address, count))
+            }
+            RegisterType::Input => {
+                timeout_as!(self, slave, read_input_registers, (address, count))
+            }
+            RegisterType::Coil => {
+                timeout_as!(self, slave, read_coils, (address, count)).map(bits_to_words)
+            }
+            RegisterType::Discrete => {
+                timeout_as!(self, slave, read_discrete_inputs, (address, count)).map(bits_to_words)
+            }
+        }
+    }
+
+    pub async fn write_typed(
+        &self,
+        slave: Option<SlaveId>,
+        register_type: RegisterType,
+        address: u16,
+        values: &[u16],
+    ) -> Result<()> {
+        match register_type {
+            RegisterType::Coil => {
+                let coils: Vec<bool> = values.iter().map(|&v| v != 0).collect();
+                timeout_as!(self, slave, write_multiple_coils, (address, &coils))
+            }
+            _ => timeout_as!(self, slave, write_multiple_registers, (address, values)),
+        }
     }
 
     pub fn set_word_order(&mut self, word_order: WordOrder) {

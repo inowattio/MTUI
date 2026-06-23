@@ -31,6 +31,7 @@ use std::time::Duration;
 pub type ApiDevice = Arc<Mutex<Option<ModbusDevice>>>;
 pub type BoundPort = Arc<AtomicU16>;
 pub type ReadOnlyFlag = Arc<AtomicBool>;
+pub type AllowSlaveFlag = Arc<AtomicBool>;
 pub type StatusFlag = Arc<AtomicU8>;
 pub type BindStateFlag = Arc<AtomicU8>;
 
@@ -201,6 +202,7 @@ pub struct App {
     api_device: ApiDevice,
     api_bound_port: BoundPort,
     api_read_only: ReadOnlyFlag,
+    api_allow_slave_id: AllowSlaveFlag,
     api_status: StatusFlag,
     api_bind: BindStateFlag,
     writes_log: SharedWritesLog,
@@ -527,6 +529,7 @@ impl App {
             api_device: Arc::new(Mutex::new(None)),
             api_bound_port: Arc::new(AtomicU16::new(0)),
             api_read_only: Arc::new(AtomicBool::new(false)),
+            api_allow_slave_id: Arc::new(AtomicBool::new(false)),
             api_status: Arc::new(AtomicU8::new(0)),
             api_bind: Arc::new(AtomicU8::new(0)),
             writes_log: Arc::new(Mutex::new(WritesLogState::default())),
@@ -572,6 +575,7 @@ impl App {
 
         self.sync_api_device();
         self.sync_api_read_only();
+        self.sync_api_allow_slave_id();
         self.refresh_writes_log_state();
 
         self.clear_read_accumulation();
@@ -669,6 +673,10 @@ impl App {
         self.api_read_only.clone()
     }
 
+    pub fn api_allow_slave_id_handle(&self) -> AllowSlaveFlag {
+        self.api_allow_slave_id.clone()
+    }
+
     pub fn api_status_handle(&self) -> StatusFlag {
         self.api_status.clone()
     }
@@ -684,6 +692,13 @@ impl App {
     fn sync_api_read_only(&self) {
         self.api_read_only
             .store(self.config.read_only, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    fn sync_api_allow_slave_id(&self) {
+        self.api_allow_slave_id.store(
+            self.config.allow_api_slave_id,
+            std::sync::atomic::Ordering::Relaxed,
+        );
     }
 
     fn sync_api_status(&self) {
@@ -722,6 +737,7 @@ impl App {
                 self.api_bound_port_handle(),
                 self.writes_log_handle(),
                 self.api_read_only_handle(),
+                self.api_allow_slave_id_handle(),
                 self.api_status_handle(),
                 self.api_bind_handle(),
             )));
@@ -1399,6 +1415,9 @@ impl App {
         match field {
             SettingsField::IgnoreDirty => self.config.ignore_dirty = !self.config.ignore_dirty,
             SettingsField::ReadOnly => self.config.read_only = !self.config.read_only,
+            SettingsField::ApiSlaveOverride => {
+                self.config.allow_api_slave_id = !self.config.allow_api_slave_id
+            }
             SettingsField::LogWrites => self.config.log_writes = !self.config.log_writes,
             SettingsField::ShowContinuation => {
                 self.config.custom_rules.show_continuation =
@@ -1430,6 +1449,7 @@ impl App {
         }
         self.refresh_writes_log_state();
         self.sync_api_read_only();
+        self.sync_api_allow_slave_id();
         self.dirty = true;
     }
 
