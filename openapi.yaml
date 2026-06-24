@@ -30,6 +30,12 @@ paths:
         Reads `count` items of the given `type` starting at `address` from the
         connected device. `Holding` and `Input` return raw 16-bit values;
         `Coil` and `Discrete` return `0` or `1` per bit.
+
+        An optional `slave_id` targets a specific Modbus slave/unit for this
+        request only; the device's configured slave is restored afterwards.
+        When omitted, the configured slave is used. Specifying `slave_id`
+        requires the "API slave id override" setting to be enabled; otherwise
+        the request is rejected with `403`.
       operationId: readRegisters
       requestBody:
         required: true
@@ -50,6 +56,13 @@ paths:
                   type: Coil
                   address: 0
                   count: 8
+              slave:
+                summary: Read 2 holding registers from slave 5
+                value:
+                  type: Holding
+                  address: 0
+                  count: 2
+                  slave_id: 5
       responses:
         "200":
           description: Values read successfully
@@ -66,6 +79,10 @@ paths:
                   summary: Coil/Discrete values (0 or 1)
                   value:
                     values: [1, 1, 1, 1, 0, 1, 1, 0]
+        "403":
+          description: |
+            A `slave_id` was specified but the "API slave id override" setting
+            is disabled.
         "503":
           description: No device is currently connected
         "502":
@@ -76,11 +93,17 @@ paths:
       summary: Write registers or coils
       description: |
         Writes one or more consecutive items starting at `address`. The
-        optional `type` selects `Holding` (default, 16-bit registers) or
+        `type` selects `Holding` (16-bit registers) or
         `Coil` (bits, where `0` is off and any non-zero value is on).
         Read-only types (`Input`, `Discrete`) are rejected with `400`, and
         all writes are rejected with `403` when the server is in read-only
         mode.
+
+        An optional `slave_id` targets a specific Modbus slave/unit for this
+        request only; the device's configured slave is restored afterwards.
+        When omitted, the configured slave is used. Specifying `slave_id`
+        requires the "API slave id override" setting to be enabled; otherwise
+        the request is rejected with `403`.
       operationId: writeRegisters
       requestBody:
         required: true
@@ -106,13 +129,23 @@ paths:
                   type: Coil
                   address: 0
                   values: [1, 0, 1]
+              slave:
+                summary: Write one holding register to slave 5
+                value:
+                  type: Holding
+                  address: 40001
+                  values: [1234]
+                  slave_id: 5
       responses:
         "204":
           description: Values written successfully (no body)
         "400":
           description: The requested type is read-only (Input or Discrete)
         "403":
-          description: Server is in read-only mode; writes are forbidden
+          description: |
+            The write is forbidden: the server is in read-only mode, or a
+            `slave_id` was specified while the "API slave id override" setting
+            is disabled.
         "503":
           description: No device is currently connected
         "502":
@@ -185,6 +218,16 @@ components:
           minimum: 0
           maximum: 65535
           description: Number of registers to read.
+        slave_id:
+          type: integer
+          format: uint8
+          minimum: 0
+          maximum: 255
+          description: |
+            Modbus slave/unit id to target for this request only. Defaults to
+            the device's configured slave when omitted. Requires the "API slave
+            id override" setting to be enabled; a request that sets this while
+            the setting is disabled is rejected with `403`.
 
     ReadResponse:
       type: object
@@ -229,6 +272,16 @@ components:
             format: uint16
             minimum: 0
             maximum: 65535
+        slave_id:
+          type: integer
+          format: uint8
+          minimum: 0
+          maximum: 255
+          description: |
+            Modbus slave/unit id to target for this request only. Defaults to
+            the device's configured slave when omitted. Requires the "API slave
+            id override" setting to be enabled; a request that sets this while
+            the setting is disabled is rejected with `403`.
 
     HealthResponse:
       type: object

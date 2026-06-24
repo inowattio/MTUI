@@ -619,6 +619,7 @@ async fn handle_settings_key(key_event: KeyEvent, app: &mut App) {
             && matches!(
                 field,
                 SettingsField::ReadOnly
+                    | SettingsField::ApiSlaveOverride
                     | SettingsField::LogWrites
                     | SettingsField::ShowContinuation
                     | SettingsField::StartupPanel
@@ -636,6 +637,7 @@ async fn handle_settings_key(key_event: KeyEvent, app: &mut App) {
             SettingsField::ClearLabels => app.clear_labels(),
             SettingsField::ClearCustom => app.clear_custom(),
             SettingsField::ReadOnly
+            | SettingsField::ApiSlaveOverride
             | SettingsField::LogWrites
             | SettingsField::ShowContinuation
             | SettingsField::StartupPanel

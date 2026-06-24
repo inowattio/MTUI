@@ -347,6 +347,7 @@ pub enum SettingsField {
     ReadOnly,
     LogWrites,
     ApiPort,
+    ApiSlaveOverride,
     StartupPanel,
     CycleHoldings,
     CycleInputs,
@@ -363,7 +364,7 @@ pub enum SettingsField {
 }
 
 impl SettingsField {
-    pub const ALL: [SettingsField; 21] = [
+    pub const ALL: [SettingsField; 22] = [
         SettingsField::Name,
         SettingsField::RegistersBatch,
         SettingsField::AutoUpdate,
@@ -372,6 +373,7 @@ impl SettingsField {
         SettingsField::ReadOnly,
         SettingsField::LogWrites,
         SettingsField::ApiPort,
+        SettingsField::ApiSlaveOverride,
         SettingsField::StartupPanel,
         SettingsField::CycleHoldings,
         SettingsField::CycleInputs,
