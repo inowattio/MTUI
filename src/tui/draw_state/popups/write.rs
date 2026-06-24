@@ -65,6 +65,22 @@ pub(super) fn draw(
         )),
     ];
 
+    let dword = write.write_type == WriteType::DWord;
+    let func = if write.force_multiple || dword {
+        "Multiple registers (0x10)"
+    } else {
+        "Single register (0x06)"
+    };
+    let func_style = if dword {
+        theme.dim_style()
+    } else {
+        theme.base()
+    };
+    lines.push(Line::from(vec![
+        Span::styled("Func:  ", theme.dim_style()),
+        Span::styled(func, func_style),
+    ]));
+
     if let Some(result) = &write.result {
         lines.push(Line::default());
         lines.push(Line::from(Span::styled(
@@ -76,7 +92,7 @@ pub(super) fn draw(
     let footer1 = [
         Hint::key(kb.action, "Write"),
         Hint::key(kb.exit, "Exit"),
-        Hint::key(kb.write, "Word/DWord"),
+        Hint::key(kb.write, "Cycle mode"),
     ];
     let footer2 = [
         Hint::key(KeyCode::Char('-'), "Negate"),

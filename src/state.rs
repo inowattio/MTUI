@@ -126,6 +126,7 @@ pub struct WriteParams {
     pub value: Option<i64>,
     pub write_type: WriteType,
     pub bit_cursor: u16,
+    pub force_multiple: bool,
 }
 
 #[derive(Debug, Default, PartialEq)]

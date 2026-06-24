@@ -2922,7 +2922,7 @@ impl App {
             return;
         }
 
-        let (position, number, write_type) = {
+        let (position, number, write_type, force_multiple) = {
             let Some(Popup::Write(w)) = &mut self.read_mut().popup else {
                 return;
             };
@@ -2931,7 +2931,7 @@ impl App {
                 return;
             };
             w.result = Some(StatusMessage::info("Writing..."));
-            (w.position, number, w.write_type)
+            (w.position, number, w.write_type, w.force_multiple)
         };
 
         let Some(device) = self.device.clone() else {
@@ -2975,6 +2975,9 @@ impl App {
 
         self.background_task = Some(BackgroundTask::Write(compat::spawn(async move {
             let result = match write_type {
+                WriteType::Word if force_multiple => {
+                    device.write_registers(position, &[number as u16]).await
+                }
                 WriteType::Word => device.write_register(position, number as u16).await,
                 WriteType::DWord => device.write_register_word(position, number as i32).await,
                 WriteType::Coil => device.write_coil(position, number != 0).await,
@@ -3005,11 +3008,18 @@ impl App {
 
     pub fn write_toggle_type(&mut self) {
         if let Some(Popup::Write(w)) = &mut self.read_mut().popup {
-            w.write_type = match w.write_type {
-                WriteType::Word => WriteType::DWord,
-                WriteType::DWord => WriteType::Word,
-                WriteType::Coil => WriteType::Coil,
-            };
+            match (w.write_type, w.force_multiple) {
+                (WriteType::Word, false) => w.force_multiple = true,
+                (WriteType::Word, true) => {
+                    w.write_type = WriteType::DWord;
+                    w.force_multiple = false;
+                }
+                (WriteType::DWord, _) => {
+                    w.write_type = WriteType::Word;
+                    w.force_multiple = false;
+                }
+                (WriteType::Coil, _) => {}
+            }
             let bits = match w.write_type {
                 WriteType::Coil => 1,
                 WriteType::Word => 16,
