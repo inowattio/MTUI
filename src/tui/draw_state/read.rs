@@ -274,7 +274,7 @@ pub fn draw(
     }
     info_spans.extend([
         Span::styled("Device: ", theme.dim_style()),
-        Span::styled(device.to_string(), theme.base()),
+        Span::styled(device, theme.base()),
         Span::styled("  slave ", theme.dim_style()),
         Span::styled(app.config.device.slave_id.to_string(), theme.base()),
         Span::styled(format!("   {info_type:?}"), theme.base()),
