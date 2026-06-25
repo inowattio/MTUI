@@ -281,7 +281,14 @@ fn ascii_cell(a: u16, b: u16, out: &mut String) {
 
 fn bits_cell(value: u16, out: &mut String) {
     let b = format!("{value:016b}");
-    let _ = write!(out, "{} {} {} {}", &b[0..4], &b[4..8], &b[8..12], &b[12..16]);
+    let _ = write!(
+        out,
+        "{} {} {} {}",
+        &b[0..4],
+        &b[4..8],
+        &b[8..12],
+        &b[12..16]
+    );
 }
 
 pub(crate) fn format_ago(elapsed: chrono::Duration) -> String {
