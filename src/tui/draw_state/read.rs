@@ -79,7 +79,14 @@ impl TableCtx<'_> {
         let h_off = self.horizontal_offset(&rows, header, prefix);
         let table_rows: Vec<Row> = rows
             .into_iter()
-            .map(|(text, style)| Row::new([Cell::from(hscroll(&text, prefix, h_off))]).style(style))
+            .map(|(text, style)| {
+                let cell = if h_off == 0 {
+                    text
+                } else {
+                    hscroll(&text, prefix, h_off)
+                };
+                Row::new([Cell::from(cell)]).style(style)
+            })
             .collect();
         let block = with_hscroll_hint(block, self.theme, h_off, self.app.h_max_offset.get());
 
