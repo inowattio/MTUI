@@ -72,7 +72,7 @@ pub fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup
     }
 }
 
-fn render(
+pub(super) fn render(
     frame: &mut Frame,
     area: Rect,
     theme: &Theme,

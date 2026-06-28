@@ -1,12 +1,14 @@
+use crate::app::App;
 use crate::state::{DiscoveryField, DiscoveryParams, InterfaceKind};
-use crate::tui::theme::Theme;
+use crate::tui::hints::{self, Hint};
+use crate::tui::theme::{spinner_frame, Theme};
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph};
 use ratatui::Frame;
 use std::net::Ipv4Addr;
 
-pub fn draw(params: &DiscoveryParams, frame: &mut Frame, area: Rect, theme: &Theme) {
+pub fn draw(params: &DiscoveryParams, app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
     let blocked = match params.interface {
         InterfaceKind::Network => params
             .ip
@@ -16,6 +18,7 @@ pub fn draw(params: &DiscoveryParams, frame: &mut Frame, area: Rect, theme: &The
         InterfaceKind::Wired => params.ports.is_empty().then_some("no serial ports"),
         InterfaceKind::Mock => None,
     };
+    let scan = app.scan_progress();
 
     let mut lines: Vec<Line> = Vec::new();
     for (i, &field) in params.fields().iter().enumerate() {
@@ -27,6 +30,7 @@ pub fn draw(params: &DiscoveryParams, frame: &mut Frame, area: Rect, theme: &The
             field,
             i as u16 == params.selected,
             blocked,
+            scan,
             theme,
         ));
     }
@@ -48,6 +52,10 @@ pub fn draw(params: &DiscoveryParams, frame: &mut Frame, area: Rect, theme: &The
         Paragraph::new(lines).block(theme.panel("Connection")),
         rect,
     );
+
+    if params.scan_open {
+        draw_scan_popup(frame, app, params, area, theme);
+    }
 }
 
 fn render_field(
@@ -55,6 +63,7 @@ fn render_field(
     field: DiscoveryField,
     selected: bool,
     blocked: Option<&'static str>,
+    scan: Option<(usize, usize)>,
     theme: &Theme,
 ) -> Line<'static> {
     let marker = if selected { "> " } else { "  " };
@@ -81,6 +90,30 @@ fn render_field(
             spans.push(Span::styled(
                 format!("   \u{2717} {reason}"),
                 theme.err_style(),
+            ));
+        }
+        return Line::from(spans);
+    }
+
+    if field == DiscoveryField::ScanNetwork {
+        let button_style = if selected {
+            theme.selected_style()
+        } else {
+            theme.accent_style()
+        };
+        let mut spans = vec![
+            Span::styled(marker, label_style),
+            Span::styled("[ Scan network ]", button_style),
+        ];
+        if let Some((done, total)) = scan {
+            spans.push(Span::styled(
+                format!("   scanning\u{2026} {done}/{total}"),
+                theme.warn_style(),
+            ));
+        } else if !params.found.is_empty() {
+            spans.push(Span::styled(
+                format!("   {} found", params.found.len()),
+                theme.dim_style(),
             ));
         }
         return Line::from(spans);
@@ -150,6 +183,73 @@ fn field_view(p: &DiscoveryParams, field: DiscoveryField) -> (&'static str, Stri
             false,
         ),
         DiscoveryField::WordOrder => ("Word order", format!("{:?}", p.word_order), true),
+        DiscoveryField::ScanNetwork => ("Scan network", String::new(), false),
         DiscoveryField::Connect => ("Connect", String::new(), false),
     }
+}
+
+fn draw_scan_popup(frame: &mut Frame, app: &App, params: &DiscoveryParams, area: Rect, theme: &Theme) {
+    let kb = &app.config.keybinds;
+    let mut lines: Vec<Line> = Vec::new();
+
+    if let Some((done, total)) = app.scan_progress() {
+        lines.push(Line::from(vec![
+            Span::styled(format!(" {} ", spinner_frame(app.frame)), theme.accent_style()),
+            Span::styled("Scanning the local network\u{2026}", theme.base()),
+        ]));
+        lines.push(Line::from(Span::styled(
+            format!("   {done} / {total} hosts"),
+            theme.dim_style(),
+        )));
+        lines.push(Line::default());
+        let footer = [Hint::key(kb.exit, "Cancel")];
+        let width = 44.max(hints::width(&footer) as u16);
+        lines.push(hints::footer(theme, footer));
+        super::popups::render(frame, area, theme, "Network scan", width, lines);
+        return;
+    }
+
+    let len = params.found.len();
+    if len == 0 {
+        lines.push(Line::from(Span::styled(
+            " No devices found on this subnet.",
+            theme.dim_style(),
+        )));
+        lines.push(Line::default());
+        let footer = [Hint::key(kb.exit, "Close")];
+        let width = 44.max(hints::width(&footer) as u16);
+        lines.push(hints::footer(theme, footer));
+        super::popups::render(frame, area, theme, "Network scan", width, lines);
+        return;
+    }
+
+    lines.push(Line::from(Span::styled(
+        format!(" {len} device(s) found"),
+        theme.header_style(),
+    )));
+    lines.push(Line::default());
+
+    // Window the list so a long result set stays inside the popup.
+    let visible = 10usize;
+    let selected = params.scan_selected as usize;
+    let top = selected.saturating_sub(visible - 1);
+    let end = (top + visible).min(len);
+    for i in top..end {
+        let style = if i as u16 == params.scan_selected {
+            theme.selected_style()
+        } else {
+            theme.base()
+        };
+        lines.push(Line::from(Span::styled(format!(" {}", params.found[i]), style)));
+    }
+    lines.push(hints::more(theme, top, len.saturating_sub(end)));
+
+    let footer = [
+        Hint::pair(kb.move_up, kb.move_down, "Select"),
+        Hint::key(kb.action, "Use"),
+        Hint::key(kb.exit, "Close"),
+    ];
+    let width = 44.max(hints::width(&footer) as u16);
+    lines.push(hints::footer(theme, footer));
+    super::popups::render(frame, area, theme, "Network scan", width, lines);
 }

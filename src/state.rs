@@ -28,6 +28,7 @@ pub enum DiscoveryField {
     CommandTimeout,
     BetweenCommands,
     WordOrder,
+    ScanNetwork,
     Connect,
 }
 
@@ -48,12 +49,15 @@ pub struct DiscoveryParams {
     pub command_timeout_ms: u64,
     pub between_commands_ms: u64,
     pub word_order: WordOrder,
+    pub found: Vec<String>,
+    pub scan_open: bool,
+    pub scan_selected: u16,
     pub status: Option<StatusMessage>,
     pub previous: Option<ReadParams>,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn local_subnet_prefix() -> Option<String> {
+pub(crate) fn local_subnet_prefix() -> Option<String> {
     match local_ip_address::local_ip().ok()? {
         std::net::IpAddr::V4(ip) if !ip.is_loopback() => {
             let [a, b, c, _] = ip.octets();
@@ -64,7 +68,7 @@ fn local_subnet_prefix() -> Option<String> {
 }
 
 #[cfg(target_arch = "wasm32")]
-fn local_subnet_prefix() -> Option<String> {
+pub(crate) fn local_subnet_prefix() -> Option<String> {
     None
 }
 
@@ -86,6 +90,9 @@ impl Default for DiscoveryParams {
             command_timeout_ms: 2000,
             between_commands_ms: 3,
             word_order: WordOrder::default(),
+            found: Vec::new(),
+            scan_open: false,
+            scan_selected: 0,
             status: None,
             previous: None,
         }
@@ -99,7 +106,7 @@ impl DiscoveryParams {
         match self.interface {
             InterfaceKind::Mock => {}
             InterfaceKind::Wired => fields.extend([Port, Baud, DataBits, Parity, StopBits]),
-            InterfaceKind::Network => fields.extend([Ip, NetPort]),
+            InterfaceKind::Network => fields.extend([Ip, NetPort, ScanNetwork]),
         }
         fields.extend([
             SlaveId,
