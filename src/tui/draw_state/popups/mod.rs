@@ -86,7 +86,7 @@ fn render(
     frame.render_widget(Paragraph::new(lines).block(theme.panel(title)), rect);
 }
 
-fn centered_rect(width: u16, height: u16, area: Rect) -> Rect {
+pub(super) fn centered_rect(width: u16, height: u16, area: Rect) -> Rect {
     let w = width.min(area.width);
     let h = height.min(area.height);
     Rect {
