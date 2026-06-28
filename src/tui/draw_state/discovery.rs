@@ -48,10 +48,7 @@ pub fn draw(params: &DiscoveryParams, app: &App, frame: &mut Frame, area: Rect, 
     let rect = super::popups::centered_rect(width, height, area);
 
     frame.render_widget(Clear, rect);
-    frame.render_widget(
-        Paragraph::new(lines).block(theme.panel("Connection")),
-        rect,
-    );
+    frame.render_widget(Paragraph::new(lines).block(theme.panel("Connection")), rect);
 
     if params.scan_open {
         draw_scan_popup(frame, app, params, area, theme);
@@ -188,13 +185,22 @@ fn field_view(p: &DiscoveryParams, field: DiscoveryField) -> (&'static str, Stri
     }
 }
 
-fn draw_scan_popup(frame: &mut Frame, app: &App, params: &DiscoveryParams, area: Rect, theme: &Theme) {
+fn draw_scan_popup(
+    frame: &mut Frame,
+    app: &App,
+    params: &DiscoveryParams,
+    area: Rect,
+    theme: &Theme,
+) {
     let kb = &app.config.keybinds;
     let mut lines: Vec<Line> = Vec::new();
 
     if let Some((done, total)) = app.scan_progress() {
         lines.push(Line::from(vec![
-            Span::styled(format!(" {} ", spinner_frame(app.frame)), theme.accent_style()),
+            Span::styled(
+                format!(" {} ", spinner_frame(app.frame)),
+                theme.accent_style(),
+            ),
             Span::styled("Scanning the local network\u{2026}", theme.base()),
         ]));
         lines.push(Line::from(Span::styled(
@@ -240,7 +246,10 @@ fn draw_scan_popup(frame: &mut Frame, app: &App, params: &DiscoveryParams, area:
         } else {
             theme.base()
         };
-        lines.push(Line::from(Span::styled(format!(" {}", params.found[i]), style)));
+        lines.push(Line::from(Span::styled(
+            format!(" {}", params.found[i]),
+            style,
+        )));
     }
     lines.push(hints::more(theme, top, len.saturating_sub(end)));
 

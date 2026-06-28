@@ -14,10 +14,9 @@ use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
 use crate::state::{
     ColumnsParams, ConnectionStatus, CustomField, CustomParams, DeviceIdParams, DiscoveryField,
     DiscoveryParams, DumpParams, HelpParams, ImportParams, InterfaceKind, LabelParams,
-    LogViewParams, LogsParams,
-    Outcome, Popup, PopupKind, RawField, RawParams, ReadPanel, ReadParams, SearchParams,
-    SettingsField, SettingsParams, State, StatusMessage, SweepConfigParams, SweepField,
-    WriteParams,
+    LogViewParams, LogsParams, Outcome, Popup, PopupKind, RawField, RawParams, ReadPanel,
+    ReadParams, SearchParams, SettingsField, SettingsParams, State, StatusMessage,
+    SweepConfigParams, SweepField, WriteParams,
 };
 use crate::writes_log::{SharedWritesLog, WriteKind, WritesLogState};
 use chrono::{DateTime, Local, SecondsFormat, Utc};
@@ -110,8 +109,11 @@ async fn scan_subnet(
             let done = done.clone();
             async move {
                 let connected = matches!(
-                    compat::timeout(per_host, tokio::net::TcpStream::connect((ip.as_str(), port)))
-                        .await,
+                    compat::timeout(
+                        per_host,
+                        tokio::net::TcpStream::connect((ip.as_str(), port))
+                    )
+                    .await,
                     Ok(Ok(_))
                 );
                 done.fetch_add(1, Ordering::Relaxed);
@@ -1008,7 +1010,9 @@ impl App {
             d.found.clear();
             d.scan_open = true;
             d.scan_selected = 0;
-            d.status = Some(StatusMessage::warn(format!("Scanning {prefix}0/24\u{2026}")));
+            d.status = Some(StatusMessage::warn(format!(
+                "Scanning {prefix}0/24\u{2026}"
+            )));
         }
         self.network_scan_task = Some(compat::spawn(scan_subnet(prefix, port, per_host, done)));
     }
