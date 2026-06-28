@@ -18,10 +18,16 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     let key_hints = make_bottom_title(&theme, &app.state, &app.config.keybinds);
     let clock = Local::now().format("%H:%M:%S.%3f").to_string();
 
+    let mut top_right = match &app.state {
+        State::Read(p) => draw_state::read::live_status(app, p, &theme),
+        _ => Vec::new(),
+    };
+    top_right.push(status_span(&app.connection, &theme));
+
     let outer = Block::default()
         .title_top(Line::styled(format!(" {mode} "), theme.base()))
         .title_top(Line::styled(" MTUI ", theme.base()).centered())
-        .title_top(Line::from(status_span(&app.connection, &theme)).right_aligned())
+        .title_top(Line::from(top_right).right_aligned())
         .title_bottom(Line::styled(format!(" {clock} "), theme.accent_style()))
         .title_bottom(
             Line::styled(

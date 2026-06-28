@@ -123,7 +123,7 @@ pub fn status_span(status: &ConnectionStatus, theme: &Theme) -> Span<'static> {
         ConnectionStatus::Error(_) => ("●", "error", theme.err),
     };
     Span::styled(
-        format!("{symbol} {label} "),
+        format!("{symbol} {label:<9} "),
         Style::default().fg(color).add_modifier(Modifier::BOLD),
     )
 }

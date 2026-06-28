@@ -255,110 +255,96 @@ pub fn draw(
         .constraints([Constraint::Length(2), Constraint::Min(0)])
         .split(area);
 
-    let read_time = if params.loading {
-        format!("{} reading", spinner_frame(app.frame))
-    } else {
-        params
-            .read_duration
-            .map(|d| format!("({d:.2?})"))
-            .unwrap_or_default()
-    };
-    let mut info_spans = Vec::new();
-    if !app.config.name.is_empty() {
-        info_spans.push(Span::styled(" ", theme.dim_style()));
-        info_spans.push(Span::styled(app.config.name.clone(), theme.accent_style()));
-        info_spans.push(Span::styled(" \u{b7} ", theme.dim_style()));
-    }
-    if app.config.read_only {
-        info_spans.push(Span::styled("READ-ONLY  ", theme.err_style()));
-    }
-    info_spans.extend([
-        Span::styled("Device: ", theme.dim_style()),
-        Span::styled(device, theme.base()),
-        Span::styled("  slave ", theme.dim_style()),
-        Span::styled(app.config.device.slave_id.to_string(), theme.base()),
-        Span::styled(format!("   {info_type:?}"), theme.base()),
-        Span::styled(" @ ", theme.dim_style()),
-        Span::styled(info_addr.to_string(), theme.accent_style()),
-    ]);
-    if is_pinned {
-        info_spans.push(Span::styled(" (pinned)", theme.changed_style()));
-    }
     let access_style = if info_type.is_writable() {
         theme.ok_style()
     } else {
         theme.warn_style()
     };
-    info_spans.push(Span::styled(
-        format!(" {}", info_type.access()),
-        access_style,
-    ));
-    info_spans.push(Span::styled("   order ", theme.dim_style()));
-    info_spans.push(Span::styled(
-        format!("{:?}", app.config.device.word_order),
-        theme.base(),
-    ));
-    info_spans.push(Span::styled("   batch ", theme.dim_style()));
-    info_spans.push(Span::styled(
-        format!("{}   ", app.config.registers_batch),
-        theme.base(),
-    ));
-    info_spans.push(Span::styled(read_time, theme.dim_style()));
-    if app.paused {
-        info_spans.push(Span::styled("   \u{23f8} paused", theme.warn_style()));
-    } else if let Some(interval) = app.config.update_interval_ms {
-        if !params.loading {
-            let remaining =
-                (interval as u128).saturating_sub(params.refresh_timer.elapsed().as_millis());
-            info_spans.push(Span::styled(
-                format!("   ⟳ {:.1}s", remaining as f64 / 1000.0),
-                theme.ok_style(),
-            ));
-        }
-    }
-    if app.sweep.active {
-        let mode = if app.sweep.continuous { " (loop)" } else { "" };
-        let span = app.sweep.to.saturating_sub(app.sweep.from);
-        let done = app.sweep.current.saturating_sub(app.sweep.from);
-        let percent = if span == 0 {
-            100
-        } else {
-            (done as u32 * 100 / span as u32).min(100)
-        };
-        info_spans.push(Span::styled(
-            format!(
-                "   {} SWEEP {}\u{2192}{} @{} ({}%){}",
-                spinner_frame(app.frame),
-                app.sweep.from,
-                app.sweep.to,
-                app.sweep.current,
-                percent,
-                mode,
-            ),
+
+    let mut identity: Vec<Vec<Span>> = Vec::new();
+    if !app.config.name.is_empty() {
+        identity.push(vec![Span::styled(
+            app.config.name.clone(),
             theme.accent_style(),
-        ));
+        )]);
     }
+    if app.config.read_only {
+        identity.push(vec![Span::styled("READ-ONLY", theme.err_style())]);
+    }
+    identity.push(vec![
+        Span::styled("Device: ", theme.dim_style()),
+        Span::styled(device.to_string(), theme.base()),
+    ]);
+    identity.push(vec![
+        Span::styled("slave ", theme.dim_style()),
+        Span::styled(app.config.device.slave_id.to_string(), theme.base()),
+    ]);
+    identity.push(vec![Span::styled(
+        info_type.access().to_string(),
+        access_style,
+    )]);
+    identity.push(vec![
+        Span::styled("order ", theme.dim_style()),
+        Span::styled(format!("{:?}", app.config.device.word_order), theme.base()),
+    ]);
+    identity.push(vec![
+        Span::styled("batch ", theme.dim_style()),
+        Span::styled(app.config.registers_batch.to_string(), theme.base()),
+    ]);
+
+    let mut cell_seg = vec![
+        Span::styled(format!("{info_type:?}"), theme.base()),
+        Span::styled(" @ ", theme.dim_style()),
+        Span::styled(info_addr.to_string(), theme.accent_style()),
+    ];
+    if is_pinned {
+        cell_seg.push(Span::styled(" (pinned)", theme.changed_style()));
+    }
+    let mut right: Vec<Vec<Span>> = Vec::new();
+    if let Some(d) = params.read_duration {
+        right.push(vec![Span::styled(
+            format!("{:>8}", format!("{d:.2?}")),
+            theme.dim_style(),
+        )]);
+    }
+    right.push(cell_seg);
+
+    let mut left_line: Vec<Span> = vec![Span::raw(" ")];
+    for (i, seg) in identity.into_iter().enumerate() {
+        if i > 0 {
+            left_line.push(Span::styled(" \u{b7} ", theme.dim_style()));
+        }
+        left_line.extend(seg);
+    }
+
+    let mut right_line: Vec<Span> = Vec::new();
+    for (i, seg) in right.into_iter().enumerate() {
+        if i > 0 {
+            right_line.push(Span::styled(" \u{b7} ", theme.dim_style()));
+        }
+        right_line.extend(seg);
+    }
+    right_line.push(Span::raw(" "));
+
+    let info_rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(1), Constraint::Length(1)])
+        .split(rows[0]);
+
+    frame.render_widget(Paragraph::new(Line::from(left_line)), info_rows[0]);
     frame.render_widget(
-        Paragraph::new(Line::from(info_spans)).alignment(Alignment::Left),
-        rows[0],
+        Paragraph::new(Line::from(right_line)).alignment(Alignment::Right),
+        info_rows[0],
     );
 
     if let Some(status) = params.active_status() {
-        if rows[0].height > 1 {
-            let status_area = Rect {
-                x: rows[0].x,
-                y: rows[0].y + 1,
-                width: rows[0].width,
-                height: 1,
-            };
-            frame.render_widget(
-                Paragraph::new(Line::from(Span::styled(
-                    format!(" {}", status.text),
-                    theme.message_style(status.kind),
-                ))),
-                status_area,
-            );
-        }
+        frame.render_widget(
+            Paragraph::new(Line::from(Span::styled(
+                format!(" {}", status.text),
+                theme.message_style(status.kind),
+            ))),
+            info_rows[1],
+        );
     }
 
     let header = app.interpreter.header();
@@ -435,6 +421,54 @@ pub fn draw(
     if let Some(popup) = &params.popup {
         draw_popup(frame, area, theme, app, popup);
     }
+}
+
+pub fn live_status(app: &App, params: &ReadParams, theme: &Theme) -> Vec<Span<'static>> {
+    let mut fields: Vec<Vec<Span<'static>>> = Vec::new();
+
+    if app.paused {
+        fields.push(vec![Span::styled("\u{23f8} paused", theme.warn_style())]);
+    } else if let Some(interval) = app.config.update_interval_ms.filter(|_| !app.sweep.active) {
+        let remaining =
+            (interval as u128).saturating_sub(params.refresh_timer.elapsed().as_millis());
+        fields.push(vec![Span::styled(
+            format!(" \u{27f3} {:>4.1}s", remaining as f64 / 1000.0),
+            theme.ok_style(),
+        )]);
+    }
+    if app.sweep.active {
+        let mode = if app.sweep.continuous { " loop" } else { "" };
+        let span = app.sweep.to.saturating_sub(app.sweep.from);
+        let done = app.sweep.current.saturating_sub(app.sweep.from);
+        let percent = if span == 0 {
+            100
+        } else {
+            (done as u32 * 100 / span as u32).min(100)
+        };
+        fields.push(vec![Span::styled(
+            format!(
+                " {}{} {}\u{2192}{} ({:>2}%)",
+                spinner_frame(app.frame),
+                mode,
+                app.sweep.from,
+                app.sweep.to,
+                percent.min(99),
+            ),
+            theme.accent_style(),
+        )]);
+    }
+
+    let mut spans: Vec<Span<'static>> = Vec::new();
+    for (i, field) in fields.into_iter().enumerate() {
+        if i > 0 {
+            spans.push(Span::styled(" \u{b7} ", theme.dim_style()));
+        }
+        spans.extend(field);
+    }
+    if !spans.is_empty() {
+        spans.push(Span::raw("  "));
+    }
+    spans
 }
 
 fn draw_graph(
