@@ -309,21 +309,10 @@ pub fn draw(
     }
     right.push(cell_seg);
 
-    let mut left_line: Vec<Span> = vec![Span::raw(" ")];
-    for (i, seg) in identity.into_iter().enumerate() {
-        if i > 0 {
-            left_line.push(Span::styled(" \u{b7} ", theme.dim_style()));
-        }
-        left_line.extend(seg);
-    }
+    let mut left_line = vec![Span::raw(" ")];
+    left_line.extend(theme.join_dotted(identity));
 
-    let mut right_line: Vec<Span> = Vec::new();
-    for (i, seg) in right.into_iter().enumerate() {
-        if i > 0 {
-            right_line.push(Span::styled(" \u{b7} ", theme.dim_style()));
-        }
-        right_line.extend(seg);
-    }
+    let mut right_line = theme.join_dotted(right);
     right_line.push(Span::raw(" "));
 
     let info_rows = Layout::default()
@@ -458,13 +447,7 @@ pub fn live_status(app: &App, params: &ReadParams, theme: &Theme) -> Vec<Span<'s
         )]);
     }
 
-    let mut spans: Vec<Span<'static>> = Vec::new();
-    for (i, field) in fields.into_iter().enumerate() {
-        if i > 0 {
-            spans.push(Span::styled(" \u{b7} ", theme.dim_style()));
-        }
-        spans.extend(field);
-    }
+    let mut spans = theme.join_dotted(fields);
     if !spans.is_empty() {
         spans.push(Span::raw("  "));
     }

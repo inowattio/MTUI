@@ -101,6 +101,21 @@ impl Theme {
         }
     }
 
+    pub fn join_dotted(
+        &self,
+        groups: impl IntoIterator<Item = Vec<Span<'static>>>,
+    ) -> Vec<Span<'static>> {
+        let separator = Span::styled(" \u{b7} ", self.dim_style());
+        let mut spans: Vec<Span<'static>> = Vec::new();
+        for (i, group) in groups.into_iter().enumerate() {
+            if i > 0 {
+                spans.push(separator.clone());
+            }
+            spans.extend(group);
+        }
+        spans
+    }
+
     pub fn panel(&self, title: &str) -> Block<'static> {
         Block::default()
             .title_top(Line::styled(format!(" {title} "), self.accent_style()))
