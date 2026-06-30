@@ -66,8 +66,8 @@ const COLUMNS: &[ColumnSpec] = &[
     ColumnSpec { name: "bcd32",   width: 10, enabled: |c| c.bcd32,    render: |c, _, o| if c.two() { match bcd_to_decimal_u32(c.word) { Some(n) => { let _ = write!(o, "{n}"); } None => o.push_str("--") } } else { o.push('-'); } },
     ColumnSpec { name: "u32",     width: 10, enabled: |c| c.u32,      render: |c, _, o| if c.two() { let _ = write!(o, "{}", c.word); } else { o.push('-'); } },
     ColumnSpec { name: "i32",     width: 11, enabled: |c| c.i32,      render: |c, _, o| if c.two() { let _ = write!(o, "{}", c.word as i32); } else { o.push('-'); } },
-    ColumnSpec { name: "u32m10k", width: 11, enabled: |c| c.u32_m10k, render: |c, _, o| if c.two() { match m10k_to_u32(c.word) { Some((h, l)) => { let _ = write!(o, "{h}/{l}"); } None => o.push_str("--") } } else { o.push('-'); } },
-    ColumnSpec { name: "i32m10k", width: 14, enabled: |c| c.i32_m10k, render: |c, _, o| if c.two() { match m10k_to_i32(c.word) { Some((h, l)) => { let _ = write!(o, "{h}/{l}"); } None => o.push_str("--") } } else { o.push('-'); } },
+    ColumnSpec { name: "u32m10k", width: 11, enabled: |c| c.u32_m10k, render: |c, _, o| if c.two() { let (h, l) = m10k_to_u32(c.word); let _ = write!(o, "{h}/{l}"); } else { o.push('-'); } },
+    ColumnSpec { name: "i32m10k", width: 14, enabled: |c| c.i32_m10k, render: |c, _, o| if c.two() { let (h, l) = m10k_to_i32(c.word); let _ = write!(o, "{h}/{l}"); } else { o.push('-'); } },
     ColumnSpec { name: "u64",     width: 20, enabled: |c| c.u64,      render: |c, _, o| if c.four() { let _ = write!(o, "{}", c.dword); } else { o.push('-'); } },
     ColumnSpec { name: "i64",     width: 21, enabled: |c| c.i64,      render: |c, _, o| if c.four() { let _ = write!(o, "{}", c.dword as i64); } else { o.push('-'); } },
     ColumnSpec { name: "f32",     width: 10, enabled: |c| c.f32,      render: |c, w, o| if c.two() { float_cell(f32::from_bits(c.word), w, o) } else { o.push('-'); } },
@@ -149,15 +149,8 @@ impl Interpretor {
 
     pub fn ascii_string(&self, data: &[RegisterCellValue]) -> String {
         data.iter()
-            .flat_map(|&(_, v)| [(v >> 8) as u8, (v & 0xFF) as u8])
-            .map(|b| {
-                let c = b as char;
-                if c.is_ascii_graphic() {
-                    c
-                } else {
-                    '·'
-                }
-            })
+            .flat_map(|&(_, v)| v.to_be_bytes())
+            .map(glyph)
             .collect()
     }
 
@@ -270,11 +263,19 @@ fn float_cell<T: std::fmt::Display + std::fmt::LowerExp>(x: T, width: usize, out
     }
 }
 
+fn glyph(b: u8) -> char {
+    let c = b as char;
+    if c.is_ascii_graphic() {
+        c
+    } else {
+        '·'
+    }
+}
+
 fn ascii_cell(a: u16, b: u16, out: &mut String) {
     for n in [a, b] {
-        for byte in [(n >> 8) as u8, (n & 0xFF) as u8] {
-            let ch = byte as char;
-            out.push(if ch.is_ascii_graphic() { ch } else { '·' });
+        for byte in n.to_be_bytes() {
+            out.push(glyph(byte));
         }
     }
 }
@@ -328,18 +329,18 @@ fn bcd_to_decimal_u32(value: u32) -> Option<u32> {
     Some(result)
 }
 
-fn m10k_to_u32(value: u32) -> Option<(u16, u16)> {
+fn m10k_to_u32(value: u32) -> (u16, u16) {
     let high = (value >> 16) as u16;
     let low = (value & 0xFFFF) as u16;
 
-    Some((high, low))
+    (high, low)
 }
 
-fn m10k_to_i32(value: u32) -> Option<(i16, i16)> {
+fn m10k_to_i32(value: u32) -> (i16, i16) {
     let high = (value >> 16) as i16;
     let low = (value & 0xFFFF) as i16;
 
-    Some((high, low))
+    (high, low)
 }
 
 pub(crate) fn f16_to_f32(bits: u16) -> f32 {

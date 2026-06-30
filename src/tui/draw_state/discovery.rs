@@ -1,10 +1,10 @@
 use crate::app::App;
 use crate::state::{DiscoveryField, DiscoveryParams, InterfaceKind};
+use crate::tui::draw_state::marker;
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::{spinner_frame, Theme};
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Clear, Paragraph};
 use ratatui::Frame;
 use std::net::Ipv4Addr;
 
@@ -37,18 +37,11 @@ pub fn draw(params: &DiscoveryParams, app: &App, frame: &mut Frame, area: Rect, 
 
     if let Some(status) = &params.status {
         lines.push(Line::default());
-        lines.push(Line::from(Span::styled(
-            format!(" {}", status.text),
-            theme.message_style(status.kind),
-        )));
+        lines.push(theme.status_line(status));
     }
 
     let width = lines.iter().map(Line::width).max().unwrap_or(0) as u16 + 4;
-    let height = lines.len() as u16 + 2;
-    let rect = super::popups::centered_rect(width, height, area);
-
-    frame.render_widget(Clear, rect);
-    frame.render_widget(Paragraph::new(lines).block(theme.panel("Connection")), rect);
+    super::popups::render(frame, area, theme, "Connection", width, lines);
 
     if params.scan_open {
         draw_scan_popup(frame, app, params, area, theme);
@@ -63,7 +56,7 @@ fn render_field(
     scan: Option<(usize, usize)>,
     theme: &Theme,
 ) -> Line<'static> {
-    let marker = if selected { "> " } else { "  " };
+    let marker = marker(selected);
 
     let label_style = if selected {
         theme.accent_style()
@@ -209,7 +202,7 @@ fn draw_scan_popup(
         )));
         lines.push(Line::default());
         let footer = [Hint::key(kb.exit, "Cancel")];
-        let width = 44.max(hints::width(&footer) as u16);
+        let width = hints::min_width(44, &footer);
         lines.push(hints::footer(theme, footer));
         super::popups::render(frame, area, theme, "Network scan", width, lines);
         return;
@@ -223,7 +216,7 @@ fn draw_scan_popup(
         )));
         lines.push(Line::default());
         let footer = [Hint::key(kb.exit, "Close")];
-        let width = 44.max(hints::width(&footer) as u16);
+        let width = hints::min_width(44, &footer);
         lines.push(hints::footer(theme, footer));
         super::popups::render(frame, area, theme, "Network scan", width, lines);
         return;
@@ -241,11 +234,7 @@ fn draw_scan_popup(
     let top = selected.saturating_sub(visible - 1);
     let end = (top + visible).min(len);
     for i in top..end {
-        let style = if i as u16 == params.scan_selected {
-            theme.selected_style()
-        } else {
-            theme.base()
-        };
+        let style = theme.line_style(i as u16 == params.scan_selected);
         lines.push(Line::from(Span::styled(
             format!(" {}", params.found[i]),
             style,

@@ -327,13 +327,7 @@ pub fn draw(
     );
 
     if let Some(status) = params.active_status() {
-        frame.render_widget(
-            Paragraph::new(Line::from(Span::styled(
-                format!(" {}", status.text),
-                theme.message_style(status.kind),
-            ))),
-            info_rows[1],
-        );
+        frame.render_widget(Paragraph::new(theme.status_line(status)), info_rows[1]);
     }
 
     let header = app.interpreter.header();

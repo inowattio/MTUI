@@ -36,11 +36,7 @@ pub(super) fn draw(
         for i in top..end {
             let ((kind, address), text) = &search.matches[i];
             let row = format!("{address:>5}  {:<8} {text}", format!("{kind:?}"));
-            let style = if i as u16 == search.selected {
-                theme.selected_style()
-            } else {
-                theme.base()
-            };
+            let style = theme.line_style(i as u16 == search.selected);
             lines.push(Line::from(Span::styled(row, style)));
         }
     }
@@ -51,7 +47,7 @@ pub(super) fn draw(
         Hint::key(kb.exit, "Close"),
     ];
     lines.push(hints::more(theme, top, len.saturating_sub(end)));
-    let width = 54.max(hints::width(&footer) as u16);
+    let width = hints::min_width(54, &footer);
     lines.push(hints::footer(theme, footer));
 
     super::render(frame, area, theme, "Go to", width, lines);

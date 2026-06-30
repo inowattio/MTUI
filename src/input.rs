@@ -57,10 +57,7 @@ impl KeyCode {
         }
         let mut chars = s.chars();
         let c = chars.next()?;
-        match chars.next() {
-            Some(_) => None,
-            None => Some(KeyCode::Char(c)),
-        }
+        chars.next().is_none().then_some(KeyCode::Char(c))
     }
 }
 

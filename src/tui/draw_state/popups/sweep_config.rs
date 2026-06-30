@@ -1,5 +1,6 @@
 use crate::config::Keybinds;
 use crate::state::{SweepConfigParams, SweepField};
+use crate::tui::draw_state::marker;
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
 use ratatui::layout::Rect;
@@ -17,12 +18,8 @@ pub(super) fn draw(
     let sel = params.current_field();
 
     let field = |label: &str, value: String, selected: bool| -> Line<'static> {
-        let marker = if selected { "> " } else { "  " };
-        let style = if selected {
-            theme.selected_style()
-        } else {
-            theme.base()
-        };
+        let marker = marker(selected);
+        let style = theme.line_style(selected);
         Line::from(vec![
             Span::styled(format!("{marker}{label:<14}"), theme.dim_style()),
             Span::styled(value, style),
@@ -61,7 +58,7 @@ pub(super) fn draw(
         theme.ok_style()
     };
     let action_line = Line::from(Span::styled(
-        format!("{}{action_text}", if action_sel { "> " } else { "  " }),
+        format!("{}{action_text}", marker(action_sel)),
         action_style,
     ));
 

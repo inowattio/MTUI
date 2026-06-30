@@ -2,6 +2,7 @@ use crate::app::{ApiBindState, App};
 use crate::config::KeybindAction;
 use crate::input::KeyCode;
 use crate::state::{SettingsField, SettingsParams};
+use crate::tui::draw_state::marker;
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
 use ratatui::layout::Rect;
@@ -104,12 +105,8 @@ fn render_field(
 ) -> Line<'static> {
     let (name, value, kind) = field_view(app, params, field);
 
-    let marker = if selected { "> " } else { "  " };
-    let style = if selected {
-        theme.selected_style()
-    } else {
-        theme.base()
-    };
+    let marker = marker(selected);
+    let style = theme.line_style(selected);
 
     let value_text = match (selected, kind) {
         (true, Kind::Toggle) => format!("\u{2039} {value} \u{203a}"),
@@ -262,12 +259,8 @@ fn draw_keybinds(params: &SettingsParams, app: &App, frame: &mut Frame, area: Re
         let selected = idx == params.kb_selected;
         let capturing = selected && params.kb_capturing;
 
-        let marker = if selected { "> " } else { "  " };
-        let style = if selected {
-            theme.selected_style()
-        } else {
-            theme.base()
-        };
+        let marker = marker(selected);
+        let style = theme.line_style(selected);
 
         let value = if capturing {
             "press a key\u{2026}".to_string()

@@ -1,4 +1,4 @@
-use crate::state::{ConnectionStatus, MessageKind};
+use crate::state::{ConnectionStatus, MessageKind, StatusMessage};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders};
@@ -99,6 +99,21 @@ impl Theme {
             MessageKind::Err => self.err_style(),
             MessageKind::Info => self.dim_style(),
         }
+    }
+
+    pub fn line_style(&self, selected: bool) -> Style {
+        if selected {
+            self.selected_style()
+        } else {
+            self.base()
+        }
+    }
+
+    pub fn status_line(&self, status: &StatusMessage) -> Line<'static> {
+        Line::from(Span::styled(
+            format!(" {}", status.text),
+            self.message_style(status.kind),
+        ))
     }
 
     pub fn join_dotted(

@@ -99,7 +99,7 @@ pub(super) fn draw(
         Hint::pair(KeyCode::Left, KeyCode::Right, "Bit"),
         Hint::key(kb.pause, "Toggle"),
     ];
-    let width = 50.max(hints::width(&footer1) as u16);
+    let width = hints::min_width(50, &footer1);
     lines.push(hints::footer(theme, footer1));
     lines.push(hints::footer(theme, footer2));
 
@@ -139,7 +139,7 @@ fn draw_coil(frame: &mut Frame, area: Rect, theme: &Theme, kb: &Keybinds, write:
         Hint::key(kb.pause, "Toggle on/off"),
         Hint::key(kb.exit, "Exit"),
     ];
-    let width = 44.max(hints::width(&footer) as u16);
+    let width = hints::min_width(44, &footer);
     lines.push(hints::footer(theme, footer));
 
     super::render(frame, area, theme, "Write coil", width, lines);

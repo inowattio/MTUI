@@ -44,10 +44,7 @@ pub(super) fn draw(
 
     if let Some(status) = &params.status {
         lines.push(Line::default());
-        lines.push(Line::from(Span::styled(
-            format!(" {}", status.text),
-            theme.message_style(status.kind),
-        )));
+        lines.push(theme.status_line(status));
     }
 
     lines.push(Line::default());

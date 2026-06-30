@@ -68,7 +68,7 @@ pub(super) fn draw(
         Hint::key(kb.action, "Toggle"),
         Hint::key(kb.exit, "Close"),
     ];
-    let width = ((CELL as u16 + 6) * 2 + 3).max(hints::width(&footer) as u16);
+    let width = hints::min_width((CELL as u16 + 6) * 2 + 3, &footer);
     lines.push(hints::footer(theme, footer));
 
     super::render(frame, area, theme, "Columns", width, lines);

@@ -52,6 +52,10 @@ pub fn width(items: &[Hint]) -> usize {
     tokens + 2 + 2
 }
 
+pub fn min_width(min: u16, items: &[Hint]) -> u16 {
+    min.max(width(items) as u16)
+}
+
 pub fn footer<const N: usize>(theme: &Theme, items: [Hint; N]) -> Line<'static> {
     let key_style = Style::default().fg(theme.accent);
     let dim = theme.dim_style();

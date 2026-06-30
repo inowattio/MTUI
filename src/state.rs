@@ -2,6 +2,7 @@ use crate::app::WriteType;
 use crate::compat::Instant;
 use crate::custom::{CustomOp, CustomRepr, EnumEntry};
 use crate::modbus::{DataBits, DeviceIdAccess, Parity, StopBits, WordOrder};
+use crate::num_ops::wrap_index;
 use crate::register::{RegisterCell, RegisterType};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
@@ -182,10 +183,13 @@ pub struct RawParams {
     pub status: Option<StatusMessage>,
 }
 
+fn clamp_pick<const N: usize, T: Copy>(selected: u16, all: &[T; N]) -> T {
+    all[(selected as usize).min(N - 1)]
+}
+
 impl RawParams {
     pub fn current_field(&self) -> RawField {
-        let i = (self.selected as usize).min(RawField::ALL.len() - 1);
-        RawField::ALL[i]
+        clamp_pick(self.selected, &RawField::ALL)
     }
 }
 
@@ -233,8 +237,7 @@ pub struct CustomParams {
 
 impl CustomParams {
     pub fn current_field(&self) -> CustomField {
-        let i = (self.selected as usize).min(CustomField::ALL.len() - 1);
-        CustomField::ALL[i]
+        clamp_pick(self.selected, &CustomField::ALL)
     }
 }
 
@@ -265,8 +268,7 @@ pub struct SweepConfigParams {
 
 impl SweepConfigParams {
     pub fn current_field(&self) -> SweepField {
-        let i = (self.selected as usize).min(SweepField::ALL.len() - 1);
-        SweepField::ALL[i]
+        clamp_pick(self.selected, &SweepField::ALL)
     }
 }
 
@@ -401,6 +403,22 @@ impl SettingsField {
         matches!(self, SettingsField::Name | SettingsField::LoadConfig)
     }
 
+    pub fn is_toggle(self) -> bool {
+        matches!(
+            self,
+            SettingsField::ReadOnly
+                | SettingsField::ApiSlaveOverride
+                | SettingsField::LogWrites
+                | SettingsField::ShowContinuation
+                | SettingsField::StartupPanel
+                | SettingsField::IgnoreDirty
+                | SettingsField::CycleHoldings
+                | SettingsField::CycleInputs
+                | SettingsField::CycleCoils
+                | SettingsField::CycleDiscretes
+        )
+    }
+
     pub fn cycle_register_type(self) -> Option<RegisterType> {
         Some(match self {
             SettingsField::CycleHoldings => RegisterType::Holding,
@@ -493,15 +511,7 @@ impl SettingsParams {
         if count == 0 {
             return;
         }
-        self.kb_selected = if up {
-            if self.kb_selected == 0 {
-                count - 1
-            } else {
-                self.kb_selected - 1
-            }
-        } else {
-            (self.kb_selected + 1) % count
-        };
+        self.kb_selected = wrap_index(self.kb_selected, count, !up);
         self.kb_scroll_into_view(count);
     }
 

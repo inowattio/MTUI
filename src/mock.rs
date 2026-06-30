@@ -476,9 +476,7 @@ impl Client for MockContext {
 
             Request::WriteMultipleCoils(addr, values) => {
                 let quantity = values.len() as u16;
-                let writable = (0..quantity)
-                    .all(|i| addr.checked_add(i).is_some_and(|a| COIL_ZONE.contains(&a)));
-                if !writable {
+                if !mapped(&[COIL_ZONE], addr, quantity) {
                     return Ok(Err(ExceptionCode::IllegalDataAddress));
                 }
                 for (i, value) in values.iter().enumerate() {
@@ -499,9 +497,7 @@ impl Client for MockContext {
 
             Request::WriteMultipleRegisters(addr, values) => {
                 let quantity = values.len() as u16;
-                let writable = (0..quantity)
-                    .all(|i| addr.checked_add(i).is_some_and(|a| WRITABLE.contains(&a)));
-                if !writable {
+                if !mapped(&[WRITABLE], addr, quantity) {
                     return Ok(Err(ExceptionCode::IllegalDataAddress));
                 }
                 for (i, value) in values.iter().enumerate() {

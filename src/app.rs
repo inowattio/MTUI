@@ -9,7 +9,7 @@ use crate::modbus::{
     DeviceConfig, DeviceIdAccess, Interface, InterfaceNetworkParams, InterfaceWiredParams,
     ModbusDevice, WordOrder,
 };
-use crate::num_ops::{digit_add, digit_remove};
+use crate::num_ops::{cycle, digit_add, digit_remove, wrap_index};
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
 use crate::state::{
     ColumnsParams, ConnectionStatus, CustomField, CustomParams, DeviceIdParams, DiscoveryField,
@@ -66,6 +66,16 @@ pub enum WriteType {
     Word,
     DWord,
     Coil,
+}
+
+impl WriteType {
+    fn bits(self) -> u16 {
+        match self {
+            WriteType::Coil => 1,
+            WriteType::Word => 16,
+            WriteType::DWord => 32,
+        }
+    }
 }
 
 pub type AppResult<T> = anyhow::Result<T>;
@@ -135,6 +145,18 @@ const RECONNECT_CAP_MS: u64 = 30_000;
 fn reconnect_backoff(attempts: u32) -> Duration {
     let shift = attempts.saturating_sub(1).min(5);
     Duration::from_millis((RECONNECT_BASE_MS << shift).min(RECONNECT_CAP_MS))
+}
+
+fn fuzzy_rank<T: Copy>(query: &str, items: &[T], label: impl Fn(T) -> &'static str) -> Vec<T> {
+    let mut scored: Vec<(i32, usize, T)> = items
+        .iter()
+        .copied()
+        .enumerate()
+        .filter_map(|(i, item)| fuzzy_score(query, label(item)).map(|score| (score, i, item)))
+        .collect();
+
+    scored.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
+    scored.into_iter().map(|(_, _, item)| item).collect()
 }
 
 fn fuzzy_score(query: &str, text: &str) -> Option<i32> {
@@ -1084,10 +1106,8 @@ impl App {
         if let Some(Popup::Help(h)) = &mut self.read_mut().popup {
             if count == 0 {
                 h.selected = 0;
-            } else if down {
-                h.selected = (h.selected + 1) % count;
             } else {
-                h.selected = (h.selected + count - 1) % count;
+                h.selected = wrap_index(h.selected, count, down);
             }
         }
     }
@@ -1096,15 +1116,7 @@ impl App {
         let Some(Popup::Help(h)) = &self.read().popup else {
             return Vec::new();
         };
-        let mut scored: Vec<(i32, usize, KeybindAction)> = KeybindAction::ALL
-            .iter()
-            .copied()
-            .enumerate()
-            .filter_map(|(i, a)| fuzzy_score(&h.query, a.label()).map(|score| (score, i, a)))
-            .collect();
-
-        scored.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
-        scored.into_iter().map(|(_, _, a)| a).collect()
+        fuzzy_rank(&h.query, KeybindAction::ALL, |a| a.label())
     }
 
     pub fn help_selected_action(&self) -> Option<KeybindAction> {
@@ -1204,15 +1216,7 @@ impl App {
         let Some(Popup::Columns(c)) = &self.read().popup else {
             return Vec::new();
         };
-        let mut scored: Vec<(i32, usize, Column)> = Column::ALL
-            .iter()
-            .copied()
-            .enumerate()
-            .filter_map(|(i, col)| fuzzy_score(&c.query, col.name()).map(|score| (score, i, col)))
-            .collect();
-
-        scored.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
-        scored.into_iter().map(|(_, _, col)| col).collect()
+        fuzzy_rank(&c.query, Column::ALL, |col| col.name())
     }
 
     pub fn columns_input(&mut self, c: char) {
@@ -1780,14 +1784,7 @@ impl App {
         let Some(params) = self.device_id_mut() else {
             return;
         };
-        let all = DeviceIdAccess::ALL;
-        let i = all.iter().position(|&a| a == params.access).unwrap_or(0);
-        let n = all.len();
-        params.access = if forward {
-            all[(i + 1) % n]
-        } else {
-            all[(i + n - 1) % n]
-        };
+        params.access = cycle(&DeviceIdAccess::ALL, params.access, forward);
         self.device_id_refresh().await;
     }
 
@@ -1855,11 +1852,7 @@ impl App {
     pub fn raw_move(&mut self, down: bool) {
         if let Some(p) = self.raw_mut() {
             let n = RawField::ALL.len() as u16;
-            p.selected = if down {
-                (p.selected + 1) % n
-            } else {
-                (p.selected + n - 1) % n
-            };
+            p.selected = wrap_index(p.selected, n, down);
         }
     }
 
@@ -2044,16 +2037,8 @@ impl App {
         };
         self.previous_position = Some(from);
 
-        let rows = self.visible_rows.get();
-        let cols = self.config.matrix_cols;
-        let p = self.read_mut();
-        if p.panel != ReadPanel::Matrix {
-            p.panel = ReadPanel::Main;
-        }
-        p.position = position;
-        p.register_type = register_type;
-        p.scroll_to_cursor(rows, cols);
-        p.popup = None;
+        self.jump_to_cell(register_type, position);
+        self.read_mut().popup = None;
         true
     }
 
@@ -2067,6 +2052,10 @@ impl App {
         };
         self.previous_position = Some(current);
 
+        self.jump_to_cell(register_type, position);
+    }
+
+    fn jump_to_cell(&mut self, register_type: RegisterType, position: u16) {
         let rows = self.visible_rows.get();
         let cols = self.config.matrix_cols;
         let p = self.read_mut();
@@ -2099,19 +2088,19 @@ impl App {
         };
 
         let (register_type, has_explicit_type) = match query.chars().next() {
-            Some('h') | Some('H') => (RegisterType::Holding, true),
-            Some('i') | Some('I') => (RegisterType::Input, true),
-            Some('c') | Some('C') => (RegisterType::Coil, true),
-            Some('d') | Some('D') => (RegisterType::Discrete, true),
+            Some('h' | 'H') => (RegisterType::Holding, true),
+            Some('i' | 'I') => (RegisterType::Input, true),
+            Some('c' | 'C') => (RegisterType::Coil, true),
+            Some('d' | 'D') => (RegisterType::Discrete, true),
             _ => (read.register_type, false),
         };
 
         let mut matches: Vec<(RegisterCell, String)> = Vec::new();
 
         let numeric_query = if has_explicit_type {
-            query.chars().skip(1).collect()
+            &query[1..]
         } else {
-            query.clone()
+            query.as_str()
         };
 
         if let Ok(parsed_address) = numeric_query.trim().parse::<u32>() {
@@ -2220,13 +2209,7 @@ impl App {
         let n = CustomField::ALL.len() as u16;
         self.with_custom(|c| {
             c.error = None;
-            c.selected = if down {
-                (c.selected + 1) % n
-            } else if c.selected == 0 {
-                n - 1
-            } else {
-                c.selected - 1
-            };
+            c.selected = wrap_index(c.selected, n, down);
         });
     }
 
@@ -2234,14 +2217,7 @@ impl App {
         self.with_custom(|c| {
             c.error = None;
             if field == CustomField::Repr {
-                let all = CustomRepr::ALL;
-                let i = all.iter().position(|&r| r == c.repr).unwrap_or(0);
-                let n = all.len();
-                c.repr = if forward {
-                    all[(i + 1) % n]
-                } else {
-                    all[(i + n - 1) % n]
-                };
+                c.repr = cycle(&CustomRepr::ALL, c.repr, forward);
             }
         });
     }
@@ -2410,8 +2386,8 @@ impl App {
             let label = self
                 .labels
                 .get(&(kind, address))
-                .cloned()
-                .unwrap_or_default();
+                .map(String::as_str)
+                .unwrap_or("");
             out.push_str(&format!(
                 "{}\t{kind:?}\t{address}\t{value:04X}\t{value}\t{label}\n",
                 read_at.to_rfc3339_opts(SecondsFormat::Millis, true),
@@ -2529,7 +2505,7 @@ impl App {
             return;
         }
 
-        if matches!(self.state, State::Read(_)) {
+        if self.is_reading() {
             let rows = self.visible_rows.get();
             let cols = self.config.matrix_cols;
             self.read_mut().scroll_to_cursor(rows, cols);
@@ -2540,7 +2516,7 @@ impl App {
         }
 
         if self.sweep.active {
-            if matches!(self.state, State::Read(_)) {
+            if self.is_reading() {
                 let rows = self.visible_rows.get();
                 let cols = self.config.matrix_cols;
                 let current = self.sweep.current;
@@ -2569,7 +2545,7 @@ impl App {
     }
 
     fn maybe_reconnect(&mut self) -> bool {
-        if self.device.is_none() || !matches!(self.state, State::Read(_)) {
+        if self.device.is_none() || !self.is_reading() {
             return false;
         }
 
@@ -2583,12 +2559,7 @@ impl App {
             return false;
         }
 
-        let now = Instant::now();
-        let due = match self.reconnect.next_at {
-            None => true,
-            Some(at) => now >= at,
-        };
-        if !due {
+        if self.reconnect.next_at.is_some_and(|at| Instant::now() < at) {
             return true;
         }
 
@@ -2637,7 +2608,7 @@ impl App {
     }
 
     pub fn open_sweep(&mut self) {
-        if !matches!(self.state, State::Read(_)) {
+        if !self.is_reading() {
             return;
         }
         let params = SweepConfigParams {
@@ -2685,8 +2656,11 @@ impl App {
 
     fn advance_sweep(&mut self, errored: bool) {
         let batch = self.config.registers_batch.max(1);
-        let read_amount = if self.sweep.errored { 1 } else { batch };
-        let advance = if errored { 1 } else { read_amount };
+        let advance = if errored || self.sweep.errored {
+            1
+        } else {
+            batch
+        };
         self.sweep.errored = errored;
 
         if self.sweep.current >= self.sweep.to {
@@ -2709,13 +2683,7 @@ impl App {
     pub fn sweep_config_move(&mut self, down: bool) {
         if let Some(Popup::SweepConfig(p)) = &mut self.read_mut().popup {
             let n = SweepField::ALL.len() as u16;
-            p.selected = if down {
-                (p.selected + 1) % n
-            } else if p.selected == 0 {
-                n - 1
-            } else {
-                p.selected - 1
-            };
+            p.selected = wrap_index(p.selected, n, down);
         }
     }
 
@@ -2762,18 +2730,27 @@ impl App {
         self.running = false;
     }
 
+    async fn read_words(
+        device: &ModbusDevice,
+        register_type: RegisterType,
+        position: u16,
+        amount: u16,
+    ) -> Result<Vec<u16>, anyhow::Error> {
+        Ok(match register_type {
+            RegisterType::Holding => device.holdings(position, amount).await?,
+            RegisterType::Input => device.inputs(position, amount).await?,
+            RegisterType::Coil => bits_to_words(device.coils(position, amount).await?),
+            RegisterType::Discrete => bits_to_words(device.discretes(position, amount).await?),
+        })
+    }
+
     async fn aquire_data_with(
         device: &ModbusDevice,
         amount: u16,
         position: u16,
         register_type: RegisterType,
     ) -> Result<Vec<RegisterCellValue>, anyhow::Error> {
-        let values = match register_type {
-            RegisterType::Holding => device.holdings(position, amount).await?,
-            RegisterType::Input => device.inputs(position, amount).await?,
-            RegisterType::Coil => bits_to_words(device.coils(position, amount).await?),
-            RegisterType::Discrete => bits_to_words(device.discretes(position, amount).await?),
-        };
+        let values = Self::read_words(device, register_type, position, amount).await?;
 
         Ok(values
             .into_iter()
@@ -2805,28 +2782,14 @@ impl App {
                 }
             }
 
-            let values = match kind {
-                RegisterType::Holding => device.holdings(start_addr, run_len as u16).await?,
-                RegisterType::Input => device.inputs(start_addr, run_len as u16).await?,
-                RegisterType::Coil => {
-                    bits_to_words(device.coils(start_addr, run_len as u16).await?)
-                }
-                RegisterType::Discrete => {
-                    bits_to_words(device.discretes(start_addr, run_len as u16).await?)
-                }
-            };
+            let values = Self::read_words(device, kind, start_addr, run_len as u16).await?;
             anyhow::ensure!(
                 values.len() == run_len,
                 "Expected {run_len} value(s) at {start_addr}, got {}",
                 values.len()
             );
 
-            for j in 0..run_len {
-                let cell = regs[i + j];
-                let value = values[j];
-
-                collection.push((cell, value));
-            }
+            collection.extend(regs[i..i + run_len].iter().copied().zip(values));
 
             i += run_len;
         }
@@ -3151,11 +3114,7 @@ impl App {
 
     fn write_bit_count(&self) -> u16 {
         match &self.read().popup {
-            Some(Popup::Write(w)) => match w.write_type {
-                WriteType::Coil => 1,
-                WriteType::Word => 16,
-                WriteType::DWord => 32,
-            },
+            Some(Popup::Write(w)) => w.write_type.bits(),
             _ => 16,
         }
     }
@@ -3174,11 +3133,7 @@ impl App {
                 }
                 (WriteType::Coil, _) => {}
             }
-            let bits = match w.write_type {
-                WriteType::Coil => 1,
-                WriteType::Word => 16,
-                WriteType::DWord => 32,
-            };
+            let bits = w.write_type.bits();
             w.bit_cursor = w.bit_cursor.min(bits - 1);
         }
         self.clamp_write_value();

@@ -494,6 +494,12 @@ impl ModbusDevice {
         timeout!(self, read_discrete_inputs, (address, quantity))
     }
 
+    fn assemble_words(&self, data: &[u16]) -> Vec<u32> {
+        data.chunks_exact(2)
+            .map(|word| self.config.word_order.make_word(word[0], word[1]))
+            .collect()
+    }
+
     pub async fn input_word(&self, address: u16) -> Result<u32> {
         let data = self.inputs(address, 2).await?;
         anyhow::ensure!(data.len() == 2, "Expected 2 values.");
@@ -509,10 +515,7 @@ impl ModbusDevice {
             data.len() == register_count as usize,
             "Expected {register_count} values."
         );
-        Ok(data
-            .chunks_exact(2)
-            .map(|word| self.config.word_order.make_word(word[0], word[1]))
-            .collect())
+        Ok(self.assemble_words(&data))
     }
 
     pub async fn holding_word(&self, address: u16) -> Result<u32> {
@@ -538,10 +541,7 @@ impl ModbusDevice {
             data.len() == register_count as usize,
             "Expected {register_count} values."
         );
-        Ok(data
-            .chunks_exact(2)
-            .map(|word| self.config.word_order.make_word(word[0], word[1]))
-            .collect())
+        Ok(self.assemble_words(&data))
     }
 
     pub async fn holding_dwords(&self, address: u16, quantity: u16) -> Result<Vec<u64>> {
