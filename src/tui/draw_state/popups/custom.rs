@@ -102,7 +102,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &
     let pfx = if sel == CustomField::Prefix {
         format!("{} ", c.prefix)
     } else {
-        c.suffix.to_string()
+        c.prefix.to_string()
     };
     lines.push(field_line("Prefix", pfx, sel == CustomField::Prefix));
 
