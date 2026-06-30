@@ -12,11 +12,11 @@ use crate::modbus::{
 use crate::num_ops::{digit_add, digit_remove};
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
 use crate::state::{
-    ColumnsParams, ConnectionStatus, CustomField, CustomParams, DeviceIdParams, DiscoveryParams,
-    DumpParams, HelpParams, ImportParams, InterfaceKind, LabelParams, LogViewParams, LogsParams,
-    Outcome, Popup, PopupKind, RawField, RawParams, ReadPanel, ReadParams, SearchParams,
-    SettingsField, SettingsParams, State, StatusMessage, SweepConfigParams, SweepField,
-    WriteParams,
+    ColumnsParams, ConnectionStatus, CustomField, CustomParams, DeviceIdParams, DiscoveryField,
+    DiscoveryParams, DumpParams, HelpParams, ImportParams, InterfaceKind, LabelParams,
+    LogViewParams, LogsParams, Outcome, Popup, PopupKind, RawField, RawParams, ReadPanel,
+    ReadParams, SearchParams, SettingsField, SettingsParams, State, StatusMessage,
+    SweepConfigParams, SweepField, WriteParams,
 };
 use crate::writes_log::{SharedWritesLog, WriteKind, WritesLogState};
 use chrono::{DateTime, Local, SecondsFormat, Utc};
@@ -24,7 +24,7 @@ use serde::{Deserialize, Serialize};
 use std::cell::Cell;
 use std::collections::{BTreeMap, VecDeque};
 use std::fs;
-use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU8};
+use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU8, AtomicUsize};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -75,6 +75,58 @@ enum BackgroundTask {
     Refresh(TaskHandle<RefreshTaskResult>),
     Write(TaskHandle<WriteOutcome>),
     Reconnect(TaskHandle<Result<ModbusDevice, String>>),
+}
+
+#[derive(Debug)]
+struct ScanProgress {
+    done: Arc<AtomicUsize>,
+    total: usize,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn subnet_prefix_from(ip: &str) -> Option<String> {
+    let octets: Vec<&str> = ip.split('.').take(3).collect();
+    if octets.len() == 3 && octets.iter().all(|o| o.parse::<u8>().is_ok()) {
+        Some(format!("{}.{}.{}.", octets[0], octets[1], octets[2]))
+    } else {
+        None
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+async fn scan_subnet(
+    prefix: String,
+    port: u16,
+    per_host: Duration,
+    done: Arc<AtomicUsize>,
+) -> Vec<String> {
+    use futures::stream::{self, StreamExt};
+    use std::sync::atomic::Ordering;
+
+    let mut found: Vec<(u16, String)> = stream::iter(1u16..=254)
+        .map(|host| {
+            let ip = format!("{prefix}{host}");
+            let done = done.clone();
+            async move {
+                let connected = matches!(
+                    compat::timeout(
+                        per_host,
+                        tokio::net::TcpStream::connect((ip.as_str(), port))
+                    )
+                    .await,
+                    Ok(Ok(_))
+                );
+                done.fetch_add(1, Ordering::Relaxed);
+                connected.then_some((host, ip))
+            }
+        })
+        .buffer_unordered(256)
+        .filter_map(|hit| async move { hit })
+        .collect()
+        .await;
+
+    found.sort_by_key(|(host, _)| *host);
+    found.into_iter().map(|(_, ip)| ip).collect()
 }
 
 const RECONNECT_BASE_MS: u64 = 1_000;
@@ -190,6 +242,9 @@ pub struct App {
     pub h_max_offset: Cell<u16>,
     previous_position: Option<RegisterCell>,
     background_task: Option<BackgroundTask>,
+    network_scan: Option<ScanProgress>,
+    #[cfg(not(target_arch = "wasm32"))]
+    network_scan_task: Option<TaskHandle<Vec<String>>>,
     previous_values: BTreeMap<RegisterCell, u16>,
     changed: BTreeMap<RegisterCell, bool>,
     read_log: BTreeMap<RegisterCell, (u16, DateTime<Utc>)>,
@@ -519,6 +574,9 @@ impl App {
             h_max_offset: Cell::new(0),
             previous_position: None,
             background_task: None,
+            network_scan: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            network_scan_task: None,
             previous_values: BTreeMap::new(),
             changed: BTreeMap::new(),
             read_log: BTreeMap::new(),
@@ -896,6 +954,102 @@ impl App {
                     d.status = Some(StatusMessage::err(format!("Connection failed: {e}")));
                 }
             }
+        }
+    }
+
+    pub fn scan_progress(&self) -> Option<(usize, usize)> {
+        self.network_scan
+            .as_ref()
+            .map(|s| (s.done.load(std::sync::atomic::Ordering::Relaxed), s.total))
+    }
+
+    pub fn use_found_ip(&mut self, index: u16) {
+        if let Some(d) = self.discovery_mut() {
+            let Some(ip) = d.found.get(index as usize).cloned() else {
+                return;
+            };
+            d.ip = ip;
+            d.scan_open = false;
+            if let Some(pos) = d
+                .fields()
+                .iter()
+                .position(|f| *f == DiscoveryField::Connect)
+            {
+                d.selected = pos as u16;
+            }
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn start_network_scan(&mut self) {
+        if self.network_scan.is_some() {
+            return;
+        }
+        let Some(d) = self.discovery() else {
+            return;
+        };
+        if d.interface != InterfaceKind::Network {
+            return;
+        }
+        let Some(prefix) = subnet_prefix_from(&d.ip).or_else(crate::state::local_subnet_prefix)
+        else {
+            if let Some(d) = self.discovery_mut() {
+                d.status = Some(StatusMessage::err("Couldn't determine a subnet to scan"));
+            }
+            return;
+        };
+        let port = d.net_port;
+        let per_host = Duration::from_millis(d.connect_timeout_ms.clamp(100, 2_000));
+        let total = 254;
+        let done = Arc::new(AtomicUsize::new(0));
+        self.network_scan = Some(ScanProgress {
+            done: done.clone(),
+            total,
+        });
+        if let Some(d) = self.discovery_mut() {
+            d.found.clear();
+            d.scan_open = true;
+            d.scan_selected = 0;
+            d.status = Some(StatusMessage::warn(format!(
+                "Scanning {prefix}0/24\u{2026}"
+            )));
+        }
+        self.network_scan_task = Some(compat::spawn(scan_subnet(prefix, port, per_host, done)));
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub fn start_network_scan(&mut self) {
+        if let Some(d) = self.discovery_mut() {
+            d.status = Some(StatusMessage::warn(
+                "Network scan isn't available in the web demo",
+            ));
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn poll_network_scan(&mut self) {
+        let Some(handle) = self.network_scan_task.as_mut() else {
+            return;
+        };
+        match handle.poll_result() {
+            TaskPoll::Pending => {}
+            TaskPoll::Finished(found) => self.finish_network_scan(found),
+            TaskPoll::Gone => self.finish_network_scan(Vec::new()),
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn finish_network_scan(&mut self, found: Vec<String>) {
+        self.network_scan_task = None;
+        self.network_scan = None;
+        let count = found.len();
+        if let Some(d) = self.discovery_mut() {
+            d.found = found;
+            d.status = Some(if count == 0 {
+                StatusMessage::warn("No devices found on this subnet")
+            } else {
+                StatusMessage::ok(format!("Found {count} device(s)"))
+            });
         }
     }
 
@@ -3063,6 +3217,9 @@ impl App {
     }
 
     pub async fn complete_background_task(&mut self) {
+        #[cfg(not(target_arch = "wasm32"))]
+        self.poll_network_scan();
+
         enum Done {
             Refresh(Option<RefreshTaskResult>),
             Write(Option<WriteOutcome>),

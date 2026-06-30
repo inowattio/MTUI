@@ -47,7 +47,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
 
     match &app.state {
         State::Read(p) => draw_state::read::draw(p, app, frame, inner, &theme, &device),
-        State::Discovery(d) => draw_state::discovery::draw(d, frame, inner, &theme),
+        State::Discovery(d) => draw_state::discovery::draw(d, app, frame, inner, &theme),
         State::Settings(s) => draw_state::settings::draw(s, app, frame, inner, &theme),
         State::Logs(l) => draw_state::logs::draw(l, app, frame, inner, &theme),
     }

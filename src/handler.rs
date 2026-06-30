@@ -432,6 +432,12 @@ fn paste_digits(digits: &str, app: &mut App) {
 
 async fn handle_discovery_key(key_event: KeyEvent, app: &mut App) {
     let kb = app.config.keybinds;
+
+    if app.discovery().is_some_and(|d| d.scan_open) {
+        handle_scan_popup_key(key_event, app, kb);
+        return;
+    }
+
     let (field, count) = match app.discovery() {
         Some(d) => (d.current_field(), d.fields().len() as u16),
         None => return,
@@ -445,7 +451,10 @@ async fn handle_discovery_key(key_event: KeyEvent, app: &mut App) {
                 app.quit();
             }
         }
-        c if c == kb.action => app.discovery_connect().await,
+        c if c == kb.action => match field {
+            DiscoveryField::ScanNetwork => app.start_network_scan(),
+            _ => app.discovery_connect().await,
+        },
         c if c == kb.move_up => {
             if let Some(d) = app.discovery_mut() {
                 d.selected = if d.selected == 0 {
@@ -506,6 +515,42 @@ async fn handle_discovery_key(key_event: KeyEvent, app: &mut App) {
                         digit_add(&mut d.between_commands_ms, digit)
                     }
                     _ => {}
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn handle_scan_popup_key(key_event: KeyEvent, app: &mut App, kb: Keybinds) {
+    let len = app.discovery().map_or(0, |d| d.found.len() as u16);
+    match key_event.code {
+        c if c == kb.exit => {
+            if let Some(d) = app.discovery_mut() {
+                d.scan_open = false;
+            }
+        }
+        c if c == kb.action => {
+            if len > 0 {
+                let selected = app.discovery().map_or(0, |d| d.scan_selected);
+                app.use_found_ip(selected);
+            }
+        }
+        c if c == kb.move_up => {
+            if let Some(d) = app.discovery_mut() {
+                if len > 0 {
+                    d.scan_selected = if d.scan_selected == 0 {
+                        len - 1
+                    } else {
+                        d.scan_selected - 1
+                    };
+                }
+            }
+        }
+        c if c == kb.move_down => {
+            if let Some(d) = app.discovery_mut() {
+                if len > 0 {
+                    d.scan_selected = (d.scan_selected + 1) % len;
                 }
             }
         }
