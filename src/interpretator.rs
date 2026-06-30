@@ -63,7 +63,7 @@ const COLUMNS: &[ColumnSpec] = &[
     ColumnSpec { name: "hex32",   width: 9,  enabled: |c| c.hex32,    render: |c, _, o| if c.two() { let _ = write!(o, "{:08X}", c.word); } else { o.push('-'); } },
     ColumnSpec { name: "f16",     width: 10, enabled: |c| c.f16,      render: |c, w, o| float_cell(f16_to_f32(c.value), w, o) },
     ColumnSpec { name: "bcd",     width: 6,  enabled: |c| c.bcd,      render: |c, _, o| match bcd_to_decimal(c.value) { Some(n) => { let _ = write!(o, "{n}"); } None => o.push_str("--") } },
-    ColumnSpec { name: "bcd32",   width: 10, enabled: |c| c.bcd32,    render: |c, _, o| if c.two() { match bcd_to_decimal_u32(c.word) { Some(n) => { let _ = write!(o, "{n}"); } None => o.push_str("--") } } else { o.push('-'); } },
+    ColumnSpec { name: "bcd32",   width: 10, enabled: |c| c.bcd32,    render: |c, _, o| if c.two() { match bcd_to_decimal(c.word) { Some(n) => { let _ = write!(o, "{n}"); } None => o.push_str("--") } } else { o.push('-'); } },
     ColumnSpec { name: "u32",     width: 10, enabled: |c| c.u32,      render: |c, _, o| if c.two() { let _ = write!(o, "{}", c.word); } else { o.push('-'); } },
     ColumnSpec { name: "i32",     width: 11, enabled: |c| c.i32,      render: |c, _, o| if c.two() { let _ = write!(o, "{}", c.word as i32); } else { o.push('-'); } },
     ColumnSpec { name: "u32m10k", width: 11, enabled: |c| c.u32_m10k, render: |c, _, o| if c.two() { let (h, l) = m10k_to_u32(c.word); let _ = write!(o, "{h}/{l}"); } else { o.push('-'); } },
@@ -154,6 +154,14 @@ impl Interpretor {
             .collect()
     }
 
+    fn write_index(&self, out: &mut String, value: u16) {
+        if self.config.index_hex {
+            let _ = write!(out, "{value:>w$X}: ", w = INDEX_W);
+        } else {
+            let _ = write!(out, "{value:>w$}: ", w = INDEX_W);
+        }
+    }
+
     pub fn placeholder(&self, index: u16, label: Option<&str>) -> String {
         let dash = "--";
         let mut row = String::new();
@@ -164,11 +172,7 @@ impl Interpretor {
         if self.config.ago {
             let _ = write!(row, "{dash:<w$} ", w = AGO_W);
         }
-        if self.config.index_hex {
-            let _ = write!(row, "{index:>w$X}: ", w = INDEX_W);
-        } else {
-            let _ = write!(row, "{index:>w$}: ", w = INDEX_W);
-        }
+        self.write_index(&mut row, index);
 
         for col in COLUMNS {
             if (col.enabled)(&self.config) {
@@ -205,11 +209,7 @@ impl Interpretor {
             let ago = format_ago(now.signed_duration_since(read_at));
             let _ = write!(row, "{ago:<w$} ", w = AGO_W);
         }
-        if self.config.index_hex {
-            let _ = write!(row, "{address:>w$X}: ", w = INDEX_W);
-        } else {
-            let _ = write!(row, "{address:>w$}: ", w = INDEX_W);
-        }
+        self.write_index(&mut row, address);
 
         let ctx = RowCtx::new(self.word_order, value, next, custom);
         for col in COLUMNS {
@@ -305,26 +305,17 @@ pub(crate) fn format_ago(elapsed: chrono::Duration) -> String {
     }
 }
 
-fn bcd_to_decimal(value: u16) -> Option<u16> {
-    let mut result = 0u16;
-    for shift in [12, 8, 4, 0] {
-        let nibble = (value >> shift) & 0xF;
-        if nibble > 9 {
+fn bcd_to_decimal<T: num_traits::PrimInt>(value: T) -> Option<T> {
+    let nibbles = std::mem::size_of::<T>() * 2;
+    let mut result = T::zero();
+    let ten = T::from(10)?;
+    let mask = T::from(0xF)?;
+    for i in (0..nibbles).rev() {
+        let nibble = (value >> (i * 4)) & mask;
+        if nibble > T::from(9)? {
             return None;
         }
-        result = result * 10 + nibble;
-    }
-    Some(result)
-}
-
-fn bcd_to_decimal_u32(value: u32) -> Option<u32> {
-    let mut result = 0u32;
-    for shift in [28, 24, 20, 16, 12, 8, 4, 0] {
-        let nibble = (value >> shift) & 0xF;
-        if nibble > 9 {
-            return None;
-        }
-        result = result * 10 + nibble;
+        result = result * ten + nibble;
     }
     Some(result)
 }

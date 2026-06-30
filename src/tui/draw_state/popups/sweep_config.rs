@@ -1,6 +1,6 @@
 use crate::config::Keybinds;
 use crate::state::{SweepConfigParams, SweepField};
-use crate::tui::draw_state::{cyclable, marker};
+use crate::tui::draw_state::{edit_value, field_row, marker};
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
 use ratatui::layout::Rect;
@@ -17,31 +17,13 @@ pub(super) fn draw(
 ) {
     let sel = params.current_field();
 
-    let field = |label: &str, value: String, selected: bool| -> Line<'static> {
-        let marker = marker(selected);
-        let style = theme.line_style(selected);
-        Line::from(vec![
-            Span::styled(format!("{marker}{label:<14}"), theme.dim_style()),
-            Span::styled(value, style),
-        ])
-    };
+    let field =
+        |label: &str, value: String, selected: bool| field_row(theme, label, 13, value, selected);
 
-    let from_val = if sel == SweepField::From {
-        format!("{}_", params.from)
-    } else {
-        params.from.to_string()
-    };
-    let to_val = if sel == SweepField::To {
-        format!("{}_", params.to)
-    } else {
-        params.to.to_string()
-    };
+    let from_val = edit_value(params.from.to_string(), sel == SweepField::From, false);
+    let to_val = edit_value(params.to.to_string(), sel == SweepField::To, false);
     let mode = if params.continuous { "loop" } else { "once" };
-    let mode_val = if sel == SweepField::Mode {
-        cyclable(mode)
-    } else {
-        mode.to_string()
-    };
+    let mode_val = edit_value(mode.to_string(), sel == SweepField::Mode, true);
 
     let action_sel = sel == SweepField::Action;
     let action_label = if running { "Stop sweep" } else { "Start sweep" };

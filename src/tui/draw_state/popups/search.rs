@@ -15,8 +15,7 @@ pub(super) fn draw(
 ) {
     let visible = 10usize;
     let len = search.matches.len();
-    let top = (search.top as usize).min(len.saturating_sub(1));
-    let end = (top + visible).min(len);
+    let (top, end) = super::window(search.top as usize, visible, len);
 
     let query_line = Line::from(vec![
         Span::styled(" index/label: ", theme.dim_style()),

@@ -29,128 +29,63 @@ pub enum Interface {
     Mock,
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
-pub enum DataBits {
-    Five,
-    Six,
-    Seven,
-    Eight,
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-impl From<DataBits> for tokio_serial::DataBits {
-    fn from(val: DataBits) -> Self {
-        match val {
-            DataBits::Five => tokio_serial::DataBits::Five,
-            DataBits::Six => tokio_serial::DataBits::Six,
-            DataBits::Seven => tokio_serial::DataBits::Seven,
-            DataBits::Eight => tokio_serial::DataBits::Eight,
+macro_rules! serial_enum {
+    (
+        $name:ident => $native:path, $err:literal,
+        { $( $variant:ident = $code:literal => $nvariant:ident ),+ $(,)? }
+    ) => {
+        #[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
+        pub enum $name {
+            $( $variant ),+
         }
-    }
-}
 
-impl From<DataBits> for u8 {
-    fn from(val: DataBits) -> Self {
-        match val {
-            DataBits::Five => 5,
-            DataBits::Six => 6,
-            DataBits::Seven => 7,
-            DataBits::Eight => 8,
+        #[cfg(not(target_arch = "wasm32"))]
+        impl From<$name> for $native {
+            fn from(val: $name) -> Self {
+                match val {
+                    $( $name::$variant => <$native>::$nvariant ),+
+                }
+            }
         }
-    }
-}
 
-impl TryFrom<u8> for DataBits {
-    type Error = &'static str;
-
-    fn try_from(value: u8) -> std::result::Result<Self, Self::Error> {
-        Ok(match value {
-            5 => Self::Five,
-            6 => Self::Six,
-            7 => Self::Seven,
-            8 => Self::Eight,
-            _ => Err("Failed to parse parity")?,
-        })
-    }
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
-pub enum Parity {
-    None,
-    Odd,
-    Even,
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-impl From<Parity> for tokio_serial::Parity {
-    fn from(val: Parity) -> Self {
-        match val {
-            Parity::None => tokio_serial::Parity::None,
-            Parity::Odd => tokio_serial::Parity::Odd,
-            Parity::Even => tokio_serial::Parity::Even,
+        impl From<$name> for u8 {
+            fn from(val: $name) -> Self {
+                match val {
+                    $( $name::$variant => $code ),+
+                }
+            }
         }
-    }
-}
 
-impl From<Parity> for u8 {
-    fn from(val: Parity) -> Self {
-        match val {
-            Parity::None => 0,
-            Parity::Odd => 1,
-            Parity::Even => 2,
+        impl TryFrom<u8> for $name {
+            type Error = &'static str;
+
+            fn try_from(value: u8) -> std::result::Result<Self, Self::Error> {
+                Ok(match value {
+                    $( $code => Self::$variant, )+
+                    _ => Err($err)?,
+                })
+            }
         }
-    }
+    };
 }
 
-impl TryFrom<u8> for Parity {
-    type Error = &'static str;
+serial_enum!(DataBits => tokio_serial::DataBits, "Failed to parse data bits", {
+    Five = 5 => Five,
+    Six = 6 => Six,
+    Seven = 7 => Seven,
+    Eight = 8 => Eight,
+});
 
-    fn try_from(value: u8) -> std::result::Result<Self, Self::Error> {
-        Ok(match value {
-            0 => Self::None,
-            1 => Self::Odd,
-            2 => Self::Even,
-            _ => Err("Failed to parse parity")?,
-        })
-    }
-}
+serial_enum!(Parity => tokio_serial::Parity, "Failed to parse parity", {
+    None = 0 => None,
+    Odd = 1 => Odd,
+    Even = 2 => Even,
+});
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
-pub enum StopBits {
-    One,
-    Two,
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-impl From<StopBits> for tokio_serial::StopBits {
-    fn from(val: StopBits) -> Self {
-        match val {
-            StopBits::One => tokio_serial::StopBits::One,
-            StopBits::Two => tokio_serial::StopBits::Two,
-        }
-    }
-}
-
-impl From<StopBits> for u8 {
-    fn from(val: StopBits) -> Self {
-        match val {
-            StopBits::One => 1,
-            StopBits::Two => 2,
-        }
-    }
-}
-
-impl TryFrom<u8> for StopBits {
-    type Error = &'static str;
-
-    fn try_from(value: u8) -> std::result::Result<Self, Self::Error> {
-        Ok(match value {
-            1 => Self::One,
-            2 => Self::Two,
-            _ => Err("Failed to parse stop bits")?,
-        })
-    }
-}
+serial_enum!(StopBits => tokio_serial::StopBits, "Failed to parse stop bits", {
+    One = 1 => One,
+    Two = 2 => Two,
+});
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct InterfaceWiredParams {
@@ -187,36 +122,28 @@ impl WordOrder {
         }
     }
 
-    pub fn make_word(self, a: u16, b: u16) -> u32 {
+    fn ordered<T: num_traits::PrimInt>(self, a: T, b: T) -> (T, T) {
         let (byte_swap, word_swap) = self.swaps();
         let (mut high, mut low) = if word_swap { (b, a) } else { (a, b) };
         if byte_swap {
             high = high.swap_bytes();
             low = low.swap_bytes();
         }
+        (high, low)
+    }
+
+    pub fn make_word(self, a: u16, b: u16) -> u32 {
+        let (high, low) = self.ordered(a, b);
         ((high as u32) << 16) | (low as u32)
     }
 
     pub fn make_dword(self, a: u32, b: u32) -> u64 {
-        let (byte_swap, word_swap) = self.swaps();
-        let (mut high, mut low) = if word_swap { (b, a) } else { (a, b) };
-        if byte_swap {
-            high = high.swap_bytes();
-            low = low.swap_bytes();
-        }
+        let (high, low) = self.ordered(a, b);
         ((high as u64) << 32) | (low as u64)
     }
 
     pub fn split_word(self, data: u32) -> [u16; 2] {
-        let (byte_swap, word_swap) = self.swaps();
-        let (mut first, mut second) = ((data >> 16) as u16, data as u16);
-        if word_swap {
-            (first, second) = (second, first);
-        }
-        if byte_swap {
-            first = first.swap_bytes();
-            second = second.swap_bytes();
-        }
+        let (first, second) = self.ordered((data >> 16) as u16, data as u16);
         [first, second]
     }
 
@@ -300,20 +227,6 @@ where
     Ok(output)
 }
 
-macro_rules! timeout {
-    ($this:ident, $action:ident, ($($arg:expr),* $(,)?)) => {
-        {
-            let mut hold = $this.context.lock().await;
-            let timeout_command = Duration::from_millis($this.config.timeout_command_ms);
-            let time_between = Duration::from_millis($this.config.time_between_commands_ms);
-            timeout(hold.$action($($arg),*), timeout_command, time_between).await
-                .map_err(|e| anyhow::Error::from(e))?
-                .map_err(|e| anyhow::Error::from(e))?
-                .map_err(|e| anyhow::Error::from(e))
-        }
-    };
-}
-
 macro_rules! timeout_as {
     ($this:ident, $slave:expr, $action:ident, ($($arg:expr),* $(,)?)) => {
         {
@@ -336,6 +249,12 @@ macro_rules! timeout_as {
                 Err(error) => Err(error),
             }
         }
+    };
+}
+
+macro_rules! timeout {
+    ($this:ident, $action:ident, ($($arg:expr),* $(,)?)) => {
+        timeout_as!($this, None::<SlaveId>, $action, ($($arg),*))
     };
 }
 
@@ -500,6 +419,12 @@ impl ModbusDevice {
             .collect()
     }
 
+    fn assemble_dword(&self, q: &[u16]) -> u64 {
+        let high = self.config.word_order.make_word(q[0], q[1]);
+        let low = self.config.word_order.make_word(q[2], q[3]);
+        self.config.word_order.make_dword(high, low)
+    }
+
     pub async fn input_word(&self, address: u16) -> Result<u32> {
         let data = self.inputs(address, 2).await?;
         anyhow::ensure!(data.len() == 2, "Expected 2 values.");
@@ -527,9 +452,7 @@ impl ModbusDevice {
     pub async fn holding_dword(&self, address: u16) -> Result<u64> {
         let data = self.holdings(address, 4).await?;
         anyhow::ensure!(data.len() == 4, "Expected 4 values.");
-        let high = self.config.word_order.make_word(data[0], data[1]);
-        let low = self.config.word_order.make_word(data[2], data[3]);
-        Ok(self.config.word_order.make_dword(high, low))
+        Ok(self.assemble_dword(&data))
     }
 
     pub async fn holding_words(&self, address: u16, quantity: u16) -> Result<Vec<u32>> {
@@ -555,11 +478,7 @@ impl ModbusDevice {
         );
         Ok(data
             .chunks_exact(4)
-            .map(|dword| {
-                let high = self.config.word_order.make_word(dword[0], dword[1]);
-                let low = self.config.word_order.make_word(dword[2], dword[3]);
-                self.config.word_order.make_dword(high, low)
-            })
+            .map(|dword| self.assemble_dword(dword))
             .collect())
     }
 

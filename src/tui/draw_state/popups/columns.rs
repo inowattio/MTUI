@@ -20,12 +20,7 @@ pub(super) fn draw(
 
     const CELL: usize = 14;
 
-    let query_line = Line::from(vec![
-        Span::styled(" > ", theme.accent_style()),
-        Span::styled(params.query.clone(), theme.base()),
-        Span::styled("_", theme.accent_style()),
-        Span::styled(format!("   ({count})"), theme.dim_style()),
-    ]);
+    let query_line = super::query_line(theme, &params.query, count);
 
     let mut lines: Vec<Line> = vec![query_line, Line::default()];
 

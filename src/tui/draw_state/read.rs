@@ -46,6 +46,17 @@ fn with_hscroll_hint(
     )
 }
 
+fn full_width_table(
+    rows: Vec<Row<'static>>,
+    header_cell: Cell<'static>,
+    theme: &Theme,
+    block: Block<'static>,
+) -> Table<'static> {
+    Table::new(rows, [Constraint::Percentage(100)])
+        .header(Row::new([header_cell]).style(theme.header_style()))
+        .block(block)
+}
+
 struct TableCtx<'a> {
     params: &'a ReadParams,
     app: &'a App,
@@ -90,12 +101,12 @@ impl TableCtx<'_> {
             .collect();
         let block = with_hscroll_hint(block, self.theme, h_off, self.app.h_max_offset.get());
 
-        Table::new(table_rows, [Constraint::Percentage(100)])
-            .header(
-                Row::new([Cell::from(hscroll(header, prefix, h_off))])
-                    .style(self.theme.header_style()),
-            )
-            .block(block)
+        full_width_table(
+            table_rows,
+            Cell::from(hscroll(header, prefix, h_off)),
+            self.theme,
+            block,
+        )
     }
 
     fn main_table(&self, visible: u16, header: &str, ascii: Option<&str>) -> Table<'static> {
@@ -225,9 +236,7 @@ impl TableCtx<'_> {
             table_rows.push(Row::new([Cell::from(Line::from(spans))]));
         }
 
-        Table::new(table_rows, [Constraint::Percentage(100)])
-            .header(Row::new([Cell::from(header)]).style(theme.header_style()))
-            .block(theme.panel("Matrix"))
+        full_width_table(table_rows, Cell::from(header), theme, theme.panel("Matrix"))
     }
 }
 

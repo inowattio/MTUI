@@ -1,7 +1,7 @@
 use crate::app::App;
 use crate::input::KeyCode;
 use crate::state::{CustomField, CustomParams};
-use crate::tui::draw_state::{cyclable, marker};
+use crate::tui::draw_state::{cyclable, field_row};
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
 use ratatui::layout::Rect;
@@ -11,14 +11,8 @@ use ratatui::Frame;
 pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &CustomParams) {
     let sel = c.current_field();
 
-    let field_line = |label: &str, value: String, selected: bool| -> Line<'static> {
-        let marker = marker(selected);
-        let style = theme.line_style(selected);
-        Line::from(vec![
-            Span::styled(format!("{marker}{label:<12} "), theme.dim_style()),
-            Span::styled(value, style),
-        ])
-    };
+    let field_line =
+        |label: &str, value: String, selected: bool| field_row(theme, label, 12, value, selected);
 
     let mut lines: Vec<Line> = vec![];
 

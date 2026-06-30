@@ -1,6 +1,6 @@
 use crate::app::App;
 use crate::state::{DiscoveryField, DiscoveryParams, InterfaceKind};
-use crate::tui::draw_state::{cyclable, marker};
+use crate::tui::draw_state::{edit_value, marker};
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::{spinner_frame, Theme};
 use ratatui::layout::Rect;
@@ -35,10 +35,7 @@ pub fn draw(params: &DiscoveryParams, app: &App, frame: &mut Frame, area: Rect, 
         ));
     }
 
-    if let Some(status) = &params.status {
-        lines.push(Line::default());
-        lines.push(theme.status_line(status));
-    }
+    super::popups::push_status(&mut lines, theme, params.status.as_ref());
 
     let width = lines.iter().map(Line::width).max().unwrap_or(0) as u16 + 4;
     super::popups::render(frame, area, theme, "Connection", width, lines);
@@ -110,13 +107,7 @@ fn render_field(
     }
 
     let (name, value, is_cyclable) = field_view(params, field);
-    let value_text = if selected && is_cyclable {
-        cyclable(&value)
-    } else if selected {
-        format!("{value}_")
-    } else {
-        value
-    };
+    let value_text = edit_value(value, selected, is_cyclable);
 
     let value_style = if field == DiscoveryField::Ip && params.ip.parse::<Ipv4Addr>().is_err() {
         theme.err_style()
@@ -247,7 +238,7 @@ fn draw_scan_popup(
         Hint::key(kb.action, "Use"),
         Hint::key(kb.exit, "Close"),
     ];
-    let width = 44.max(hints::width(&footer) as u16);
+    let width = hints::min_width(44, &footer);
     lines.push(hints::footer(theme, footer));
     super::popups::render(frame, area, theme, "Network scan", width, lines);
 }

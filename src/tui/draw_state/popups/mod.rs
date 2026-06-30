@@ -97,6 +97,32 @@ pub(super) fn centered_rect(width: u16, height: u16, area: Rect) -> Rect {
     }
 }
 
+pub(super) fn query_line(theme: &Theme, query: &str, count: usize) -> Line<'static> {
+    Line::from(vec![
+        Span::styled(" > ", theme.accent_style()),
+        Span::styled(query.to_string(), theme.base()),
+        Span::styled("_", theme.accent_style()),
+        Span::styled(format!("   ({count})"), theme.dim_style()),
+    ])
+}
+
+pub(super) fn window(top: usize, visible: usize, len: usize) -> (usize, usize) {
+    let top = top.min(len.saturating_sub(1));
+    let end = (top + visible).min(len);
+    (top, end)
+}
+
+pub(super) fn push_status(
+    lines: &mut Vec<Line<'static>>,
+    theme: &Theme,
+    status: Option<&crate::state::StatusMessage>,
+) {
+    if let Some(status) = status {
+        lines.push(Line::default());
+        lines.push(theme.status_line(status));
+    }
+}
+
 pub(super) fn two_column(
     count: usize,
     mut cell: impl FnMut(usize) -> Vec<Span<'static>>,

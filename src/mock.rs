@@ -156,15 +156,27 @@ impl MockContext {
         50_000.0 * (1.0 + self.slave_id as f64) + base_kw * 1000.0 * t / 3600.0
     }
 
+    fn grid_present(&self, t: f64) -> bool {
+        (t + self.phase()) % 47.0 > 1.5
+    }
+
+    fn warning(&self, t: f64) -> bool {
+        ((t / 19.0) as u64).is_multiple_of(2)
+    }
+
+    fn heartbeat(&self, t: f64) -> bool {
+        (t as u64).is_multiple_of(2)
+    }
+
     fn status_word(&self, t: f64) -> u16 {
         let mut status = 1; // running
-        if (t + self.phase()) % 47.0 > 1.5 {
+        if self.grid_present(t) {
             status |= 1 << 1; // grid ok, with a short dropout every ~47s
         }
-        if ((t / 19.0) as u64).is_multiple_of(2) {
+        if self.warning(t) {
             status |= 1 << 2; // slow warning toggle
         }
-        if (t as u64).is_multiple_of(2) {
+        if self.heartbeat(t) {
             status |= 1 << 15; // 1 Hz heartbeat
         }
         status
@@ -329,14 +341,13 @@ impl MockContext {
     }
 
     fn discrete_value(&self, addr: u16, t: f64) -> bool {
-        let phase = self.phase();
         match addr {
-            0 => true,                                  // device ready
-            1 => (t + phase) % 47.0 > 1.5,              // grid present, brief dropouts
-            2 => ((t / 19.0) as u64).is_multiple_of(2), // slow warning toggle
-            3 => (t as u64).is_multiple_of(2),          // 1 Hz heartbeat
-            7 => self.setpoint(53) != 0,                // noise enabled flag
-            8 => false,                                 // no fault
+            0 => true,                   // device ready
+            1 => self.grid_present(t),   // grid present, brief dropouts
+            2 => self.warning(t),        // slow warning toggle
+            3 => self.heartbeat(t),      // 1 Hz heartbeat
+            7 => self.setpoint(53) != 0, // noise enabled flag
+            8 => false,                  // no fault
             _ => (t as u64).wrapping_add(addr as u64).is_multiple_of(3),
         }
     }

@@ -360,6 +360,21 @@ impl From<PinnedRegisters> for Vec<RegisterCell> {
     }
 }
 
+impl From<&[RegisterCell]> for PinnedRegisters {
+    fn from(cells: &[RegisterCell]) -> Self {
+        let mut pinned = PinnedRegisters::default();
+        for (kind, address) in cells {
+            match kind {
+                RegisterType::Holding => pinned.holdings.push(*address),
+                RegisterType::Input => pinned.inputs.push(*address),
+                RegisterType::Coil => pinned.coils.push(*address),
+                RegisterType::Discrete => pinned.discretes.push(*address),
+            }
+        }
+        pinned
+    }
+}
+
 impl From<Labels> for BTreeMap<RegisterCell, String> {
     fn from(value: Labels) -> Self {
         let mut map = BTreeMap::new();
@@ -941,9 +956,7 @@ impl App {
             }
         };
 
-        if let Some(d) = self.discovery_mut() {
-            d.status = Some(StatusMessage::warn("Connecting\u{2026}"));
-        }
+        self.set_discovery_status(StatusMessage::warn("Connecting\u{2026}"));
 
         match ModbusDevice::new(&device_config).await {
             Ok(device) => {
@@ -963,9 +976,7 @@ impl App {
             }
             Err(e) => {
                 log::error!("Connect failed \u{b7} {e}");
-                if let Some(d) = self.discovery_mut() {
-                    d.status = Some(StatusMessage::err(format!("Connection failed: {e}")));
-                }
+                self.set_discovery_status(StatusMessage::err(format!("Connection failed: {e}")));
             }
         }
     }
@@ -1006,9 +1017,7 @@ impl App {
         }
         let Some(prefix) = subnet_prefix_from(&d.ip).or_else(crate::state::local_subnet_prefix)
         else {
-            if let Some(d) = self.discovery_mut() {
-                d.status = Some(StatusMessage::err("Couldn't determine a subnet to scan"));
-            }
+            self.set_discovery_status(StatusMessage::err("Couldn't determine a subnet to scan"));
             return;
         };
         let port = d.net_port;
@@ -1032,11 +1041,9 @@ impl App {
 
     #[cfg(target_arch = "wasm32")]
     pub fn start_network_scan(&mut self) {
-        if let Some(d) = self.discovery_mut() {
-            d.status = Some(StatusMessage::warn(
-                "Network scan isn't available in the web demo",
-            ));
-        }
+        self.set_discovery_status(StatusMessage::warn(
+            "Network scan isn't available in the web demo",
+        ));
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -1383,28 +1390,34 @@ impl App {
         }
     }
 
+    fn set_discovery_status(&mut self, msg: StatusMessage) {
+        if let Some(d) = self.discovery_mut() {
+            d.status = Some(msg);
+        }
+    }
+
+    fn note_cleared(&mut self, n: usize, noun: &str) {
+        self.dirty = true;
+        log::info!("Cleared {n} {noun}(s)");
+        self.set_settings_status(StatusMessage::ok(format!("Cleared {n} {noun}(s)")));
+    }
+
     pub fn clear_pins(&mut self) {
         let n = self.pinned_registers.len();
         self.pinned_registers.clear();
-        self.dirty = true;
-        log::info!("Cleared {n} pinned register(s)");
-        self.set_settings_status(StatusMessage::ok(format!("Cleared {n} pinned register(s)")));
+        self.note_cleared(n, "pinned register");
     }
 
     pub fn clear_labels(&mut self) {
         let n = self.labels.len();
         self.labels.clear();
-        self.dirty = true;
-        log::info!("Cleared {n} label(s)");
-        self.set_settings_status(StatusMessage::ok(format!("Cleared {n} label(s)")));
+        self.note_cleared(n, "label");
     }
 
     pub fn clear_custom(&mut self) {
         let n = self.custom_rules.len();
         self.custom_rules.clear();
-        self.dirty = true;
-        log::info!("Cleared {n} custom rule(s)");
-        self.set_settings_status(StatusMessage::ok(format!("Cleared {n} custom rule(s)")));
+        self.note_cleared(n, "custom rule");
     }
 
     pub fn clear_session_data(&mut self) {
@@ -1573,13 +1586,8 @@ impl App {
                     !self.config.custom_rules.show_continuation
             }
             SettingsField::StartupPanel => {
-                let panels = ReadPanel::ALL;
-                let current = panels
-                    .iter()
-                    .position(|&p| p == self.config.startup.panel)
-                    .unwrap_or(0) as i64;
-                let next = (current + delta).rem_euclid(panels.len() as i64);
-                self.config.startup.panel = panels[next as usize];
+                self.config.startup.panel =
+                    cycle(&ReadPanel::ALL, self.config.startup.panel, delta > 0);
             }
             SettingsField::CycleHoldings
             | SettingsField::CycleInputs
@@ -1840,6 +1848,46 @@ impl App {
         }
     }
 
+    pub fn write_mut(&mut self) -> Option<&mut WriteParams> {
+        match &mut self.state {
+            State::Read(p) => match &mut p.popup {
+                Some(Popup::Write(w)) => Some(w),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    fn write(&self) -> Option<&WriteParams> {
+        match &self.state {
+            State::Read(p) => match &p.popup {
+                Some(Popup::Write(w)) => Some(w),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    fn search_mut(&mut self) -> Option<&mut SearchParams> {
+        match &mut self.state {
+            State::Read(p) => match &mut p.popup {
+                Some(Popup::Search(s)) => Some(s),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    fn sweep_config_mut(&mut self) -> Option<&mut SweepConfigParams> {
+        match &mut self.state {
+            State::Read(p) => match &mut p.popup {
+                Some(Popup::SweepConfig(p)) => Some(p),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
     pub fn raw_move(&mut self, down: bool) {
         if let Some(p) = self.raw_mut() {
             let n = RawField::ALL.len() as u16;
@@ -1988,14 +2036,14 @@ impl App {
     }
 
     pub fn search_input(&mut self, c: char) {
-        if let Some(Popup::Search(s)) = &mut self.read_mut().popup {
+        if let Some(s) = self.search_mut() {
             s.query.push(c);
         }
         self.recompute_search();
     }
 
     pub fn search_backspace(&mut self) {
-        if let Some(Popup::Search(s)) = &mut self.read_mut().popup {
+        if let Some(s) = self.search_mut() {
             s.query.pop();
         }
         self.recompute_search();
@@ -2003,7 +2051,7 @@ impl App {
 
     pub fn search_move(&mut self, down: bool) {
         let rows = self.visible_rows.get();
-        if let Some(Popup::Search(s)) = &mut self.read_mut().popup {
+        if let Some(s) = self.search_mut() {
             s.selected = if down {
                 s.selected.saturating_add(1)
             } else {
@@ -2115,7 +2163,7 @@ impl App {
         matches.extend(scored.into_iter().map(|(_, cell, text)| (cell, text)));
 
         let rows = self.visible_rows.get();
-        if let Some(Popup::Search(s)) = &mut self.read_mut().popup {
+        if let Some(s) = self.search_mut() {
             s.matches = matches;
             s.selected = 0;
             s.top = 0;
@@ -2328,16 +2376,7 @@ impl App {
         self.config.custom_rules.coils = rebuilt.coils;
         self.config.custom_rules.discretes = rebuilt.discretes;
 
-        let mut pinned = PinnedRegisters::default();
-        for (kind, address) in &self.pinned_registers {
-            match kind {
-                RegisterType::Holding => pinned.holdings.push(*address),
-                RegisterType::Input => pinned.inputs.push(*address),
-                RegisterType::Coil => pinned.coils.push(*address),
-                RegisterType::Discrete => pinned.discretes.push(*address),
-            }
-        }
-        self.config.pinned_registers = pinned;
+        self.config.pinned_registers = self.pinned_registers.as_slice().into();
 
         self.config.interpretations = self.interpreter.config();
         if let State::Read(p) = &self.state {
@@ -2437,9 +2476,7 @@ impl App {
             }
             Err(error) => log::error!("Save failed \u{b7} {error}"),
         }
-        if let Some(s) = self.settings_mut() {
-            s.status = Some(result.into());
-        }
+        self.set_settings_status(result.into());
     }
 
     pub async fn settings_load(&mut self) {
@@ -2451,9 +2488,7 @@ impl App {
             Ok(message) => log::info!("{message}"),
             Err(error) => log::error!("{error}"),
         }
-        if let Some(s) = self.settings_mut() {
-            s.status = Some(result.into());
-        }
+        self.set_settings_status(result.into());
     }
 
     async fn load_config_from(&mut self, path: &str) -> Outcome {
@@ -2672,14 +2707,14 @@ impl App {
     }
 
     pub fn sweep_config_move(&mut self, down: bool) {
-        if let Some(Popup::SweepConfig(p)) = &mut self.read_mut().popup {
+        if let Some(p) = self.sweep_config_mut() {
             let n = SweepField::ALL.len() as u16;
             p.selected = wrap_index(p.selected, n, down);
         }
     }
 
     pub fn sweep_config_toggle(&mut self) {
-        if let Some(Popup::SweepConfig(p)) = &mut self.read_mut().popup {
+        if let Some(p) = self.sweep_config_mut() {
             p.continuous = !p.continuous;
         }
     }
@@ -2689,7 +2724,7 @@ impl App {
             return;
         }
         let digit = c as u8 - b'0';
-        if let Some(Popup::SweepConfig(p)) = &mut self.read_mut().popup {
+        if let Some(p) = self.sweep_config_mut() {
             match field {
                 SweepField::From => digit_add(&mut p.from, digit),
                 SweepField::To => digit_add(&mut p.to, digit),
@@ -2699,7 +2734,7 @@ impl App {
     }
 
     pub fn sweep_config_backspace(&mut self, field: SweepField) {
-        if let Some(Popup::SweepConfig(p)) = &mut self.read_mut().popup {
+        if let Some(p) = self.sweep_config_mut() {
             match field {
                 SweepField::From => digit_remove(&mut p.from),
                 SweepField::To => digit_remove(&mut p.to),
@@ -3018,20 +3053,20 @@ impl App {
 
     pub fn commit_write(&mut self) {
         if self.config.read_only {
-            if let Some(Popup::Write(w)) = &mut self.read_mut().popup {
+            if let Some(w) = self.write_mut() {
                 w.result = Some(StatusMessage::info("Read-only mode."));
             }
             return;
         }
         if self.background_task.is_some() {
-            if let Some(Popup::Write(w)) = &mut self.read_mut().popup {
+            if let Some(w) = self.write_mut() {
                 w.result = Some(StatusMessage::info("Device is busy."));
             }
             return;
         }
 
         let (position, number, write_type, force_multiple) = {
-            let Some(Popup::Write(w)) = &mut self.read_mut().popup else {
+            let Some(w) = self.write_mut() else {
                 return;
             };
             let Some(number) = w.value else {
@@ -3104,14 +3139,11 @@ impl App {
     }
 
     fn write_bit_count(&self) -> u16 {
-        match &self.read().popup {
-            Some(Popup::Write(w)) => w.write_type.bits(),
-            _ => 16,
-        }
+        self.write().map_or(16, |w| w.write_type.bits())
     }
 
     pub fn write_toggle_type(&mut self) {
-        if let Some(Popup::Write(w)) = &mut self.read_mut().popup {
+        if let Some(w) = self.write_mut() {
             match (w.write_type, w.force_multiple) {
                 (WriteType::Word, false) => w.force_multiple = true,
                 (WriteType::Word, true) => {
@@ -3131,7 +3163,7 @@ impl App {
     }
 
     pub fn clamp_write_value(&mut self) {
-        if let Some(Popup::Write(w)) = &mut self.read_mut().popup {
+        if let Some(w) = self.write_mut() {
             if let Some(value) = w.value {
                 let (lo, hi) = match w.write_type {
                     WriteType::Coil => (0, 1),
@@ -3145,7 +3177,7 @@ impl App {
 
     pub fn write_move_bit(&mut self, left: bool) {
         let bits = self.write_bit_count();
-        if let Some(Popup::Write(w)) = &mut self.read_mut().popup {
+        if let Some(w) = self.write_mut() {
             w.bit_cursor = if left {
                 (w.bit_cursor + 1).min(bits - 1)
             } else {
@@ -3155,7 +3187,7 @@ impl App {
     }
 
     pub fn write_toggle_bit(&mut self) {
-        if let Some(Popup::Write(w)) = &mut self.read_mut().popup {
+        if let Some(w) = self.write_mut() {
             let mask = 1u32 << w.bit_cursor;
             let current = w.value.unwrap_or(0) as u32;
             w.value = Some((current ^ mask) as i64);
@@ -3172,23 +3204,21 @@ impl App {
             Reconnect(Option<Result<ModbusDevice, String>>),
         }
 
+        macro_rules! poll_task {
+            ($handle:expr, $variant:path) => {
+                match $handle.poll_result() {
+                    TaskPoll::Pending => return,
+                    TaskPoll::Finished(value) => $variant(Some(value)),
+                    TaskPoll::Gone => $variant(None),
+                }
+            };
+        }
+
         let done = match self.background_task.as_mut() {
             None => return,
-            Some(BackgroundTask::Refresh(handle)) => match handle.poll_result() {
-                TaskPoll::Pending => return,
-                TaskPoll::Finished(result) => Done::Refresh(Some(result)),
-                TaskPoll::Gone => Done::Refresh(None),
-            },
-            Some(BackgroundTask::Write(handle)) => match handle.poll_result() {
-                TaskPoll::Pending => return,
-                TaskPoll::Finished(outcome) => Done::Write(Some(outcome)),
-                TaskPoll::Gone => Done::Write(None),
-            },
-            Some(BackgroundTask::Reconnect(handle)) => match handle.poll_result() {
-                TaskPoll::Pending => return,
-                TaskPoll::Finished(result) => Done::Reconnect(Some(result)),
-                TaskPoll::Gone => Done::Reconnect(None),
-            },
+            Some(BackgroundTask::Refresh(handle)) => poll_task!(handle, Done::Refresh),
+            Some(BackgroundTask::Write(handle)) => poll_task!(handle, Done::Write),
+            Some(BackgroundTask::Reconnect(handle)) => poll_task!(handle, Done::Reconnect),
         };
         self.background_task = None;
 
@@ -3228,7 +3258,7 @@ impl App {
                 }
                 self.pending_write = None;
                 if self.is_reading() {
-                    if let Some(Popup::Write(w)) = &mut self.read_mut().popup {
+                    if let Some(w) = self.write_mut() {
                         w.result = Some(if outcome.ok {
                             StatusMessage::ok(outcome.message)
                         } else {

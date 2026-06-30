@@ -234,13 +234,13 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
             c if c == kb.action => app.commit_write(),
             c if c == kb.write => app.write_toggle_type(),
             c if c == kb.move_up => {
-                if let Some(Popup::Write(w)) = &mut app.read_mut().popup {
+                if let Some(w) = app.write_mut() {
                     decrement_option_by(&mut w.value, 1);
                 }
                 app.clamp_write_value();
             }
             c if c == kb.move_down => {
-                if let Some(Popup::Write(w)) = &mut app.read_mut().popup {
+                if let Some(w) = app.write_mut() {
                     increment_option_by(&mut w.value, 1);
                 }
                 app.clamp_write_value();
@@ -249,19 +249,19 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
             KeyCode::Right => app.write_move_bit(false),
             c if c == kb.pause => app.write_toggle_bit(),
             KeyCode::Char('-') => {
-                if let Some(Popup::Write(w)) = &mut app.read_mut().popup {
+                if let Some(w) = app.write_mut() {
                     negate_opt_option(&mut w.value);
                 }
                 app.clamp_write_value();
             }
             KeyCode::Backspace => {
-                if let Some(Popup::Write(w)) = &mut app.read_mut().popup {
+                if let Some(w) = app.write_mut() {
                     digit_remove_option(&mut w.value);
                 }
             }
             KeyCode::Char(c) if c.is_ascii_digit() => {
                 let digit = c as u8 - b'0';
-                if let Some(Popup::Write(w)) = &mut app.read_mut().popup {
+                if let Some(w) = app.write_mut() {
                     digit_add_option(&mut w.value, digit);
                 }
                 app.clamp_write_value();
@@ -396,7 +396,7 @@ fn paste_digits(digits: &str, app: &mut App) {
 
     match app.popup_kind() {
         Some(PopupKind::Write) => {
-            if let Some(Popup::Write(w)) = &mut app.read_mut().popup {
+            if let Some(w) = app.write_mut() {
                 set_option_to_zero(&mut w.value);
                 for digit in digits {
                     digit_add_option(&mut w.value, digit);

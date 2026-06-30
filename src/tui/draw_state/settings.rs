@@ -2,7 +2,7 @@ use crate::app::{ApiBindState, App};
 use crate::config::KeybindAction;
 use crate::input::KeyCode;
 use crate::state::{SettingsField, SettingsParams};
-use crate::tui::draw_state::{cyclable, marker};
+use crate::tui::draw_state::{edit_value, field_row, marker};
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
 use ratatui::layout::Rect;
@@ -105,20 +105,12 @@ fn render_field(
 ) -> Line<'static> {
     let (name, value, kind) = field_view(app, params, field);
 
-    let marker = marker(selected);
-    let style = theme.line_style(selected);
-
     let value_text = match (selected, kind) {
-        (true, Kind::Toggle) => cyclable(&value),
-        (true, Kind::Number) => format!("{value}_"),
         (true, Kind::Action) => format!("{value}  \u{2190} enter"),
-        (false, _) => value,
+        (s, k) => edit_value(value, s, matches!(k, Kind::Toggle)),
     };
 
-    Line::from(vec![
-        Span::styled(format!("{marker}{name:<24} "), theme.dim_style()),
-        Span::styled(value_text, style),
-    ])
+    field_row(theme, name, 24, value_text, selected)
 }
 
 fn field_view(
