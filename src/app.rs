@@ -24,7 +24,7 @@ use serde::{Deserialize, Serialize};
 use std::cell::Cell;
 use std::collections::{BTreeMap, VecDeque};
 use std::fs;
-use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU8, AtomicUsize};
+use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU8, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -111,7 +111,6 @@ async fn scan_subnet(
     done: Arc<AtomicUsize>,
 ) -> Vec<String> {
     use futures::stream::{self, StreamExt};
-    use std::sync::atomic::Ordering;
 
     let mut found: Vec<(u16, String)> = stream::iter(1u16..=254)
         .map(|host| {
@@ -766,24 +765,22 @@ impl App {
     }
 
     pub fn api_bind_state(&self) -> ApiBindState {
-        ApiBindState::from_code(self.api_bind.load(std::sync::atomic::Ordering::Relaxed))
+        ApiBindState::from_code(self.api_bind.load(Ordering::Relaxed))
     }
 
     fn sync_api_read_only(&self) {
         self.api_read_only
-            .store(self.config.read_only, std::sync::atomic::Ordering::Relaxed);
+            .store(self.config.read_only, Ordering::Relaxed);
     }
 
     fn sync_api_allow_slave_id(&self) {
-        self.api_allow_slave_id.store(
-            self.config.allow_api_slave_id,
-            std::sync::atomic::Ordering::Relaxed,
-        );
+        self.api_allow_slave_id
+            .store(self.config.allow_api_slave_id, Ordering::Relaxed);
     }
 
     fn sync_api_status(&self) {
         self.api_status
-            .store(self.connection.code(), std::sync::atomic::Ordering::Relaxed);
+            .store(self.connection.code(), Ordering::Relaxed);
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -802,12 +799,9 @@ impl App {
             handle.abort();
             log::info!("API server stopped");
         }
-        self.api_bound_port
-            .store(0, std::sync::atomic::Ordering::Relaxed);
-        self.api_bind.store(
-            ApiBindState::Pending.code(),
-            std::sync::atomic::Ordering::Relaxed,
-        );
+        self.api_bound_port.store(0, Ordering::Relaxed);
+        self.api_bind
+            .store(ApiBindState::Pending.code(), Ordering::Relaxed);
         self.api_server_port = desired;
 
         if let Some(port) = desired {
@@ -825,10 +819,7 @@ impl App {
     }
 
     pub fn api_bound_port(&self) -> Option<u16> {
-        match self
-            .api_bound_port
-            .load(std::sync::atomic::Ordering::Relaxed)
-        {
+        match self.api_bound_port.load(Ordering::Relaxed) {
             0 => None,
             port => Some(port),
         }
@@ -982,7 +973,7 @@ impl App {
     pub fn scan_progress(&self) -> Option<(usize, usize)> {
         self.network_scan
             .as_ref()
-            .map(|s| (s.done.load(std::sync::atomic::Ordering::Relaxed), s.total))
+            .map(|s| (s.done.load(Ordering::Relaxed), s.total))
     }
 
     pub fn use_found_ip(&mut self, index: u16) {

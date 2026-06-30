@@ -2,7 +2,7 @@ use crate::app::{ApiBindState, App};
 use crate::config::KeybindAction;
 use crate::input::KeyCode;
 use crate::state::{SettingsField, SettingsParams};
-use crate::tui::draw_state::marker;
+use crate::tui::draw_state::{cyclable, marker};
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
 use ratatui::layout::Rect;
@@ -109,7 +109,7 @@ fn render_field(
     let style = theme.line_style(selected);
 
     let value_text = match (selected, kind) {
-        (true, Kind::Toggle) => format!("\u{2039} {value} \u{203a}"),
+        (true, Kind::Toggle) => cyclable(&value),
         (true, Kind::Number) => format!("{value}_"),
         (true, Kind::Action) => format!("{value}  \u{2190} enter"),
         (false, _) => value,

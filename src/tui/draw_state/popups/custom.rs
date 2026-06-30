@@ -1,7 +1,7 @@
 use crate::app::App;
 use crate::input::KeyCode;
 use crate::state::{CustomField, CustomParams};
-use crate::tui::draw_state::marker;
+use crate::tui::draw_state::{cyclable, marker};
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
 use ratatui::layout::Rect;
@@ -38,7 +38,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &
 
     let repr_val = format!("{}  ({} reg)", c.repr.label(), c.repr.register_count());
     let repr_val = if sel == CustomField::Repr {
-        format!("\u{2039} {repr_val} \u{203a}")
+        cyclable(&repr_val)
     } else {
         repr_val
     };

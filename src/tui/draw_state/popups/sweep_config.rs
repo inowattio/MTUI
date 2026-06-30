@@ -1,6 +1,6 @@
 use crate::config::Keybinds;
 use crate::state::{SweepConfigParams, SweepField};
-use crate::tui::draw_state::marker;
+use crate::tui::draw_state::{cyclable, marker};
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
 use ratatui::layout::Rect;
@@ -38,7 +38,7 @@ pub(super) fn draw(
     };
     let mode = if params.continuous { "loop" } else { "once" };
     let mode_val = if sel == SweepField::Mode {
-        format!("\u{2039} {mode} \u{203a}")
+        cyclable(mode)
     } else {
         mode.to_string()
     };

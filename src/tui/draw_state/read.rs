@@ -110,24 +110,20 @@ impl TableCtx<'_> {
             let selected = addr == params.position;
             let zebra = i % 2 == 1;
 
-            let (text, style) = match app.cell_row((params.register_type, addr), now) {
-                Some((text, changed)) => {
-                    let style = if selected {
-                        theme.selected_style()
-                    } else {
-                        theme.row_style(zebra, changed)
-                    };
-                    (text, style)
-                }
+            let (text, base_style) = match app.cell_row((params.register_type, addr), now) {
+                Some((text, changed)) => (text, theme.row_style(zebra, changed)),
                 None => {
-                    let style = if selected {
-                        theme.selected_style()
-                    } else {
-                        theme.dim_style()
-                    };
                     let label = app.label_text(params.register_type, addr);
-                    (app.interpreter.placeholder(addr, label.as_deref()), style)
+                    (
+                        app.interpreter.placeholder(addr, label.as_deref()),
+                        theme.dim_style(),
+                    )
                 }
+            };
+            let style = if selected {
+                theme.selected_style()
+            } else {
+                base_style
             };
 
             rows.push((text, style));

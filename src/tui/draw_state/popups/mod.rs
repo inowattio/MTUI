@@ -19,7 +19,7 @@ use crate::state::Popup;
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
 use ratatui::layout::Rect;
-use ratatui::text::Line;
+use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph};
 use ratatui::Frame;
 
@@ -95,4 +95,22 @@ pub(super) fn centered_rect(width: u16, height: u16, area: Rect) -> Rect {
         width: w,
         height: h,
     }
+}
+
+pub(super) fn two_column(
+    count: usize,
+    mut cell: impl FnMut(usize) -> Vec<Span<'static>>,
+) -> Vec<Line<'static>> {
+    let rows = count.div_ceil(2);
+    (0..rows)
+        .map(|r| {
+            let mut spans = cell(r);
+            let right = r + rows;
+            if right < count {
+                spans.push(Span::raw(" "));
+                spans.extend(cell(right));
+            }
+            Line::from(spans)
+        })
+        .collect()
 }

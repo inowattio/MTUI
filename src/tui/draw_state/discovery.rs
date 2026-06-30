@@ -1,6 +1,6 @@
 use crate::app::App;
 use crate::state::{DiscoveryField, DiscoveryParams, InterfaceKind};
-use crate::tui::draw_state::marker;
+use crate::tui::draw_state::{cyclable, marker};
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::{spinner_frame, Theme};
 use ratatui::layout::Rect;
@@ -109,9 +109,9 @@ fn render_field(
         return Line::from(spans);
     }
 
-    let (name, value, cyclable) = field_view(params, field);
-    let value_text = if selected && cyclable {
-        format!("\u{2039} {value} \u{203a}")
+    let (name, value, is_cyclable) = field_view(params, field);
+    let value_text = if selected && is_cyclable {
+        cyclable(&value)
     } else if selected {
         format!("{value}_")
     } else {
