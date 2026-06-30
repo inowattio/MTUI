@@ -94,7 +94,6 @@ where
     }
 }
 
-/// Move `index` within `0..len`, wrapping at the ends. `len` must be greater than 0.
 pub fn wrap_index(index: u16, len: u16, forward: bool) -> u16 {
     if forward {
         (index + 1) % len
@@ -103,8 +102,6 @@ pub fn wrap_index(index: u16, len: u16, forward: bool) -> u16 {
     }
 }
 
-/// Step to the next or previous element of `items`, wrapping around.
-/// Returns `current` unchanged when `items` is empty.
 pub fn cycle<T: Copy + PartialEq>(items: &[T], current: T, forward: bool) -> T {
     if items.is_empty() {
         return current;
