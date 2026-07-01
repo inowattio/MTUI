@@ -547,6 +547,7 @@ impl LogsParams {
 
 popups! {
     Help(HelpParams),
+    About,
     Dump(DumpParams),
     Search(SearchParams),
     Label(LabelParams),

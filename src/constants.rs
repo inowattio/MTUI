@@ -11,6 +11,7 @@ pub mod keybind {
     pub const PIN: KeyCode = KeyCode::Char('p');
     pub const DUMP: KeyCode = KeyCode::Char('d');
     pub const HELP: KeyCode = KeyCode::Char('h');
+    pub const ABOUT: KeyCode = KeyCode::Char('a');
     pub const REFRESH: KeyCode = KeyCode::Char('r');
     pub const TOGGLE: KeyCode = KeyCode::Char('t');
     pub const WRITE: KeyCode = KeyCode::Char('w');

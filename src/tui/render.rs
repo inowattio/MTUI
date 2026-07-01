@@ -34,16 +34,8 @@ pub fn render(app: &mut App, frame: &mut Frame) {
 
     let outer = Block::default()
         .title_top(Line::styled(format!(" {mode} "), theme.base()))
-        .title_top(Line::styled(" MTUI ", theme.base()).centered())
         .title_top(Line::from(top_right).right_aligned())
         .title_bottom(clock_line)
-        .title_bottom(
-            Line::styled(
-                format!(" v{} ", env!("CARGO_PKG_VERSION")),
-                theme.dim_style(),
-            )
-            .centered(),
-        )
         .title_bottom(key_hints.right_aligned())
         .style(Style::default().fg(theme.border))
         .borders(Borders::ALL)

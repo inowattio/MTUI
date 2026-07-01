@@ -129,6 +129,7 @@ async fn run_action(app: &mut App, action: KeybindAction) {
         Pin => app.pin(),
         Dump => app.open_dump(),
         Help => app.open_help(),
+        About => app.open_about(),
         Refresh | Action => app.refresh().await,
         Toggle => app.toggle_type(),
         Write => app.open_write(),
@@ -180,6 +181,11 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
             c if c == kb.move_down => app.help_move(true),
             KeyCode::Backspace => app.help_backspace(),
             KeyCode::Char(c) => app.help_input(c),
+            _ => {}
+        },
+
+        PopupKind::About => match key_event.code {
+            c if c == kb.exit || c == kb.about => app.close_popup(),
             _ => {}
         },
 
