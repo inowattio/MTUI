@@ -379,7 +379,6 @@ field_enum! {
         ShowContinuation,
         ShowClock,
         ShowFrameTime,
-        EditKeybinds,
         Save,
         LoadConfig,
     }
@@ -417,6 +416,62 @@ impl SettingsField {
             _ => return None,
         })
     }
+}
+
+field_enum! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum SettingsCategory {
+        General,
+        Data,
+        Api,
+        Display,
+        Cycle,
+        Clear,
+        Keybinds,
+        Config,
+    }
+}
+
+impl SettingsCategory {
+    pub fn label(self) -> &'static str {
+        match self {
+            SettingsCategory::General => "General",
+            SettingsCategory::Data => "Data",
+            SettingsCategory::Api => "API",
+            SettingsCategory::Display => "Display",
+            SettingsCategory::Cycle => "Cycle types",
+            SettingsCategory::Clear => "Clear data",
+            SettingsCategory::Keybinds => "Keybinds",
+            SettingsCategory::Config => "Config",
+        }
+    }
+
+    pub fn fields(self) -> &'static [SettingsField] {
+        use SettingsField::*;
+        match self {
+            SettingsCategory::General => &[Name, StartupPanel, IgnoreDirty],
+            SettingsCategory::Data => {
+                &[RegistersBatch, AutoUpdate, ReadOnly, HistoryCap, MatrixCols]
+            }
+            SettingsCategory::Api => &[ApiPort, ApiSlaveOverride, LogWrites],
+            SettingsCategory::Display => &[ShowClock, ShowFrameTime, ShowContinuation],
+            SettingsCategory::Cycle => &[CycleHoldings, CycleInputs, CycleCoils, CycleDiscretes],
+            SettingsCategory::Clear => &[ClearPins, ClearLabels, ClearCustom],
+            SettingsCategory::Keybinds => &[],
+            SettingsCategory::Config => &[Save, LoadConfig],
+        }
+    }
+
+    pub fn is_keybinds(self) -> bool {
+        matches!(self, SettingsCategory::Keybinds)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SettingsFocus {
+    #[default]
+    Categories,
+    Fields,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -476,11 +531,12 @@ impl From<Outcome> for StatusMessage {
 
 #[derive(Debug, Default, PartialEq)]
 pub struct SettingsParams {
-    pub selected: u16,
+    pub category: u16,
+    pub field: u16,
+    pub focus: SettingsFocus,
     pub status: Option<StatusMessage>,
     pub load_path: String,
     pub previous: ReadParams,
-    pub editing_keybinds: bool,
     pub kb_selected: u16,
     pub kb_top: u16,
     pub kb_capturing: bool,
@@ -489,11 +545,26 @@ pub struct SettingsParams {
 impl SettingsParams {
     pub const KB_VISIBLE: u16 = 14;
 
-    pub fn open_keybinds(&mut self) {
-        self.editing_keybinds = true;
-        self.kb_selected = 0;
-        self.kb_top = 0;
-        self.kb_capturing = false;
+    pub fn current_category(&self) -> SettingsCategory {
+        SettingsCategory::ALL[self.category as usize]
+    }
+
+    pub fn current_fields(&self) -> &'static [SettingsField] {
+        self.current_category().fields()
+    }
+
+    pub fn current_field(&self) -> Option<SettingsField> {
+        self.current_fields().get(self.field as usize).copied()
+    }
+
+    pub fn enter_category(&mut self) {
+        self.focus = SettingsFocus::Fields;
+        self.field = 0;
+        if self.current_category().is_keybinds() {
+            self.kb_selected = 0;
+            self.kb_top = 0;
+            self.kb_capturing = false;
+        }
     }
 
     pub fn kb_move(&mut self, up: bool, count: u16) {

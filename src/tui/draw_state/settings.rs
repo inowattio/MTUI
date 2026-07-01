@@ -1,14 +1,16 @@
 use crate::app::{ApiBindState, App};
 use crate::config::KeybindAction;
 use crate::input::KeyCode;
-use crate::state::{SettingsField, SettingsParams};
+use crate::state::{SettingsCategory, SettingsField, SettingsFocus, SettingsParams};
 use crate::tui::draw_state::{edit_value, field_row, marker};
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
-use ratatui::layout::Rect;
+use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::Paragraph;
+use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
+
+const CATEGORY_WIDTH: u16 = 18;
 
 enum Kind {
     Number,
@@ -21,34 +23,71 @@ fn on_off(value: bool) -> String {
 }
 
 pub fn draw(params: &SettingsParams, app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
-    if params.editing_keybinds {
-        draw_keybinds(params, app, frame, area, theme);
+    if area.height == 0 || area.width == 0 {
         return;
     }
 
-    let mut lines: Vec<Line> = vec![Line::default()];
-    let mut selected_line = 0u16;
+    let body = Rect::new(area.x, area.y, area.width, area.height - 1);
+    let cols = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Length(CATEGORY_WIDTH), Constraint::Min(0)])
+        .split(body);
 
-    for (i, &field) in SettingsField::ALL.iter().enumerate() {
-        if matches!(
-            field,
-            SettingsField::CycleHoldings
-                | SettingsField::ClearPins
-                | SettingsField::EditKeybinds
-                | SettingsField::Save
-        ) {
-            lines.push(Line::default());
-        }
-        if i as u16 == params.selected {
-            selected_line = lines.len() as u16;
-        }
-        lines.push(render_field(
-            app,
-            params,
-            field,
-            i as u16 == params.selected,
-            theme,
-        ));
+    let divider = Block::default()
+        .borders(Borders::RIGHT)
+        .border_style(theme.dim_style());
+    let left_inner = divider.inner(cols[0]);
+    frame.render_widget(divider, cols[0]);
+    draw_categories(params, frame, left_inner, theme);
+
+    let right = cols[1];
+    let right = Rect::new(
+        right.x.saturating_add(1),
+        right.y,
+        right.width.saturating_sub(1),
+        right.height,
+    );
+    if params.current_category().is_keybinds() {
+        draw_keybinds(params, app, frame, right, theme);
+    } else {
+        draw_fields(params, app, frame, right, theme);
+    }
+
+    draw_footer(params, app, frame, area, theme);
+}
+
+fn draw_categories(params: &SettingsParams, frame: &mut Frame, area: Rect, theme: &Theme) {
+    let focused = params.focus == SettingsFocus::Categories;
+    let mut lines: Vec<Line> = vec![Line::default()];
+
+    for (i, &category) in SettingsCategory::ALL.iter().enumerate() {
+        let selected = i as u16 == params.category;
+        let style = match (selected, focused) {
+            (true, true) => theme.selected_style(),
+            (true, false) => theme.accent_style(),
+            (false, _) => theme.dim_style(),
+        };
+        lines.push(Line::from(Span::styled(
+            format!("{}{}", marker(selected), category.label()),
+            style,
+        )));
+    }
+
+    frame.render_widget(Paragraph::new(lines), area);
+}
+
+fn draw_fields(params: &SettingsParams, app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
+    let focused = params.focus == SettingsFocus::Fields;
+    let mut lines: Vec<Line> = vec![Line::default()];
+    lines.push(Line::from(Span::styled(
+        format!("  {}", params.current_category().label().to_uppercase()),
+        theme.accent_style(),
+    )));
+    lines.push(Line::default());
+
+    for (i, &field) in params.current_fields().iter().enumerate() {
+        let selected = focused && i as u16 == params.field;
+        lines.push(render_field(app, params, field, selected, theme));
         if field == SettingsField::LogWrites {
             lines.push(Line::from(Span::styled(
                 format!("  {:<24} {}", "", app.writes_log_path_string()),
@@ -57,24 +96,14 @@ pub fn draw(params: &SettingsParams, app: &App, frame: &mut Frame, area: Rect, t
         }
     }
 
-    if let Some(status) = &params.status {
-        lines.push(Line::default());
-        lines.push(Line::from(Span::styled(
-            status.text.clone(),
-            theme.message_style(status.kind),
-        )));
-    }
+    frame.render_widget(Paragraph::new(lines), area);
+}
 
-    if area.height == 0 {
-        return;
-    }
-
-    let list_height = area.height - 1;
-    let offset = selected_line.saturating_sub(list_height.saturating_sub(1));
-    let list_area = Rect::new(area.x, area.y, area.width, list_height);
-    frame.render_widget(Paragraph::new(lines).scroll((offset, 0)), list_area);
-
+fn draw_footer(params: &SettingsParams, app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
     let footer = Rect::new(area.x, area.y + area.height - 1, area.width, 1);
+    if let Some(status) = &params.status {
+        frame.render_widget(Paragraph::new(theme.status_line(status)), footer);
+    }
     if app.dirty {
         frame.render_widget(
             Paragraph::new(
@@ -220,7 +249,6 @@ fn field_view(
             on_off(device.show_frame_time),
             Kind::Toggle,
         ),
-        SettingsField::EditKeybinds => ("Edit keybinds", "open".to_string(), Kind::Action),
         SettingsField::Save => (
             "Save configuration",
             app.config_path().to_string(),
@@ -237,8 +265,8 @@ fn draw_keybinds(params: &SettingsParams, app: &App, frame: &mut Frame, area: Re
 
     let mut lines: Vec<Line> = vec![Line::default()];
     lines.push(Line::from(Span::styled(
-        format!("  Keybinds  ({}/{})", params.kb_selected + 1, count),
-        theme.base(),
+        format!("  KEYBINDS  ({}/{})", params.kb_selected + 1, count),
+        theme.accent_style(),
     )));
     lines.push(Line::default());
 
@@ -289,13 +317,6 @@ fn draw_keybinds(params: &SettingsParams, app: &App, frame: &mut Frame, area: Re
         )
     };
     lines.push(hint);
-
-    if app.dirty {
-        lines.push(Line::from(Span::styled(
-            "  \u{25cf} unsaved changes",
-            theme.warn_style(),
-        )));
-    }
 
     frame.render_widget(Paragraph::new(lines), area);
 }

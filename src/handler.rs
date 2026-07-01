@@ -8,7 +8,7 @@ use crate::num_ops::{
 };
 use crate::state::{
     DiscoveryField, DiscoveryParams, InterfaceKind, LogsParams, Popup, PopupKind, ReadPanel,
-    SettingsField, SweepField,
+    SettingsCategory, SettingsField, SettingsFocus, SweepField,
 };
 
 pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
@@ -603,27 +603,71 @@ fn handle_logs_view_key(key_event: KeyEvent, app: &mut App) {
 }
 
 async fn handle_settings_key(key_event: KeyEvent, app: &mut App) {
-    if app.settings().is_some_and(|s| s.editing_keybinds) {
-        handle_keybinds_key(key_event, app);
-        return;
+    match app
+        .settings()
+        .map_or(SettingsFocus::Categories, |s| s.focus)
+    {
+        SettingsFocus::Categories => handle_settings_category_key(key_event, app),
+        SettingsFocus::Fields
+            if app
+                .settings()
+                .is_some_and(|s| s.current_category().is_keybinds()) =>
+        {
+            handle_keybinds_key(key_event, app)
+        }
+        SettingsFocus::Fields => handle_settings_field_key(key_event, app).await,
     }
+}
 
+fn handle_settings_category_key(key_event: KeyEvent, app: &mut App) {
     let kb = app.config.keybinds;
-    let count = SettingsField::ALL.len() as u16;
-    let selected = app.settings().map_or(0, |s| s.selected);
-    let field = SettingsField::ALL[selected as usize];
+    let count = SettingsCategory::ALL.len() as u16;
 
     match key_event.code {
-        c if c == kb.exit => app.close_settings(),
-        c if c == kb.settings && !field.is_text_input() => app.close_settings(),
+        c if c == kb.exit || c == kb.settings => app.close_settings(),
         c if c == kb.move_up => {
             if let Some(s) = app.settings_mut() {
-                s.selected = wrap_index(s.selected, count, false);
+                s.category = wrap_index(s.category, count, false);
             }
         }
         c if c == kb.move_down => {
             if let Some(s) = app.settings_mut() {
-                s.selected = wrap_index(s.selected, count, true);
+                s.category = wrap_index(s.category, count, true);
+            }
+        }
+        c if c == kb.action || c == KeyCode::Right => {
+            if let Some(s) = app.settings_mut() {
+                s.enter_category();
+            }
+        }
+        _ => {}
+    }
+}
+
+async fn handle_settings_field_key(key_event: KeyEvent, app: &mut App) {
+    let kb = app.config.keybinds;
+    let count = app
+        .settings()
+        .map_or(0, |s| s.current_fields().len() as u16);
+    let Some(field) = app.settings().and_then(|s| s.current_field()) else {
+        return;
+    };
+
+    match key_event.code {
+        c if c == kb.exit => {
+            if let Some(s) = app.settings_mut() {
+                s.focus = SettingsFocus::Categories;
+            }
+        }
+        c if c == kb.settings && !field.is_text_input() => app.close_settings(),
+        c if c == kb.move_up => {
+            if let Some(s) = app.settings_mut() {
+                s.field = wrap_index(s.field, count, false);
+            }
+        }
+        c if c == kb.move_down => {
+            if let Some(s) = app.settings_mut() {
+                s.field = wrap_index(s.field, count, true);
             }
         }
         KeyCode::Left => app.settings_adjust(field, -1),
@@ -634,11 +678,6 @@ async fn handle_settings_key(key_event: KeyEvent, app: &mut App) {
             SettingsField::ClearLabels => app.clear_labels(),
             SettingsField::ClearCustom => app.clear_custom(),
             f if f.is_toggle() => app.settings_adjust(f, 1),
-            SettingsField::EditKeybinds => {
-                if let Some(s) = app.settings_mut() {
-                    s.open_keybinds();
-                }
-            }
             SettingsField::Save => app.settings_save(),
             SettingsField::LoadConfig => app.settings_load().await,
             _ => {}
@@ -672,7 +711,7 @@ fn handle_keybinds_key(key_event: KeyEvent, app: &mut App) {
     match key_event.code {
         KeyCode::Esc => {
             if let Some(s) = app.settings_mut() {
-                s.editing_keybinds = false;
+                s.focus = SettingsFocus::Categories;
             }
         }
         c if c == kb.move_up => {
