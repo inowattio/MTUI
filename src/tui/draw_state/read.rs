@@ -506,9 +506,7 @@ fn draw_graph(
             .unwrap_or_default()
     };
 
-    let block = theme.panel(&title).title_bottom(
-        Line::styled(" some keybinds are unavailable here ", theme.dim_style()).right_aligned(),
-    );
+    let block = theme.panel(&title);
     let inner = block.inner(area);
     frame.render_widget(block, area);
 

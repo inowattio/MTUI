@@ -31,15 +31,9 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
     }
 
     if app.read().graph {
-        match key_event.code {
-            c if c == kb.dump => {
-                app.toggle_graph_width();
-                return Ok(());
-            }
-            c if c == kb.columns || c == kb.slave || c == kb.switch_view || c == kb.toggle => {
-                return Ok(())
-            }
-            _ => {}
+        if key_event.code == kb.dump {
+            app.toggle_graph_width();
+            return Ok(());
         }
     }
 
