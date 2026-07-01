@@ -22,6 +22,10 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         clock_spans.push(Span::styled(format!(" {clock} "), theme.accent_style()));
     }
     if app.config.show_frame_time {
+        if !app.config.show_clock {
+            clock_spans.push(Span::styled(" ", theme.base()));
+        }
+
         clock_spans.push(Span::styled(
             format!(">{:?}ms ", app.last_frame.as_millis()),
             theme.dim_style(),
