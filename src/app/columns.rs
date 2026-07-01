@@ -1,5 +1,3 @@
-#[cfg(not(target_arch = "wasm32"))]
-use super::ClipboardHandle;
 use super::{fuzzy_rank, App};
 use crate::config::Column;
 use crate::state::{ColumnsParams, Popup, StatusMessage};
@@ -93,7 +91,7 @@ impl App {
             let (_, address) = self.cursor_cell();
 
             if self.clipboard.is_none() {
-                self.clipboard = arboard::Clipboard::new().ok().map(ClipboardHandle);
+                self.clipboard = arboard::Clipboard::new().ok().map(super::ClipboardHandle);
             }
             match self
                 .clipboard
