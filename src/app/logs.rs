@@ -1,4 +1,9 @@
-use super::*;
+use super::{App, WriteType};
+use crate::modbus::Interface;
+use crate::state::{LogViewParams, LogsParams, Popup, ReadPanel, State, StatusMessage};
+use crate::writes_log::{SharedWritesLog, WriteKind};
+use chrono::{Local, SecondsFormat};
+use std::fs;
 
 impl App {
     fn note_cleared(&mut self, n: usize, noun: &str) {

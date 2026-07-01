@@ -1,4 +1,6 @@
-use super::*;
+use super::App;
+use crate::num_ops::{digit_add, digit_remove, wrap_index};
+use crate::state::{Popup, State, SweepConfigParams, SweepField};
 
 impl App {
     fn sweep_config_mut(&mut self) -> Option<&mut SweepConfigParams> {

@@ -1,4 +1,22 @@
-use super::*;
+#[cfg(not(target_arch = "wasm32"))]
+use super::{scan_subnet, subnet_prefix_from, ScanProgress};
+use super::{App, ReconnectState};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::compat::{self, TaskPoll};
+use crate::config::Config;
+use crate::modbus::{
+    DeviceConfig, Interface, InterfaceNetworkParams, InterfaceWiredParams, ModbusDevice,
+};
+use crate::state::{
+    ConnectionStatus, DiscoveryField, DiscoveryParams, InterfaceKind, State, StatusMessage,
+};
+#[cfg(not(target_arch = "wasm32"))]
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+#[cfg(not(target_arch = "wasm32"))]
+use std::sync::Arc;
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::Duration;
 
 impl App {
     pub fn discovery(&self) -> Option<&DiscoveryParams> {

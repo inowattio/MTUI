@@ -1,4 +1,7 @@
-use super::*;
+use super::{App, BackgroundTask, PendingWrite, WriteOutcome, WriteType};
+use crate::compat;
+use crate::register::RegisterType;
+use crate::state::{Popup, State, StatusMessage, WriteParams};
 
 impl App {
     pub fn open_write(&mut self) {

@@ -1,4 +1,9 @@
-use super::*;
+use super::App;
+use crate::interpretator::format_ago;
+use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
+use crate::state::{Popup, ReadPanel};
+use chrono::{DateTime, Local, Utc};
+use std::collections::VecDeque;
 
 impl App {
     pub fn open_inspect(&mut self) {

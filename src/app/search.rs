@@ -1,4 +1,6 @@
-use super::*;
+use super::{fuzzy_score, App};
+use crate::register::{RegisterCell, RegisterType};
+use crate::state::{LabelParams, Popup, ReadPanel, SearchParams, State};
 
 impl App {
     fn search_mut(&mut self) -> Option<&mut SearchParams> {

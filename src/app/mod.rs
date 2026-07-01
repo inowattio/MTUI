@@ -1,30 +1,22 @@
-use crate::compat::{self, Instant, TaskHandle, TaskPoll};
-use crate::config::{
-    Column, Config, CustomRules, InterpretorConfig, KeybindAction, Label, Labels, Startup,
-};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::compat;
+use crate::compat::{Instant, TaskHandle};
+use crate::config::{Config, CustomRules, Label, Labels};
 use crate::constants::CONFIG_PATH;
-use crate::custom::{parse_enum, parse_op, CustomRepr, CustomRule};
-use crate::interpretator::{format_ago, Interpretor};
-use crate::modbus::{
-    DeviceConfig, DeviceIdAccess, Interface, InterfaceNetworkParams, InterfaceWiredParams,
-    ModbusDevice, WordOrder,
-};
-use crate::num_ops::{cycle, digit_add, digit_remove, wrap_index};
+use crate::custom::CustomRule;
+use crate::interpretator::Interpretor;
+use crate::modbus::ModbusDevice;
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
-use crate::state::{
-    ColumnsParams, ConnectionStatus, CustomField, CustomParams, DeviceIdParams, DiscoveryField,
-    DiscoveryParams, DumpParams, HelpParams, ImportParams, InterfaceKind, LabelParams,
-    LogViewParams, LogsParams, Outcome, Popup, PopupKind, RawField, RawParams, ReadPanel,
-    ReadParams, SearchParams, SettingsField, SettingsParams, State, StatusMessage,
-    SweepConfigParams, SweepField, WriteParams,
-};
-use crate::writes_log::{SharedWritesLog, WriteKind, WritesLogState};
-use chrono::{DateTime, Local, SecondsFormat, Utc};
+use crate::state::{ConnectionStatus, CustomParams, State};
+use crate::writes_log::SharedWritesLog;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::cell::Cell;
 use std::collections::{BTreeMap, VecDeque};
 use std::fs;
-use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU8, AtomicUsize, Ordering};
+#[cfg(not(target_arch = "wasm32"))]
+use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU8, AtomicUsize};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 

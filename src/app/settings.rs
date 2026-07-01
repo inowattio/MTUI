@@ -1,4 +1,7 @@
-use super::*;
+use super::App;
+
+use crate::num_ops::cycle;
+use crate::state::{ReadPanel, SettingsField, SettingsParams, State, StatusMessage};
 
 impl App {
     pub fn settings(&self) -> Option<&SettingsParams> {

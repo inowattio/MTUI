@@ -1,4 +1,8 @@
-use super::*;
+#[cfg(not(target_arch = "wasm32"))]
+use super::ClipboardHandle;
+use super::{fuzzy_rank, App};
+use crate::config::Column;
+use crate::state::{ColumnsParams, Popup, StatusMessage};
 
 impl App {
     pub fn open_columns(&mut self) {

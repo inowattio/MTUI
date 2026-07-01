@@ -1,4 +1,8 @@
-use super::*;
+use super::{
+    AllowSlaveFlag, ApiBindState, ApiDevice, App, BindStateFlag, BoundPort, ReadOnlyFlag,
+    StatusFlag,
+};
+use std::sync::atomic::Ordering;
 
 impl App {
     pub fn api_device(&self) -> ApiDevice {

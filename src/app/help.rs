@@ -1,4 +1,7 @@
-use super::*;
+use super::{fuzzy_rank, App};
+use crate::config::KeybindAction;
+use crate::num_ops::wrap_index;
+use crate::state::{HelpParams, Popup};
 
 impl App {
     pub fn open_help(&mut self) {
