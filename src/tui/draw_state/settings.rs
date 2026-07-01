@@ -221,6 +221,7 @@ fn field_view(
             on_off(device.custom_rules.show_continuation),
             Kind::Toggle,
         ),
+        SettingsField::ShowClock => ("Show clock", on_off(device.show_clock), Kind::Toggle),
         SettingsField::ShowFrameTime => (
             "Show frame render time",
             on_off(device.show_frame_time),

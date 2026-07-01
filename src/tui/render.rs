@@ -16,8 +16,11 @@ pub fn render(app: &mut App, frame: &mut Frame) {
 
     let mode = make_top_title(&app.state);
     let key_hints = make_bottom_title(&theme, &app.state, &app.config.keybinds);
-    let clock = Local::now().format("%H:%M:%S.%3f").to_string();
-    let mut clock_spans = vec![Span::styled(format!(" {clock} "), theme.accent_style())];
+    let mut clock_spans = Vec::new();
+    if app.config.show_clock {
+        let clock = Local::now().format("%H:%M:%S.%3f").to_string();
+        clock_spans.push(Span::styled(format!(" {clock} "), theme.accent_style()));
+    }
     if app.config.show_frame_time {
         clock_spans.push(Span::styled(
             format!(">{:?}ms ", app.last_frame.as_millis()),
