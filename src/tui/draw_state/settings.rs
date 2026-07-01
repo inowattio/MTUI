@@ -75,13 +75,6 @@ pub fn draw(params: &SettingsParams, app: &App, frame: &mut Frame, area: Rect, t
     frame.render_widget(Paragraph::new(lines).scroll((offset, 0)), list_area);
 
     let footer = Rect::new(area.x, area.y + area.height - 1, area.width, 1);
-    frame.render_widget(
-        Paragraph::new(Line::from(Span::styled(
-            concat!("  ", env!("CARGO_PKG_REPOSITORY")),
-            theme.dim_style(),
-        ))),
-        footer,
-    );
     if app.dirty {
         frame.render_widget(
             Paragraph::new(
