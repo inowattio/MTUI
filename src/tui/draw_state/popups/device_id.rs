@@ -42,13 +42,7 @@ pub(super) fn draw(
         }
     }
 
-    if let Some(status) = &params.status {
-        lines.push(Line::default());
-        lines.push(Line::from(Span::styled(
-            format!(" {}", status.text),
-            theme.message_style(status.kind),
-        )));
-    }
+    super::push_status(&mut lines, theme, params.status.as_ref());
 
     lines.push(Line::default());
     lines.push(hints::footer(

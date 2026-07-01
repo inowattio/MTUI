@@ -18,24 +18,15 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App) {
             theme.dim_style(),
         )));
     } else {
-        let rows = entries.len().div_ceil(2);
-        let cell = |i: usize| -> [Span<'static>; 2] {
+        let cell = |i: usize| -> Vec<Span<'static>> {
             let (name, value) = &entries[i];
             let value: String = value.chars().take(VALUE).collect();
-            [
+            vec![
                 Span::styled(format!(" {name:<NAME$} "), theme.dim_style()),
                 Span::styled(format!("{value:<VALUE$} "), theme.base()),
             ]
         };
-        for r in 0..rows {
-            let mut spans = cell(r).to_vec();
-            let right = r + rows;
-            if right < entries.len() {
-                spans.push(Span::raw(" "));
-                spans.extend(cell(right));
-            }
-            lines.push(Line::from(spans));
-        }
+        lines.extend(super::two_column(entries.len(), cell));
     }
     lines.push(Line::default());
     let kb = &app.config.keybinds;

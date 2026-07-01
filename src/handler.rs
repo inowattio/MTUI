@@ -3,8 +3,8 @@ use crate::config::{KeybindAction, Keybinds};
 use crate::input::{KeyCode, KeyEvent};
 use crate::modbus::{DataBits, Parity, StopBits, WordOrder};
 use crate::num_ops::{
-    decrement_option_by, digit_add, digit_add_option, digit_remove, digit_remove_option,
-    increment_option_by, negate_opt_option, set_option_to_zero, set_to_zero,
+    cycle, decrement_option_by, digit_add, digit_add_option, digit_remove, digit_remove_option,
+    increment_option_by, negate_opt_option, set_option_to_zero, set_to_zero, wrap_index,
 };
 use crate::state::{
     DiscoveryField, DiscoveryParams, InterfaceKind, LogsParams, Popup, PopupKind, ReadPanel,
@@ -57,11 +57,7 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         KeyCode::Left | KeyCode::Right if app.read().panel == ReadPanel::Matrix => {
             let cols = app.config.matrix_cols;
             let p = app.read_mut();
-            p.position = if key_event.code == KeyCode::Left {
-                p.position.saturating_sub(1)
-            } else {
-                p.position.saturating_add(1)
-            };
+            p.position = step_pos(p.position, key_event.code == KeyCode::Left, 1);
             p.scroll_to_cursor(rows, cols);
         }
         KeyCode::Left => app.scroll_columns(false),
@@ -89,6 +85,14 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
     Ok(())
 }
 
+fn step_pos(value: u16, up: bool, step: u16) -> u16 {
+    if up {
+        value.saturating_sub(step)
+    } else {
+        value.saturating_add(step)
+    }
+}
+
 fn move_read_cursor(app: &mut App, code: KeyCode) {
     let rows = app.visible_rows.get();
     let panel_len = app.panel_len();
@@ -103,28 +107,16 @@ fn move_read_cursor(app: &mut App, code: KeyCode) {
     let p = app.read_mut();
     match p.panel {
         ReadPanel::Main => {
-            p.position = if up {
-                p.position.saturating_sub(step)
-            } else {
-                p.position.saturating_add(step)
-            };
+            p.position = step_pos(p.position, up, step);
             p.scroll_to_cursor(rows, cols);
         }
         ReadPanel::Matrix => {
             let step = step.saturating_mul(cols.max(1));
-            p.position = if up {
-                p.position.saturating_sub(step)
-            } else {
-                p.position.saturating_add(step)
-            };
+            p.position = step_pos(p.position, up, step);
             p.scroll_to_cursor(rows, cols);
         }
         _ => {
-            p.pinned_index = if up {
-                p.pinned_index.saturating_sub(step)
-            } else {
-                p.pinned_index.saturating_add(step)
-            };
+            p.pinned_index = step_pos(p.pinned_index, up, step);
             p.scroll_pinned(rows, panel_len);
         }
     }
@@ -242,13 +234,13 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
             c if c == kb.action => app.commit_write(),
             c if c == kb.write => app.write_toggle_type(),
             c if c == kb.move_up => {
-                if let Some(Popup::Write(w)) = &mut app.read_mut().popup {
+                if let Some(w) = app.write_mut() {
                     decrement_option_by(&mut w.value, 1);
                 }
                 app.clamp_write_value();
             }
             c if c == kb.move_down => {
-                if let Some(Popup::Write(w)) = &mut app.read_mut().popup {
+                if let Some(w) = app.write_mut() {
                     increment_option_by(&mut w.value, 1);
                 }
                 app.clamp_write_value();
@@ -257,19 +249,19 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
             KeyCode::Right => app.write_move_bit(false),
             c if c == kb.pause => app.write_toggle_bit(),
             KeyCode::Char('-') => {
-                if let Some(Popup::Write(w)) = &mut app.read_mut().popup {
+                if let Some(w) = app.write_mut() {
                     negate_opt_option(&mut w.value);
                 }
                 app.clamp_write_value();
             }
             KeyCode::Backspace => {
-                if let Some(Popup::Write(w)) = &mut app.read_mut().popup {
+                if let Some(w) = app.write_mut() {
                     digit_remove_option(&mut w.value);
                 }
             }
             KeyCode::Char(c) if c.is_ascii_digit() => {
                 let digit = c as u8 - b'0';
-                if let Some(Popup::Write(w)) = &mut app.read_mut().popup {
+                if let Some(w) = app.write_mut() {
                     digit_add_option(&mut w.value, digit);
                 }
                 app.clamp_write_value();
@@ -404,7 +396,7 @@ fn paste_digits(digits: &str, app: &mut App) {
 
     match app.popup_kind() {
         Some(PopupKind::Write) => {
-            if let Some(Popup::Write(w)) = &mut app.read_mut().popup {
+            if let Some(w) = app.write_mut() {
                 set_option_to_zero(&mut w.value);
                 for digit in digits {
                     digit_add_option(&mut w.value, digit);
@@ -457,16 +449,12 @@ async fn handle_discovery_key(key_event: KeyEvent, app: &mut App) {
         },
         c if c == kb.move_up => {
             if let Some(d) = app.discovery_mut() {
-                d.selected = if d.selected == 0 {
-                    count - 1
-                } else {
-                    d.selected - 1
-                };
+                d.selected = wrap_index(d.selected, count, false);
             }
         }
         c if c == kb.move_down => {
             if let Some(d) = app.discovery_mut() {
-                d.selected = (d.selected + 1) % count;
+                d.selected = wrap_index(d.selected, count, true);
             }
         }
         KeyCode::Left => {
@@ -539,37 +527,19 @@ fn handle_scan_popup_key(key_event: KeyEvent, app: &mut App, kb: Keybinds) {
         c if c == kb.move_up => {
             if let Some(d) = app.discovery_mut() {
                 if len > 0 {
-                    d.scan_selected = if d.scan_selected == 0 {
-                        len - 1
-                    } else {
-                        d.scan_selected - 1
-                    };
+                    d.scan_selected = wrap_index(d.scan_selected, len, false);
                 }
             }
         }
         c if c == kb.move_down => {
             if let Some(d) = app.discovery_mut() {
                 if len > 0 {
-                    d.scan_selected = (d.scan_selected + 1) % len;
+                    d.scan_selected = wrap_index(d.scan_selected, len, true);
                 }
             }
         }
         _ => {}
     }
-}
-
-fn cycle<T: Copy + PartialEq>(items: &[T], current: T, forward: bool) -> T {
-    if items.is_empty() {
-        return current;
-    }
-    let i = items.iter().position(|x| *x == current).unwrap_or(0);
-    let n = items.len();
-    let j = if forward {
-        (i + 1) % n
-    } else {
-        (i + n - 1) % n
-    };
-    items[j]
 }
 
 fn cycle_field(d: &mut DiscoveryParams, field: DiscoveryField, forward: bool) {
@@ -602,11 +572,7 @@ fn cycle_field(d: &mut DiscoveryParams, field: DiscoveryField, forward: bool) {
         DiscoveryField::Port => {
             if !d.ports.is_empty() {
                 let n = d.ports.len() as u16;
-                d.port_index = if forward {
-                    (d.port_index + 1) % n
-                } else {
-                    (d.port_index + n - 1) % n
-                };
+                d.port_index = wrap_index(d.port_index, n, forward);
             }
         }
         DiscoveryField::Baud => d.baud_rate = cycle(&BAUDS, d.baud_rate, forward),
@@ -638,7 +604,7 @@ async fn handle_settings_key(key_event: KeyEvent, app: &mut App) {
 
     let kb = app.config.keybinds;
     let count = SettingsField::ALL.len() as u16;
-    let selected = app.settings().map(|s| s.selected).unwrap_or(0);
+    let selected = app.settings().map_or(0, |s| s.selected);
     let field = SettingsField::ALL[selected as usize];
 
     match key_event.code {
@@ -646,51 +612,22 @@ async fn handle_settings_key(key_event: KeyEvent, app: &mut App) {
         c if c == kb.settings && !field.is_text_input() => app.close_settings(),
         c if c == kb.move_up => {
             if let Some(s) = app.settings_mut() {
-                s.selected = if s.selected == 0 {
-                    count - 1
-                } else {
-                    s.selected - 1
-                };
+                s.selected = wrap_index(s.selected, count, false);
             }
         }
         c if c == kb.move_down => {
             if let Some(s) = app.settings_mut() {
-                s.selected = (s.selected + 1) % count;
+                s.selected = wrap_index(s.selected, count, true);
             }
         }
         KeyCode::Left => app.settings_adjust(field, -1),
         KeyCode::Right => app.settings_adjust(field, 1),
-        c if c == kb.pause
-            && matches!(
-                field,
-                SettingsField::ReadOnly
-                    | SettingsField::ApiSlaveOverride
-                    | SettingsField::LogWrites
-                    | SettingsField::ShowContinuation
-                    | SettingsField::StartupPanel
-                    | SettingsField::IgnoreDirty
-                    | SettingsField::CycleHoldings
-                    | SettingsField::CycleInputs
-                    | SettingsField::CycleCoils
-                    | SettingsField::CycleDiscretes
-            ) =>
-        {
-            app.settings_adjust(field, 1)
-        }
+        c if c == kb.pause && field.is_toggle() => app.settings_adjust(field, 1),
         c if c == kb.action => match field {
             SettingsField::ClearPins => app.clear_pins(),
             SettingsField::ClearLabels => app.clear_labels(),
             SettingsField::ClearCustom => app.clear_custom(),
-            SettingsField::ReadOnly
-            | SettingsField::ApiSlaveOverride
-            | SettingsField::LogWrites
-            | SettingsField::ShowContinuation
-            | SettingsField::StartupPanel
-            | SettingsField::IgnoreDirty
-            | SettingsField::CycleHoldings
-            | SettingsField::CycleInputs
-            | SettingsField::CycleCoils
-            | SettingsField::CycleDiscretes => app.settings_adjust(field, 1),
+            f if f.is_toggle() => app.settings_adjust(f, 1),
             SettingsField::EditKeybinds => {
                 if let Some(s) = app.settings_mut() {
                     s.open_keybinds();

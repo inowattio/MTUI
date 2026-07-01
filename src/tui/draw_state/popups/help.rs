@@ -52,12 +52,7 @@ pub(super) fn draw(
         })
         .collect();
 
-    let query_line = Line::from(vec![
-        Span::styled(" > ", theme.accent_style()),
-        Span::styled(help.query.clone(), theme.base()),
-        Span::styled("_", theme.accent_style()),
-        Span::styled(format!("   ({})", matches.len()), theme.dim_style()),
-    ]);
+    let query_line = super::query_line(theme, &help.query, matches.len());
 
     let mut lines: Vec<Line> = Vec::with_capacity(rows + 4);
     lines.push(query_line);

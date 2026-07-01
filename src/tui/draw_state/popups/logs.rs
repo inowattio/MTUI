@@ -9,8 +9,7 @@ use ratatui::Frame;
 pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, kb: &Keybinds, logs: &LogsParams) {
     let visible = LogsParams::VISIBLE as usize;
     let len = logs.lines.len();
-    let top = (logs.top as usize).min(len.saturating_sub(1));
-    let end = (top + visible).min(len);
+    let (top, end) = super::window(logs.top as usize, visible, len);
 
     let mut lines = vec![
         Line::from(Span::styled(format!(" {}", logs.path), theme.dim_style())),

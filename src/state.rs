@@ -2,9 +2,44 @@ use crate::app::WriteType;
 use crate::compat::Instant;
 use crate::custom::{CustomOp, CustomRepr, EnumEntry};
 use crate::modbus::{DataBits, DeviceIdAccess, Parity, StopBits, WordOrder};
+use crate::num_ops::{cycle, wrap_index};
 use crate::register::{RegisterCell, RegisterType};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
+
+macro_rules! field_enum {
+    ( $(#[$meta:meta])* $vis:vis enum $name:ident { $( $(#[$vmeta:meta])* $variant:ident ),+ $(,)? } ) => {
+        $(#[$meta])*
+        $vis enum $name { $( $(#[$vmeta])* $variant ),+ }
+        impl $name {
+            pub const ALL: [$name; field_enum!(@count $($variant)+)] = [$($name::$variant),+];
+        }
+    };
+    (@count) => (0usize);
+    (@count $head:ident $($tail:ident)*) => (1usize + field_enum!(@count $($tail)*));
+}
+
+macro_rules! popups {
+    ( $( $variant:ident $( ( $payload:ty ) )? ),+ $(,)? ) => {
+        #[derive(Debug, PartialEq)]
+        pub enum Popup {
+            $( $variant $( ( $payload ) )? ),+
+        }
+
+        #[derive(Clone, Copy, PartialEq, Eq)]
+        pub enum PopupKind {
+            $( $variant ),+
+        }
+
+        impl Popup {
+            pub fn kind(&self) -> PopupKind {
+                match self {
+                    $( Popup::$variant { .. } => PopupKind::$variant ),+
+                }
+            }
+        }
+    };
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InterfaceKind {
@@ -163,14 +198,12 @@ pub struct DeviceIdParams {
     pub loading: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RawField {
-    Code,
-    Data,
-}
-
-impl RawField {
-    pub const ALL: [RawField; 2] = [RawField::Code, RawField::Data];
+field_enum! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum RawField {
+        Code,
+        Data,
+    }
 }
 
 #[derive(Debug, Default, PartialEq)]
@@ -182,36 +215,28 @@ pub struct RawParams {
     pub status: Option<StatusMessage>,
 }
 
+fn clamp_pick<const N: usize, T: Copy>(selected: u16, all: &[T; N]) -> T {
+    all[(selected as usize).min(N - 1)]
+}
+
 impl RawParams {
     pub fn current_field(&self) -> RawField {
-        let i = (self.selected as usize).min(RawField::ALL.len() - 1);
-        RawField::ALL[i]
+        clamp_pick(self.selected, &RawField::ALL)
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CustomField {
-    Repr,
-    Ops,
-    Enum,
-    Decimals,
-    Prefix,
-    Suffix,
-    Save,
-    Remove,
-}
-
-impl CustomField {
-    pub const ALL: [CustomField; 8] = [
-        CustomField::Repr,
-        CustomField::Ops,
-        CustomField::Enum,
-        CustomField::Decimals,
-        CustomField::Prefix,
-        CustomField::Suffix,
-        CustomField::Save,
-        CustomField::Remove,
-    ];
+field_enum! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum CustomField {
+        Repr,
+        Ops,
+        Enum,
+        Decimals,
+        Prefix,
+        Suffix,
+        Save,
+        Remove,
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -233,26 +258,18 @@ pub struct CustomParams {
 
 impl CustomParams {
     pub fn current_field(&self) -> CustomField {
-        let i = (self.selected as usize).min(CustomField::ALL.len() - 1);
-        CustomField::ALL[i]
+        clamp_pick(self.selected, &CustomField::ALL)
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SweepField {
-    From,
-    To,
-    Mode,
-    Action,
-}
-
-impl SweepField {
-    pub const ALL: [SweepField; 4] = [
-        SweepField::From,
-        SweepField::To,
-        SweepField::Mode,
-        SweepField::Action,
-    ];
+field_enum! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum SweepField {
+        From,
+        To,
+        Mode,
+        Action,
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -265,8 +282,7 @@ pub struct SweepConfigParams {
 
 impl SweepConfigParams {
     pub fn current_field(&self) -> SweepField {
-        let i = (self.selected as usize).min(SweepField::ALL.len() - 1);
-        SweepField::ALL[i]
+        clamp_pick(self.selected, &SweepField::ALL)
     }
 }
 
@@ -315,25 +331,19 @@ fn scroll_window(cursor: &mut u16, top: &mut u16, rows: u16, len: u16) {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
-pub enum ReadPanel {
-    #[default]
-    Main,
-    Pinned,
-    Labeled,
-    Custom,
-    Matrix,
+field_enum! {
+    #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+    pub enum ReadPanel {
+        #[default]
+        Main,
+        Pinned,
+        Labeled,
+        Custom,
+        Matrix,
+    }
 }
 
 impl ReadPanel {
-    pub const ALL: [ReadPanel; 5] = [
-        ReadPanel::Main,
-        ReadPanel::Pinned,
-        ReadPanel::Labeled,
-        ReadPanel::Custom,
-        ReadPanel::Matrix,
-    ];
-
     pub fn name(self) -> &'static str {
         match self {
             ReadPanel::Main => "Main",
@@ -345,60 +355,53 @@ impl ReadPanel {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SettingsField {
-    Name,
-    RegistersBatch,
-    AutoUpdate,
-    HistoryCap,
-    MatrixCols,
-    ReadOnly,
-    LogWrites,
-    ApiPort,
-    ApiSlaveOverride,
-    StartupPanel,
-    CycleHoldings,
-    CycleInputs,
-    CycleCoils,
-    CycleDiscretes,
-    IgnoreDirty,
-    ClearPins,
-    ClearLabels,
-    ClearCustom,
-    ShowContinuation,
-    EditKeybinds,
-    Save,
-    LoadConfig,
+field_enum! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum SettingsField {
+        Name,
+        RegistersBatch,
+        AutoUpdate,
+        HistoryCap,
+        MatrixCols,
+        ReadOnly,
+        LogWrites,
+        ApiPort,
+        ApiSlaveOverride,
+        StartupPanel,
+        CycleHoldings,
+        CycleInputs,
+        CycleCoils,
+        CycleDiscretes,
+        IgnoreDirty,
+        ClearPins,
+        ClearLabels,
+        ClearCustom,
+        ShowContinuation,
+        EditKeybinds,
+        Save,
+        LoadConfig,
+    }
 }
 
 impl SettingsField {
-    pub const ALL: [SettingsField; 22] = [
-        SettingsField::Name,
-        SettingsField::RegistersBatch,
-        SettingsField::AutoUpdate,
-        SettingsField::HistoryCap,
-        SettingsField::MatrixCols,
-        SettingsField::ReadOnly,
-        SettingsField::LogWrites,
-        SettingsField::ApiPort,
-        SettingsField::ApiSlaveOverride,
-        SettingsField::StartupPanel,
-        SettingsField::CycleHoldings,
-        SettingsField::CycleInputs,
-        SettingsField::CycleCoils,
-        SettingsField::CycleDiscretes,
-        SettingsField::IgnoreDirty,
-        SettingsField::ClearPins,
-        SettingsField::ClearLabels,
-        SettingsField::ClearCustom,
-        SettingsField::ShowContinuation,
-        SettingsField::EditKeybinds,
-        SettingsField::Save,
-        SettingsField::LoadConfig,
-    ];
-
     pub fn is_text_input(self) -> bool {
         matches!(self, SettingsField::Name | SettingsField::LoadConfig)
+    }
+
+    pub fn is_toggle(self) -> bool {
+        matches!(
+            self,
+            SettingsField::ReadOnly
+                | SettingsField::ApiSlaveOverride
+                | SettingsField::LogWrites
+                | SettingsField::ShowContinuation
+                | SettingsField::StartupPanel
+                | SettingsField::IgnoreDirty
+                | SettingsField::CycleHoldings
+                | SettingsField::CycleInputs
+                | SettingsField::CycleCoils
+                | SettingsField::CycleDiscretes
+        )
     }
 
     pub fn cycle_register_type(self) -> Option<RegisterType> {
@@ -493,15 +496,7 @@ impl SettingsParams {
         if count == 0 {
             return;
         }
-        self.kb_selected = if up {
-            if self.kb_selected == 0 {
-                count - 1
-            } else {
-                self.kb_selected - 1
-            }
-        } else {
-            (self.kb_selected + 1) % count
-        };
+        self.kb_selected = wrap_index(self.kb_selected, count, !up);
         self.kb_scroll_into_view(count);
     }
 
@@ -518,13 +513,12 @@ impl SettingsParams {
     }
 
     fn kb_scroll_into_view(&mut self, count: u16) {
-        let visible = Self::KB_VISIBLE.min(count);
-        if self.kb_selected < self.kb_top {
-            self.kb_top = self.kb_selected;
-        } else if self.kb_selected >= self.kb_top + visible {
-            self.kb_top = self.kb_selected + 1 - visible;
-        }
-        self.kb_top = self.kb_top.min(count.saturating_sub(visible));
+        scroll_window(
+            &mut self.kb_selected,
+            &mut self.kb_top,
+            Self::KB_VISIBLE,
+            count,
+        );
     }
 }
 
@@ -549,8 +543,7 @@ impl LogsParams {
     }
 }
 
-#[derive(Debug, PartialEq)]
-pub enum Popup {
+popups! {
     Help(HelpParams),
     Dump(DumpParams),
     Search(SearchParams),
@@ -566,47 +559,6 @@ pub enum Popup {
     Raw(RawParams),
     Import(ImportParams),
     Quit,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum PopupKind {
-    Help,
-    Dump,
-    Search,
-    Label,
-    Custom,
-    Columns,
-    Write,
-    Slave,
-    Logs,
-    SweepConfig,
-    Inspect,
-    DeviceId,
-    Raw,
-    Import,
-    Quit,
-}
-
-impl Popup {
-    pub fn kind(&self) -> PopupKind {
-        match self {
-            Popup::Help(_) => PopupKind::Help,
-            Popup::Dump(_) => PopupKind::Dump,
-            Popup::Search(_) => PopupKind::Search,
-            Popup::Label(_) => PopupKind::Label,
-            Popup::Custom(_) => PopupKind::Custom,
-            Popup::Columns(_) => PopupKind::Columns,
-            Popup::Write(_) => PopupKind::Write,
-            Popup::Slave(_) => PopupKind::Slave,
-            Popup::Logs(_) => PopupKind::Logs,
-            Popup::SweepConfig(_) => PopupKind::SweepConfig,
-            Popup::Inspect => PopupKind::Inspect,
-            Popup::DeviceId(_) => PopupKind::DeviceId,
-            Popup::Raw(_) => PopupKind::Raw,
-            Popup::Import(_) => PopupKind::Import,
-            Popup::Quit => PopupKind::Quit,
-        }
-    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -677,13 +629,7 @@ impl ReadParams {
     }
 
     pub fn toggle_panel(&mut self) {
-        self.panel = match self.panel {
-            ReadPanel::Main => ReadPanel::Pinned,
-            ReadPanel::Pinned => ReadPanel::Labeled,
-            ReadPanel::Labeled => ReadPanel::Custom,
-            ReadPanel::Custom => ReadPanel::Matrix,
-            ReadPanel::Matrix => ReadPanel::Main,
-        };
+        self.panel = cycle(&ReadPanel::ALL, self.panel, true);
     }
 
     pub fn scroll_pinned(&mut self, rows: u16, len: u16) {

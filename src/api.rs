@@ -229,10 +229,7 @@ fn current(device: &ApiDevice) -> Option<ModbusDevice> {
 }
 
 fn describe_slave(slave: Option<u8>) -> String {
-    match slave {
-        Some(id) => id.to_string(),
-        None => "default".to_string(),
-    }
+    slave.map_or_else(|| "default".to_string(), |id| id.to_string())
 }
 
 fn slave_override_forbidden(state: &ApiState, slave: Option<u8>) -> bool {

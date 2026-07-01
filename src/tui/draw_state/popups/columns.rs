@@ -20,12 +20,7 @@ pub(super) fn draw(
 
     const CELL: usize = 14;
 
-    let query_line = Line::from(vec![
-        Span::styled(" > ", theme.accent_style()),
-        Span::styled(params.query.clone(), theme.base()),
-        Span::styled("_", theme.accent_style()),
-        Span::styled(format!("   ({count})"), theme.dim_style()),
-    ]);
+    let query_line = super::query_line(theme, &params.query, count);
 
     let mut lines: Vec<Line> = vec![query_line, Line::default()];
 
@@ -35,8 +30,7 @@ pub(super) fn draw(
             theme.dim_style(),
         )));
     } else {
-        let rows = count.div_ceil(2);
-        let cell = |i: usize| -> Span<'static> {
+        let cell = |i: usize| -> Vec<Span<'static>> {
             let column = matches[i];
             let on = app.interpreter.is_enabled(column);
             let mark = if on { "[x]" } else { "[ ]" };
@@ -47,18 +41,12 @@ pub(super) fn draw(
             } else {
                 theme.dim_style()
             };
-            Span::styled(format!(" {mark} {:<CELL$} ", column.name()), style)
+            vec![Span::styled(
+                format!(" {mark} {:<CELL$} ", column.name()),
+                style,
+            )]
         };
-
-        for r in 0..rows {
-            let mut spans = vec![cell(r)];
-            let right = r + rows;
-            if right < count {
-                spans.push(Span::raw(" "));
-                spans.push(cell(right));
-            }
-            lines.push(Line::from(spans));
-        }
+        lines.extend(super::two_column(count, cell));
     }
 
     lines.push(Line::default());
@@ -68,7 +56,7 @@ pub(super) fn draw(
         Hint::key(kb.action, "Toggle"),
         Hint::key(kb.exit, "Close"),
     ];
-    let width = ((CELL as u16 + 6) * 2 + 3).max(hints::width(&footer) as u16);
+    let width = hints::min_width((CELL as u16 + 6) * 2 + 3, &footer);
     lines.push(hints::footer(theme, footer));
 
     super::render(frame, area, theme, "Columns", width, lines);

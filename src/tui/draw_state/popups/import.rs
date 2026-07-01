@@ -15,7 +15,7 @@ pub(super) fn draw(
     params: &ImportParams,
 ) {
     let mut lines = vec![Line::from(Span::styled(
-        "Found importable data on the clipboard:".to_string(),
+        "Found importable data on the clipboard:",
         theme.base(),
     ))];
 
@@ -35,7 +35,7 @@ pub(super) fn draw(
 
     lines.push(Line::default());
     lines.push(Line::from(Span::styled(
-        "Entries at the same address are overwritten.".to_string(),
+        "Entries at the same address are overwritten.",
         theme.dim_style(),
     )));
     lines.push(hints::footer(

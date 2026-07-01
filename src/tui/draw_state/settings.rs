@@ -2,6 +2,7 @@ use crate::app::{ApiBindState, App};
 use crate::config::KeybindAction;
 use crate::input::KeyCode;
 use crate::state::{SettingsField, SettingsParams};
+use crate::tui::draw_state::{edit_value, field_row, marker};
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
 use ratatui::layout::Rect;
@@ -104,24 +105,12 @@ fn render_field(
 ) -> Line<'static> {
     let (name, value, kind) = field_view(app, params, field);
 
-    let marker = if selected { "> " } else { "  " };
-    let style = if selected {
-        theme.selected_style()
-    } else {
-        theme.base()
-    };
-
     let value_text = match (selected, kind) {
-        (true, Kind::Toggle) => format!("\u{2039} {value} \u{203a}"),
-        (true, Kind::Number) => format!("{value}_"),
         (true, Kind::Action) => format!("{value}  \u{2190} enter"),
-        (false, _) => value,
+        (s, k) => edit_value(value, s, matches!(k, Kind::Toggle)),
     };
 
-    Line::from(vec![
-        Span::styled(format!("{marker}{name:<24} "), theme.dim_style()),
-        Span::styled(value_text, style),
-    ])
+    field_row(theme, name, 24, value_text, selected)
 }
 
 fn field_view(
@@ -262,12 +251,8 @@ fn draw_keybinds(params: &SettingsParams, app: &App, frame: &mut Frame, area: Re
         let selected = idx == params.kb_selected;
         let capturing = selected && params.kb_capturing;
 
-        let marker = if selected { "> " } else { "  " };
-        let style = if selected {
-            theme.selected_style()
-        } else {
-            theme.base()
-        };
+        let marker = marker(selected);
+        let style = theme.line_style(selected);
 
         let value = if capturing {
             "press a key\u{2026}".to_string()

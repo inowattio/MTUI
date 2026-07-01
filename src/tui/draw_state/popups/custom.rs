@@ -1,6 +1,7 @@
 use crate::app::App;
 use crate::input::KeyCode;
 use crate::state::{CustomField, CustomParams};
+use crate::tui::draw_state::{cyclable, field_row};
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
 use ratatui::layout::Rect;
@@ -10,18 +11,8 @@ use ratatui::Frame;
 pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &CustomParams) {
     let sel = c.current_field();
 
-    let field_line = |label: &str, value: String, selected: bool| -> Line<'static> {
-        let marker = if selected { "> " } else { "  " };
-        let style = if selected {
-            theme.selected_style()
-        } else {
-            theme.base()
-        };
-        Line::from(vec![
-            Span::styled(format!("{marker}{label:<12} "), theme.dim_style()),
-            Span::styled(value, style),
-        ])
-    };
+    let field_line =
+        |label: &str, value: String, selected: bool| field_row(theme, label, 12, value, selected);
 
     let mut lines: Vec<Line> = vec![];
 
@@ -29,7 +20,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &
         Ok((input, output)) => Line::from(vec![
             Span::styled(" Preview  ", theme.dim_style()),
             Span::styled(input.to_string(), theme.base()),
-            Span::styled(" \u{2192} ".to_string(), theme.dim_style()),
+            Span::styled(" \u{2192} ", theme.dim_style()),
             Span::styled(output, theme.accent_style()),
         ]),
         Err(reason) => Line::from(vec![
@@ -41,7 +32,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &
 
     let repr_val = format!("{}  ({} reg)", c.repr.label(), c.repr.register_count());
     let repr_val = if sel == CustomField::Repr {
-        format!("\u{2039} {repr_val} \u{203a}")
+        cyclable(&repr_val)
     } else {
         repr_val
     };
@@ -59,7 +50,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &
     lines.push(field_line("Operations", ops_str, sel == CustomField::Ops));
     if sel == CustomField::Ops {
         lines.push(Line::from(Span::styled(
-            "    (enter adds, backspace removes)".to_string(),
+            "    (enter adds, backspace removes)",
             theme.dim_style(),
         )));
         lines.push(Line::from(Span::styled(
@@ -80,7 +71,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &
     lines.push(field_line("Enum", enum_str, sel == CustomField::Enum));
     if sel == CustomField::Enum {
         lines.push(Line::from(Span::styled(
-            "    (enter adds, backspace removes)".to_string(),
+            "    (enter adds, backspace removes)",
             theme.dim_style(),
         )));
         lines.push(Line::from(Span::styled(
@@ -97,7 +88,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &
     lines.push(field_line("Decimals", dec, sel == CustomField::Decimals));
     if sel == CustomField::Decimals {
         lines.push(Line::from(Span::styled(
-            "    auto; 0 for none; numerical for amount".to_string(),
+            "    auto; 0 for none; numerical for amount",
             theme.dim_style(),
         )));
     }
@@ -105,7 +96,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &
     let pfx = if sel == CustomField::Prefix {
         format!("{} ", c.prefix)
     } else {
-        c.suffix.to_string()
+        c.prefix.to_string()
     };
     lines.push(field_line("Prefix", pfx, sel == CustomField::Prefix));
 
@@ -137,7 +128,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &
     if let Some(err) = &c.error {
         lines.push(Line::default());
         lines.push(Line::from(Span::styled(
-            format!(" {}", err.clone()),
+            format!(" {err}"),
             theme.err_style(),
         )));
     }
