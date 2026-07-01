@@ -43,6 +43,7 @@ impl App {
             running: true,
             connection: ConnectionStatus::Unknown,
             frame: 0,
+            last_frame: std::time::Duration::ZERO,
             paused: false,
             headless: false,
             dirty: false,

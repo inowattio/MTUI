@@ -35,7 +35,9 @@ where
     }
 
     pub fn draw(&mut self, app: &mut App) -> AppResult<()> {
+        let started = crate::compat::Instant::now();
         self.terminal.draw(|frame| render(app, frame))?;
+        app.last_frame = started.elapsed();
         Ok(())
     }
 

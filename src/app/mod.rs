@@ -246,6 +246,7 @@ pub struct App {
     pub interpreter: Interpretor,
     pub connection: ConnectionStatus,
     pub frame: u64,
+    pub last_frame: Duration,
     pub paused: bool,
     pub headless: bool,
     pub dirty: bool,

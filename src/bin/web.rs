@@ -121,7 +121,9 @@ mod web {
                 }
 
                 if must_draw {
+                    let started = compat::Instant::now();
                     let _ = terminal.draw(|frame| render(&mut app, frame));
+                    app.last_frame = started.elapsed();
                 }
             }
         }));
