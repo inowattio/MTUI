@@ -17,13 +17,14 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     let mode = make_top_title(&app.state);
     let key_hints = make_bottom_title(&theme, &app.state, &app.config.keybinds);
     let clock = Local::now().format("%H:%M:%S.%3f").to_string();
-    let clock_line = Line::from(vec![
-        Span::styled(format!(" {clock} "), theme.accent_style()),
-        Span::styled(
+    let mut clock_spans = vec![Span::styled(format!(" {clock} "), theme.accent_style())];
+    if app.config.show_frame_time {
+        clock_spans.push(Span::styled(
             format!(">{:?}ms ", app.last_frame.as_millis()),
             theme.dim_style(),
-        ),
-    ]);
+        ));
+    }
+    let clock_line = Line::from(clock_spans);
 
     let mut top_right = match &app.state {
         State::Read(p) => draw_state::read::live_status(app, p, &theme),

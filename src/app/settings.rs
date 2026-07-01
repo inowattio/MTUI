@@ -88,6 +88,9 @@ impl App {
                 self.config.custom_rules.show_continuation =
                     !self.config.custom_rules.show_continuation
             }
+            SettingsField::ShowFrameTime => {
+                self.config.show_frame_time = !self.config.show_frame_time
+            }
             SettingsField::StartupPanel => {
                 self.config.startup.panel =
                     cycle(&ReadPanel::ALL, self.config.startup.panel, delta > 0);

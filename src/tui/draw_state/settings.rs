@@ -221,6 +221,11 @@ fn field_view(
             on_off(device.custom_rules.show_continuation),
             Kind::Toggle,
         ),
+        SettingsField::ShowFrameTime => (
+            "Show frame render time",
+            on_off(device.show_frame_time),
+            Kind::Toggle,
+        ),
         SettingsField::EditKeybinds => ("Edit keybinds", "open".to_string(), Kind::Action),
         SettingsField::Save => (
             "Save configuration",

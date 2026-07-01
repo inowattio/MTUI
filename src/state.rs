@@ -377,6 +377,7 @@ field_enum! {
         ClearLabels,
         ClearCustom,
         ShowContinuation,
+        ShowFrameTime,
         EditKeybinds,
         Save,
         LoadConfig,
@@ -395,6 +396,7 @@ impl SettingsField {
                 | SettingsField::ApiSlaveOverride
                 | SettingsField::LogWrites
                 | SettingsField::ShowContinuation
+                | SettingsField::ShowFrameTime
                 | SettingsField::StartupPanel
                 | SettingsField::IgnoreDirty
                 | SettingsField::CycleHoldings
