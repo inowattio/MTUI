@@ -113,7 +113,8 @@ impl App {
             .copied()
             .filter(|&c| c.is_graphable() && self.interpreter.is_enabled(c))
             .collect();
-        if self.interpreter.is_enabled(Column::Custom) && self.custom_rule(self.cursor_cell()).is_some()
+        if self.interpreter.is_enabled(Column::Custom)
+            && self.custom_rule(self.cursor_cell()).is_some()
         {
             cols.push(Column::Custom);
         }

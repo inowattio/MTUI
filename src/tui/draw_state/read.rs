@@ -689,7 +689,11 @@ fn draw_graph(
         theme.dim_style()
     };
     let delta_str = if is_float {
-        format!("{}{}", if delta < 0.0 { "-" } else { "+" }, fmt_num(delta.abs(), true))
+        format!(
+            "{}{}",
+            if delta < 0.0 { "-" } else { "+" },
+            fmt_num(delta.abs(), true)
+        )
     } else {
         format!("{delta:+.0}")
     };
