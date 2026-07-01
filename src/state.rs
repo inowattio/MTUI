@@ -1,5 +1,6 @@
 use crate::app::WriteType;
 use crate::compat::Instant;
+use crate::config::Column;
 use crate::custom::{CustomOp, CustomRepr, EnumEntry};
 use crate::modbus::{DataBits, DeviceIdAccess, Parity, StopBits, WordOrder};
 use crate::num_ops::{cycle, wrap_index};
@@ -646,7 +647,7 @@ pub struct ReadParams {
     pub pinned_top: u16,
     pub popup: Option<Popup>,
     pub graph: bool,
-    pub graph_dword: bool,
+    pub graph_column: Column,
     pub refresh_timer: Instant,
     pub register_type: RegisterType,
     pub read_duration: Option<Duration>,
@@ -669,7 +670,7 @@ impl Default for ReadParams {
             pinned_top: 0,
             popup: None,
             graph: false,
-            graph_dword: false,
+            graph_column: Column::U16,
             refresh_timer: Instant::now(),
             register_type: Default::default(),
             read_duration: None,

@@ -77,6 +77,43 @@ const COLUMNS: &[ColumnSpec] = &[
     ColumnSpec { name: "custom",  width: 18, enabled: |c| c.custom,   render: |c, _, o| o.push_str(&c.custom) },
 ];
 
+impl Column {
+    pub fn graph_width(self) -> Option<usize> {
+        Some(match self {
+            Column::U16 | Column::I16 | Column::F16 | Column::Bcd => 1,
+            Column::U32 | Column::I32 | Column::F32 | Column::Bcd32 => 2,
+            Column::U64 | Column::I64 | Column::F64 => 4,
+            _ => return None,
+        })
+    }
+
+    pub fn is_graphable(self) -> bool {
+        self.graph_width().is_some()
+    }
+
+    pub fn graph_is_float(self) -> bool {
+        matches!(self, Column::F16 | Column::F32 | Column::F64)
+    }
+}
+
+pub fn graph_value(column: Column, order: WordOrder, regs: &[u16]) -> Option<f64> {
+    let word = |a: usize| order.make_word(regs[a], regs[a + 1]);
+    Some(match column {
+        Column::U16 => regs[0] as f64,
+        Column::I16 => regs[0] as i16 as f64,
+        Column::F16 => f16_to_f32(regs[0]) as f64,
+        Column::Bcd => bcd_to_decimal(regs[0])? as f64,
+        Column::U32 => word(0) as f64,
+        Column::I32 => word(0) as i32 as f64,
+        Column::F32 => f32::from_bits(word(0)) as f64,
+        Column::Bcd32 => bcd_to_decimal(word(0))? as f64,
+        Column::U64 => order.make_dword(word(0), word(2)) as f64,
+        Column::I64 => order.make_dword(word(0), word(2)) as i64 as f64,
+        Column::F64 => f64::from_bits(order.make_dword(word(0), word(2))),
+        _ => return None,
+    })
+}
+
 impl Interpretor {
     pub fn new(interpretation: InterpretorConfig, word_order: WordOrder) -> Self {
         let mut interpretor = Self {

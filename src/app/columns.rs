@@ -107,9 +107,44 @@ impl App {
         self.set_read_status(message);
     }
 
-    pub fn toggle_graph_width(&mut self) {
-        let p = self.read_mut();
-        p.graph_dword = !p.graph_dword;
+    fn graphable_columns(&self) -> Vec<Column> {
+        let mut cols: Vec<Column> = Column::ALL
+            .iter()
+            .copied()
+            .filter(|&c| c.is_graphable() && self.interpreter.is_enabled(c))
+            .collect();
+        if self.interpreter.is_enabled(Column::Custom) && self.custom_rule(self.cursor_cell()).is_some()
+        {
+            cols.push(Column::Custom);
+        }
+        cols
+    }
+
+    pub fn graph_cycle_len(&self) -> usize {
+        self.graphable_columns().len()
+    }
+
+    pub fn active_graph_column(&self) -> Option<Column> {
+        let cols = self.graphable_columns();
+        let current = self.read().graph_column;
+        if cols.contains(&current) {
+            Some(current)
+        } else {
+            cols.first().copied()
+        }
+    }
+
+    pub fn cycle_graph_interpretation(&mut self) {
+        let cols = self.graphable_columns();
+        if cols.is_empty() {
+            return;
+        }
+        let current = self.read().graph_column;
+        let next = match cols.iter().position(|&c| c == current) {
+            Some(i) => cols[(i + 1) % cols.len()],
+            None => cols[0],
+        };
+        self.read_mut().graph_column = next;
     }
 
     pub fn scroll_columns(&mut self, right: bool) {

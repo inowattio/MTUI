@@ -30,11 +30,9 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         return Ok(());
     }
 
-    if app.read().graph {
-        if key_event.code == kb.dump {
-            app.toggle_graph_width();
-            return Ok(());
-        }
+    if app.read().graph && key_event.code == kb.dump {
+        app.cycle_graph_interpretation();
+        return Ok(());
     }
 
     if let Some(action) = kb.action_for(key_event.code) {

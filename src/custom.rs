@@ -143,6 +143,23 @@ impl CustomRule {
         }
     }
 
+    pub fn numeric(&self, words: &[u16], order: WordOrder) -> Option<f64> {
+        let base = self.base_value(words, order)?;
+
+        if base.is_finite() && !self.enum_map.is_empty() {
+            let key = base as i64;
+            if self.enum_map.iter().any(|e| e.value == key) {
+                return None;
+            }
+        }
+
+        let mut value = base;
+        for op in &self.ops {
+            value = op.apply(value);
+        }
+        value.is_finite().then_some(value)
+    }
+
     pub fn evaluate(&self, words: &[u16], order: WordOrder) -> String {
         let Some(base) = self.base_value(words, order) else {
             return String::new();

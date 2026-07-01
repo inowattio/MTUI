@@ -173,6 +173,10 @@ impl App {
         self.read_mut().popup = None;
     }
 
+    pub fn custom_rule(&self, cell: RegisterCell) -> Option<&crate::custom::CustomRule> {
+        self.custom_rules.get(&cell)
+    }
+
     pub(super) fn custom_value(
         &self,
         cell: RegisterCell,

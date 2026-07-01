@@ -1,5 +1,7 @@
 use super::popups::draw_popup;
 use crate::app::App;
+use crate::config::Column;
+use crate::interpretator::graph_value;
 use crate::register::RegisterCell;
 use crate::state::{ReadPanel, ReadParams};
 use crate::tui::hints::{self, Hint};
@@ -350,7 +352,7 @@ pub fn draw(
             theme,
             app,
             (info_type, info_addr),
-            params.graph_dword,
+            app.active_graph_column(),
         );
         if let Some(popup) = &params.popup {
             draw_popup(frame, area, theme, app, popup);
@@ -453,49 +455,101 @@ pub fn live_status(app: &App, params: &ReadParams, theme: &Theme) -> Vec<Span<'s
     spans
 }
 
+fn combine_history<F>(app: &App, cell: RegisterCell, width: usize, mut value: F) -> Vec<(f64, f64)>
+where
+    F: FnMut(&[u16]) -> Option<f64>,
+{
+    let (kind, address) = cell;
+    let mut histories = Vec::with_capacity(width);
+    for offset in 0..width as u16 {
+        match app.value_history((kind, address.wrapping_add(offset))) {
+            Some(history) => histories.push(history),
+            None => return Vec::new(),
+        }
+    }
+
+    let len = histories.iter().map(|h| h.len()).min().unwrap_or(0);
+    let mut regs = vec![0u16; width];
+    let mut points = Vec::with_capacity(len);
+    for i in 0..len {
+        for (k, history) in histories.iter().enumerate() {
+            regs[k] = history[history.len() - len + i];
+        }
+        if let Some(v) = value(&regs) {
+            points.push((points.len() as f64, v));
+        }
+    }
+    points
+}
+
+fn graph_points(app: &App, cell: RegisterCell, column: Column) -> Vec<(f64, f64)> {
+    let order = app.config.device.word_order;
+    if column == Column::Custom {
+        let Some(rule) = app.custom_rule(cell) else {
+            return Vec::new();
+        };
+        let width = rule.repr.register_count();
+        return combine_history(app, cell, width, |regs| rule.numeric(regs, order));
+    }
+    let width = column.graph_width().unwrap_or(1);
+    combine_history(app, cell, width, |regs| graph_value(column, order, regs))
+}
+
+fn fmt_num(v: f64, is_float: bool) -> String {
+    if !is_float {
+        return format!("{v:.0}");
+    }
+    let mag = v.abs();
+    if mag != 0.0 && !(1e-3..1e6).contains(&mag) {
+        format!("{v:.2e}")
+    } else if mag >= 100.0 {
+        format!("{v:.1}")
+    } else {
+        format!("{v:.3}")
+    }
+}
+
 fn draw_graph(
     frame: &mut Frame,
     area: Rect,
     theme: &Theme,
     app: &App,
     cell: RegisterCell,
-    dword: bool,
+    column: Option<Column>,
 ) {
     let (kind, address) = cell;
-    // Coils/discrete inputs are 0/1; plot them as a square wave on a fixed
-    // 0..1 axis. DWord graphing combines two registers, so it never applies.
-    let bit_plot = kind.is_bit() && !dword;
-    let width = if dword {
-        "DWord"
-    } else if bit_plot {
-        "Bit"
+    let bit_plot = kind.is_bit();
+
+    let mode = if bit_plot {
+        "bit"
     } else {
-        "Word"
+        column.map_or("--", Column::name)
     };
     let label = app.label_text(kind, address);
     let title = match &label {
-        Some(l) => format!(" Graph [{width}] \u{201c}{l}\u{201d} "),
-        None => format!(" Graph [{width}] "),
+        Some(l) => format!(" Graph [{mode}] \u{201c}{l}\u{201d} "),
+        None => format!(" Graph [{mode}] "),
     };
 
-    let points: Vec<(f64, f64)> = if dword {
-        let order = app.config.device.word_order;
-        match (
-            app.value_history(cell),
-            app.value_history((kind, address.wrapping_add(1))),
-        ) {
-            (Some(low), Some(high)) => {
-                let n = low.len().min(high.len());
-                low.iter()
-                    .skip(low.len() - n)
-                    .zip(high.iter().skip(high.len() - n))
-                    .enumerate()
-                    .map(|(i, (&a, &b))| (i as f64, order.make_word(a, b) as f64))
-                    .collect()
-            }
-            _ => Vec::new(),
-        }
+    let block = if !bit_plot && app.graph_cycle_len() > 1 {
+        let hint = hints::footer(theme, [Hint::key(app.config.keybinds.dump, "cycle")]);
+        theme.panel(&title).title_bottom(hint.right_aligned())
     } else {
+        theme.panel(&title)
+    };
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    if !bit_plot && column.is_none() {
+        let hint = Paragraph::new(Line::from(Span::styled(
+            "Enable a numeric column (u16, i16, f32, \u{2026}) to graph.",
+            theme.dim_style(),
+        )));
+        frame.render_widget(hint, inner);
+        return;
+    }
+
+    let points: Vec<(f64, f64)> = if bit_plot {
         app.value_history(cell)
             .map(|h| {
                 h.iter()
@@ -504,11 +558,16 @@ fn draw_graph(
                     .collect()
             })
             .unwrap_or_default()
+    } else {
+        graph_points(app, cell, column.unwrap())
     };
 
-    let block = theme.panel(&title);
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
+    let is_float = match column {
+        _ if bit_plot => false,
+        Some(Column::Custom) => points.iter().any(|&(_, y)| y.fract() != 0.0),
+        Some(c) => c.graph_is_float(),
+        None => false,
+    };
 
     if points.len() < 2 {
         let kb = &app.config.keybinds;
@@ -569,7 +628,7 @@ fn draw_graph(
         (0..=4)
             .map(|i| {
                 let v = y_lo + (y_hi - y_lo) * (i as f64 / 4.0);
-                Span::styled(format!("{v:.0}"), theme.dim_style())
+                Span::styled(fmt_num(v, is_float), theme.dim_style())
             })
             .collect()
     };
@@ -629,18 +688,28 @@ fn draw_graph(
     } else {
         theme.dim_style()
     };
+    let delta_str = if is_float {
+        format!("{}{}", if delta < 0.0 { "-" } else { "+" }, fmt_num(delta.abs(), true))
+    } else {
+        format!("{delta:+.0}")
+    };
+    let avg_str = if is_float {
+        fmt_num(avg, true)
+    } else {
+        format!("{avg:.1}")
+    };
     let footer = Line::from(vec![
         Span::styled("cur ", theme.dim_style()),
-        Span::styled(format!("{last:.0}"), theme.accent_style()),
-        Span::styled(format!("  \u{0394}{delta:+.0}"), delta_style),
+        Span::styled(fmt_num(last, is_float), theme.accent_style()),
+        Span::styled(format!("  \u{0394}{delta_str}"), delta_style),
         Span::styled("   min ", theme.dim_style()),
-        Span::styled(format!("{min:.0}"), theme.base()),
+        Span::styled(fmt_num(min, is_float), theme.base()),
         Span::styled("  max ", theme.dim_style()),
-        Span::styled(format!("{max:.0}"), theme.base()),
+        Span::styled(fmt_num(max, is_float), theme.base()),
         Span::styled("  avg ", theme.dim_style()),
-        Span::styled(format!("{avg:.1}"), theme.base()),
+        Span::styled(avg_str, theme.base()),
         Span::styled("  span ", theme.dim_style()),
-        Span::styled(format!("{span:.0}"), theme.base()),
+        Span::styled(fmt_num(span, is_float), theme.base()),
         Span::styled("  n ", theme.dim_style()),
         Span::styled(format!("{count}"), theme.base()),
     ]);
