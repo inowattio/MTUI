@@ -88,7 +88,6 @@ pub struct DiscoveryParams {
     pub scan_open: bool,
     pub scan_selected: u16,
     pub status: Option<StatusMessage>,
-    pub previous: Option<ReadParams>,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -129,7 +128,6 @@ impl Default for DiscoveryParams {
             scan_open: false,
             scan_selected: 0,
             status: None,
-            previous: None,
         }
     }
 }
@@ -619,6 +617,7 @@ impl LogsParams {
 }
 
 popups! {
+    Discovery(DiscoveryParams),
     Help(HelpParams),
     About,
     Dump(DumpParams),
@@ -759,7 +758,6 @@ pub struct LogViewParams {
 #[derive(Debug, PartialEq)]
 pub enum State {
     Read(ReadParams),
-    Discovery(DiscoveryParams),
     Settings(SettingsParams),
     Logs(LogViewParams),
 }

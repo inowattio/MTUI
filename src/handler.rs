@@ -15,11 +15,6 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
     let rows = app.visible_rows.get();
     let kb = app.config.keybinds;
 
-    if app.discovery().is_some() {
-        handle_discovery_key(key_event, app).await;
-        return Ok(());
-    }
-
     if app.settings().is_some() {
         handle_settings_key(key_event, app).await;
         return Ok(());
@@ -170,6 +165,8 @@ async fn run_action(app: &mut App, action: KeybindAction) {
 async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
     let kb = app.config.keybinds;
     match kind {
+        PopupKind::Discovery => handle_discovery_key(key_event, app).await,
+
         PopupKind::Help => match key_event.code {
             c if c == kb.exit => app.close_popup(),
             c if c == kb.action => {
@@ -444,7 +441,7 @@ async fn handle_discovery_key(key_event: KeyEvent, app: &mut App) {
     match key_event.code {
         c if c == kb.exit => {
             if app.device.is_some() {
-                app.return_to_read();
+                app.close_popup();
             } else {
                 app.quit();
             }

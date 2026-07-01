@@ -90,7 +90,9 @@ impl App {
                 app.notify_no_cycle_types();
             }
         } else {
-            app.state = State::Discovery(Self::discovery_params(&app.config));
+            let mut read = app.startup_read_params();
+            read.popup = Some(Popup::Discovery(Self::discovery_params(&app.config)));
+            app.state = State::Read(read);
             log::warn!("Started \u{b7} no device, opened Discovery");
         }
 

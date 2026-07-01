@@ -9,6 +9,7 @@ use ratatui::Frame;
 use std::net::Ipv4Addr;
 
 pub fn draw(params: &DiscoveryParams, app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
+    let kb = &app.config.keybinds;
     let blocked = match params.interface {
         InterfaceKind::Network => params
             .ip
@@ -35,10 +36,19 @@ pub fn draw(params: &DiscoveryParams, app: &App, frame: &mut Frame, area: Rect, 
         ));
     }
 
-    super::popups::push_status(&mut lines, theme, params.status.as_ref());
+    super::push_status(&mut lines, theme, params.status.as_ref());
 
-    let width = lines.iter().map(Line::width).max().unwrap_or(0) as u16 + 4;
-    super::popups::render(frame, area, theme, "Connection", width, lines);
+    lines.push(Line::default());
+    let footer = [
+        Hint::pair(kb.move_up, kb.move_down, "Move"),
+        Hint::key(kb.action, "Connect"),
+        Hint::key(kb.exit, "Back"),
+    ];
+    let content_width = lines.iter().map(Line::width).max().unwrap_or(0) as u16 + 4;
+    let width = hints::min_width(content_width, &footer);
+    lines.push(hints::footer(theme, footer));
+
+    super::render(frame, area, theme, "Connection", width, lines);
 
     if params.scan_open {
         draw_scan_popup(frame, app, params, area, theme);
@@ -195,7 +205,7 @@ fn draw_scan_popup(
         let footer = [Hint::key(kb.exit, "Cancel")];
         let width = hints::min_width(44, &footer);
         lines.push(hints::footer(theme, footer));
-        super::popups::render(frame, area, theme, "Network scan", width, lines);
+        super::render(frame, area, theme, "Network scan", width, lines);
         return;
     }
 
@@ -209,7 +219,7 @@ fn draw_scan_popup(
         let footer = [Hint::key(kb.exit, "Close")];
         let width = hints::min_width(44, &footer);
         lines.push(hints::footer(theme, footer));
-        super::popups::render(frame, area, theme, "Network scan", width, lines);
+        super::render(frame, area, theme, "Network scan", width, lines);
         return;
     }
 
@@ -219,7 +229,6 @@ fn draw_scan_popup(
     )));
     lines.push(Line::default());
 
-    // Window the list so a long result set stays inside the popup.
     let visible = 10usize;
     let selected = params.scan_selected as usize;
     let top = selected.saturating_sub(visible - 1);
@@ -240,5 +249,5 @@ fn draw_scan_popup(
     ];
     let width = hints::min_width(44, &footer);
     lines.push(hints::footer(theme, footer));
-    super::popups::render(frame, area, theme, "Network scan", width, lines);
+    super::render(frame, area, theme, "Network scan", width, lines);
 }

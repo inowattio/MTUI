@@ -7,7 +7,6 @@ use ratatui::text::Line;
 pub fn make_bottom_title(theme: &Theme, state: &State, kb: &Keybinds) -> Line<'static> {
     let items = match state {
         State::Read(_) => [Hint::key(kb.action, "Read"), Hint::key(kb.help, "Help")],
-        State::Discovery(_) => [Hint::key(kb.action, "Connect"), Hint::key(kb.exit, "Back")],
         State::Settings(s) => {
             let primary = if s.focus == SettingsFocus::Categories {
                 Hint::key(kb.action, "Open")

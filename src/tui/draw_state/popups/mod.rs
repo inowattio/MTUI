@@ -3,6 +3,7 @@ mod columns;
 mod confirm;
 mod custom;
 mod device_id;
+mod discovery;
 mod help;
 mod import;
 mod inspect;
@@ -27,6 +28,7 @@ use ratatui::Frame;
 pub fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup: &Popup) {
     let kb = &app.config.keybinds;
     match popup {
+        Popup::Discovery(d) => discovery::draw(d, app, frame, area, theme),
         Popup::Help(h) => help::draw(frame, area, theme, kb, app, h),
         Popup::Dump(d) => confirm::draw(
             frame,

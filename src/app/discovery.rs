@@ -8,7 +8,7 @@ use crate::modbus::{
     DeviceConfig, Interface, InterfaceNetworkParams, InterfaceWiredParams, ModbusDevice,
 };
 use crate::state::{
-    ConnectionStatus, DiscoveryField, DiscoveryParams, InterfaceKind, State, StatusMessage,
+    ConnectionStatus, DiscoveryField, DiscoveryParams, InterfaceKind, Popup, State, StatusMessage,
 };
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::atomic::AtomicUsize;
@@ -21,14 +21,20 @@ use std::time::Duration;
 impl App {
     pub fn discovery(&self) -> Option<&DiscoveryParams> {
         match &self.state {
-            State::Discovery(d) => Some(d),
+            State::Read(p) => match &p.popup {
+                Some(Popup::Discovery(d)) => Some(d),
+                _ => None,
+            },
             _ => None,
         }
     }
 
     pub fn discovery_mut(&mut self) -> Option<&mut DiscoveryParams> {
         match &mut self.state {
-            State::Discovery(d) => Some(d),
+            State::Read(p) => match &mut p.popup {
+                Some(Popup::Discovery(d)) => Some(d),
+                _ => None,
+            },
             _ => None,
         }
     }
@@ -67,31 +73,8 @@ impl App {
 
     pub fn open_discovery(&mut self) {
         self.background_task = None;
-        let previous = std::mem::take(self.read_mut());
-        let mut params = Self::discovery_params(&self.config);
-        params.previous = Some(previous);
-        self.state = State::Discovery(params);
-    }
-
-    pub fn return_to_read(&mut self) {
-        if self.device.is_none() {
-            return;
-        }
-        self.connection = ConnectionStatus::Unknown;
-        self.logged_connection = ConnectionStatus::Unknown;
-        self.reconnect = ReconnectState::default();
-        self.restore_previous_read();
-    }
-
-    fn restore_previous_read(&mut self) {
-        let previous = match &mut self.state {
-            State::Discovery(d) => d.previous.take(),
-            _ => None,
-        };
-        let mut read = previous.unwrap_or_else(|| self.startup_read_params());
-        read.loading = false;
-        read.popup = None;
-        self.state = State::Read(read);
+        let params = Self::discovery_params(&self.config);
+        self.read_mut().popup = Some(Popup::Discovery(params));
     }
 
     pub async fn discovery_connect(&mut self) {
@@ -143,7 +126,7 @@ impl App {
                 self.reconnect = ReconnectState::default();
                 let device = self.config.display_device();
                 log::info!("Switched device \u{b7} {device}");
-                self.restore_previous_read();
+                self.close_popup();
             }
             Err(e) => {
                 log::error!("Connect failed \u{b7} {e}");
