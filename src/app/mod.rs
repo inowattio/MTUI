@@ -570,7 +570,7 @@ fn parse_hex_bytes(input: &str) -> Result<Vec<u8>, String> {
 }
 
 fn create_default_config(path: &str) -> Config {
-    let config = Config::default();
+    let config = Config::demo();
     let serialized = serde_json::to_string_pretty(&config).expect("serialize default config");
 
     let _ = ensure_parent_dir(path);

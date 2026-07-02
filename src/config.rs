@@ -381,9 +381,19 @@ impl Default for Config {
             port: None,
             allow_api_slave_id: false,
             pinned_registers: Default::default(),
+            labels: Labels::default(),
+            custom_rules: CustomRules::default(),
+            keybinds: Keybinds::default(),
+        }
+    }
+}
+
+impl Config {
+    pub fn demo() -> Self {
+        Self {
             labels: demo_labels(),
             custom_rules: demo_rules(),
-            keybinds: Keybinds::default(),
+            ..Self::default()
         }
     }
 }

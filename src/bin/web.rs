@@ -138,7 +138,7 @@ mod web {
         // The Mock device connects without awaiting anything, so blocking
         // here is safe.
         let app = Rc::new(Mutex::new(futures::executor::block_on(App::boot(
-            Config::default(),
+            Config::demo(),
             "browser demo (not persisted)".to_string(),
         ))));
 
