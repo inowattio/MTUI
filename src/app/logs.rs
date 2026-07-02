@@ -180,7 +180,7 @@ impl App {
         };
 
         let selection = match panel {
-            ReadPanel::Main => (register_type, position),
+            ReadPanel::Main | ReadPanel::Matrix => (register_type, position),
             _ => match self.panel_cell_at(pinned_index as usize) {
                 Some(cell) => cell,
                 None => return,
