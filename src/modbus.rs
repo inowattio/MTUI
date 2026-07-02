@@ -159,9 +159,14 @@ impl WordOrder {
 
 #[cfg(test)]
 mod tests {
-    use super::{DeviceConfig, Interface, InterfaceNetworkParams, ModbusDevice, WordOrder};
+    use super::WordOrder;
+    #[cfg(not(target_arch = "wasm32"))]
+    use super::{DeviceConfig, Interface, InterfaceNetworkParams, ModbusDevice};
+    #[cfg(not(target_arch = "wasm32"))]
     use std::sync::atomic::{AtomicUsize, Ordering};
+    #[cfg(not(target_arch = "wasm32"))]
     use std::sync::Arc;
+    #[cfg(not(target_arch = "wasm32"))]
     use std::time::Duration;
 
     #[test]
@@ -194,6 +199,7 @@ mod tests {
         }
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     async fn wait_for(counter: &AtomicUsize, target: usize) {
         for _ in 0..200 {
             if counter.load(Ordering::Relaxed) >= target {
@@ -207,6 +213,7 @@ mod tests {
         );
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     #[tokio::test]
     async fn poisoned_context_reconnects_before_next_command() {
         // A mock device stands in for a real transport. Simulate a prior
@@ -224,6 +231,7 @@ mod tests {
         );
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     #[tokio::test]
     async fn command_timeout_poisons_and_next_command_reconnects() {
         // A server that accepts TCP connections but never replies, so every
