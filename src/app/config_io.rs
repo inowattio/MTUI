@@ -1,4 +1,5 @@
-use super::{save_config, App, ImportPayload};
+use super::{save_config, App, BackgroundTask, ImportPayload, LoadConfigTaskResult};
+use crate::compat;
 use crate::config::{Config, CustomRules, Startup};
 use crate::custom::CustomRule;
 use crate::modbus::ModbusDevice;
@@ -109,27 +110,56 @@ impl App {
         &self.config_path
     }
 
-    pub(super) async fn load_config_from(&mut self, path: &str) -> Outcome {
+    pub(super) fn start_config_load(&mut self, path: String) -> Result<(), String> {
         if path.is_empty() {
             return Err("Load failed: enter a file name".to_string());
         }
-        let content = fs::read_to_string(path).map_err(|e| format!("Load failed: {e}"))?;
+        let content = fs::read_to_string(&path).map_err(|e| format!("Load failed: {e}"))?;
         let config: Config =
             serde_json::from_str(&content).map_err(|e| format!("Load failed: {e}"))?;
 
-        let device = ModbusDevice::new(&config.device)
-            .await
-            .map_err(|e| format!("Load failed: device: {e}"))?;
+        let device_config = config.device.clone();
+        self.background_task = Some(BackgroundTask::LoadConfig(compat::spawn(async move {
+            let result = ModbusDevice::new(&device_config)
+                .await
+                .map_err(|e| e.to_string());
+            LoadConfigTaskResult {
+                path,
+                config: Box::new(config),
+                result,
+            }
+        })));
+        Ok(())
+    }
 
-        self.apply_config(config, Some(device));
-        self.dirty = true;
+    pub(super) fn apply_load_config_result(&mut self, result: Option<LoadConfigTaskResult>) {
+        let outcome: Outcome = match result {
+            Some(LoadConfigTaskResult {
+                path,
+                config,
+                result,
+            }) => match result {
+                Ok(device) => {
+                    self.apply_config(*config, Some(device));
+                    self.dirty = true;
 
-        let read = self.startup_read_params();
-        if let Some(s) = self.settings_mut() {
-            s.previous = read;
+                    let read = self.startup_read_params();
+                    if let Some(s) = self.settings_mut() {
+                        s.previous = read;
+                    }
+
+                    Ok(format!("Loaded {path}"))
+                }
+                Err(e) => Err(format!("Load failed: device: {e}")),
+            },
+            None => Err("Load failed: task stopped unexpectedly".to_string()),
+        };
+
+        match &outcome {
+            Ok(message) => log::info!("{message}"),
+            Err(error) => log::error!("{error}"),
         }
-
-        Ok(format!("Loaded {path}"))
+        self.set_settings_status(outcome.into());
     }
 
     pub fn commit_dump(&mut self) {

@@ -129,7 +129,7 @@ async fn run_action(app: &mut App, action: KeybindAction) {
         Slave => app.open_slave(),
         CyclePosition => app.cycle_position(),
         Inspect => app.open_inspect(),
-        DeviceId => app.open_device_id().await,
+        DeviceId => app.open_device_id(),
         Raw => app.open_raw(),
         Graph => app.toggle_graph(),
         Discovery => app.open_discovery(),
@@ -190,15 +190,15 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
 
         PopupKind::DeviceId => match key_event.code {
             c if c == kb.exit || c == kb.device_id => app.close_popup(),
-            c if c == kb.refresh || c == kb.action => app.device_id_refresh().await,
-            KeyCode::Left => app.device_id_cycle(false).await,
-            KeyCode::Right => app.device_id_cycle(true).await,
+            c if c == kb.refresh || c == kb.action => app.device_id_refresh(),
+            KeyCode::Left => app.device_id_cycle(false),
+            KeyCode::Right => app.device_id_cycle(true),
             _ => {}
         },
 
         PopupKind::Raw => match key_event.code {
             c if c == kb.exit => app.close_popup(),
-            c if c == kb.action => app.raw_send().await,
+            c if c == kb.action => app.raw_send(),
             c if c == kb.move_up => app.raw_move(false),
             c if c == kb.move_down => app.raw_move(true),
             KeyCode::Backspace => app.raw_backspace(),
@@ -440,7 +440,7 @@ async fn handle_discovery_key(key_event: KeyEvent, app: &mut App) {
         }
         c if c == kb.action => match field {
             DiscoveryField::ScanNetwork => app.start_network_scan(),
-            _ => app.discovery_connect().await,
+            _ => app.discovery_connect(),
         },
         c if c == kb.move_up => {
             if let Some(d) = app.discovery_mut() {
@@ -668,7 +668,7 @@ async fn handle_settings_field_key(key_event: KeyEvent, app: &mut App) {
             SettingsField::ClearCustom => app.clear_custom(),
             f if f.is_toggle() => app.settings_adjust(f, 1),
             SettingsField::Save => app.settings_save(),
-            SettingsField::LoadConfig => app.settings_load().await,
+            SettingsField::LoadConfig => app.settings_load(),
             _ => {}
         },
         KeyCode::Backspace => app.settings_backspace(field),

@@ -5,7 +5,7 @@ use crate::config::{Config, CustomRules, Label, Labels};
 use crate::constants::CONFIG_PATH;
 use crate::custom::CustomRule;
 use crate::interpretator::Interpretor;
-use crate::modbus::ModbusDevice;
+use crate::modbus::{DeviceConfig, DeviceIdAccess, ModbusDevice};
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
 use crate::state::{ConnectionStatus, CustomParams, State};
 use crate::writes_log::SharedWritesLog;
@@ -77,6 +77,36 @@ enum BackgroundTask {
     Refresh(TaskHandle<RefreshTaskResult>),
     Write(TaskHandle<WriteOutcome>),
     Reconnect(TaskHandle<Result<ModbusDevice, String>>),
+    Connect(TaskHandle<ConnectTaskResult>),
+    DeviceId(TaskHandle<DeviceIdTaskResult>),
+    Raw(TaskHandle<RawTaskResult>),
+    LoadConfig(TaskHandle<LoadConfigTaskResult>),
+}
+
+#[derive(Debug)]
+struct ConnectTaskResult {
+    config: DeviceConfig,
+    result: Result<ModbusDevice, String>,
+}
+
+#[derive(Debug)]
+struct DeviceIdTaskResult {
+    access: DeviceIdAccess,
+    result: Result<Vec<(u8, String)>, String>,
+}
+
+#[derive(Debug)]
+struct RawTaskResult {
+    code: u8,
+    sent: usize,
+    result: Result<Vec<u8>, String>,
+}
+
+#[derive(Debug)]
+struct LoadConfigTaskResult {
+    path: String,
+    config: Box<Config>,
+    result: Result<ModbusDevice, String>,
 }
 
 #[derive(Debug)]

@@ -1,8 +1,9 @@
 #[cfg(not(target_arch = "wasm32"))]
 use super::{scan_subnet, subnet_prefix_from, ScanProgress};
-use super::{App, ReconnectState};
+use super::{App, BackgroundTask, ConnectTaskResult, ReconnectState};
+use crate::compat;
 #[cfg(not(target_arch = "wasm32"))]
-use crate::compat::{self, TaskPoll};
+use crate::compat::TaskPoll;
 use crate::config::Config;
 use crate::modbus::{
     DeviceConfig, Interface, InterfaceNetworkParams, InterfaceWiredParams, ModbusDevice,
@@ -77,7 +78,11 @@ impl App {
         self.read_mut().popup = Some(Popup::Discovery(params));
     }
 
-    pub async fn discovery_connect(&mut self) {
+    pub fn discovery_connect(&mut self) {
+        if !self.free_background_slot() {
+            self.set_discovery_status(StatusMessage::info("Device is busy."));
+            return;
+        }
         let device_config = {
             let Some(d) = self.discovery() else {
                 return;
@@ -112,13 +117,32 @@ impl App {
 
         self.set_discovery_status(StatusMessage::warn("Connecting\u{2026}"));
 
-        match ModbusDevice::new(&device_config).await {
+        self.background_task = Some(BackgroundTask::Connect(compat::spawn(async move {
+            let result = ModbusDevice::new(&device_config)
+                .await
+                .map_err(|e| e.to_string());
+            ConnectTaskResult {
+                config: device_config,
+                result,
+            }
+        })));
+    }
+
+    pub(super) fn apply_connect_result(&mut self, result: Option<ConnectTaskResult>) {
+        let Some(ConnectTaskResult { config, result }) = result else {
+            log::error!("Connect task stopped unexpectedly");
+            self.set_discovery_status(StatusMessage::err(
+                "Connection failed: task stopped unexpectedly",
+            ));
+            return;
+        };
+        match result {
             Ok(device) => {
                 self.device = Some(device);
                 self.sync_api_device();
                 self.refresh_writes_log_state();
-                self.interpreter.set_word_order(device_config.word_order);
-                self.config.device = device_config;
+                self.interpreter.set_word_order(config.word_order);
+                self.config.device = config;
                 self.dirty = true;
                 self.clear_read_accumulation();
                 self.connection = ConnectionStatus::Unknown;
@@ -126,7 +150,9 @@ impl App {
                 self.reconnect = ReconnectState::default();
                 let device = self.config.display_device();
                 log::info!("Switched device \u{b7} {device}");
-                self.close_popup();
+                if self.discovery().is_some() {
+                    self.close_popup();
+                }
             }
             Err(e) => {
                 log::error!("Connect failed \u{b7} {e}");

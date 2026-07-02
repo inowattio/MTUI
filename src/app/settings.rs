@@ -173,15 +173,20 @@ impl App {
         self.set_settings_status(result.into());
     }
 
-    pub async fn settings_load(&mut self) {
+    pub fn settings_load(&mut self) {
         let Some(path) = self.settings().map(|s| s.load_path.trim().to_string()) else {
             return;
         };
-        let result = self.load_config_from(&path).await;
-        match &result {
-            Ok(message) => log::info!("{message}"),
-            Err(error) => log::error!("{error}"),
+        if !self.free_background_slot() {
+            self.set_settings_status(StatusMessage::info("Device is busy."));
+            return;
         }
-        self.set_settings_status(result.into());
+        match self.start_config_load(path) {
+            Ok(()) => self.set_settings_status(StatusMessage::info("Loading\u{2026}")),
+            Err(error) => {
+                log::error!("{error}");
+                self.set_settings_status(StatusMessage::err(error));
+            }
+        }
     }
 }

@@ -1,6 +1,7 @@
 use super::{
     bits_to_words, default_config_path, fetch_config_or_exit, reconnect_backoff, App,
-    BackgroundTask, ReconnectState, RefreshTaskResult, SweepState, WriteOutcome,
+    BackgroundTask, ConnectTaskResult, DeviceIdTaskResult, LoadConfigTaskResult, RawTaskResult,
+    ReconnectState, RefreshTaskResult, SweepState, WriteOutcome,
 };
 use crate::compat::{self, Instant, TaskPoll};
 use crate::config::{Config, InterpretorConfig};
@@ -526,6 +527,20 @@ impl App {
         }
     }
 
+    pub(super) fn free_background_slot(&mut self) -> bool {
+        match &self.background_task {
+            None => true,
+            Some(BackgroundTask::Refresh(_)) => {
+                self.background_task = None;
+                if self.is_reading() {
+                    self.read_mut().loading = false;
+                }
+                true
+            }
+            Some(_) => false,
+        }
+    }
+
     pub async fn complete_background_task(&mut self) {
         #[cfg(not(target_arch = "wasm32"))]
         self.poll_network_scan();
@@ -534,6 +549,10 @@ impl App {
             Refresh(Option<RefreshTaskResult>),
             Write(Option<WriteOutcome>),
             Reconnect(Option<Result<ModbusDevice, String>>),
+            Connect(Option<ConnectTaskResult>),
+            DeviceId(Option<DeviceIdTaskResult>),
+            Raw(Option<RawTaskResult>),
+            LoadConfig(Option<LoadConfigTaskResult>),
         }
 
         macro_rules! poll_task {
@@ -551,11 +570,19 @@ impl App {
             Some(BackgroundTask::Refresh(handle)) => poll_task!(handle, Done::Refresh),
             Some(BackgroundTask::Write(handle)) => poll_task!(handle, Done::Write),
             Some(BackgroundTask::Reconnect(handle)) => poll_task!(handle, Done::Reconnect),
+            Some(BackgroundTask::Connect(handle)) => poll_task!(handle, Done::Connect),
+            Some(BackgroundTask::DeviceId(handle)) => poll_task!(handle, Done::DeviceId),
+            Some(BackgroundTask::Raw(handle)) => poll_task!(handle, Done::Raw),
+            Some(BackgroundTask::LoadConfig(handle)) => poll_task!(handle, Done::LoadConfig),
         };
         self.background_task = None;
 
         match done {
             Done::Reconnect(result) => self.apply_reconnect_result(result),
+            Done::Connect(result) => self.apply_connect_result(result),
+            Done::DeviceId(result) => self.apply_device_id_result(result),
+            Done::Raw(result) => self.apply_raw_result(result),
+            Done::LoadConfig(result) => self.apply_load_config_result(result),
             Done::Refresh(Some(result)) => self.apply_refresh_result(result),
             Done::Refresh(None) => {
                 let message = "read task stopped unexpectedly".to_string();
