@@ -56,7 +56,9 @@ apps:
       # from mounted removable media.
       - home
       - removable-media
-      # Clipboard ("copy address"); arboard talks to the X11 server.
+      # Clipboard ("copy address"): arboard uses the Wayland data-control
+      # protocol when available and falls back to the X11 server.
+      - wayland
       - x11
 
 parts:
