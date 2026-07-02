@@ -9,7 +9,7 @@ use std::future::Future;
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 #[cfg(not(target_arch = "wasm32"))]
 use std::str::FromStr;
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
@@ -159,7 +159,10 @@ impl WordOrder {
 
 #[cfg(test)]
 mod tests {
-    use super::WordOrder;
+    use super::{DeviceConfig, Interface, InterfaceNetworkParams, ModbusDevice, WordOrder};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+    use std::time::Duration;
 
     #[test]
     fn make_word_orders_bytes() {
@@ -189,6 +192,95 @@ mod tests {
             let word = order.make_word(0x0102, 0x0304);
             assert_eq!(order.split_word(word), [0x0102, 0x0304], "{order:?}");
         }
+    }
+
+    async fn wait_for(counter: &AtomicUsize, target: usize) {
+        for _ in 0..200 {
+            if counter.load(Ordering::Relaxed) >= target {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+        panic!(
+            "connection count never reached {target} (got {})",
+            counter.load(Ordering::Relaxed)
+        );
+    }
+
+    #[tokio::test]
+    async fn poisoned_context_reconnects_before_next_command() {
+        // A mock device stands in for a real transport. Simulate a prior
+        // command having timed out and desynchronized the context.
+        let device = ModbusDevice::new(&DeviceConfig::default()).await.unwrap();
+        device.poisoned.store(true, Ordering::Relaxed);
+
+        // The next command must rebuild the context, clear the flag, and still
+        // return a value.
+        let result = device.holdings(0, 1).await;
+        assert!(result.is_ok(), "command after reconnect failed: {result:?}");
+        assert!(
+            !device.poisoned.load(Ordering::Relaxed),
+            "reconnect must clear the poison flag"
+        );
+    }
+
+    #[tokio::test]
+    async fn command_timeout_poisons_and_next_command_reconnects() {
+        // A server that accepts TCP connections but never replies, so every
+        // Modbus command times out. Counting accepted connections lets us
+        // observe reconnects.
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let connections = Arc::new(AtomicUsize::new(0));
+        let counter = connections.clone();
+        tokio::spawn(async move {
+            let mut held = Vec::new();
+            while let Ok((stream, _)) = listener.accept().await {
+                counter.fetch_add(1, Ordering::Relaxed);
+                held.push(stream); // keep the socket open but stay silent
+            }
+        });
+
+        let config = DeviceConfig {
+            interface: Interface::Network(InterfaceNetworkParams {
+                ip: "127.0.0.1".to_string(),
+                port: addr.port(),
+            }),
+            slave_id: 1,
+            timeout_connect_ms: 500,
+            timeout_command_ms: 100,
+            time_between_commands_ms: 0,
+            word_order: WordOrder::default(),
+        };
+
+        let device = ModbusDevice::new(&config)
+            .await
+            .expect("connect to loopback");
+        wait_for(&connections, 1).await;
+        assert!(!device.poisoned.load(Ordering::Relaxed));
+
+        // Silent server: the command times out and poisons the context. No
+        // reconnect happens yet, so the connection count stays at one.
+        assert!(device.holdings(0, 1).await.is_err(), "expected a timeout");
+        assert!(
+            device.poisoned.load(Ordering::Relaxed),
+            "a timed-out command must poison the context"
+        );
+        assert_eq!(
+            connections.load(Ordering::Relaxed),
+            1,
+            "no reconnect expected yet"
+        );
+
+        // Poisoned: the next command must reconnect (a second TCP connection)
+        // before touching the wire, discarding the desynchronized transport.
+        assert!(device.holdings(0, 1).await.is_err());
+        wait_for(&connections, 2).await;
+        assert_eq!(
+            connections.load(Ordering::Relaxed),
+            2,
+            "poisoned context must reconnect before the next command"
+        );
     }
 }
 
@@ -231,6 +323,14 @@ macro_rules! timeout_as {
     ($this:ident, $slave:expr, $action:ident, ($($arg:expr),* $(,)?)) => {
         {
             let mut hold = $this.context.lock().await;
+
+            if $this.poisoned.load(Ordering::Relaxed) {
+                let mut fresh = ModbusDevice::connect_context(&$this.config).await?;
+                fresh.set_slave(Slave($this.default_slave.load(Ordering::Relaxed)));
+                *hold = fresh;
+                $this.poisoned.store(false, Ordering::Relaxed);
+            }
+
             let timeout_command = Duration::from_millis($this.config.timeout_command_ms);
             let time_between = Duration::from_millis($this.config.time_between_commands_ms);
             let override_slave = $slave;
@@ -246,7 +346,10 @@ macro_rules! timeout_as {
                 Ok(Ok(Ok(value))) => Ok(value),
                 Ok(Ok(Err(error))) => Err(anyhow::Error::from(error)),
                 Ok(Err(error)) => Err(anyhow::Error::from(error)),
-                Err(error) => Err(error),
+                Err(error) => {
+                    $this.poisoned.store(true, Ordering::Relaxed);
+                    Err(error)
+                }
             }
         }
     };
@@ -298,6 +401,7 @@ pub struct ModbusDevice {
     context: Arc<Mutex<Context>>,
     config: DeviceConfig,
     default_slave: Arc<AtomicU8>,
+    poisoned: Arc<AtomicBool>,
 }
 
 impl Debug for ModbusDevice {
@@ -308,13 +412,24 @@ impl Debug for ModbusDevice {
 
 impl ModbusDevice {
     pub async fn new(config: &DeviceConfig) -> Result<Self> {
+        let mut context = Self::connect_context(config).await?;
+        context.set_slave(Slave(config.slave_id));
+
+        Ok(Self {
+            context: Arc::new(Mutex::new(context)),
+            default_slave: Arc::new(AtomicU8::new(config.slave_id)),
+            poisoned: Arc::new(AtomicBool::new(false)),
+            config: config.clone(),
+        })
+    }
+
+    async fn connect_context(config: &DeviceConfig) -> Result<Context> {
         let timeout_connect = Duration::from_millis(config.timeout_connect_ms);
-        let slave = Slave(config.slave_id);
         #[cfg(target_arch = "wasm32")]
         let _ = timeout_connect;
 
         #[cfg(not(target_arch = "wasm32"))]
-        let mut context = match &config.interface {
+        let context = match &config.interface {
             Interface::Wired(interface) => {
                 let builder = tokio_serial::new(&interface.path, interface.baud_rate)
                     .timeout(timeout_connect)
@@ -323,29 +438,23 @@ impl ModbusDevice {
                     .stop_bits(interface.stop_bits.into());
 
                 let port = SerialStream::open(&builder)?;
-                rtu::attach_slave(port, slave)
+                rtu::attach_slave(port, Slave(config.slave_id))
             }
             Interface::Network(interface) => {
                 let socket_addr = SocketAddr::V4(SocketAddrV4::new(
                     Ipv4Addr::from_str(&interface.ip)?,
                     interface.port,
                 ));
-                let connection = tcp::connect_slave(socket_addr, slave);
+                let connection = tcp::connect_slave(socket_addr, Slave(config.slave_id));
                 timeout(connection, timeout_connect, Duration::default()).await??
             }
             Interface::Mock => MockContext::make(),
         };
 
         #[cfg(target_arch = "wasm32")]
-        let mut context = MockContext::make();
+        let context = MockContext::make();
 
-        context.set_slave(slave);
-
-        Ok(Self {
-            context: Arc::new(Mutex::new(context)),
-            default_slave: Arc::new(AtomicU8::new(config.slave_id)),
-            config: config.clone(),
-        })
+        Ok(context)
     }
 
     pub async fn set_slave(&self, slave_id: SlaveId) {
