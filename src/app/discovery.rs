@@ -9,7 +9,7 @@ use crate::modbus::{
     DeviceConfig, Interface, InterfaceNetworkParams, InterfaceWiredParams, ModbusDevice,
 };
 use crate::state::{
-    ConnectionStatus, DiscoveryField, DiscoveryParams, InterfaceKind, Popup, State, StatusMessage,
+    ConnectionStatus, DiscoveryField, DiscoveryParams, InterfaceKind, Popup, StatusMessage,
 };
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::atomic::AtomicUsize;
@@ -21,23 +21,11 @@ use std::time::Duration;
 
 impl App {
     pub fn discovery(&self) -> Option<&DiscoveryParams> {
-        match &self.state {
-            State::Read(p) => match &p.popup {
-                Some(Popup::Discovery(d)) => Some(d),
-                _ => None,
-            },
-            _ => None,
-        }
+        self.popup_as()
     }
 
     pub fn discovery_mut(&mut self) -> Option<&mut DiscoveryParams> {
-        match &mut self.state {
-            State::Read(p) => match &mut p.popup {
-                Some(Popup::Discovery(d)) => Some(d),
-                _ => None,
-            },
-            _ => None,
-        }
+        self.popup_as_mut()
     }
 
     pub(super) fn discovery_params(config: &Config) -> DiscoveryParams {

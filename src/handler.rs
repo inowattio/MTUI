@@ -7,8 +7,8 @@ use crate::num_ops::{
     increment_option_by, negate_opt_option, set_option_to_zero, set_to_zero, wrap_index,
 };
 use crate::state::{
-    DiscoveryField, DiscoveryParams, InterfaceKind, LogsParams, Popup, PopupKind, ReadPanel,
-    SettingsCategory, SettingsField, SettingsFocus, SweepField,
+    CustomParams, DiscoveryField, DiscoveryParams, InterfaceKind, LogsParams, PopupKind, ReadPanel,
+    SettingsCategory, SettingsField, SettingsFocus, SweepConfigParams, SweepField,
 };
 
 pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
@@ -285,9 +285,11 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
         },
 
         PopupKind::Custom => {
-            let field = match &app.read().popup {
-                Some(Popup::Custom(c)) => c.current_field(),
-                _ => return,
+            let Some(field) = app
+                .popup_as::<CustomParams>()
+                .map(CustomParams::current_field)
+            else {
+                return;
             };
             match key_event.code {
                 c if c == kb.exit => app.close_popup(),
@@ -306,15 +308,13 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
             c if c == kb.exit || c == kb.slave => app.close_popup(),
             c if c == kb.action => app.commit_slave().await,
             KeyCode::Backspace => {
-                let p = app.read_mut();
-                if let Some(Popup::Slave(value)) = &mut p.popup {
+                if let Some(value) = app.popup_as_mut::<u16>() {
                     digit_remove(value);
                 }
             }
             KeyCode::Char(c) if c.is_ascii_digit() => {
                 let digit = c as u8 - b'0';
-                let p = app.read_mut();
-                if let Some(Popup::Slave(value)) = &mut p.popup {
+                if let Some(value) = app.popup_as_mut::<u16>() {
                     digit_add(value, digit);
                 }
             }
@@ -331,9 +331,11 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
         },
 
         PopupKind::SweepConfig => {
-            let field = match &app.read().popup {
-                Some(Popup::SweepConfig(p)) => p.current_field(),
-                _ => return,
+            let Some(field) = app
+                .popup_as::<SweepConfigParams>()
+                .map(SweepConfigParams::current_field)
+            else {
+                return;
             };
             match key_event.code {
                 c if c == kb.exit || c == kb.sweep => app.close_popup(),

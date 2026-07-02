@@ -359,26 +359,33 @@ impl ImportPayload {
     }
 }
 
+macro_rules! impl_section_mut {
+    ($ty:ty, $elem:ty) => {
+        impl $ty {
+            fn section_mut(&mut self, kind: RegisterType) -> &mut Vec<$elem> {
+                match kind {
+                    RegisterType::Holding => &mut self.holdings,
+                    RegisterType::Input => &mut self.inputs,
+                    RegisterType::Coil => &mut self.coils,
+                    RegisterType::Discrete => &mut self.discretes,
+                }
+            }
+        }
+    };
+}
+
+impl_section_mut!(PinnedRegisters, u16);
+impl_section_mut!(Labels, Label);
+impl_section_mut!(CustomRules, CustomRule);
+
 impl From<PinnedRegisters> for Vec<RegisterCell> {
-    fn from(value: PinnedRegisters) -> Self {
+    fn from(mut value: PinnedRegisters) -> Self {
         let mut collection = Vec::new();
-
-        for holding in value.holdings {
-            collection.push((RegisterType::Holding, holding));
+        for kind in RegisterType::ALL {
+            for address in std::mem::take(value.section_mut(kind)) {
+                collection.push((kind, address));
+            }
         }
-
-        for input in value.inputs {
-            collection.push((RegisterType::Input, input));
-        }
-
-        for coil in value.coils {
-            collection.push((RegisterType::Coil, coil));
-        }
-
-        for discrete in value.discretes {
-            collection.push((RegisterType::Discrete, discrete));
-        }
-
         collection
     }
 }
@@ -386,38 +393,21 @@ impl From<PinnedRegisters> for Vec<RegisterCell> {
 impl From<&[RegisterCell]> for PinnedRegisters {
     fn from(cells: &[RegisterCell]) -> Self {
         let mut pinned = PinnedRegisters::default();
-        for (kind, address) in cells {
-            match kind {
-                RegisterType::Holding => pinned.holdings.push(*address),
-                RegisterType::Input => pinned.inputs.push(*address),
-                RegisterType::Coil => pinned.coils.push(*address),
-                RegisterType::Discrete => pinned.discretes.push(*address),
-            }
+        for &(kind, address) in cells {
+            pinned.section_mut(kind).push(address);
         }
         pinned
     }
 }
 
 impl From<Labels> for BTreeMap<RegisterCell, String> {
-    fn from(value: Labels) -> Self {
+    fn from(mut value: Labels) -> Self {
         let mut map = BTreeMap::new();
-
-        for label in value.holdings {
-            map.insert((RegisterType::Holding, label.address), label.text);
+        for kind in RegisterType::ALL {
+            for label in std::mem::take(value.section_mut(kind)) {
+                map.insert((kind, label.address), label.text);
+            }
         }
-
-        for label in value.inputs {
-            map.insert((RegisterType::Input, label.address), label.text);
-        }
-
-        for label in value.coils {
-            map.insert((RegisterType::Coil, label.address), label.text);
-        }
-
-        for label in value.discretes {
-            map.insert((RegisterType::Discrete, label.address), label.text);
-        }
-
         map
     }
 }
@@ -425,44 +415,24 @@ impl From<Labels> for BTreeMap<RegisterCell, String> {
 impl From<&BTreeMap<RegisterCell, String>> for Labels {
     fn from(map: &BTreeMap<RegisterCell, String>) -> Self {
         let mut labels = Labels::default();
-
-        for ((kind, address), text) in map {
-            let label = Label {
-                address: *address,
+        for (&(kind, address), text) in map {
+            labels.section_mut(kind).push(Label {
+                address,
                 text: text.clone(),
-            };
-            match kind {
-                RegisterType::Holding => labels.holdings.push(label),
-                RegisterType::Input => labels.inputs.push(label),
-                RegisterType::Coil => labels.coils.push(label),
-                RegisterType::Discrete => labels.discretes.push(label),
-            }
+            });
         }
-
         labels
     }
 }
 
 impl From<CustomRules> for BTreeMap<RegisterCell, CustomRule> {
-    fn from(value: CustomRules) -> Self {
+    fn from(mut value: CustomRules) -> Self {
         let mut map = BTreeMap::new();
-
-        for rule in value.holdings {
-            map.insert((RegisterType::Holding, rule.address), rule);
+        for kind in RegisterType::ALL {
+            for rule in std::mem::take(value.section_mut(kind)) {
+                map.insert((kind, rule.address), rule);
+            }
         }
-
-        for rule in value.inputs {
-            map.insert((RegisterType::Input, rule.address), rule);
-        }
-
-        for rule in value.coils {
-            map.insert((RegisterType::Coil, rule.address), rule);
-        }
-
-        for rule in value.discretes {
-            map.insert((RegisterType::Discrete, rule.address), rule);
-        }
-
         map
     }
 }
@@ -470,18 +440,11 @@ impl From<CustomRules> for BTreeMap<RegisterCell, CustomRule> {
 impl From<&BTreeMap<RegisterCell, CustomRule>> for CustomRules {
     fn from(map: &BTreeMap<RegisterCell, CustomRule>) -> Self {
         let mut rules = CustomRules::default();
-
-        for ((kind, address), rule) in map {
+        for (&(kind, address), rule) in map {
             let mut rule = rule.clone();
-            rule.address = *address;
-            match kind {
-                RegisterType::Holding => rules.holdings.push(rule),
-                RegisterType::Input => rules.inputs.push(rule),
-                RegisterType::Coil => rules.coils.push(rule),
-                RegisterType::Discrete => rules.discretes.push(rule),
-            }
+            rule.address = address;
+            rules.section_mut(kind).push(rule);
         }
-
         rules
     }
 }

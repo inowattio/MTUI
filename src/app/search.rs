@@ -1,16 +1,10 @@
 use super::{fuzzy_score, App};
 use crate::register::{RegisterCell, RegisterType};
-use crate::state::{LabelParams, Popup, ReadPanel, SearchParams, State};
+use crate::state::{LabelParams, Popup, ReadPanel, SearchParams};
 
 impl App {
     fn search_mut(&mut self) -> Option<&mut SearchParams> {
-        match &mut self.state {
-            State::Read(p) => match &mut p.popup {
-                Some(Popup::Search(s)) => Some(s),
-                _ => None,
-            },
-            _ => None,
-        }
+        self.popup_as_mut()
     }
 
     pub fn open_search(&mut self) {
@@ -59,10 +53,9 @@ impl App {
     }
 
     pub fn search_commit(&mut self) -> bool {
-        let target = match &self.read().popup {
-            Some(Popup::Search(s)) => s.matches.get(s.selected as usize).map(|(cell, _)| *cell),
-            _ => None,
-        };
+        let target = self
+            .popup_as::<SearchParams>()
+            .and_then(|s| s.matches.get(s.selected as usize).map(|(cell, _)| *cell));
         let Some((register_type, position)) = target else {
             return false;
         };
@@ -104,18 +97,17 @@ impl App {
     }
 
     fn recompute_search(&mut self) {
-        let read = self.read();
-        let query = match &read.popup {
-            Some(Popup::Search(s)) => s.query.clone(),
-            _ => return,
+        let Some(query) = self.popup_as::<SearchParams>().map(|s| s.query.clone()) else {
+            return;
         };
+        let current_type = self.read().register_type;
 
         let (register_type, has_explicit_type) = match query.chars().next() {
             Some('h' | 'H') => (RegisterType::Holding, true),
             Some('i' | 'I') => (RegisterType::Input, true),
             Some('c' | 'C') => (RegisterType::Coil, true),
             Some('d' | 'D') => (RegisterType::Discrete, true),
-            _ => (read.register_type, false),
+            _ => (current_type, false),
         };
 
         let mut matches: Vec<(RegisterCell, String)> = Vec::new();
@@ -156,21 +148,23 @@ impl App {
     }
 
     pub fn label_input(&mut self, c: char) {
-        if let Some(Popup::Label(l)) = &mut self.read_mut().popup {
+        if let Some(l) = self.popup_as_mut::<LabelParams>() {
             l.text.push(c);
         }
     }
 
     pub fn label_backspace(&mut self) {
-        if let Some(Popup::Label(l)) = &mut self.read_mut().popup {
+        if let Some(l) = self.popup_as_mut::<LabelParams>() {
             l.text.pop();
         }
     }
 
     pub fn commit_label(&mut self) {
-        let (position, register_type, text) = match &self.read().popup {
-            Some(Popup::Label(l)) => (l.position, l.register_type, l.text.clone()),
-            _ => return,
+        let Some((position, register_type, text)) = self
+            .popup_as::<LabelParams>()
+            .map(|l| (l.position, l.register_type, l.text.clone()))
+        else {
+            return;
         };
 
         let key = (register_type, position);

@@ -8,21 +8,21 @@ impl App {
     }
 
     pub fn column_matches(&self) -> Vec<Column> {
-        let Some(Popup::Columns(c)) = &self.read().popup else {
+        let Some(c) = self.popup_as::<ColumnsParams>() else {
             return Vec::new();
         };
         fuzzy_rank(&c.query, Column::ALL, |col| col.name())
     }
 
     pub fn columns_input(&mut self, c: char) {
-        if let Some(Popup::Columns(p)) = &mut self.read_mut().popup {
+        if let Some(p) = self.popup_as_mut::<ColumnsParams>() {
             p.query.push(c);
             p.selected = 0;
         }
     }
 
     pub fn columns_backspace(&mut self) {
-        if let Some(Popup::Columns(p)) = &mut self.read_mut().popup {
+        if let Some(p) = self.popup_as_mut::<ColumnsParams>() {
             p.query.pop();
             p.selected = 0;
         }
@@ -30,9 +30,11 @@ impl App {
 
     pub fn columns_toggle_selected(&mut self) {
         let matches = self.column_matches();
-        let selected = match &self.read().popup {
-            Some(Popup::Columns(p)) => p.selected as usize,
-            _ => return,
+        let Some(selected) = self
+            .popup_as::<ColumnsParams>()
+            .map(|p| p.selected as usize)
+        else {
+            return;
         };
         if let Some(&column) = matches.get(selected) {
             self.toggle_column(column);
@@ -44,7 +46,7 @@ impl App {
         if count == 0 {
             return;
         }
-        if let Some(Popup::Columns(p)) = &mut self.read_mut().popup {
+        if let Some(p) = self.popup_as_mut::<ColumnsParams>() {
             let rows = count.div_ceil(2);
             let (col_start, col_len, row) = if p.selected < rows {
                 (0, rows, p.selected)
@@ -65,7 +67,7 @@ impl App {
         if count == 0 {
             return;
         }
-        if let Some(Popup::Columns(p)) = &mut self.read_mut().popup {
+        if let Some(p) = self.popup_as_mut::<ColumnsParams>() {
             let rows = count.div_ceil(2);
             let row = if p.selected < rows {
                 p.selected

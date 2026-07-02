@@ -2,7 +2,7 @@ use super::{parse_hex_bytes, App, BackgroundTask, DeviceIdTaskResult, RawTaskRes
 use crate::compat;
 use crate::modbus::DeviceIdAccess;
 use crate::num_ops::{cycle, wrap_index};
-use crate::state::{DeviceIdParams, Popup, RawField, RawParams, State, StatusMessage};
+use crate::state::{DeviceIdParams, Popup, RawField, RawParams, StatusMessage};
 
 impl App {
     pub fn open_slave(&mut self) {
@@ -11,10 +11,9 @@ impl App {
     }
 
     pub async fn commit_slave(&mut self) {
-        let id = match &self.read().popup {
-            Some(Popup::Slave(value)) => Some((*value).min(u8::MAX as u16) as u8),
-            _ => None,
-        };
+        let id = self
+            .popup_as::<u16>()
+            .map(|value| (*value).min(u8::MAX as u16) as u8);
         if let Some(id) = id {
             if let Some(device) = &self.device {
                 device.set_slave(id).await;
@@ -36,13 +35,7 @@ impl App {
     }
 
     fn device_id_mut(&mut self) -> Option<&mut DeviceIdParams> {
-        match &mut self.state {
-            State::Read(p) => match &mut p.popup {
-                Some(Popup::DeviceId(d)) => Some(d),
-                _ => None,
-            },
-            _ => None,
-        }
+        self.popup_as_mut()
     }
 
     pub fn device_id_cycle(&mut self, forward: bool) {
@@ -125,13 +118,7 @@ impl App {
     }
 
     fn raw_mut(&mut self) -> Option<&mut RawParams> {
-        match &mut self.state {
-            State::Read(p) => match &mut p.popup {
-                Some(Popup::Raw(r)) => Some(r),
-                _ => None,
-            },
-            _ => None,
-        }
+        self.popup_as_mut()
     }
 
     pub fn raw_move(&mut self, down: bool) {

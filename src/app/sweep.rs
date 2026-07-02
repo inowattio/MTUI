@@ -1,16 +1,10 @@
 use super::App;
 use crate::num_ops::{digit_add, digit_remove, wrap_index};
-use crate::state::{Popup, State, SweepConfigParams, SweepField};
+use crate::state::{Popup, SweepConfigParams, SweepField};
 
 impl App {
     fn sweep_config_mut(&mut self) -> Option<&mut SweepConfigParams> {
-        match &mut self.state {
-            State::Read(p) => match &mut p.popup {
-                Some(Popup::SweepConfig(p)) => Some(p),
-                _ => None,
-            },
-            _ => None,
-        }
+        self.popup_as_mut()
     }
 
     pub fn open_sweep(&mut self) {
@@ -27,7 +21,7 @@ impl App {
     }
 
     pub fn sweep_action(&mut self) {
-        let Some(Popup::SweepConfig(p)) = &self.read().popup else {
+        let Some(p) = self.popup_as::<SweepConfigParams>() else {
             return;
         };
         let (mut from, mut to, continuous) = (p.from, p.to, p.continuous);

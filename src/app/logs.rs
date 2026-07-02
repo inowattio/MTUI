@@ -73,7 +73,7 @@ impl App {
     }
 
     pub fn logs_scroll(&mut self, delta: i32) {
-        if let Some(Popup::Logs(l)) = &mut self.read_mut().popup {
+        if let Some(l) = self.popup_as_mut::<LogsParams>() {
             l.scroll(delta);
         }
     }

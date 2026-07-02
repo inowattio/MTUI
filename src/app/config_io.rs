@@ -164,7 +164,7 @@ impl App {
 
     pub fn commit_dump(&mut self) {
         let result = self.dump_read_log();
-        if let Some(Popup::Dump(d)) = &mut self.read_mut().popup {
+        if let Some(d) = self.popup_as_mut::<DumpParams>() {
             d.result = Some(result);
         }
     }

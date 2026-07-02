@@ -45,7 +45,7 @@ impl App {
     }
 
     fn with_custom(&mut self, f: impl FnOnce(&mut CustomParams)) {
-        if let Some(Popup::Custom(c)) = &mut self.read_mut().popup {
+        if let Some(c) = self.popup_as_mut::<CustomParams>() {
             f(c);
         }
     }
@@ -146,9 +146,8 @@ impl App {
     }
 
     pub fn commit_custom(&mut self) {
-        let built = match &self.read().popup {
-            Some(Popup::Custom(c)) => build_custom_rule(c),
-            _ => return,
+        let Some(built) = self.popup_as::<CustomParams>().map(build_custom_rule) else {
+            return;
         };
         match built {
             Ok((cell, rule)) => {
@@ -162,9 +161,11 @@ impl App {
     }
 
     pub fn remove_custom(&mut self) {
-        let cell = match &self.read().popup {
-            Some(Popup::Custom(c)) => (c.register_type, c.address),
-            _ => return,
+        let Some(cell) = self
+            .popup_as::<CustomParams>()
+            .map(|c| (c.register_type, c.address))
+        else {
+            return;
         };
         if self.custom_rules.remove(&cell).is_some() {
             self.dirty = true;

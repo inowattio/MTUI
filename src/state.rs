@@ -20,7 +20,30 @@ macro_rules! field_enum {
     (@count $head:ident $($tail:ident)*) => (1usize + field_enum!(@count $($tail)*));
 }
 
+pub trait PopupPayload: Sized {
+    fn from_popup(popup: &Popup) -> Option<&Self>;
+    fn from_popup_mut(popup: &mut Popup) -> Option<&mut Self>;
+}
+
 macro_rules! popups {
+    (@accessor $variant:ident ( $payload:ty )) => {
+        impl PopupPayload for $payload {
+            fn from_popup(popup: &Popup) -> Option<&Self> {
+                match popup {
+                    Popup::$variant(inner) => Some(inner),
+                    _ => None,
+                }
+            }
+            fn from_popup_mut(popup: &mut Popup) -> Option<&mut Self> {
+                match popup {
+                    Popup::$variant(inner) => Some(inner),
+                    _ => None,
+                }
+            }
+        }
+    };
+    (@accessor $variant:ident) => {};
+
     ( $( $variant:ident $( ( $payload:ty ) )? ),+ $(,)? ) => {
         #[derive(Debug, PartialEq)]
         pub enum Popup {
@@ -39,6 +62,8 @@ macro_rules! popups {
                 }
             }
         }
+
+        $( popups!(@accessor $variant $( ( $payload ) )? ); )+
     };
 }
 

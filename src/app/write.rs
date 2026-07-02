@@ -1,7 +1,7 @@
 use super::{App, BackgroundTask, PendingWrite, WriteOutcome, WriteType};
 use crate::compat;
 use crate::register::RegisterType;
-use crate::state::{Popup, State, StatusMessage, WriteParams};
+use crate::state::{Popup, StatusMessage, WriteParams};
 
 impl App {
     pub fn open_write(&mut self) {
@@ -48,23 +48,11 @@ impl App {
     }
 
     pub fn write_mut(&mut self) -> Option<&mut WriteParams> {
-        match &mut self.state {
-            State::Read(p) => match &mut p.popup {
-                Some(Popup::Write(w)) => Some(w),
-                _ => None,
-            },
-            _ => None,
-        }
+        self.popup_as_mut()
     }
 
     fn write(&self) -> Option<&WriteParams> {
-        match &self.state {
-            State::Read(p) => match &p.popup {
-                Some(Popup::Write(w)) => Some(w),
-                _ => None,
-            },
-            _ => None,
-        }
+        self.popup_as()
     }
 
     pub fn toggle_word_order(&mut self) {

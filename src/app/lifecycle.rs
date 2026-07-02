@@ -9,7 +9,7 @@ use crate::interpretator::Interpretor;
 use crate::modbus::{Interface, ModbusDevice, WordOrder};
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
 use crate::state::{
-    ConnectionStatus, Popup, PopupKind, ReadPanel, ReadParams, State, StatusMessage,
+    ConnectionStatus, Popup, PopupKind, PopupPayload, ReadPanel, ReadParams, State, StatusMessage,
 };
 use crate::writes_log::WritesLogState;
 use chrono::Utc;
@@ -174,6 +174,20 @@ impl App {
 
     pub fn popup_kind(&self) -> Option<PopupKind> {
         self.read().popup.as_ref().map(Popup::kind)
+    }
+
+    pub fn popup_as<T: PopupPayload>(&self) -> Option<&T> {
+        match &self.state {
+            State::Read(p) => p.popup.as_ref().and_then(T::from_popup),
+            _ => None,
+        }
+    }
+
+    pub fn popup_as_mut<T: PopupPayload>(&mut self) -> Option<&mut T> {
+        match &mut self.state {
+            State::Read(p) => p.popup.as_mut().and_then(T::from_popup_mut),
+            _ => None,
+        }
     }
 
     pub fn close_popup(&mut self) {
