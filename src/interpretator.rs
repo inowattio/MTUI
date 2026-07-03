@@ -329,6 +329,20 @@ fn bits_cell(value: u16, out: &mut String) {
     );
 }
 
+pub(crate) fn fmt_num(v: f64, is_float: bool) -> String {
+    if !is_float {
+        return format!("{v:.0}");
+    }
+    let mag = v.abs();
+    if mag != 0.0 && !(1e-3..1e6).contains(&mag) {
+        format!("{v:.2e}")
+    } else if mag >= 100.0 {
+        format!("{v:.1}")
+    } else {
+        format!("{v:.3}")
+    }
+}
+
 pub(crate) fn format_ago(elapsed: chrono::Duration) -> String {
     let secs = elapsed.num_seconds();
     if secs <= 0 {

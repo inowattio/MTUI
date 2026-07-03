@@ -188,6 +188,8 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
             c if c == kb.exit || c == kb.inspect => app.close_popup(),
             c if c == kb.refresh || c == kb.action => app.refresh().await,
             c if c == kb.word_order => app.toggle_word_order(),
+            KeyCode::Left => app.inspect_cycle(false),
+            KeyCode::Right => app.inspect_cycle(true),
             c if c == kb.move_up || c == kb.move_down || c == kb.page_up || c == kb.page_down => {
                 move_read_cursor(app, key_event.code);
             }

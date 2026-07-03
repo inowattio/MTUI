@@ -1,7 +1,7 @@
 use super::popups::draw_popup;
 use crate::app::App;
 use crate::config::Column;
-use crate::interpretator::graph_value;
+use crate::interpretator::fmt_num;
 use crate::register::RegisterCell;
 use crate::state::{ReadPanel, ReadParams};
 use crate::tui::hints::{self, Hint};
@@ -455,60 +455,6 @@ pub fn live_status(app: &App, params: &ReadParams, theme: &Theme) -> Vec<Span<'s
     spans
 }
 
-fn combine_history<F>(app: &App, cell: RegisterCell, width: usize, mut value: F) -> Vec<(f64, f64)>
-where
-    F: FnMut(&[u16]) -> Option<f64>,
-{
-    let (kind, address) = cell;
-    let mut histories = Vec::with_capacity(width);
-    for offset in 0..width as u16 {
-        match app.value_history((kind, address.wrapping_add(offset))) {
-            Some(history) => histories.push(history),
-            None => return Vec::new(),
-        }
-    }
-
-    let len = histories.iter().map(|h| h.len()).min().unwrap_or(0);
-    let mut regs = vec![0u16; width];
-    let mut points = Vec::with_capacity(len);
-    for i in 0..len {
-        for (k, history) in histories.iter().enumerate() {
-            regs[k] = history[history.len() - len + i];
-        }
-        if let Some(v) = value(&regs) {
-            points.push((points.len() as f64, v));
-        }
-    }
-    points
-}
-
-fn graph_points(app: &App, cell: RegisterCell, column: Column) -> Vec<(f64, f64)> {
-    let order = app.config.device.word_order;
-    if column == Column::Custom {
-        let Some(rule) = app.custom_rule(cell) else {
-            return Vec::new();
-        };
-        let width = rule.repr.register_count();
-        return combine_history(app, cell, width, |regs| rule.numeric(regs, order));
-    }
-    let width = column.graph_width().unwrap_or(1);
-    combine_history(app, cell, width, |regs| graph_value(column, order, regs))
-}
-
-fn fmt_num(v: f64, is_float: bool) -> String {
-    if !is_float {
-        return format!("{v:.0}");
-    }
-    let mag = v.abs();
-    if mag != 0.0 && !(1e-3..1e6).contains(&mag) {
-        format!("{v:.2e}")
-    } else if mag >= 100.0 {
-        format!("{v:.1}")
-    } else {
-        format!("{v:.3}")
-    }
-}
-
 fn draw_graph(
     frame: &mut Frame,
     area: Rect,
@@ -559,7 +505,11 @@ fn draw_graph(
             })
             .unwrap_or_default()
     } else {
-        graph_points(app, cell, column.unwrap())
+        app.column_history(cell, column.unwrap())
+            .into_iter()
+            .enumerate()
+            .map(|(i, v)| (i as f64, v))
+            .collect()
     };
 
     let is_float = match column {

@@ -54,7 +54,7 @@ pub fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup
         Popup::Slave(value) => slave::draw(frame, area, theme, kb, *value),
         Popup::SweepConfig(s) => sweep_config::draw(frame, area, theme, kb, s, app.sweep.active),
         Popup::Logs(logs) => logs::draw(frame, area, theme, kb, logs),
-        Popup::Inspect => inspect::draw(frame, area, theme, app),
+        Popup::Inspect(mode) => inspect::draw(frame, area, theme, app, *mode),
         Popup::About => about::draw(frame, area, theme, kb),
         Popup::Stats => stats::draw(frame, area, theme, kb, app),
         Popup::DeviceId(params) => device_id::draw(frame, area, theme, kb, params),

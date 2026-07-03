@@ -1,12 +1,14 @@
 use crate::app::App;
+use crate::input::KeyCode;
+use crate::state::InspectMode;
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::Frame;
 
-pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App) {
-    let (_, entries) = app.inspect_lines();
+pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, mode: InspectMode) {
+    let (_, entries) = app.inspect_lines(mode);
 
     const NAME: usize = 9;
     const VALUE: usize = 21;
@@ -34,6 +36,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App) {
         theme,
         [
             Hint::pair(kb.move_up, kb.move_down, "Move"),
+            Hint::pair(KeyCode::Left, KeyCode::Right, "Mode"),
             Hint::key(kb.refresh, "Refresh"),
             Hint::key(kb.word_order, "Cycle order"),
             Hint::key(kb.exit, "Close"),
@@ -41,5 +44,6 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App) {
     ));
 
     let width = ((NAME + VALUE + 3) as u16) * 2 + 3;
-    super::render(frame, area, theme, "Inspect", width, lines);
+    let title = format!("Inspect [{}]", mode.name());
+    super::render(frame, area, theme, &title, width, lines);
 }

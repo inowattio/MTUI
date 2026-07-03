@@ -1,13 +1,44 @@
 use super::App;
-use crate::interpretator::format_ago;
+use crate::config::Column;
+use crate::interpretator::{fmt_num, format_ago, graph_value};
+use crate::num_ops::cycle;
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
-use crate::state::{Popup, ReadPanel};
+use crate::state::{InspectMode, Popup, ReadPanel};
 use chrono::{DateTime, Local, Utc};
 use std::collections::VecDeque;
 
+const INSPECT_COLUMNS: &[Column] = &[
+    Column::U16,
+    Column::I16,
+    Column::U8s,
+    Column::I8s,
+    Column::Hex,
+    Column::Hex32,
+    Column::F16,
+    Column::Bcd,
+    Column::Bcd32,
+    Column::U32,
+    Column::I32,
+    Column::U32M10K,
+    Column::I32M10K,
+    Column::U64,
+    Column::I64,
+    Column::F32,
+    Column::F64,
+    Column::Ascii,
+    Column::Bits,
+    Column::Custom,
+];
+
 impl App {
     pub fn open_inspect(&mut self) {
-        self.read_mut().popup = Some(Popup::Inspect);
+        self.read_mut().popup = Some(Popup::Inspect(InspectMode::default()));
+    }
+
+    pub fn inspect_cycle(&mut self, forward: bool) {
+        if let Some(mode) = self.popup_as_mut::<InspectMode>() {
+            *mode = cycle(&InspectMode::ALL, *mode, forward);
+        }
     }
 
     pub fn open_about(&mut self) {
@@ -84,8 +115,11 @@ impl App {
         self.changed.get(&cell).copied().unwrap_or(false)
     }
 
-    pub fn inspect_lines(&self) -> (RegisterCell, Vec<(&'static str, String)>) {
+    pub fn inspect_lines(&self, mode: InspectMode) -> (RegisterCell, Vec<(&'static str, String)>) {
         let cell = self.cursor_cell();
+        if mode != InspectMode::Now {
+            return (cell, self.inspect_aggregates(cell, mode));
+        }
         let (kind, addr) = cell;
         let Some(&(value, time)) = self.read_log.get(&cell) else {
             return (cell, Vec::new());
@@ -113,6 +147,92 @@ impl App {
             label,
         ));
         (cell, lines)
+    }
+
+    fn inspect_aggregates(
+        &self,
+        cell: RegisterCell,
+        mode: InspectMode,
+    ) -> Vec<(&'static str, String)> {
+        let samples = self.value_history(cell).map_or(0, VecDeque::len);
+        if samples == 0 {
+            return Vec::new();
+        }
+        let mut lines = vec![("samples", samples.to_string())];
+        for &column in INSPECT_COLUMNS {
+            lines.push((column.name(), self.aggregate_text(cell, column, mode)));
+        }
+        lines.push(("label", self.labels.get(&cell).cloned().unwrap_or_default()));
+        lines
+    }
+
+    fn aggregate_text(&self, cell: RegisterCell, column: Column, mode: InspectMode) -> String {
+        let series = self.column_history(cell, column);
+        if series.is_empty() {
+            return "--".to_string();
+        }
+        let is_float = column.graph_is_float() || series.iter().any(|v| v.fract() != 0.0);
+        match mode {
+            InspectMode::Min => fmt_num(
+                series.iter().copied().fold(f64::INFINITY, f64::min),
+                is_float,
+            ),
+            InspectMode::Max => fmt_num(
+                series.iter().copied().fold(f64::NEG_INFINITY, f64::max),
+                is_float,
+            ),
+            InspectMode::Avg => {
+                let avg = series.iter().sum::<f64>() / series.len() as f64;
+                if is_float {
+                    fmt_num(avg, true)
+                } else {
+                    format!("{avg:.1}")
+                }
+            }
+            InspectMode::Now => unreachable!("aggregates are not computed for the now mode"),
+        }
+    }
+
+    pub fn column_history(&self, cell: RegisterCell, column: Column) -> Vec<f64> {
+        let order = self.config.device.word_order;
+        if column == Column::Custom {
+            let Some(rule) = self.custom_rule(cell) else {
+                return Vec::new();
+            };
+            let width = rule.repr.register_count();
+            return self.combined_history(cell, width, |regs| rule.numeric(regs, order));
+        }
+        let Some(width) = column.graph_width() else {
+            return Vec::new();
+        };
+        self.combined_history(cell, width, |regs| graph_value(column, order, regs))
+    }
+
+    fn combined_history<F>(&self, cell: RegisterCell, width: usize, mut value: F) -> Vec<f64>
+    where
+        F: FnMut(&[u16]) -> Option<f64>,
+    {
+        let (kind, address) = cell;
+        let mut histories = Vec::with_capacity(width);
+        for offset in 0..width as u16 {
+            match self.value_history((kind, address.wrapping_add(offset))) {
+                Some(history) => histories.push(history),
+                None => return Vec::new(),
+            }
+        }
+
+        let len = histories.iter().map(|h| h.len()).min().unwrap_or(0);
+        let mut regs = vec![0u16; width];
+        let mut values = Vec::with_capacity(len);
+        for i in 0..len {
+            for (k, history) in histories.iter().enumerate() {
+                regs[k] = history[history.len() - len + i];
+            }
+            if let Some(v) = value(&regs) {
+                values.push(v);
+            }
+        }
+        values
     }
 
     pub fn custom_count(&self) -> usize {

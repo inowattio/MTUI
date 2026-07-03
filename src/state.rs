@@ -642,6 +642,28 @@ impl LogsParams {
     }
 }
 
+field_enum! {
+    #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+    pub enum InspectMode {
+        #[default]
+        Now,
+        Min,
+        Max,
+        Avg,
+    }
+}
+
+impl InspectMode {
+    pub fn name(self) -> &'static str {
+        match self {
+            InspectMode::Now => "now",
+            InspectMode::Min => "min",
+            InspectMode::Max => "max",
+            InspectMode::Avg => "avg",
+        }
+    }
+}
+
 popups! {
     Discovery(DiscoveryParams),
     Help(HelpParams),
@@ -655,7 +677,7 @@ popups! {
     Slave(u16),
     Logs(LogsParams),
     SweepConfig(SweepConfigParams),
-    Inspect,
+    Inspect(InspectMode),
     Stats,
     DeviceId(DeviceIdParams),
     Raw(RawParams),
