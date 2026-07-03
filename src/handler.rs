@@ -91,6 +91,7 @@ fn move_read_cursor(app: &mut App, code: KeyCode) {
         1
     };
     let up = code == kb.move_up || code == kb.page_up;
+    let scroll_rows = app.panel_scroll_rows();
     let p = app.read_mut();
     match p.panel {
         ReadPanel::Main => {
@@ -104,7 +105,7 @@ fn move_read_cursor(app: &mut App, code: KeyCode) {
         }
         _ => {
             p.pinned_index = step_pos(p.pinned_index, up, step);
-            p.scroll_pinned(rows, panel_len);
+            p.scroll_pinned(scroll_rows, panel_len);
         }
     }
 }
@@ -145,8 +146,9 @@ async fn run_action(app: &mut App, action: KeybindAction) {
             app.read_mut().toggle_panel();
             let len = app.panel_len();
             let cols = app.config.matrix_cols;
+            let scroll_rows = app.panel_scroll_rows();
             let p = app.read_mut();
-            p.scroll_pinned(rows, len);
+            p.scroll_pinned(scroll_rows, len);
             p.scroll_to_cursor(rows, cols);
         }
         MoveUp | MoveDown | PageUp | PageDown => {

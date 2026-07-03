@@ -94,6 +94,31 @@ impl App {
         len as u16
     }
 
+    fn panel_has_type(&self, kind: RegisterType) -> bool {
+        match self.read().panel {
+            ReadPanel::Main | ReadPanel::Pinned | ReadPanel::Matrix => {
+                self.pinned_registers.iter().any(|&(k, _)| k == kind)
+            }
+            ReadPanel::Labeled => self.labels.keys().any(|&(k, _)| k == kind),
+            ReadPanel::Custom => self.custom_rules.keys().any(|&(k, _)| k == kind),
+        }
+    }
+
+    pub fn panel_group_breaks(&self) -> u16 {
+        let present = RegisterType::ALL
+            .iter()
+            .filter(|&&kind| self.panel_has_type(kind))
+            .count() as u16;
+        present.saturating_sub(1)
+    }
+
+    pub fn panel_scroll_rows(&self) -> u16 {
+        self.visible_rows
+            .get()
+            .saturating_sub(self.panel_group_breaks())
+            .max(1)
+    }
+
     pub fn cursor_cell(&self) -> RegisterCell {
         let (panel, register_type, position, index) = {
             let p = self.read();

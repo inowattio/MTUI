@@ -198,9 +198,9 @@ impl App {
         self.pinned_registers.sort();
         self.dirty = true;
 
-        let rows = self.visible_rows.get();
         let len = self.panel_len();
-        self.read_mut().scroll_pinned(rows, len);
+        let scroll_rows = self.panel_scroll_rows();
+        self.read_mut().scroll_pinned(scroll_rows, len);
 
         let (kind, addr) = selection;
         let verb = if pinned { "Pinned" } else { "Unpinned" };

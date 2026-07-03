@@ -2,7 +2,7 @@ use super::popups::draw_popup;
 use crate::app::App;
 use crate::config::Column;
 use crate::interpretator::fmt_num;
-use crate::register::RegisterCell;
+use crate::register::{RegisterCell, RegisterType};
 use crate::state::{ReadPanel, ReadParams};
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::{spinner_frame, Theme};
@@ -165,8 +165,14 @@ impl TableCtx<'_> {
         let now = Local::now();
         let header = format!("{:<2}{}", "T", app.interpreter.header());
 
-        let mut rows: Vec<(String, Style)> = Vec::with_capacity(cells.len());
-        for (row_idx, &(kind, address)) in cells.iter().enumerate() {
+        let mut rows: Vec<(String, Style)> = Vec::with_capacity(cells.len() + 3);
+        let mut prev_kind: Option<RegisterType> = None;
+        for (ord, &(kind, address)) in cells.iter().enumerate() {
+            if prev_kind.is_some_and(|pk| pk != kind) {
+                rows.push((String::new(), theme.base()));
+            }
+            prev_kind = Some(kind);
+
             let (text, changed) = match app.cell_row((kind, address), now) {
                 Some(row) => row,
                 None => {
@@ -180,10 +186,10 @@ impl TableCtx<'_> {
 
             let text = format!("{:<2}{text}", kind.marker());
 
-            let style = if (top + row_idx) as u16 == params.pinned_index {
+            let style = if (top + ord) as u16 == params.pinned_index {
                 theme.selected_style()
             } else {
-                theme.row_style(row_idx % 2 == 1, changed)
+                theme.row_style(ord % 2 == 1, changed)
             };
             rows.push((text, style));
         }
