@@ -3,6 +3,7 @@ use crate::constants::EVENT_HANDLER_TICKRATE;
 use crate::input;
 use crossterm::event::{Event as CrosstermEvent, KeyCode as CrosstermKeyCode, KeyEventKind};
 use futures::{FutureExt, StreamExt};
+use num_traits::Zero;
 use tokio::sync::mpsc;
 
 #[derive(Clone, Debug)]
@@ -29,6 +30,8 @@ fn convert_key(code: CrosstermKeyCode) -> Option<input::KeyCode> {
         _ => return None,
     })
 }
+
+const EVENTS_CAPACITY: usize = 16;
 
 #[allow(dead_code)]
 #[derive(Debug)]
@@ -83,10 +86,14 @@ impl EventHandler {
         }
     }
 
-    pub async fn next(&mut self) -> AppResult<Event> {
-        self.receiver
-            .recv()
-            .await
-            .ok_or_else(|| anyhow::anyhow!("event channel closed"))
+    pub async fn nexts(&mut self) -> AppResult<Vec<Event>> {
+        let mut buffer = Vec::with_capacity(EVENTS_CAPACITY);
+        let c = self.receiver.recv_many(&mut buffer, EVENTS_CAPACITY).await;
+
+        if c.is_zero() {
+            return Err(anyhow::anyhow!("event channel closed"));
+        }
+
+        Ok(buffer)
     }
 }

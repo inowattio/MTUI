@@ -3,8 +3,7 @@ mod native {
     use clap::Parser;
     use mtui::app::{App, AppResult};
     use mtui::constants::EVENT_HANDLER_TICKRATE;
-    use mtui::event::{Event, EventHandler};
-    use mtui::handler::{handle_key_events, handle_paste};
+    use mtui::event::EventHandler;
     use mtui::logger;
     use mtui::tui::Tui;
     use ratatui::backend::CrosstermBackend;
@@ -44,12 +43,7 @@ mod native {
         while app.running {
             app.complete_background_task().await;
             tui.draw(&mut app)?;
-            match tui.next_event().await? {
-                Event::Tick => app.tick().await,
-                Event::Key(key_event) => handle_key_events(key_event, &mut app).await?,
-                Event::Resize(_, _) => {}
-                Event::Paste(data) => handle_paste(data, &mut app),
-            }
+            tui.process_events(&mut app).await?;
         }
 
         tui.exit()?;

@@ -1,5 +1,6 @@
 use crate::app::{App, AppResult};
 use crate::event::{Event, EventHandler};
+use crate::handler::{handle_key_events, handle_paste};
 use crate::tui::render;
 use crossterm::event::{DisableBracketedPaste, EnableBracketedPaste};
 use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
@@ -41,6 +42,19 @@ where
         Ok(())
     }
 
+    pub async fn process_events(&mut self, app: &mut App) -> AppResult<()> {
+        for event in self.events.nexts().await? {
+            match event {
+                Event::Tick => app.tick().await,
+                Event::Key(key_event) => handle_key_events(key_event, app).await?,
+                Event::Resize(_, _) => {}
+                Event::Paste(data) => handle_paste(data, app),
+            }
+        }
+
+        Ok(())
+    }
+
     fn reset() -> AppResult<()> {
         terminal::disable_raw_mode()?;
         crossterm::execute!(io::stderr(), LeaveAlternateScreen, DisableBracketedPaste)?;
@@ -51,9 +65,5 @@ where
         Self::reset()?;
         self.terminal.show_cursor()?;
         Ok(())
-    }
-
-    pub async fn next_event(&mut self) -> AppResult<Event> {
-        self.events.next().await
     }
 }
