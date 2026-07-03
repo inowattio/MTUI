@@ -33,12 +33,9 @@ fn convert_key(code: CrosstermKeyCode) -> Option<input::KeyCode> {
 
 const EVENTS_CAPACITY: usize = 16;
 
-#[allow(dead_code)]
 #[derive(Debug)]
 pub struct EventHandler {
-    sender: mpsc::UnboundedSender<Event>,
     receiver: mpsc::UnboundedReceiver<Event>,
-    handler: tokio::task::JoinHandle<()>,
 }
 
 async fn event_processor(tx: mpsc::UnboundedSender<Event>) {
@@ -77,13 +74,9 @@ impl EventHandler {
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         let (sender, receiver) = mpsc::unbounded_channel();
-        let handler = tokio::spawn(event_processor(sender.clone()));
+        tokio::spawn(event_processor(sender.clone()));
 
-        Self {
-            sender,
-            receiver,
-            handler,
-        }
+        Self { receiver }
     }
 
     pub async fn nexts(&mut self) -> AppResult<Vec<Event>> {
