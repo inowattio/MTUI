@@ -94,6 +94,23 @@ impl App {
         len as u16
     }
 
+    pub(super) fn panel_refresh_window(&self, batch: usize) -> Vec<RegisterCell> {
+        let cursor = self.cursor_cell();
+        let kind = cursor.0;
+        let same: Vec<RegisterCell> = self
+            .panel_window(0, self.panel_len() as usize)
+            .into_iter()
+            .filter(|&(k, _)| k == kind)
+            .collect();
+        if same.is_empty() {
+            return Vec::new();
+        }
+        let batch = batch.max(1).min(same.len());
+        let pos = same.iter().position(|&c| c == cursor).unwrap_or(0);
+        let start = pos.saturating_sub(batch / 2).min(same.len() - batch);
+        same[start..start + batch].to_vec()
+    }
+
     fn panel_has_type(&self, kind: RegisterType) -> bool {
         match self.read().panel {
             ReadPanel::Main | ReadPanel::Pinned | ReadPanel::Matrix => {

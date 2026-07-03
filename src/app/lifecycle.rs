@@ -436,16 +436,10 @@ impl App {
         let read_main = sweeping || matches!(panel, ReadPanel::Main | ReadPanel::Matrix);
         self.connection = ConnectionStatus::Reading;
 
-        let panel_registers = {
-            let total = self.panel_len() as usize;
-            if total == 0 {
-                Vec::new()
-            } else {
-                let batch = (amount as usize).min(total);
-                let idx = (self.read().pinned_index as usize).min(total - 1);
-                let start = idx.saturating_sub(batch / 2).min(total - batch);
-                self.panel_window(start, batch)
-            }
+        let panel_registers = if read_main {
+            Vec::new()
+        } else {
+            self.panel_refresh_window(amount as usize)
         };
 
         self.background_task = Some(BackgroundTask::Refresh(compat::spawn(async move {
