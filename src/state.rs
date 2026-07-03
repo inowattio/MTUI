@@ -656,6 +656,7 @@ popups! {
     Logs(LogsParams),
     SweepConfig(SweepConfigParams),
     Inspect,
+    Stats,
     DeviceId(DeviceIdParams),
     Raw(RawParams),
     Import(ImportParams),

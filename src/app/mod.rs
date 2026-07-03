@@ -247,6 +247,51 @@ impl Default for SweepState {
     }
 }
 
+#[derive(Debug, Default)]
+pub struct CommStats {
+    pub reads_ok: u64,
+    pub read_errors: u64,
+    pub writes_ok: u64,
+    pub write_errors: u64,
+    latency_sum: Duration,
+    latency_min: Option<Duration>,
+    latency_max: Option<Duration>,
+    last_error: Option<(String, DateTime<Utc>)>,
+}
+
+impl CommStats {
+    pub fn record_read_ok(&mut self, latency: Duration) {
+        self.reads_ok += 1;
+        self.latency_sum += latency;
+        self.latency_min = Some(self.latency_min.map_or(latency, |m| m.min(latency)));
+        self.latency_max = Some(self.latency_max.map_or(latency, |m| m.max(latency)));
+    }
+
+    pub fn record_read_error(&mut self, message: &str) {
+        self.read_errors += 1;
+        self.last_error = Some((message.to_string(), Utc::now()));
+    }
+
+    pub fn record_write(&mut self, ok: bool, message: &str) {
+        if ok {
+            self.writes_ok += 1;
+        } else {
+            self.write_errors += 1;
+            self.last_error = Some((message.to_string(), Utc::now()));
+        }
+    }
+
+    pub fn latency(&self) -> Option<(Duration, Duration, Duration)> {
+        let (min, max) = (self.latency_min?, self.latency_max?);
+        let avg = self.latency_sum / self.reads_ok.min(u32::MAX as u64) as u32;
+        Some((min, avg, max))
+    }
+
+    pub fn last_error(&self) -> Option<(&str, DateTime<Utc>)> {
+        self.last_error.as_ref().map(|(m, at)| (m.as_str(), *at))
+    }
+}
+
 #[derive(Debug)]
 struct RefreshTaskResult {
     register_type: RegisterType,
@@ -281,6 +326,7 @@ pub struct App {
     pub headless: bool,
     pub dirty: bool,
     pub sweep: SweepState,
+    pub stats: CommStats,
     reconnect: ReconnectState,
     pub visible_rows: Cell<u16>,
     pub h_max_offset: Cell<u16>,

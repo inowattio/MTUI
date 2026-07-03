@@ -1,7 +1,7 @@
 use super::{
     bits_to_words, default_config_path, fetch_config_or_exit, reconnect_backoff, App,
-    BackgroundTask, ConnectTaskResult, DeviceIdTaskResult, LoadConfigTaskResult, RawTaskResult,
-    ReconnectState, RefreshTaskResult, SweepState, WriteOutcome,
+    BackgroundTask, CommStats, ConnectTaskResult, DeviceIdTaskResult, LoadConfigTaskResult,
+    RawTaskResult, ReconnectState, RefreshTaskResult, SweepState, WriteOutcome,
 };
 use crate::compat::{self, Instant, TaskPoll};
 use crate::config::{Config, InterpretorConfig};
@@ -49,6 +49,7 @@ impl App {
             headless: false,
             dirty: false,
             sweep: SweepState::default(),
+            stats: CommStats::default(),
             reconnect: ReconnectState::default(),
             visible_rows: Cell::new(1),
             h_max_offset: Cell::new(0),
@@ -130,6 +131,7 @@ impl App {
         self.changed.clear();
         self.read_log.clear();
         self.value_history.clear();
+        self.stats = CommStats::default();
     }
 
     pub(super) fn startup_read_params(&self) -> ReadParams {
@@ -471,6 +473,11 @@ impl App {
     }
 
     fn apply_refresh_result(&mut self, result: RefreshTaskResult) {
+        match (&result.main_data, &result.pinned_data) {
+            (Some(Ok(_)), _) | (_, Some(Ok(_))) => self.stats.record_read_ok(result.read_duration),
+            (Some(Err(e)), _) | (_, Some(Err(e))) => self.stats.record_read_error(e),
+            _ => {}
+        }
         if !self.is_reading() {
             return;
         }
@@ -600,6 +607,7 @@ impl App {
             Done::Refresh(Some(result)) => self.apply_refresh_result(result),
             Done::Refresh(None) => {
                 let message = "read task stopped unexpectedly".to_string();
+                self.stats.record_read_error(&message);
                 if self.is_reading() {
                     let params = self.read_mut();
                     params.read_error = Some(message.clone());
@@ -613,6 +621,7 @@ impl App {
                     ok: false,
                     message: "write task stopped unexpectedly".to_string(),
                 });
+                self.stats.record_write(outcome.ok, &outcome.message);
                 if let Some(pending) = &self.pending_write {
                     let detail = format!(
                         "@{} = {} (was {})",

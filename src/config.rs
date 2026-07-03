@@ -103,6 +103,7 @@ keybinds! {
     CopyAddress => copy_address : "Copy address" = COPY_ADDRESS,
     Logs => logs : "View write logs" = LOGS,
     AppLogs => app_logs : "App logs" = APP_LOGS,
+    Stats => stats : "Statistics" = STATS,
     Sweep => sweep : "Sweep" = SWEEP,
     Clear => clear : "Clear session data" = CLEAR,
     SwitchView => switch_view : "Cycle panel" = SWITCH_VIEW,

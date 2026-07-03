@@ -14,6 +14,10 @@ impl App {
         self.read_mut().popup = Some(Popup::About);
     }
 
+    pub fn open_stats(&mut self) {
+        self.read_mut().popup = Some(Popup::Stats);
+    }
+
     pub fn panel_cell_at(&self, index: usize) -> Option<RegisterCell> {
         match self.read().panel {
             ReadPanel::Main | ReadPanel::Pinned | ReadPanel::Matrix => {

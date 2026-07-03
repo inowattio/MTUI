@@ -32,6 +32,7 @@ pub mod keybind {
     pub const COPY_ADDRESS: KeyCode = KeyCode::Char('y');
     pub const LOGS: KeyCode = KeyCode::Char('L');
     pub const APP_LOGS: KeyCode = KeyCode::Char('k');
+    pub const STATS: KeyCode = KeyCode::Char('S');
     pub const SWEEP: KeyCode = KeyCode::Char('u');
     pub const CLEAR: KeyCode = KeyCode::Char('x');
     pub const SWITCH_VIEW: KeyCode = KeyCode::Tab;

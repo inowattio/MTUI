@@ -137,6 +137,7 @@ async fn run_action(app: &mut App, action: KeybindAction) {
         CopyAddress => app.copy_address(),
         Logs => app.open_logs(),
         AppLogs => app.open_log_view(),
+        Stats => app.open_stats(),
         Sweep => app.open_sweep(),
         Clear => app.clear_session_data(),
         SwitchView => {
@@ -175,6 +176,11 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
 
         PopupKind::About => match key_event.code {
             c if c == kb.exit || c == kb.about => app.close_popup(),
+            _ => {}
+        },
+
+        PopupKind::Stats => match key_event.code {
+            c if c == kb.exit || c == kb.stats => app.close_popup(),
             _ => {}
         },
 
