@@ -35,7 +35,8 @@ mod native {
 
         let mut app = App::new(args.config).await;
 
-        let backend = CrosstermBackend::new(io::stderr());
+        let writer = io::BufWriter::with_capacity(256 * 1024, io::stderr());
+        let backend = CrosstermBackend::new(writer);
         let terminal = Terminal::new(backend)?;
         let events = EventHandler::new();
         let mut tui = Tui::new(terminal, events)?;
