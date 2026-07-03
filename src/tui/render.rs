@@ -27,7 +27,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         }
 
         clock_spans.push(Span::styled(
-            format!(">{:?}ms ", app.last_frame.as_millis()),
+            format!(">{:.2?}ms ", app.last_frame.as_micros() as f64 / 1000.),
             theme.dim_style(),
         ));
     }
