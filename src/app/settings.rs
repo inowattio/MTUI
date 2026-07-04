@@ -2,6 +2,24 @@ use super::App;
 
 use crate::num_ops::cycle;
 use crate::state::{ReadPanel, SettingsField, SettingsParams, State, StatusMessage};
+use crate::tui::theme::{self, Theme};
+use ratatui::style::Color;
+
+fn theme_field(theme: &mut Theme, field: SettingsField) -> Option<&mut Color> {
+    Some(match field {
+        SettingsField::ThemeBorder => &mut theme.border,
+        SettingsField::ThemeAccent => &mut theme.accent,
+        SettingsField::ThemeText => &mut theme.text,
+        SettingsField::ThemeDim => &mut theme.dim,
+        SettingsField::ThemeChanged => &mut theme.changed,
+        SettingsField::ThemeZebra => &mut theme.zebra,
+        SettingsField::ThemeOk => &mut theme.ok,
+        SettingsField::ThemeWarn => &mut theme.warn,
+        SettingsField::ThemeErr => &mut theme.err,
+        SettingsField::ThemeSelectedFg => &mut theme.selected_fg,
+        _ => return None,
+    })
+}
 
 impl App {
     pub fn settings(&self) -> Option<&SettingsParams> {
@@ -103,6 +121,11 @@ impl App {
                 let rt = field.cycle_register_type().expect("cycle field");
                 self.config.cycle_types.toggle(rt);
             }
+            f if f.is_theme_color() => {
+                if let Some(slot) = theme_field(&mut self.config.theme, f) {
+                    *slot = cycle(theme::PALETTE, *slot, delta > 0);
+                }
+            }
             _ => {
                 let Some((min, max, step)) = Self::numeric_spec(field) else {
                     return;
@@ -118,6 +141,18 @@ impl App {
     }
 
     pub fn settings_digit(&mut self, field: SettingsField, digit: u8) {
+        if field.is_theme_color() {
+            if let Some(slot) = theme_field(&mut self.config.theme, field) {
+                let current = match *slot {
+                    Color::Indexed(n) => n as i64,
+                    _ => 0,
+                };
+                let value = (current * 10 + digit as i64).clamp(0, 255) as u8;
+                *slot = Color::Indexed(value);
+                self.dirty = true;
+            }
+            return;
+        }
         let Some((min, max, _)) = Self::numeric_spec(field) else {
             return;
         };
@@ -151,6 +186,21 @@ impl App {
         if field == SettingsField::Name {
             self.config.name.pop();
             self.dirty = true;
+            return;
+        }
+        if field.is_theme_color() {
+            let default = theme_field(&mut Theme::default(), field).copied();
+            if let Some(slot) = theme_field(&mut self.config.theme, field) {
+                match *slot {
+                    Color::Indexed(n) if n > 0 => *slot = Color::Indexed(n / 10),
+                    _ => {
+                        if let Some(def) = default {
+                            *slot = def;
+                        }
+                    }
+                }
+                self.dirty = true;
+            }
             return;
         }
         let Some((min, _, _)) = Self::numeric_spec(field) else {

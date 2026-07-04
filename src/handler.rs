@@ -678,7 +678,7 @@ async fn handle_settings_field_key(key_event: KeyEvent, app: &mut App) {
             SettingsField::ClearPins => app.clear_pins(),
             SettingsField::ClearLabels => app.clear_labels(),
             SettingsField::ClearCustom => app.clear_custom(),
-            f if f.is_toggle() => app.settings_adjust(f, 1),
+            f if f.is_toggle() || f.is_theme_color() => app.settings_adjust(f, 1),
             SettingsField::Save => app.settings_save(),
             SettingsField::LoadConfig => app.settings_load(),
             _ => {}

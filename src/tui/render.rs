@@ -3,7 +3,7 @@ use crate::state::State;
 use crate::tui::draw_state;
 use crate::tui::make_bottom_title::make_bottom_title;
 use crate::tui::make_top_title::make_top_title;
-use crate::tui::theme::{status_span, Theme};
+use crate::tui::theme::status_span;
 use chrono::Local;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
@@ -12,7 +12,7 @@ use ratatui::Frame;
 
 pub fn render(app: &mut App, frame: &mut Frame) {
     let device = app.config.display_device();
-    let theme = Theme::default();
+    let theme = app.config.theme;
 
     let mode = make_top_title(&app.state);
     let key_hints = make_bottom_title(&theme, &app.state, &app.config.keybinds);

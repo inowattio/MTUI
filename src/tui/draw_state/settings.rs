@@ -6,20 +6,27 @@ use crate::tui::draw_state::{edit_value, field_row, marker};
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
+use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
 
 const CATEGORY_WIDTH: u16 = 18;
 
+#[derive(Clone, Copy)]
 enum Kind {
     Number,
     Toggle,
     Action,
+    Color(Color),
 }
 
 fn on_off(value: bool) -> String {
     if value { "on" } else { "off" }.to_string()
+}
+
+fn color_view(name: &'static str, color: Color) -> (&'static str, String, Kind) {
+    (name, color.to_string(), Kind::Color(color))
 }
 
 pub fn draw(params: &SettingsParams, app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
@@ -96,6 +103,18 @@ fn draw_fields(params: &SettingsParams, app: &App, frame: &mut Frame, area: Rect
         }
     }
 
+    if matches!(params.current_category(), SettingsCategory::Theme) {
+        lines.push(Line::default());
+        lines.push(hints::footer(
+            theme,
+            [
+                Hint::pair(KeyCode::Left, KeyCode::Right, "Cycle"),
+                Hint::pair(KeyCode::Char('0'), KeyCode::Char('9'), "256-color index"),
+                Hint::key(KeyCode::Backspace, "Delete / reset"),
+            ],
+        ));
+    }
+
     frame.render_widget(Paragraph::new(lines), area);
 }
 
@@ -129,10 +148,31 @@ fn render_field(
 
     let value_text = match (selected, kind) {
         (true, Kind::Action) => format!("{value}  \u{2190} enter"),
+        (s, Kind::Color(_)) => edit_value(value, s, true),
         (s, k) => edit_value(value, s, matches!(k, Kind::Toggle)),
     };
 
-    field_row(theme, name, 24, value_text, selected)
+    match kind {
+        Kind::Color(color) => color_row(theme, name, value_text, color, selected),
+        _ => field_row(theme, name, 24, value_text, selected),
+    }
+}
+
+fn color_row(
+    theme: &Theme,
+    label: &str,
+    value: String,
+    color: Color,
+    selected: bool,
+) -> Line<'static> {
+    Line::from(vec![
+        Span::styled(
+            format!("{}{label:<24} ", marker(selected)),
+            theme.dim_style(),
+        ),
+        Span::styled(format!("{value:<18}"), theme.line_style(selected)),
+        Span::styled("\u{2588}\u{2588}\u{2588}", Style::default().fg(color)),
+    ])
 }
 
 fn field_view(
@@ -249,6 +289,16 @@ fn field_view(
             on_off(device.show_frame_time),
             Kind::Toggle,
         ),
+        SettingsField::ThemeBorder => color_view("Border", device.theme.border),
+        SettingsField::ThemeAccent => color_view("Accent / titles", device.theme.accent),
+        SettingsField::ThemeText => color_view("Text", device.theme.text),
+        SettingsField::ThemeDim => color_view("Dim / muted", device.theme.dim),
+        SettingsField::ThemeChanged => color_view("Changed value", device.theme.changed),
+        SettingsField::ThemeZebra => color_view("Zebra stripe", device.theme.zebra),
+        SettingsField::ThemeOk => color_view("OK / connected", device.theme.ok),
+        SettingsField::ThemeWarn => color_view("Warning", device.theme.warn),
+        SettingsField::ThemeErr => color_view("Error", device.theme.err),
+        SettingsField::ThemeSelectedFg => color_view("Selected text", device.theme.selected_fg),
         SettingsField::Save => (
             "Save configuration",
             app.config_path().to_string(),

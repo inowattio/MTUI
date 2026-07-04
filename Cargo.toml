@@ -30,7 +30,7 @@ web = []
 local-config = []
 
 [dependencies]
-ratatui = { version = "0.30.2", default-features = false }
+ratatui = { version = "0.30.2", default-features = false, features = ["serde"] }
 tokio = { version = "1.52.3", default-features = false, features = ["sync", "macros"] }
 futures = "0.3.32"
 futures-timer = { version = "3.0.4", features = ["wasm-bindgen"] }

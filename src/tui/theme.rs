@@ -2,10 +2,32 @@ use crate::state::{ConnectionStatus, MessageKind, StatusMessage};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders};
+use serde::{Deserialize, Serialize};
 
 const SPINNER_FRAMES: [&str; 8] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧"];
 
-#[derive(Clone, Copy, Debug)]
+pub const PALETTE: &[Color] = &[
+    Color::Reset,
+    Color::Black,
+    Color::Red,
+    Color::Green,
+    Color::Yellow,
+    Color::Blue,
+    Color::Magenta,
+    Color::Cyan,
+    Color::Gray,
+    Color::DarkGray,
+    Color::LightRed,
+    Color::LightGreen,
+    Color::LightYellow,
+    Color::LightBlue,
+    Color::LightMagenta,
+    Color::LightCyan,
+    Color::White,
+];
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[serde(default)]
 pub struct Theme {
     pub border: Color,
     pub accent: Color,
@@ -16,6 +38,7 @@ pub struct Theme {
     pub ok: Color,
     pub warn: Color,
     pub err: Color,
+    pub selected_fg: Color,
 }
 
 impl Default for Theme {
@@ -30,6 +53,7 @@ impl Default for Theme {
             ok: Color::LightGreen,
             warn: Color::Yellow,
             err: Color::LightRed,
+            selected_fg: Color::Black,
         }
     }
 }
@@ -58,7 +82,7 @@ impl Theme {
     pub fn selected_style(&self) -> Style {
         Style::default()
             .bg(self.accent)
-            .fg(Color::Black)
+            .fg(self.selected_fg)
             .add_modifier(Modifier::BOLD)
     }
 

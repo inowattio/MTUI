@@ -4,6 +4,7 @@ use crate::input::KeyCode;
 use crate::modbus::{DeviceConfig, Interface};
 use crate::register::RegisterType;
 use crate::state::ReadPanel;
+use crate::tui::theme::Theme;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -29,6 +30,7 @@ pub struct Config {
     pub labels: Labels,
     pub custom_rules: CustomRules,
     pub keybinds: Keybinds,
+    pub theme: Theme,
 }
 
 macro_rules! keybinds {
@@ -385,6 +387,7 @@ impl Default for Config {
             labels: Labels::default(),
             custom_rules: CustomRules::default(),
             keybinds: Keybinds::default(),
+            theme: Theme::default(),
         }
     }
 }

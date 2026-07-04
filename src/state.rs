@@ -403,6 +403,16 @@ field_enum! {
         ShowContinuation,
         ShowClock,
         ShowFrameTime,
+        ThemeBorder,
+        ThemeAccent,
+        ThemeText,
+        ThemeDim,
+        ThemeChanged,
+        ThemeZebra,
+        ThemeOk,
+        ThemeWarn,
+        ThemeErr,
+        ThemeSelectedFg,
         Save,
         LoadConfig,
     }
@@ -440,6 +450,22 @@ impl SettingsField {
             _ => return None,
         })
     }
+
+    pub fn is_theme_color(self) -> bool {
+        matches!(
+            self,
+            SettingsField::ThemeBorder
+                | SettingsField::ThemeAccent
+                | SettingsField::ThemeText
+                | SettingsField::ThemeDim
+                | SettingsField::ThemeChanged
+                | SettingsField::ThemeZebra
+                | SettingsField::ThemeOk
+                | SettingsField::ThemeWarn
+                | SettingsField::ThemeErr
+                | SettingsField::ThemeSelectedFg
+        )
+    }
 }
 
 field_enum! {
@@ -449,6 +475,7 @@ field_enum! {
         Data,
         Api,
         Display,
+        Theme,
         Cycle,
         Clear,
         Keybinds,
@@ -463,6 +490,7 @@ impl SettingsCategory {
             SettingsCategory::Data => "Data",
             SettingsCategory::Api => "API",
             SettingsCategory::Display => "Display",
+            SettingsCategory::Theme => "Theme",
             SettingsCategory::Cycle => "Cycle types",
             SettingsCategory::Clear => "Clear data",
             SettingsCategory::Keybinds => "Keybinds",
@@ -479,6 +507,18 @@ impl SettingsCategory {
             }
             SettingsCategory::Api => &[ApiPort, ApiSlaveOverride, LogWrites],
             SettingsCategory::Display => &[ShowClock, ShowFrameTime, ShowContinuation],
+            SettingsCategory::Theme => &[
+                ThemeBorder,
+                ThemeAccent,
+                ThemeText,
+                ThemeDim,
+                ThemeChanged,
+                ThemeZebra,
+                ThemeOk,
+                ThemeWarn,
+                ThemeErr,
+                ThemeSelectedFg,
+            ],
             SettingsCategory::Cycle => &[CycleHoldings, CycleInputs, CycleCoils, CycleDiscretes],
             SettingsCategory::Clear => &[ClearPins, ClearLabels, ClearCustom],
             SettingsCategory::Keybinds => &[],
