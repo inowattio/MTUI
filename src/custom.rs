@@ -135,10 +135,13 @@ pub struct CustomRule {
     pub prefix: String,
     #[serde(default)]
     pub suffix: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub word_order: Option<WordOrder>,
 }
 
 impl CustomRule {
     fn base_value(&self, words: &[u16], order: WordOrder) -> Option<f64> {
+        let order = self.word_order.unwrap_or(order);
         match self.repr {
             CustomRepr::U16 => words.first().map(|&w| w as f64),
             CustomRepr::I16 => words.first().map(|&w| w as i16 as f64),
@@ -297,6 +300,21 @@ mod tests {
     }
 
     #[test]
+    fn per_rule_word_order_overrides_device() {
+        let mut r = rule(CustomRepr::F32);
+        r.word_order = Some(WordOrder::CDAB);
+        assert_eq!(r.evaluate(&[0x0000, 0x3F80], WordOrder::ABCD), "1");
+        assert_eq!(r.evaluate(&[0x0000, 0x3F80], WordOrder::DCBA), "1");
+    }
+
+    #[test]
+    fn no_override_follows_device_order() {
+        let r = rule(CustomRepr::F32);
+        assert_eq!(r.evaluate(&[0x0000, 0x3F80], WordOrder::CDAB), "1");
+        assert_eq!(r.evaluate(&[0x3F80, 0x0000], WordOrder::ABCD), "1");
+    }
+
+    #[test]
     fn max_registers_covers_all_reprs() {
         let widest = CustomRepr::ALL
             .iter()
@@ -394,6 +412,7 @@ mod tests {
         }];
         r.decimals = Some(2);
         r.prefix = "~ ".into();
+        r.word_order = Some(WordOrder::BADC);
         let json = serde_json::to_string(&r).unwrap();
         let back: CustomRule = serde_json::from_str(&json).unwrap();
         assert_eq!(r, back);

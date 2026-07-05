@@ -14,6 +14,7 @@ impl App {
                 address,
                 register_type,
                 repr: rule.repr,
+                word_order: rule.word_order,
                 ops: rule.ops.clone(),
                 enum_map: rule.enum_map.clone(),
                 decimals: rule.decimals.map(|d| d.to_string()).unwrap_or_default(),
@@ -29,6 +30,7 @@ impl App {
                 address,
                 register_type,
                 repr: CustomRepr::default(),
+                word_order: None,
                 ops: Vec::new(),
                 enum_map: Vec::new(),
                 decimals: String::new(),
@@ -59,10 +61,21 @@ impl App {
     }
 
     pub fn custom_cycle(&mut self, field: CustomField, forward: bool) {
+        const ORDER_CHOICES: [Option<WordOrder>; 5] = [
+            None,
+            Some(WordOrder::ABCD),
+            Some(WordOrder::BADC),
+            Some(WordOrder::CDAB),
+            Some(WordOrder::DCBA),
+        ];
         self.with_custom(|c| {
             c.error = None;
-            if field == CustomField::Repr {
-                c.repr = cycle(&CustomRepr::ALL, c.repr, forward);
+            match field {
+                CustomField::Repr => c.repr = cycle(&CustomRepr::ALL, c.repr, forward),
+                CustomField::WordOrder => {
+                    c.word_order = cycle(&ORDER_CHOICES, c.word_order, forward);
+                }
+                _ => {}
             }
         });
     }

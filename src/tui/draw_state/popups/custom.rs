@@ -38,6 +38,21 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &
     };
     lines.push(field_line("Type", repr_val, sel == CustomField::Repr));
 
+    let order_val = match c.word_order {
+        Some(order) => format!("{order:?}"),
+        None => format!("device ({:?})", app.config.device.word_order),
+    };
+    let order_val = if sel == CustomField::WordOrder {
+        cyclable(&order_val)
+    } else {
+        order_val
+    };
+    lines.push(field_line(
+        "Word order",
+        order_val,
+        sel == CustomField::WordOrder,
+    ));
+
     let ops_str = if c.ops.is_empty() {
         "(none)".to_string()
     } else {

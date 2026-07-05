@@ -557,6 +557,7 @@ fn build_custom_rule(c: &CustomParams) -> Result<(RegisterCell, CustomRule), Str
         decimals,
         prefix: c.prefix.clone(),
         suffix: c.suffix.clone(),
+        word_order: c.word_order,
     };
     Ok(((c.register_type, c.address), rule))
 }

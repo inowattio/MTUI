@@ -253,6 +253,7 @@ field_enum! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub enum CustomField {
         Repr,
+        WordOrder,
         Ops,
         Enum,
         Decimals,
@@ -268,6 +269,7 @@ pub struct CustomParams {
     pub address: u16,
     pub register_type: RegisterType,
     pub repr: CustomRepr,
+    pub word_order: Option<WordOrder>,
     pub ops: Vec<CustomOp>,
     pub enum_map: Vec<EnumEntry>,
     pub decimals: String,
