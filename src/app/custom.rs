@@ -190,14 +190,22 @@ impl App {
             if !self.config.custom_rules.show_continuation {
                 return None;
             }
-            let prev = address.checked_sub(1)?;
-            let prev_rule = self.custom_rules.get(&(kind, prev))?;
-            return (prev_rule.repr.register_count() == 2).then(|| "part of \u{2191}".to_string());
+            for back in 1..CustomRepr::MAX_REGISTERS as u16 {
+                let Some(prev) = address.checked_sub(back) else {
+                    break;
+                };
+                if let Some(prev_rule) = self.custom_rules.get(&(kind, prev)) {
+                    return (prev_rule.repr.register_count() as u16 > back)
+                        .then(|| "part of \u{2191}".to_string());
+                }
+            }
+            return None;
         };
         let mut words = vec![value];
-        if rule.repr.register_count() == 2 {
-            if let Some(n) = neighbor(1) {
-                words.push(n);
+        for offset in 1..rule.repr.register_count() as u16 {
+            match neighbor(offset) {
+                Some(n) => words.push(n),
+                None => break,
             }
         }
         let formatted = rule.evaluate(&words, word_order);
@@ -210,10 +218,10 @@ impl App {
             return Err("no value read yet".to_string());
         };
         let mut words = vec![value];
-        if rule.repr.register_count() == 2 {
-            match self.read_log.get(&(cell.0, cell.1.saturating_add(1))) {
+        for offset in 1..rule.repr.register_count() as u16 {
+            match self.read_log.get(&(cell.0, cell.1.saturating_add(offset))) {
                 Some(&(n, _)) => words.push(n),
-                None => return Err("waiting for second register".to_string()),
+                None => return Err(format!("waiting for register +{offset}")),
             }
         }
         let output = rule.evaluate(&words, self.config.device.word_order);

@@ -5,7 +5,7 @@ use crate::num_ops::cycle;
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
 use crate::state::{InspectMode, Popup, ReadPanel};
 use chrono::{DateTime, Local, Utc};
-use std::collections::VecDeque;
+use std::collections::{BTreeSet, VecDeque};
 
 const INSPECT_COLUMNS: &[Column] = &[
     Column::U16,
@@ -108,7 +108,19 @@ impl App {
         let batch = batch.max(1).min(same.len());
         let pos = same.iter().position(|&c| c == cursor).unwrap_or(0);
         let start = pos.saturating_sub(batch / 2).min(same.len() - batch);
-        same[start..start + batch].to_vec()
+
+        let mut cells = BTreeSet::new();
+        for &(kind, addr) in &same[start..start + batch] {
+            cells.insert((kind, addr));
+            if let Some(rule) = self.custom_rules.get(&(kind, addr)) {
+                for offset in 1..rule.repr.register_count() as u16 {
+                    if let Some(a) = addr.checked_add(offset) {
+                        cells.insert((kind, a));
+                    }
+                }
+            }
+        }
+        cells.into_iter().collect()
     }
 
     fn panel_has_type(&self, kind: RegisterType) -> bool {

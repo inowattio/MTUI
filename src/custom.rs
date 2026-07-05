@@ -11,22 +11,31 @@ pub enum CustomRepr {
     U32,
     I32,
     F32,
+    U64,
+    I64,
+    F64,
 }
 
 impl CustomRepr {
-    pub const ALL: [CustomRepr; 6] = [
+    pub const ALL: [CustomRepr; 9] = [
         CustomRepr::U16,
         CustomRepr::I16,
         CustomRepr::F16,
         CustomRepr::U32,
         CustomRepr::I32,
         CustomRepr::F32,
+        CustomRepr::U64,
+        CustomRepr::I64,
+        CustomRepr::F64,
     ];
+
+    pub const MAX_REGISTERS: usize = 4;
 
     pub fn register_count(self) -> usize {
         match self {
             CustomRepr::U16 | CustomRepr::I16 | CustomRepr::F16 => 1,
             CustomRepr::U32 | CustomRepr::I32 | CustomRepr::F32 => 2,
+            CustomRepr::U64 | CustomRepr::I64 | CustomRepr::F64 => 4,
         }
     }
 
@@ -38,6 +47,9 @@ impl CustomRepr {
             CustomRepr::U32 => "u32",
             CustomRepr::I32 => "i32",
             CustomRepr::F32 => "f32",
+            CustomRepr::U64 => "u64",
+            CustomRepr::I64 => "i64",
+            CustomRepr::F64 => "f64",
         }
     }
 }
@@ -138,6 +150,16 @@ impl CustomRule {
                     CustomRepr::U32 => word as f64,
                     CustomRepr::I32 => word as i32 as f64,
                     _ => f32::from_bits(word) as f64,
+                })
+            }
+            CustomRepr::U64 | CustomRepr::I64 | CustomRepr::F64 => {
+                let (&a, &b) = (words.first()?, words.get(1)?);
+                let (&c, &d) = (words.get(2)?, words.get(3)?);
+                let dword = order.make_dword(order.make_word(a, b), order.make_word(c, d));
+                Some(match self.repr {
+                    CustomRepr::U64 => dword as f64,
+                    CustomRepr::I64 => dword as i64 as f64,
+                    _ => f64::from_bits(dword),
                 })
             }
         }
@@ -249,6 +271,39 @@ mod tests {
     fn f32_with_word_order() {
         let r = rule(CustomRepr::F32);
         assert_eq!(r.evaluate(&[0x3F80, 0x0000], WordOrder::ABCD), "1");
+    }
+
+    #[test]
+    fn qword_needs_four_words() {
+        let r = rule(CustomRepr::U64);
+        assert_eq!(r.evaluate(&[0, 1, 0], WordOrder::ABCD), "");
+        assert_eq!(r.evaluate(&[0, 1, 0, 0], WordOrder::ABCD), "4294967296");
+    }
+
+    #[test]
+    fn i64_is_signed() {
+        let r = rule(CustomRepr::I64);
+        assert_eq!(
+            r.evaluate(&[0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF], WordOrder::ABCD),
+            "-1"
+        );
+    }
+
+    #[test]
+    fn f64_with_word_order() {
+        let r = rule(CustomRepr::F64);
+        assert_eq!(r.evaluate(&[0x3FF0, 0, 0, 0], WordOrder::ABCD), "1");
+        assert_eq!(r.evaluate(&[0, 0, 0, 0x3FF0], WordOrder::CDAB), "1");
+    }
+
+    #[test]
+    fn max_registers_covers_all_reprs() {
+        let widest = CustomRepr::ALL
+            .iter()
+            .map(|r| r.register_count())
+            .max()
+            .unwrap();
+        assert_eq!(widest, CustomRepr::MAX_REGISTERS);
     }
 
     #[test]
