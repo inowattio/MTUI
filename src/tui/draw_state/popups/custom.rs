@@ -95,6 +95,27 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &
         )));
     }
 
+    let bits_str = if c.bits.is_empty() {
+        "(none)".to_string()
+    } else {
+        c.bits
+            .iter()
+            .map(|e| format!("{}\u{2192}{}", e.bit, e.name))
+            .collect::<Vec<_>>()
+            .join("  ")
+    };
+    lines.push(field_line("Bits", bits_str, sel == CustomField::Bits));
+    if sel == CustomField::Bits {
+        lines.push(Line::from(Span::styled(
+            "    (enter adds, backspace removes)",
+            theme.dim_style(),
+        )));
+        lines.push(Line::from(Span::styled(
+            format!("    add: {}_   e.g. 0=run", c.bit_buffer),
+            theme.dim_style(),
+        )));
+    }
+
     let dec = if c.decimals.is_empty() {
         "auto".to_string()
     } else {

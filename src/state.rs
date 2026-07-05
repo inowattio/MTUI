@@ -1,7 +1,7 @@
 use crate::app::WriteType;
 use crate::compat::Instant;
 use crate::config::Column;
-use crate::custom::{CustomOp, CustomRepr, EnumEntry};
+use crate::custom::{BitEntry, CustomOp, CustomRepr, EnumEntry};
 use crate::modbus::{DataBits, DeviceIdAccess, Parity, StopBits, WordOrder};
 use crate::num_ops::{cycle, wrap_index};
 use crate::register::{RegisterCell, RegisterType};
@@ -256,6 +256,7 @@ field_enum! {
         WordOrder,
         Ops,
         Enum,
+        Bits,
         Decimals,
         Prefix,
         Suffix,
@@ -272,11 +273,13 @@ pub struct CustomParams {
     pub word_order: Option<WordOrder>,
     pub ops: Vec<CustomOp>,
     pub enum_map: Vec<EnumEntry>,
+    pub bits: Vec<BitEntry>,
     pub decimals: String,
     pub prefix: String,
     pub suffix: String,
     pub op_buffer: String,
     pub enum_buffer: String,
+    pub bit_buffer: String,
     pub selected: u16,
     pub existed: bool,
     pub error: Option<String>,

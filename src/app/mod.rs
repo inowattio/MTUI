@@ -549,11 +549,22 @@ fn build_custom_rule(c: &CustomParams) -> Result<(RegisterCell, CustomRule), Str
         ),
     };
 
+    let width = c.repr.register_count() as u8 * 16;
+    if let Some(entry) = c.bits.iter().find(|e| e.bit >= width) {
+        return Err(format!(
+            "bit: {} exceeds {} ({} bits)",
+            entry.bit,
+            c.repr.label(),
+            width
+        ));
+    }
+
     let rule = CustomRule {
         address: c.address,
         repr: c.repr,
         ops: c.ops.clone(),
         enum_map: c.enum_map.clone(),
+        bits: c.bits.clone(),
         decimals,
         prefix: c.prefix.clone(),
         suffix: c.suffix.clone(),

@@ -120,6 +120,12 @@ pub struct EnumEntry {
     pub text: String,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+pub struct BitEntry {
+    pub bit: u8,
+    pub name: String,
+}
+
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 pub struct CustomRule {
     #[serde(rename = "i")]
@@ -129,6 +135,8 @@ pub struct CustomRule {
     pub ops: Vec<CustomOp>,
     #[serde(default, rename = "enum")]
     pub enum_map: Vec<EnumEntry>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub bits: Vec<BitEntry>,
     #[serde(default)]
     pub decimals: Option<u8>,
     #[serde(default)]
@@ -140,31 +148,45 @@ pub struct CustomRule {
 }
 
 impl CustomRule {
-    fn base_value(&self, words: &[u16], order: WordOrder) -> Option<f64> {
+    fn raw_bits(&self, words: &[u16], order: WordOrder) -> Option<u64> {
         let order = self.word_order.unwrap_or(order);
-        match self.repr {
-            CustomRepr::U16 => words.first().map(|&w| w as f64),
-            CustomRepr::I16 => words.first().map(|&w| w as i16 as f64),
-            CustomRepr::F16 => words.first().map(|&w| f16_to_f32(w) as f64),
-            CustomRepr::U32 | CustomRepr::I32 | CustomRepr::F32 => {
-                let (&a, &b) = (words.first()?, words.get(1)?);
-                let word = order.make_word(a, b);
-                Some(match self.repr {
-                    CustomRepr::U32 => word as f64,
-                    CustomRepr::I32 => word as i32 as f64,
-                    _ => f32::from_bits(word) as f64,
-                })
-            }
-            CustomRepr::U64 | CustomRepr::I64 | CustomRepr::F64 => {
+        Some(match self.repr.register_count() {
+            1 => *words.first()? as u64,
+            2 => order.make_word(*words.first()?, *words.get(1)?) as u64,
+            _ => {
                 let (&a, &b) = (words.first()?, words.get(1)?);
                 let (&c, &d) = (words.get(2)?, words.get(3)?);
-                let dword = order.make_dword(order.make_word(a, b), order.make_word(c, d));
-                Some(match self.repr {
-                    CustomRepr::U64 => dword as f64,
-                    CustomRepr::I64 => dword as i64 as f64,
-                    _ => f64::from_bits(dword),
-                })
+                order.make_dword(order.make_word(a, b), order.make_word(c, d))
             }
+        })
+    }
+
+    fn base_value(&self, words: &[u16], order: WordOrder) -> Option<f64> {
+        let raw = self.raw_bits(words, order)?;
+        Some(match self.repr {
+            CustomRepr::U16 => raw as f64,
+            CustomRepr::I16 => raw as u16 as i16 as f64,
+            CustomRepr::F16 => f16_to_f32(raw as u16) as f64,
+            CustomRepr::U32 => raw as f64,
+            CustomRepr::I32 => raw as u32 as i32 as f64,
+            CustomRepr::F32 => f32::from_bits(raw as u32) as f64,
+            CustomRepr::U64 => raw as f64,
+            CustomRepr::I64 => raw as i64 as f64,
+            CustomRepr::F64 => f64::from_bits(raw),
+        })
+    }
+
+    fn bit_names(&self, raw: u64) -> String {
+        let names: Vec<&str> = self
+            .bits
+            .iter()
+            .filter(|e| e.bit < 64 && raw >> e.bit & 1 == 1)
+            .map(|e| e.name.as_str())
+            .collect();
+        if names.is_empty() {
+            "(none)".to_string()
+        } else {
+            names.join("\u{b7}")
         }
     }
 
@@ -176,6 +198,9 @@ impl CustomRule {
             if self.enum_map.iter().any(|e| e.value == key) {
                 return None;
             }
+        }
+        if !self.bits.is_empty() {
+            return None;
         }
 
         let mut value = base;
@@ -195,6 +220,11 @@ impl CustomRule {
             if let Some(entry) = self.enum_map.iter().find(|e| e.value == key) {
                 return format!("{}{}{}", self.prefix, entry.text, self.suffix);
             }
+        }
+
+        if !self.bits.is_empty() {
+            let raw = self.raw_bits(words, order).unwrap_or_default();
+            return format!("{}{}{}", self.prefix, self.bit_names(raw), self.suffix);
         }
 
         let mut value = base;
@@ -237,6 +267,22 @@ pub fn parse_enum(input: &str) -> Result<EnumEntry, String> {
     Ok(EnumEntry {
         value,
         text: text.trim().to_string(),
+    })
+}
+
+pub fn parse_bit(input: &str) -> Result<BitEntry, String> {
+    let (bit, name) = input.split_once('=').ok_or("use bit=name")?;
+    let bit: u8 = bit.trim().parse().map_err(|_| "invalid bit".to_string())?;
+    if bit > 63 {
+        return Err("bit must be 0-63".to_string());
+    }
+    let name = name.trim();
+    if name.is_empty() {
+        return Err("name is empty".to_string());
+    }
+    Ok(BitEntry {
+        bit,
+        name: name.to_string(),
     })
 }
 
@@ -312,6 +358,75 @@ mod tests {
         let r = rule(CustomRepr::F32);
         assert_eq!(r.evaluate(&[0x0000, 0x3F80], WordOrder::CDAB), "1");
         assert_eq!(r.evaluate(&[0x3F80, 0x0000], WordOrder::ABCD), "1");
+    }
+
+    fn bit(bit: u8, name: &str) -> BitEntry {
+        BitEntry {
+            bit,
+            name: name.to_string(),
+        }
+    }
+
+    #[test]
+    fn bits_name_set_bits() {
+        let mut r = rule(CustomRepr::U16);
+        r.bits = vec![bit(0, "run"), bit(1, "grid"), bit(15, "beat")];
+        assert_eq!(r.evaluate(&[0b11], WordOrder::ABCD), "run\u{b7}grid");
+        assert_eq!(r.evaluate(&[0b10], WordOrder::ABCD), "grid");
+        assert_eq!(r.evaluate(&[0x8000], WordOrder::ABCD), "beat");
+        assert_eq!(r.evaluate(&[0b100], WordOrder::ABCD), "(none)");
+    }
+
+    #[test]
+    fn enum_precedes_bits() {
+        let mut r = rule(CustomRepr::U16);
+        r.enum_map = vec![EnumEntry {
+            value: 0,
+            text: "idle".into(),
+        }];
+        r.bits = vec![bit(0, "run")];
+        assert_eq!(r.evaluate(&[0], WordOrder::ABCD), "idle");
+        assert_eq!(r.evaluate(&[1], WordOrder::ABCD), "run");
+    }
+
+    #[test]
+    fn bits_span_words_with_order() {
+        let mut r = rule(CustomRepr::U32);
+        r.bits = vec![bit(16, "high"), bit(0, "low")];
+        assert_eq!(r.evaluate(&[1, 0], WordOrder::ABCD), "high");
+        assert_eq!(r.evaluate(&[0, 1], WordOrder::ABCD), "low");
+        assert_eq!(r.evaluate(&[1, 0], WordOrder::CDAB), "low");
+    }
+
+    #[test]
+    fn bits_respect_prefix_suffix_and_skip_math() {
+        let mut r = rule(CustomRepr::U16);
+        r.bits = vec![bit(0, "on")];
+        r.ops = vec![CustomOp {
+            op: OpKind::Mul,
+            v: 100.0,
+        }];
+        r.prefix = "[".to_string();
+        r.suffix = "]".to_string();
+        assert_eq!(r.evaluate(&[1], WordOrder::ABCD), "[on]");
+        assert_eq!(r.numeric(&[1], WordOrder::ABCD), None);
+    }
+
+    #[test]
+    fn out_of_range_bit_is_ignored() {
+        let mut r = rule(CustomRepr::U16);
+        r.bits = vec![bit(63, "top")];
+        assert_eq!(r.evaluate(&[0xFFFF], WordOrder::ABCD), "(none)");
+    }
+
+    #[test]
+    fn parse_bit_helpers() {
+        assert_eq!(parse_bit("0=run").unwrap(), bit(0, "run"));
+        assert_eq!(parse_bit(" 15 = heartbeat ").unwrap(), bit(15, "heartbeat"));
+        assert!(parse_bit("run").is_err());
+        assert!(parse_bit("64=x").is_err());
+        assert!(parse_bit("a=x").is_err());
+        assert!(parse_bit("3=").is_err());
     }
 
     #[test]
@@ -413,6 +528,7 @@ mod tests {
         r.decimals = Some(2);
         r.prefix = "~ ".into();
         r.word_order = Some(WordOrder::BADC);
+        r.bits = vec![bit(3, "warn")];
         let json = serde_json::to_string(&r).unwrap();
         let back: CustomRule = serde_json::from_str(&json).unwrap();
         assert_eq!(r, back);

@@ -1,5 +1,5 @@
 use super::{build_custom_rule, App};
-use crate::custom::{parse_enum, parse_op, CustomRepr};
+use crate::custom::{parse_bit, parse_enum, parse_op, CustomRepr};
 use crate::modbus::WordOrder;
 use crate::num_ops::{cycle, wrap_index};
 use crate::register::RegisterCell;
@@ -17,11 +17,13 @@ impl App {
                 word_order: rule.word_order,
                 ops: rule.ops.clone(),
                 enum_map: rule.enum_map.clone(),
+                bits: rule.bits.clone(),
                 decimals: rule.decimals.map(|d| d.to_string()).unwrap_or_default(),
                 prefix: rule.prefix.clone(),
                 suffix: rule.suffix.clone(),
                 op_buffer: String::new(),
                 enum_buffer: String::new(),
+                bit_buffer: String::new(),
                 selected: 0,
                 existed: true,
                 error: None,
@@ -33,11 +35,13 @@ impl App {
                 word_order: None,
                 ops: Vec::new(),
                 enum_map: Vec::new(),
+                bits: Vec::new(),
                 decimals: String::new(),
                 prefix: String::new(),
                 suffix: String::new(),
                 op_buffer: String::new(),
                 enum_buffer: String::new(),
+                bit_buffer: String::new(),
                 selected: 0,
                 existed: false,
                 error: None,
@@ -86,6 +90,7 @@ impl App {
             match field {
                 CustomField::Ops => c.op_buffer.push(ch),
                 CustomField::Enum => c.enum_buffer.push(ch),
+                CustomField::Bits => c.bit_buffer.push(ch),
                 CustomField::Decimals => {
                     if ch.is_ascii_digit() && c.decimals.len() < 2 {
                         c.decimals.push(ch);
@@ -110,6 +115,11 @@ impl App {
                 CustomField::Enum => {
                     if c.enum_buffer.pop().is_none() {
                         c.enum_map.pop();
+                    }
+                }
+                CustomField::Bits => {
+                    if c.bit_buffer.pop().is_none() {
+                        c.bits.pop();
                     }
                 }
                 CustomField::Decimals => {
@@ -150,6 +160,18 @@ impl App {
                         c.enum_buffer.clear();
                     }
                     Err(e) => c.error = Some(format!("enum: {e}")),
+                }
+            }),
+            CustomField::Bits => self.with_custom(|c| {
+                if c.bit_buffer.trim().is_empty() {
+                    return;
+                }
+                match parse_bit(&c.bit_buffer) {
+                    Ok(entry) => {
+                        c.bits.push(entry);
+                        c.bit_buffer.clear();
+                    }
+                    Err(e) => c.error = Some(format!("bit: {e}")),
                 }
             }),
             CustomField::Save => self.commit_custom(),
