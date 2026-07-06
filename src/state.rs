@@ -254,6 +254,7 @@ field_enum! {
     pub enum CustomField {
         Repr,
         WordOrder,
+        Next,
         Ops,
         Enum,
         Bits,
@@ -271,6 +272,7 @@ pub struct CustomParams {
     pub register_type: RegisterType,
     pub repr: CustomRepr,
     pub word_order: Option<WordOrder>,
+    pub next: Vec<u16>,
     pub ops: Vec<CustomOp>,
     pub enum_map: Vec<EnumEntry>,
     pub bits: Vec<BitEntry>,
@@ -280,6 +282,7 @@ pub struct CustomParams {
     pub op_buffer: String,
     pub enum_buffer: String,
     pub bit_buffer: String,
+    pub next_buffer: String,
     pub selected: u16,
     pub existed: bool,
     pub error: Option<String>,

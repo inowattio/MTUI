@@ -559,12 +559,21 @@ fn build_custom_rule(c: &CustomParams) -> Result<(RegisterCell, CustomRule), Str
         ));
     }
 
+    if c.next.len() > c.repr.register_count() - 1 {
+        return Err(format!(
+            "next: {} uses {} register(s)",
+            c.repr.label(),
+            c.repr.register_count()
+        ));
+    }
+
     let rule = CustomRule {
         address: c.address,
         repr: c.repr,
         ops: c.ops.clone(),
         enum_map: c.enum_map.clone(),
         bits: c.bits.clone(),
+        next: c.next.clone(),
         decimals,
         prefix: c.prefix.clone(),
         suffix: c.suffix.clone(),

@@ -53,6 +53,30 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &
         sel == CustomField::WordOrder,
     ));
 
+    let next_str = if c.next.is_empty() {
+        "(contiguous)".to_string()
+    } else {
+        c.next
+            .iter()
+            .map(u16::to_string)
+            .collect::<Vec<_>>()
+            .join("  ")
+    };
+    lines.push(field_line("Next words", next_str, sel == CustomField::Next));
+    if sel == CustomField::Next {
+        lines.push(Line::from(Span::styled(
+            "    (enter adds, backspace removes)",
+            theme.dim_style(),
+        )));
+        lines.push(Line::from(Span::styled(
+            format!(
+                "    add: {}_   address of word 2 (then 3, 4)",
+                c.next_buffer
+            ),
+            theme.dim_style(),
+        )));
+    }
+
     let ops_str = if c.ops.is_empty() {
         "(none)".to_string()
     } else {

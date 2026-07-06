@@ -137,6 +137,8 @@ pub struct CustomRule {
     pub enum_map: Vec<EnumEntry>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub bits: Vec<BitEntry>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub next: Vec<u16>,
     #[serde(default)]
     pub decimals: Option<u8>,
     #[serde(default)]
@@ -148,6 +150,20 @@ pub struct CustomRule {
 }
 
 impl CustomRule {
+    pub fn word_addresses(&self) -> Vec<u16> {
+        let mut addresses = Vec::with_capacity(self.repr.register_count());
+        addresses.push(self.address);
+        for i in 1..self.repr.register_count() {
+            let address = self
+                .next
+                .get(i - 1)
+                .copied()
+                .unwrap_or_else(|| addresses[i - 1].wrapping_add(1));
+            addresses.push(address);
+        }
+        addresses
+    }
+
     fn raw_bits(&self, words: &[u16], order: WordOrder) -> Option<u64> {
         let order = self.word_order.unwrap_or(order);
         Some(match self.repr.register_count() {
@@ -430,6 +446,37 @@ mod tests {
     }
 
     #[test]
+    fn word_addresses_default_contiguous() {
+        let mut r = rule(CustomRepr::F64);
+        r.address = 100;
+        assert_eq!(r.word_addresses(), vec![100, 101, 102, 103]);
+    }
+
+    #[test]
+    fn word_addresses_jump_then_contiguous() {
+        let mut r = rule(CustomRepr::U32);
+        r.address = 520;
+        r.next = vec![524];
+        assert_eq!(r.word_addresses(), vec![520, 524]);
+
+        let mut r = rule(CustomRepr::F64);
+        r.address = 520;
+        r.next = vec![524];
+        assert_eq!(r.word_addresses(), vec![520, 524, 525, 526]);
+
+        r.next = vec![524, 530];
+        assert_eq!(r.word_addresses(), vec![520, 524, 530, 531]);
+    }
+
+    #[test]
+    fn word_addresses_single_register() {
+        let mut r = rule(CustomRepr::U16);
+        r.address = 7;
+        r.next = vec![99];
+        assert_eq!(r.word_addresses(), vec![7]);
+    }
+
+    #[test]
     fn max_registers_covers_all_reprs() {
         let widest = CustomRepr::ALL
             .iter()
@@ -529,6 +576,7 @@ mod tests {
         r.prefix = "~ ".into();
         r.word_order = Some(WordOrder::BADC);
         r.bits = vec![bit(3, "warn")];
+        r.next = vec![104];
         let json = serde_json::to_string(&r).unwrap();
         let back: CustomRule = serde_json::from_str(&json).unwrap();
         assert_eq!(r, back);

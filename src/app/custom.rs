@@ -15,6 +15,7 @@ impl App {
                 register_type,
                 repr: rule.repr,
                 word_order: rule.word_order,
+                next: rule.next.clone(),
                 ops: rule.ops.clone(),
                 enum_map: rule.enum_map.clone(),
                 bits: rule.bits.clone(),
@@ -24,6 +25,7 @@ impl App {
                 op_buffer: String::new(),
                 enum_buffer: String::new(),
                 bit_buffer: String::new(),
+                next_buffer: String::new(),
                 selected: 0,
                 existed: true,
                 error: None,
@@ -33,6 +35,7 @@ impl App {
                 register_type,
                 repr: CustomRepr::default(),
                 word_order: None,
+                next: Vec::new(),
                 ops: Vec::new(),
                 enum_map: Vec::new(),
                 bits: Vec::new(),
@@ -42,6 +45,7 @@ impl App {
                 op_buffer: String::new(),
                 enum_buffer: String::new(),
                 bit_buffer: String::new(),
+                next_buffer: String::new(),
                 selected: 0,
                 existed: false,
                 error: None,
@@ -91,6 +95,11 @@ impl App {
                 CustomField::Ops => c.op_buffer.push(ch),
                 CustomField::Enum => c.enum_buffer.push(ch),
                 CustomField::Bits => c.bit_buffer.push(ch),
+                CustomField::Next => {
+                    if ch.is_ascii_digit() && c.next_buffer.len() < 5 {
+                        c.next_buffer.push(ch);
+                    }
+                }
                 CustomField::Decimals => {
                     if ch.is_ascii_digit() && c.decimals.len() < 2 {
                         c.decimals.push(ch);
@@ -120,6 +129,11 @@ impl App {
                 CustomField::Bits => {
                     if c.bit_buffer.pop().is_none() {
                         c.bits.pop();
+                    }
+                }
+                CustomField::Next => {
+                    if c.next_buffer.pop().is_none() {
+                        c.next.pop();
                     }
                 }
                 CustomField::Decimals => {
@@ -174,6 +188,26 @@ impl App {
                     Err(e) => c.error = Some(format!("bit: {e}")),
                 }
             }),
+            CustomField::Next => self.with_custom(|c| {
+                if c.next_buffer.trim().is_empty() {
+                    return;
+                }
+                if c.next.len() + 1 >= c.repr.register_count() {
+                    c.error = Some(format!(
+                        "next: {} uses {} register(s)",
+                        c.repr.label(),
+                        c.repr.register_count()
+                    ));
+                    return;
+                }
+                match c.next_buffer.trim().parse::<u16>() {
+                    Ok(address) => {
+                        c.next.push(address);
+                        c.next_buffer.clear();
+                    }
+                    Err(_) => c.error = Some("next: invalid address".to_string()),
+                }
+            }),
             CustomField::Save => self.commit_custom(),
             CustomField::Remove => self.remove_custom(),
             _ => {}
@@ -218,27 +252,32 @@ impl App {
         cell: RegisterCell,
         value: u16,
         word_order: WordOrder,
-        neighbor: &impl Fn(u16) -> Option<u16>,
+        at: &impl Fn(u16) -> Option<u16>,
     ) -> Option<String> {
         let (kind, address) = cell;
         let Some(rule) = self.custom_rules.get(&cell) else {
             if !self.config.custom_rules.show_continuation {
                 return None;
             }
-            for back in 1..CustomRepr::MAX_REGISTERS as u16 {
-                let Some(prev) = address.checked_sub(back) else {
-                    break;
-                };
-                if let Some(prev_rule) = self.custom_rules.get(&(kind, prev)) {
-                    return (prev_rule.repr.register_count() as u16 > back)
-                        .then(|| "part of \u{2191}".to_string());
-                }
-            }
-            return None;
+            return self
+                .custom_rules
+                .range((kind, 0)..=(kind, u16::MAX))
+                .find_map(|(&(_, owner), r)| {
+                    let position = r
+                        .word_addresses()
+                        .into_iter()
+                        .skip(1)
+                        .position(|a| a == address)? as u16;
+                    Some(if address == owner.wrapping_add(position + 1) {
+                        "part of \u{2191}".to_string()
+                    } else {
+                        format!("part of {owner}")
+                    })
+                });
         };
         let mut words = vec![value];
-        for offset in 1..rule.repr.register_count() as u16 {
-            match neighbor(offset) {
+        for word_address in rule.word_addresses().into_iter().skip(1) {
+            match at(word_address) {
                 Some(n) => words.push(n),
                 None => break,
             }
@@ -253,10 +292,10 @@ impl App {
             return Err("no value read yet".to_string());
         };
         let mut words = vec![value];
-        for offset in 1..rule.repr.register_count() as u16 {
-            match self.read_log.get(&(cell.0, cell.1.saturating_add(offset))) {
+        for word_address in rule.word_addresses().into_iter().skip(1) {
+            match self.read_log.get(&(cell.0, word_address)) {
                 Some(&(n, _)) => words.push(n),
-                None => return Err(format!("waiting for register +{offset}")),
+                None => return Err(format!("waiting for register {word_address}")),
             }
         }
         let output = rule.evaluate(&words, self.config.device.word_order);

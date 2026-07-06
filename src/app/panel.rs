@@ -113,10 +113,8 @@ impl App {
         for &(kind, addr) in &same[start..start + batch] {
             cells.insert((kind, addr));
             if let Some(rule) = self.custom_rules.get(&(kind, addr)) {
-                for offset in 1..rule.repr.register_count() as u16 {
-                    if let Some(a) = addr.checked_add(offset) {
-                        cells.insert((kind, a));
-                    }
+                for word_address in rule.word_addresses().into_iter().skip(1) {
+                    cells.insert((kind, word_address));
                 }
             }
         }
@@ -178,12 +176,8 @@ impl App {
         let Some(&(value, time)) = self.read_log.get(&cell) else {
             return (cell, Vec::new());
         };
-        let neighbor = |offset: u16| {
-            self.read_log
-                .get(&(kind, addr.saturating_add(offset)))
-                .map(|&(v, _)| v)
-        };
-        let custom = self.custom_value(cell, value, self.config.device.word_order, &neighbor);
+        let at = |address: u16| self.read_log.get(&(kind, address)).map(|&(v, _)| v);
+        let custom = self.custom_value(cell, value, self.config.device.word_order, &at);
         let label = self.labels.get(&cell).map(String::as_str);
         let mut lines = vec![
             (
@@ -196,7 +190,7 @@ impl App {
         ];
         lines.extend(self.interpreter.interpret_all(
             value,
-            [neighbor(1), neighbor(2), neighbor(3)],
+            [1, 2, 3].map(|offset| at(addr.saturating_add(offset))),
             custom.as_deref(),
             label,
         ));
@@ -253,30 +247,31 @@ impl App {
             let Some(rule) = self.custom_rule(cell) else {
                 return Vec::new();
             };
-            let width = rule.repr.register_count();
-            return self.combined_history(cell, width, |regs| rule.numeric(regs, order));
+            return self.combined_history(cell.0, &rule.word_addresses(), |regs| {
+                rule.numeric(regs, order)
+            });
         }
         let Some(width) = column.graph_width() else {
             return Vec::new();
         };
-        self.combined_history(cell, width, |regs| graph_value(column, order, regs))
+        let addresses: Vec<u16> = (0..width as u16).map(|o| cell.1.wrapping_add(o)).collect();
+        self.combined_history(cell.0, &addresses, |regs| graph_value(column, order, regs))
     }
 
-    fn combined_history<F>(&self, cell: RegisterCell, width: usize, mut value: F) -> Vec<f64>
+    fn combined_history<F>(&self, kind: RegisterType, addresses: &[u16], mut value: F) -> Vec<f64>
     where
         F: FnMut(&[u16]) -> Option<f64>,
     {
-        let (kind, address) = cell;
-        let mut histories = Vec::with_capacity(width);
-        for offset in 0..width as u16 {
-            match self.value_history((kind, address.wrapping_add(offset))) {
+        let mut histories = Vec::with_capacity(addresses.len());
+        for &address in addresses {
+            match self.value_history((kind, address)) {
                 Some(history) => histories.push(history),
                 None => return Vec::new(),
             }
         }
 
         let len = histories.iter().map(|h| h.len()).min().unwrap_or(0);
-        let mut regs = vec![0u16; width];
+        let mut regs = vec![0u16; addresses.len()];
         let mut values = Vec::with_capacity(len);
         for i in 0..len {
             for (k, history) in histories.iter().enumerate() {
@@ -308,17 +303,13 @@ impl App {
     pub fn cell_row(&self, cell: RegisterCell, now: DateTime<Local>) -> Option<(String, bool)> {
         let (kind, addr) = cell;
         let &(value, time) = self.read_log.get(&cell)?;
-        let neighbor = |offset: u16| {
-            self.read_log
-                .get(&(kind, addr.saturating_add(offset)))
-                .map(|&(v, _)| v)
-        };
-        let custom = self.custom_value(cell, value, self.config.device.word_order, &neighbor);
+        let at = |address: u16| self.read_log.get(&(kind, address)).map(|&(v, _)| v);
+        let custom = self.custom_value(cell, value, self.config.device.word_order, &at);
         let label = self.labels.get(&cell).map(String::as_str);
         let row = self.interpreter.format_row(
             addr,
             value,
-            [neighbor(1), neighbor(2), neighbor(3)],
+            [1, 2, 3].map(|offset| at(addr.saturating_add(offset))),
             time.with_timezone(&Local),
             now,
             custom.as_deref(),
