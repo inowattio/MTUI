@@ -19,10 +19,10 @@ use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU8};
 use std::sync::{Arc, Mutex};
 
 impl App {
-    pub async fn new(config_path: Option<String>) -> Self {
-        let dump_example_if_missing = config_path.is_none();
+    pub async fn new(config_path: Option<String>, make_config_if_none: bool) -> Self {
+        let create_if_missing = make_config_if_none || config_path.is_none();
         let config_path = config_path.unwrap_or_else(default_config_path);
-        let config = fetch_config_or_exit(&config_path, dump_example_if_missing);
+        let config = fetch_config_or_exit(&config_path, create_if_missing);
         Self::boot(config, config_path).await
     }
 

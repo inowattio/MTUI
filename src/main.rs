@@ -18,6 +18,10 @@ mod native {
         #[arg(long)]
         config: Option<String>,
 
+        /// Create a default configuration file if none exists at the config path.
+        #[arg(long)]
+        make_config_if_none: bool,
+
         /// Run as an API server only, with no TUI; logs are printed to stderr.
         #[arg(long)]
         headless: bool,
@@ -29,10 +33,10 @@ mod native {
         logger::init();
 
         if args.headless {
-            return run_headless(args.config).await;
+            return run_headless(args.config, args.make_config_if_none).await;
         }
 
-        let mut app = App::new(args.config).await;
+        let mut app = App::new(args.config, args.make_config_if_none).await;
 
         let writer = io::BufWriter::with_capacity(256 * 1024, io::stderr());
         let backend = CrosstermBackend::new(writer);
@@ -50,9 +54,9 @@ mod native {
         Ok(())
     }
 
-    async fn run_headless(config: Option<String>) -> AppResult<()> {
+    async fn run_headless(config: Option<String>, make_config_if_none: bool) -> AppResult<()> {
         logger::enable_echo();
-        let mut app = App::new(config).await;
+        let mut app = App::new(config, make_config_if_none).await;
         app.headless = true;
 
         app.config
