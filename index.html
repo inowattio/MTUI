@@ -31,5 +31,23 @@
     }
   </style>
 </head>
-<body></body>
+<body>
+  <noscript>
+    <div style="font-family: sans-serif; padding: 2rem; text-align: center;">
+      <h1>⚠️ JavaScript is disabled</h1>
+      <p>This website requires JavaScript and WebAssembly to function properly.</p>
+    </div>
+  </noscript>
+  <script>
+    if (typeof WebAssembly === "undefined") {
+      document.body.innerHTML = `
+        <div style="font-family: sans-serif; padding: 2rem; text-align: center;">
+          <h1>⚠️ Your browser does not support WebAssembly</h1>
+          <p>This website requires WebAssembly to run. Please use a modern browser (Chrome, Firefox, Safari, or Edge) and make sure WebAssembly is enabled.</p>
+        </div>
+      `;
+      throw new Error("WebAssembly not supported");
+    }
+  </script>
+</body>
 </html>
