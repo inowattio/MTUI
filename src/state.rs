@@ -249,21 +249,17 @@ impl RawParams {
     }
 }
 
-field_enum! {
-    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-    pub enum CustomField {
-        Repr,
-        WordOrder,
-        Next,
-        Ops,
-        Enum,
-        Bits,
-        Decimals,
-        Prefix,
-        Suffix,
-        Save,
-        Remove,
-    }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CustomField {
+    Repr,
+    WordOrder,
+    Next,
+    Ops,
+    Enum,
+    Bits,
+    Decimals,
+    Prefix,
+    Suffix,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -289,8 +285,42 @@ pub struct CustomParams {
 }
 
 impl CustomParams {
+    pub fn fields(&self) -> Vec<CustomField> {
+        use CustomField::*;
+        let multi = self.repr.register_count() > 1;
+        let bits_active = !self.bits.is_empty();
+
+        let mut fields = vec![Repr];
+        if multi || self.word_order.is_some() {
+            fields.push(WordOrder);
+        }
+        if multi || !self.next.is_empty() {
+            fields.push(Next);
+        }
+        if !bits_active || !self.ops.is_empty() {
+            fields.push(Ops);
+        }
+        fields.push(Enum);
+        fields.push(Bits);
+        if !bits_active || !self.decimals.is_empty() {
+            fields.push(Decimals);
+        }
+        fields.push(Prefix);
+        fields.push(Suffix);
+        fields
+    }
+
     pub fn current_field(&self) -> CustomField {
-        clamp_pick(self.selected, &CustomField::ALL)
+        let fields = self.fields();
+        fields[(self.selected as usize).min(fields.len() - 1)]
+    }
+
+    pub fn reselect(&mut self, field: CustomField) {
+        let fields = self.fields();
+        self.selected = match fields.iter().position(|&f| f == field) {
+            Some(i) => i as u16,
+            None => self.selected.min(fields.len() as u16 - 1),
+        };
     }
 }
 

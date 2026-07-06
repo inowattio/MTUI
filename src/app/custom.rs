@@ -1,5 +1,6 @@
 use super::{build_custom_rule, App};
 use crate::custom::{parse_bit, parse_enum, parse_op, CustomRepr};
+use crate::interpretator::fmt_num;
 use crate::modbus::WordOrder;
 use crate::num_ops::{cycle, wrap_index};
 use crate::register::RegisterCell;
@@ -61,10 +62,10 @@ impl App {
     }
 
     pub fn custom_move(&mut self, down: bool) {
-        let n = CustomField::ALL.len() as u16;
         self.with_custom(|c| {
             c.error = None;
-            c.selected = wrap_index(c.selected, n, down);
+            let n = c.fields().len() as u16;
+            c.selected = wrap_index(c.selected.min(n - 1), n, down);
         });
     }
 
@@ -85,6 +86,7 @@ impl App {
                 }
                 _ => {}
             }
+            c.reselect(field);
         });
     }
 
@@ -147,70 +149,68 @@ impl App {
                 }
                 _ => {}
             }
+            c.reselect(field);
         });
     }
 
     pub fn custom_enter(&mut self, field: CustomField) {
-        match field {
-            CustomField::Ops => self.with_custom(|c| {
-                if c.op_buffer.trim().is_empty() {
-                    return;
-                }
-                match parse_op(&c.op_buffer) {
+        let mut adding = false;
+        self.with_custom(|c| {
+            adding = match field {
+                CustomField::Ops => !c.op_buffer.trim().is_empty(),
+                CustomField::Enum => !c.enum_buffer.trim().is_empty(),
+                CustomField::Bits => !c.bit_buffer.trim().is_empty(),
+                CustomField::Next => !c.next_buffer.trim().is_empty(),
+                _ => false,
+            };
+            if !adding {
+                return;
+            }
+            match field {
+                CustomField::Ops => match parse_op(&c.op_buffer) {
                     Ok(op) => {
                         c.ops.push(op);
                         c.op_buffer.clear();
                     }
                     Err(e) => c.error = Some(format!("op: {e}")),
-                }
-            }),
-            CustomField::Enum => self.with_custom(|c| {
-                if c.enum_buffer.trim().is_empty() {
-                    return;
-                }
-                match parse_enum(&c.enum_buffer) {
+                },
+                CustomField::Enum => match parse_enum(&c.enum_buffer) {
                     Ok(entry) => {
                         c.enum_map.push(entry);
                         c.enum_buffer.clear();
                     }
                     Err(e) => c.error = Some(format!("enum: {e}")),
-                }
-            }),
-            CustomField::Bits => self.with_custom(|c| {
-                if c.bit_buffer.trim().is_empty() {
-                    return;
-                }
-                match parse_bit(&c.bit_buffer) {
+                },
+                CustomField::Bits => match parse_bit(&c.bit_buffer) {
                     Ok(entry) => {
                         c.bits.push(entry);
                         c.bit_buffer.clear();
                     }
                     Err(e) => c.error = Some(format!("bit: {e}")),
-                }
-            }),
-            CustomField::Next => self.with_custom(|c| {
-                if c.next_buffer.trim().is_empty() {
-                    return;
-                }
-                if c.next.len() + 1 >= c.repr.register_count() {
-                    c.error = Some(format!(
-                        "next: {} uses {} register(s)",
-                        c.repr.label(),
-                        c.repr.register_count()
-                    ));
-                    return;
-                }
-                match c.next_buffer.trim().parse::<u16>() {
-                    Ok(address) => {
-                        c.next.push(address);
-                        c.next_buffer.clear();
+                },
+                CustomField::Next => {
+                    if c.next.len() + 1 >= c.repr.register_count() {
+                        c.error = Some(format!(
+                            "next: {} uses {} register(s)",
+                            c.repr.label(),
+                            c.repr.register_count()
+                        ));
+                    } else {
+                        match c.next_buffer.trim().parse::<u16>() {
+                            Ok(address) => {
+                                c.next.push(address);
+                                c.next_buffer.clear();
+                            }
+                            Err(_) => c.error = Some("next: invalid address".to_string()),
+                        }
                     }
-                    Err(_) => c.error = Some("next: invalid address".to_string()),
                 }
-            }),
-            CustomField::Save => self.commit_custom(),
-            CustomField::Remove => self.remove_custom(),
-            _ => {}
+                _ => {}
+            }
+            c.reselect(field);
+        });
+        if !adding {
+            self.commit_custom();
         }
     }
 
@@ -286,27 +286,54 @@ impl App {
         (!formatted.is_empty()).then_some(formatted)
     }
 
-    pub fn custom_preview(&self, c: &CustomParams) -> Result<(String, String), String> {
+    pub fn custom_preview(&self, c: &CustomParams) -> Result<CustomPreview, String> {
         let (cell, rule) = build_custom_rule(c)?;
-        let Some(&(value, _)) = self.read_log.get(&cell) else {
-            return Err("no value read yet".to_string());
-        };
-        let mut words = vec![value];
-        for word_address in rule.word_addresses().into_iter().skip(1) {
+        let mut words = Vec::with_capacity(rule.repr.register_count());
+        let mut sources = Vec::with_capacity(rule.repr.register_count());
+        for word_address in rule.word_addresses() {
             match self.read_log.get(&(cell.0, word_address)) {
-                Some(&(n, _)) => words.push(n),
+                Some(&(n, _)) => {
+                    words.push(n);
+                    sources.push(format!("{word_address}:{n}"));
+                }
                 None => return Err(format!("waiting for register {word_address}")),
             }
         }
-        let output = rule.evaluate(&words, self.config.device.word_order);
+
+        let order = self.config.device.word_order;
+        let output = rule.evaluate(&words, order);
         if output.is_empty() {
             return Err("no output".to_string());
         }
-        let input = words
-            .iter()
-            .map(|w| w.to_string())
-            .collect::<Vec<_>>()
-            .join(", ");
-        Ok((input, output))
+
+        let transforms = !rule.ops.is_empty() || !rule.enum_map.is_empty() || !rule.bits.is_empty();
+        let base = (rule.repr.register_count() > 1 || transforms)
+            .then(|| {
+                if rule.bits.is_empty() {
+                    let b = rule.base(&words, order)?;
+                    Some(format!(
+                        "{} {}",
+                        rule.repr.label(),
+                        fmt_num(b, b.fract() != 0.0)
+                    ))
+                } else {
+                    let raw = rule.raw(&words, order)?;
+                    let hex_width = 2 + rule.repr.register_count() * 4;
+                    Some(format!("{raw:#0hex_width$x}"))
+                }
+            })
+            .flatten();
+
+        Ok(CustomPreview {
+            words: sources.join("  "),
+            base,
+            output,
+        })
     }
+}
+
+pub struct CustomPreview {
+    pub words: String,
+    pub base: Option<String>,
+    pub output: String,
 }

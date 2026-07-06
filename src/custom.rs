@@ -192,6 +192,14 @@ impl CustomRule {
         })
     }
 
+    pub fn raw(&self, words: &[u16], order: WordOrder) -> Option<u64> {
+        self.raw_bits(words, order)
+    }
+
+    pub fn base(&self, words: &[u16], order: WordOrder) -> Option<f64> {
+        self.base_value(words, order)
+    }
+
     fn bit_names(&self, raw: u64) -> String {
         let names: Vec<&str> = self
             .bits

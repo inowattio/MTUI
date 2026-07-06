@@ -20,6 +20,7 @@ fn convert_key(code: CrosstermKeyCode) -> Option<input::KeyCode> {
         CrosstermKeyCode::Esc => input::KeyCode::Esc,
         CrosstermKeyCode::Enter => input::KeyCode::Enter,
         CrosstermKeyCode::Backspace => input::KeyCode::Backspace,
+        CrosstermKeyCode::Delete => input::KeyCode::Delete,
         CrosstermKeyCode::Tab => input::KeyCode::Tab,
         CrosstermKeyCode::Up => input::KeyCode::Up,
         CrosstermKeyCode::Down => input::KeyCode::Down,

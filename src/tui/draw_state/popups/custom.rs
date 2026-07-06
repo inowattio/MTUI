@@ -1,189 +1,189 @@
 use crate::app::App;
 use crate::input::KeyCode;
 use crate::state::{CustomField, CustomParams};
-use crate::tui::draw_state::{cyclable, field_row};
+use crate::tui::draw_state::{edit_value, field_row};
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::Frame;
 
+fn section(field: CustomField) -> &'static str {
+    match field {
+        CustomField::Repr | CustomField::WordOrder | CustomField::Next => "DECODE",
+        CustomField::Ops | CustomField::Enum | CustomField::Bits => "MAP",
+        CustomField::Decimals | CustomField::Prefix | CustomField::Suffix => "FORMAT",
+    }
+}
+
+fn joined<T>(items: &[T], display: impl Fn(&T) -> String) -> String {
+    if items.is_empty() {
+        "(none)".to_string()
+    } else {
+        items.iter().map(display).collect::<Vec<_>>().join("  ")
+    }
+}
+
 pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &CustomParams) {
     let sel = c.current_field();
 
-    let field_line =
-        |label: &str, value: String, selected: bool| field_row(theme, label, 12, value, selected);
+    let kb = &app.config.keybinds;
+    let footer = [
+        Hint::pair(kb.move_up, kb.move_down, "Field"),
+        Hint::pair(KeyCode::Left, KeyCode::Right, "Change"),
+        Hint::key(kb.action, "Save"),
+        Hint::key(KeyCode::Delete, "Remove"),
+        Hint::key(kb.exit, "Close"),
+    ];
+    let width = hints::min_width(56, &footer);
+    let inner = width.saturating_sub(2) as usize;
 
     let mut lines: Vec<Line> = vec![];
 
-    lines.push(match app.custom_preview(c) {
-        Ok((input, output)) => Line::from(vec![
-            Span::styled(" Preview  ", theme.dim_style()),
-            Span::styled(input.to_string(), theme.base()),
-            Span::styled(" \u{2192} ", theme.dim_style()),
-            Span::styled(output, theme.accent_style()),
-        ]),
-        Err(reason) => Line::from(vec![
-            Span::styled(" Preview  ", theme.dim_style()),
-            Span::styled(reason, theme.dim_style()),
-        ]),
-    });
-    lines.push(Line::default());
+    match app.custom_preview(c) {
+        Ok(preview) => {
+            let mut segments = vec![(preview.words, false)];
+            if let Some(base) = preview.base {
+                segments.push((base, false));
+            }
+            segments.push((preview.output, true));
 
-    let repr_val = format!("{}  ({} reg)", c.repr.label(), c.repr.register_count());
-    let repr_val = if sel == CustomField::Repr {
-        cyclable(&repr_val)
-    } else {
-        repr_val
-    };
-    lines.push(field_line("Type", repr_val, sel == CustomField::Repr));
-
-    let order_val = match c.word_order {
-        Some(order) => format!("{order:?}"),
-        None => format!("device ({:?})", app.config.device.word_order),
-    };
-    let order_val = if sel == CustomField::WordOrder {
-        cyclable(&order_val)
-    } else {
-        order_val
-    };
-    lines.push(field_line(
-        "Word order",
-        order_val,
-        sel == CustomField::WordOrder,
-    ));
-
-    let next_str = if c.next.is_empty() {
-        "(contiguous)".to_string()
-    } else {
-        c.next
-            .iter()
-            .map(u16::to_string)
-            .collect::<Vec<_>>()
-            .join("  ")
-    };
-    lines.push(field_line("Next words", next_str, sel == CustomField::Next));
-    if sel == CustomField::Next {
-        lines.push(Line::from(Span::styled(
-            "    (enter adds, backspace removes)",
-            theme.dim_style(),
-        )));
-        lines.push(Line::from(Span::styled(
-            format!(
-                "    add: {}_   address of word 2 (then 3, 4)",
-                c.next_buffer
-            ),
-            theme.dim_style(),
-        )));
+            let mut spans: Vec<Span> = Vec::new();
+            let mut used = 0usize;
+            for (i, (text, is_output)) in segments.into_iter().enumerate() {
+                let style = if is_output {
+                    theme.accent_style()
+                } else {
+                    theme.base()
+                };
+                let sep = if i == 0 { " " } else { " \u{2192} " };
+                let needed = sep.chars().count() + text.chars().count();
+                if i > 0 && used + needed > inner {
+                    lines.push(Line::from(std::mem::take(&mut spans)));
+                    let indent = "  \u{2192} ";
+                    used = indent.chars().count() + text.chars().count();
+                    spans.push(Span::styled(indent, theme.dim_style()));
+                } else {
+                    used += needed;
+                    spans.push(Span::styled(sep, theme.dim_style()));
+                }
+                spans.push(Span::styled(text, style));
+            }
+            lines.push(Line::from(spans));
+        }
+        Err(reason) => {
+            lines.push(Line::from(Span::styled(
+                format!(" {reason}"),
+                theme.dim_style(),
+            )));
+        }
     }
 
-    let ops_str = if c.ops.is_empty() {
-        "(none)".to_string()
-    } else {
-        c.ops
-            .iter()
-            .map(|o| o.display())
-            .collect::<Vec<_>>()
-            .join(" ")
+    let entry_hints = |lines: &mut Vec<Line>, buffer: &str, example: &str| {
+        lines.push(Line::from(Span::styled(
+            format!("    add: {buffer}_   {example}"),
+            theme.dim_style(),
+        )));
+        lines.push(Line::from(Span::styled(
+            "    (enter adds \u{b7} empty enter saves \u{b7} backspace removes)",
+            theme.dim_style(),
+        )));
     };
-    lines.push(field_line("Operations", ops_str, sel == CustomField::Ops));
-    if sel == CustomField::Ops {
-        lines.push(Line::from(Span::styled(
-            "    (enter adds, backspace removes)",
-            theme.dim_style(),
-        )));
-        lines.push(Line::from(Span::styled(
-            format!("    add: {}_   e.g. *0.1  +5  /10  ^2", c.op_buffer),
-            theme.dim_style(),
-        )));
+
+    let mut current_section = "";
+    for field in c.fields() {
+        if section(field) != current_section {
+            current_section = section(field);
+            lines.push(Line::default());
+            lines.push(Line::from(Span::styled(
+                format!(" {current_section}"),
+                theme.dim_style(),
+            )));
+        }
+        let selected = field == sel;
+
+        match field {
+            CustomField::Repr => {
+                let value = format!("{}  ({} reg)", c.repr.label(), c.repr.register_count());
+                lines.push(field_row(
+                    theme,
+                    "Type",
+                    12,
+                    edit_value(value, selected, true),
+                    selected,
+                ));
+            }
+            CustomField::WordOrder => {
+                let value = match c.word_order {
+                    Some(order) => format!("{order:?}"),
+                    None => format!("device ({:?})", app.config.device.word_order),
+                };
+                lines.push(field_row(
+                    theme,
+                    "Word order",
+                    12,
+                    edit_value(value, selected, true),
+                    selected,
+                ));
+            }
+            CustomField::Next => {
+                let value = if c.next.is_empty() {
+                    "(contiguous)".to_string()
+                } else {
+                    joined(&c.next, u16::to_string)
+                };
+                lines.push(field_row(theme, "Next words", 12, value, selected));
+                if selected {
+                    entry_hints(&mut lines, &c.next_buffer, "address of word 2 (then 3, 4)");
+                }
+            }
+            CustomField::Ops => {
+                let value = joined(&c.ops, |o| o.display());
+                lines.push(field_row(theme, "Operations", 12, value, selected));
+                if selected {
+                    entry_hints(&mut lines, &c.op_buffer, "e.g. *0.1  +5  /10  ^2");
+                }
+            }
+            CustomField::Enum => {
+                let value = joined(&c.enum_map, |e| format!("{}\u{2192}{}", e.value, e.text));
+                lines.push(field_row(theme, "Enum", 12, value, selected));
+                if selected {
+                    entry_hints(&mut lines, &c.enum_buffer, "e.g. 3=Running");
+                }
+            }
+            CustomField::Bits => {
+                let value = joined(&c.bits, |e| format!("{}\u{2192}{}", e.bit, e.name));
+                lines.push(field_row(theme, "Bits", 12, value, selected));
+                if selected {
+                    entry_hints(&mut lines, &c.bit_buffer, "e.g. 0=run");
+                }
+            }
+            CustomField::Decimals => {
+                let value = if selected {
+                    format!("{}_", c.decimals)
+                } else if c.decimals.is_empty() {
+                    "auto".to_string()
+                } else {
+                    c.decimals.clone()
+                };
+                lines.push(field_row(theme, "Decimals", 12, value, selected));
+                if selected {
+                    lines.push(Line::from(Span::styled(
+                        "    auto; 0 for none; numerical for amount",
+                        theme.dim_style(),
+                    )));
+                }
+            }
+            CustomField::Prefix => {
+                let value = edit_value(c.prefix.clone(), selected, false);
+                lines.push(field_row(theme, "Prefix", 12, value, selected));
+            }
+            CustomField::Suffix => {
+                let value = edit_value(c.suffix.clone(), selected, false);
+                lines.push(field_row(theme, "Suffix", 12, value, selected));
+            }
+        }
     }
-
-    let enum_str = if c.enum_map.is_empty() {
-        "(none)".to_string()
-    } else {
-        c.enum_map
-            .iter()
-            .map(|e| format!("{}\u{2192}{}", e.value, e.text))
-            .collect::<Vec<_>>()
-            .join("  ")
-    };
-    lines.push(field_line("Enum", enum_str, sel == CustomField::Enum));
-    if sel == CustomField::Enum {
-        lines.push(Line::from(Span::styled(
-            "    (enter adds, backspace removes)",
-            theme.dim_style(),
-        )));
-        lines.push(Line::from(Span::styled(
-            format!("    add: {}_   e.g. 3=Running", c.enum_buffer),
-            theme.dim_style(),
-        )));
-    }
-
-    let bits_str = if c.bits.is_empty() {
-        "(none)".to_string()
-    } else {
-        c.bits
-            .iter()
-            .map(|e| format!("{}\u{2192}{}", e.bit, e.name))
-            .collect::<Vec<_>>()
-            .join("  ")
-    };
-    lines.push(field_line("Bits", bits_str, sel == CustomField::Bits));
-    if sel == CustomField::Bits {
-        lines.push(Line::from(Span::styled(
-            "    (enter adds, backspace removes)",
-            theme.dim_style(),
-        )));
-        lines.push(Line::from(Span::styled(
-            format!("    add: {}_   e.g. 0=run", c.bit_buffer),
-            theme.dim_style(),
-        )));
-    }
-
-    let dec = if c.decimals.is_empty() {
-        "auto".to_string()
-    } else {
-        c.decimals.clone()
-    };
-    lines.push(field_line("Decimals", dec, sel == CustomField::Decimals));
-    if sel == CustomField::Decimals {
-        lines.push(Line::from(Span::styled(
-            "    auto; 0 for none; numerical for amount",
-            theme.dim_style(),
-        )));
-    }
-
-    let pfx = if sel == CustomField::Prefix {
-        format!("{} ", c.prefix)
-    } else {
-        c.prefix.to_string()
-    };
-    lines.push(field_line("Prefix", pfx, sel == CustomField::Prefix));
-
-    let sfx = if sel == CustomField::Suffix {
-        format!("{} ", c.suffix)
-    } else {
-        c.suffix.to_string()
-    };
-    lines.push(field_line("Suffix", sfx, sel == CustomField::Suffix));
-
-    lines.push(Line::default());
-    let save_hint = if sel == CustomField::Save {
-        "\u{2190} enter".to_string()
-    } else {
-        String::new()
-    };
-    lines.push(field_line("Save rule", save_hint, sel == CustomField::Save));
-    let remove_hint = if sel == CustomField::Remove {
-        "\u{2190} enter".to_string()
-    } else {
-        String::new()
-    };
-    lines.push(field_line(
-        "Remove rule",
-        remove_hint,
-        sel == CustomField::Remove,
-    ));
 
     if let Some(err) = &c.error {
         lines.push(Line::default());
@@ -194,15 +194,8 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &
     }
 
     lines.push(Line::default());
-    let kb = &app.config.keybinds;
-    lines.push(hints::footer(
-        theme,
-        [
-            Hint::pair(kb.move_up, kb.move_down, "Field"),
-            Hint::pair(KeyCode::Left, KeyCode::Right, "Change"),
-            Hint::key(kb.exit, "Close"),
-        ],
-    ));
+    lines.push(hints::footer(theme, footer));
 
-    super::render(frame, area, theme, "Custom rule", 48, lines);
+    let title = format!("Custom rule \u{b7} {:?} @ {}", c.register_type, c.address);
+    super::render(frame, area, theme, &title, width, lines);
 }

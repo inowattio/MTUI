@@ -25,6 +25,7 @@ mod web {
             KeyCode::Esc => input::KeyCode::Esc,
             KeyCode::Enter => input::KeyCode::Enter,
             KeyCode::Backspace => input::KeyCode::Backspace,
+            KeyCode::Delete => input::KeyCode::Delete,
             KeyCode::Tab => input::KeyCode::Tab,
             KeyCode::Up => input::KeyCode::Up,
             KeyCode::Down => input::KeyCode::Down,

@@ -40,6 +40,7 @@ fn glyph(kc: KeyCode) -> String {
         KeyCode::Right => "\u{2192}".to_string(),
         KeyCode::PageUp => "PgUp".to_string(),
         KeyCode::PageDown => "PgDn".to_string(),
+        KeyCode::Delete => "Del".to_string(),
         other => other.to_string(),
     }
 }

@@ -307,6 +307,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
                 c if c == kb.move_down => app.custom_move(true),
                 KeyCode::Left => app.custom_cycle(field, false),
                 KeyCode::Right => app.custom_cycle(field, true),
+                KeyCode::Delete => app.remove_custom(),
                 c if c == kb.action => app.custom_enter(field),
                 KeyCode::Backspace => app.custom_backspace(field),
                 KeyCode::Char(c) => app.custom_char(field, c),
