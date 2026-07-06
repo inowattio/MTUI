@@ -508,7 +508,7 @@ fn ensure_parent_dir(path: &str) -> Result<(), String> {
     }
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(feature = "local-config")))]
+#[cfg(not(target_arch = "wasm32"))]
 fn default_config_path() -> String {
     if std::path::Path::new(CONFIG_PATH).exists() {
         return CONFIG_PATH.to_string();
@@ -521,11 +521,6 @@ fn default_config_path() -> String {
                 .into_owned()
         })
         .unwrap_or_else(|| CONFIG_PATH.to_string())
-}
-
-#[cfg(all(not(target_arch = "wasm32"), feature = "local-config"))]
-fn default_config_path() -> String {
-    CONFIG_PATH.to_string()
 }
 
 #[cfg(target_arch = "wasm32")]

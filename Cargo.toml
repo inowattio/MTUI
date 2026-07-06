@@ -27,7 +27,6 @@ required-features = ["web"]
 
 [features]
 web = []
-local-config = []
 
 [dependencies]
 ratatui = { version = "0.30.2", default-features = false, features = ["serde"] }
