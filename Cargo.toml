@@ -1,6 +1,6 @@
 [package]
 name = "mtui"
-version = "0.7.3"
+version = "0.7.4"
 edition = "2021"
 license = "GPL-2.0-only"
 description = "An extensive Modbus client for your terminal."
