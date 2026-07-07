@@ -315,10 +315,7 @@ pub fn draw(
     }
     let mut right: Vec<Vec<Span>> = Vec::new();
     if let Some(d) = params.read_duration {
-        right.push(vec![Span::styled(
-            format!("{d:.2?}"),
-            theme.dim_style(),
-        )]);
+        right.push(vec![Span::styled(format!("{d:.2?}"), theme.dim_style())]);
     }
     right.push(cell_seg);
 
