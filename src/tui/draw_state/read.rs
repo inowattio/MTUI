@@ -316,16 +316,16 @@ pub fn draw(
     let mut right: Vec<Vec<Span>> = Vec::new();
     if let Some(d) = params.read_duration {
         right.push(vec![Span::styled(
-            format!("{:>8}", format!("{d:.2?}")),
+            format!("{d:.2?}"),
             theme.dim_style(),
         )]);
     }
     right.push(cell_seg);
 
     let mut left_line = vec![Span::raw(" ")];
-    left_line.extend(theme.join_dotted(identity));
+    left_line.extend(theme.join_dotted(right.into_iter().rev()));
 
-    let mut right_line = theme.join_dotted(right);
+    let mut right_line = theme.join_dotted(identity.into_iter().rev());
     right_line.push(Span::raw(" "));
 
     let info_rows = Layout::default()

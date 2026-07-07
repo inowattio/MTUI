@@ -33,15 +33,17 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     }
     let clock_line = Line::from(clock_spans);
 
-    let mut top_right = match &app.state {
+    let live = match &app.state {
         State::Read(p) => draw_state::read::live_status(app, p, &theme),
         _ => Vec::new(),
     };
-    top_right.push(status_span(&app.connection, &theme));
+
+    let mut left_top = vec![Span::raw(" "), status_span(&app.connection, &theme)];
+    left_top.extend(live);
 
     let outer = Block::default()
-        .title_top(Line::styled(format!(" {mode} "), theme.base()))
-        .title_top(Line::from(top_right).right_aligned())
+        .title_top(Line::from(left_top))
+        .title_top(Line::styled(format!(" {mode} "), theme.base()).right_aligned())
         .title_bottom(clock_line)
         .title_bottom(key_hints.right_aligned())
         .style(Style::default().fg(theme.border))
