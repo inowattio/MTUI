@@ -85,8 +85,8 @@ pub fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup
             hints::footer(
                 theme,
                 [
-                    Hint::pair(kb.action, kb.exit, "Confirm"),
-                    Hint::key(KeyCode::Backspace, "Cancel"),
+                    Hint::key(kb.action, "Confirm"),
+                    Hint::pair(KeyCode::Backspace, kb.exit, "Cancel"),
                 ],
             ),
         ),

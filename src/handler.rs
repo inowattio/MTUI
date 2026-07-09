@@ -379,7 +379,8 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
         },
 
         PopupKind::Quit => match key_event.code {
-            c if c == kb.action || c == kb.exit => app.quit(),
+            c if c == kb.action => app.quit(),
+            c if c == kb.exit => app.close_popup(),
             KeyCode::Backspace => app.close_popup(),
             _ => {}
         },
