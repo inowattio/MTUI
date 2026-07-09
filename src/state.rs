@@ -453,12 +453,16 @@ field_enum! {
         ThemeSelectedFg,
         Save,
         LoadConfig,
+        NextConfig,
     }
 }
 
 impl SettingsField {
     pub fn is_text_input(self) -> bool {
-        matches!(self, SettingsField::Name | SettingsField::LoadConfig)
+        matches!(
+            self,
+            SettingsField::Name | SettingsField::LoadConfig | SettingsField::NextConfig
+        )
     }
 
     pub fn is_toggle(self) -> bool {
@@ -560,7 +564,7 @@ impl SettingsCategory {
             SettingsCategory::Cycle => &[CycleHoldings, CycleInputs, CycleCoils, CycleDiscretes],
             SettingsCategory::Clear => &[ClearPins, ClearLabels, ClearCustom],
             SettingsCategory::Keybinds => &[],
-            SettingsCategory::Config => &[Save, LoadConfig],
+            SettingsCategory::Config => &[Save, LoadConfig, NextConfig],
         }
     }
 
@@ -760,6 +764,7 @@ popups! {
     DeviceId(DeviceIdParams),
     Raw(RawParams),
     Import(ImportParams),
+    CycleConfig,
     Quit,
 }
 

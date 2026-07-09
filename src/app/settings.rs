@@ -172,6 +172,10 @@ impl App {
                 self.config.name.push(c);
                 self.dirty = true;
             }
+            SettingsField::NextConfig => {
+                self.config.next_config.push(c);
+                self.dirty = true;
+            }
             _ => {}
         }
     }
@@ -185,6 +189,11 @@ impl App {
         }
         if field == SettingsField::Name {
             self.config.name.pop();
+            self.dirty = true;
+            return;
+        }
+        if field == SettingsField::NextConfig {
+            self.config.next_config.pop();
             self.dirty = true;
             return;
         }

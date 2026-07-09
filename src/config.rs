@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 #[serde(default)]
 pub struct Config {
     pub name: String,
+    pub next_config: String,
     pub device: DeviceConfig,
     pub startup: Startup,
     pub interpretations: InterpretorConfig,
@@ -108,6 +109,7 @@ keybinds! {
     Stats => stats : "Statistics" = STATS,
     Sweep => sweep : "Sweep" = SWEEP,
     Clear => clear : "Clear session data" = CLEAR,
+    NextConfig => next_config : "Cycle config" = NEXT_CONFIG,
     SwitchView => switch_view : "Cycle panel" = SWITCH_VIEW,
     Action => action : "Read / confirm" = ACTION,
     MoveUp => move_up : "Move up" = MOVE_UP,
@@ -364,6 +366,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             name: "demo".to_string(),
+            next_config: String::new(),
             device: DeviceConfig::default(),
             startup: Startup {
                 address: 5,

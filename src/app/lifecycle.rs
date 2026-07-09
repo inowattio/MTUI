@@ -33,6 +33,7 @@ impl App {
             .ok();
 
         let mut app = Self {
+            origin_config_path: config_path.clone(),
             config_path,
             interpreter: Interpretor::new(InterpretorConfig::default(), WordOrder::default()),
             pinned_registers: Vec::new(),

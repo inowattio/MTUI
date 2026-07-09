@@ -60,6 +60,21 @@ pub fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup
         Popup::DeviceId(params) => device_id::draw(frame, area, theme, kb, params),
         Popup::Raw(params) => raw::draw(frame, area, theme, kb, params),
         Popup::Import(params) => import::draw(frame, area, theme, kb, params),
+        Popup::CycleConfig => confirm::draw(
+            frame,
+            area,
+            theme,
+            "Unsaved changes",
+            " Load next configuration anyway?",
+            &None,
+            hints::footer(
+                theme,
+                [
+                    Hint::key(kb.action, "Confirm"),
+                    Hint::pair(KeyCode::Backspace, kb.exit, "Cancel"),
+                ],
+            ),
+        ),
         Popup::Quit => confirm::draw(
             frame,
             area,

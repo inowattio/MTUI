@@ -141,6 +141,7 @@ async fn run_action(app: &mut App, action: KeybindAction) {
         Stats => app.open_stats(),
         Sweep => app.open_sweep(),
         Clear => app.clear_session_data(),
+        NextConfig => app.cycle_config(),
         SwitchView => {
             let rows = app.visible_rows.get();
             app.read_mut().toggle_panel();
@@ -367,6 +368,13 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
             c if c == kb.action => app.apply_import(),
             c if c == kb.exit => app.cancel_import(),
             KeyCode::Backspace => app.cancel_import(),
+            _ => {}
+        },
+
+        PopupKind::CycleConfig => match key_event.code {
+            c if c == kb.action => app.confirm_cycle_config(),
+            c if c == kb.exit => app.close_popup(),
+            KeyCode::Backspace => app.close_popup(),
             _ => {}
         },
 

@@ -305,6 +305,11 @@ fn field_view(
             Kind::Action,
         ),
         SettingsField::LoadConfig => ("Load configuration", params.load_path.clone(), Kind::Number),
+        SettingsField::NextConfig => (
+            "Next configuration",
+            device.next_config.clone(),
+            Kind::Number,
+        ),
     }
 }
 

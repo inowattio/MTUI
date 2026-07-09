@@ -314,6 +314,7 @@ impl std::fmt::Debug for ClipboardHandle {
 pub struct App {
     pub config: Config,
     config_path: String,
+    origin_config_path: String,
     pub running: bool,
     pub state: State,
     pub pinned_registers: Vec<RegisterCell>,

@@ -141,11 +141,15 @@ impl App {
             }) => match result {
                 Ok(device) => {
                     self.apply_config(*config, Some(device));
-                    self.dirty = true;
+
+                    self.config_path = path.clone();
+                    self.dirty = false;
 
                     let read = self.startup_read_params();
-                    if let Some(s) = self.settings_mut() {
-                        s.previous = read;
+                    match &mut self.state {
+                        State::Settings(s) => s.previous = read,
+                        State::Read(p) => *p = read,
+                        _ => {}
                     }
 
                     Ok(format!("Loaded {path}"))
@@ -159,7 +163,58 @@ impl App {
             Ok(message) => log::info!("{message}"),
             Err(error) => log::error!("{error}"),
         }
-        self.set_settings_status(outcome.into());
+        match &self.state {
+            State::Read(_) => self.set_read_status(outcome.into()),
+            State::Settings(_) => self.set_settings_status(outcome.into()),
+            _ => {}
+        }
+    }
+
+    fn cycle_target(&self) -> Option<String> {
+        let next = self.config.next_config.trim();
+        if !next.is_empty() {
+            Some(next.to_string())
+        } else if self.config_path != self.origin_config_path {
+            Some(self.origin_config_path.clone())
+        } else {
+            None
+        }
+    }
+
+    pub fn cycle_config(&mut self) {
+        let Some(target) = self.cycle_target() else {
+            self.set_read_status(StatusMessage::info("No next configuration set"));
+            return;
+        };
+
+        if self.dirty && !self.config.ignore_dirty {
+            self.read_mut().popup = Some(Popup::CycleConfig);
+            return;
+        }
+
+        self.load_config_target(target);
+    }
+
+    pub fn confirm_cycle_config(&mut self) {
+        self.close_popup();
+        if let Some(target) = self.cycle_target() {
+            self.load_config_target(target);
+        }
+    }
+
+    fn load_config_target(&mut self, target: String) {
+        if !self.free_background_slot() {
+            self.set_read_status(StatusMessage::info("Device is busy."));
+            return;
+        }
+
+        match self.start_config_load(target) {
+            Ok(()) => self.set_read_status(StatusMessage::info("Loading\u{2026}")),
+            Err(error) => {
+                log::error!("{error}");
+                self.set_read_status(StatusMessage::err(error));
+            }
+        }
     }
 
     pub fn commit_dump(&mut self) {

@@ -35,6 +35,7 @@ pub mod keybind {
     pub const STATS: KeyCode = KeyCode::Char('S');
     pub const SWEEP: KeyCode = KeyCode::Char('u');
     pub const CLEAR: KeyCode = KeyCode::Char('x');
+    pub const NEXT_CONFIG: KeyCode = KeyCode::Char('C');
     pub const SWITCH_VIEW: KeyCode = KeyCode::Tab;
     pub const ACTION: KeyCode = KeyCode::Enter;
     pub const MOVE_UP: KeyCode = KeyCode::Up;
