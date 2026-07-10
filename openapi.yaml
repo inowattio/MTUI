@@ -8,7 +8,7 @@ info:
     The server binds to `0.0.0.0` on a configurable port and proxies requests
     to the live Modbus device backing the TUI. When no device is connected,
     register operations return `503 Service Unavailable`.
-  version: 0.2.1
+  version: 0.2.2
   license:
     name: See repository
 
@@ -113,8 +113,9 @@ paths:
               $ref: "#/components/schemas/WriteRequest"
             examples:
               single:
-                summary: Write one holding register (type defaults to Holding)
+                summary: Write one holding register
                 value:
+                  type: Holding
                   address: 40001
                   values: [1234]
               multiple:
@@ -246,16 +247,14 @@ components:
 
     WriteRequest:
       type: object
-      required: [address, values]
+      required: [type, address, values]
       properties:
         type:
           allOf:
             - $ref: "#/components/schemas/RegisterType"
-          default: Holding
           description: |
-            Target data class. Defaults to `Holding` when omitted. Only
-            `Holding` and `Coil` are writable; `Input` and `Discrete` are
-            rejected with `400`.
+            Target data class. Only `Holding` and `Coil` are writable;
+            `Input` and `Discrete` are rejected with `400`.
         address:
           type: integer
           format: uint16
