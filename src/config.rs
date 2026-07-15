@@ -111,6 +111,7 @@ keybinds! {
     Clear => clear : "Clear session data" = CLEAR,
     NextConfig => next_config : "Cycle config" = NEXT_CONFIG,
     SwitchView => switch_view : "Cycle panel" = SWITCH_VIEW,
+    SwitchViewBack => switch_view_back : "Cycle panel back" = SWITCH_VIEW_BACK,
     Action => action : "Read / confirm" = ACTION,
     MoveUp => move_up : "Move up" = MOVE_UP,
     MoveDown => move_down : "Move down" = MOVE_DOWN,

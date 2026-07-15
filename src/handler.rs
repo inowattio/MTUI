@@ -142,9 +142,9 @@ async fn run_action(app: &mut App, action: KeybindAction) {
         Sweep => app.open_sweep(),
         Clear => app.clear_session_data(),
         NextConfig => app.cycle_config(),
-        SwitchView => {
+        SwitchView | SwitchViewBack => {
             let rows = app.visible_rows.get();
-            app.read_mut().toggle_panel();
+            app.read_mut().toggle_panel(action == SwitchView);
             let len = app.panel_len();
             let cols = app.config.matrix_cols;
             let scroll_rows = app.panel_scroll_rows();

@@ -38,6 +38,8 @@ mod web {
             KeyCode::Enter => input::KeyCode::Enter,
             KeyCode::Backspace => input::KeyCode::Backspace,
             KeyCode::Delete => input::KeyCode::Delete,
+            // Browsers have no BackTab key; Shift+Tab arrives as Tab+shift.
+            KeyCode::Tab if event.shift => input::KeyCode::BackTab,
             KeyCode::Tab => input::KeyCode::Tab,
             KeyCode::Up => input::KeyCode::Up,
             KeyCode::Down => input::KeyCode::Down,

@@ -835,8 +835,8 @@ impl ReadParams {
         self.window_start = self.position.saturating_sub(rows / 2).min(max_start);
     }
 
-    pub fn toggle_panel(&mut self) {
-        self.panel = cycle(&ReadPanel::ALL, self.panel, true);
+    pub fn toggle_panel(&mut self, forward: bool) {
+        self.panel = cycle(&ReadPanel::ALL, self.panel, forward);
     }
 
     pub fn scroll_pinned(&mut self, rows: u16, len: u16) {

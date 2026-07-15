@@ -14,6 +14,12 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Axis, Block, Cell, Chart, Dataset, GraphType, Paragraph, Row, Table};
 use ratatui::Frame;
 
+fn panel_block(theme: &Theme, active: ReadPanel) -> Block<'static> {
+    let names = ReadPanel::ALL.map(ReadPanel::name);
+    let index = ReadPanel::ALL.iter().position(|&p| p == active);
+    theme.tabbed_panel(&names, index.unwrap_or(0))
+}
+
 fn ascii_title(ascii: &str, theme: &Theme) -> Line<'static> {
     Line::from(vec![
         Span::styled(" ASCII ", theme.dim_style()),
@@ -142,7 +148,7 @@ impl TableCtx<'_> {
             rows.push((text, style));
         }
 
-        let mut block = theme.panel("Main");
+        let mut block = panel_block(theme, ReadPanel::Main);
         if let Some(error) = &params.read_error {
             block = block.title_bottom(
                 Line::styled(format!(" \u{26a0} {error} "), theme.err_style()).left_aligned(),
@@ -158,7 +164,6 @@ impl TableCtx<'_> {
         &self,
         cells: &[RegisterCell],
         top: usize,
-        title: &str,
         ascii: Option<&str>,
     ) -> Table<'static> {
         let (params, app, theme) = (self.params, self.app, self.theme);
@@ -194,7 +199,7 @@ impl TableCtx<'_> {
             rows.push((text, style));
         }
 
-        let mut block = theme.panel(title);
+        let mut block = panel_block(theme, params.panel);
         if let Some(ascii) = ascii {
             block = block.title_bottom(ascii_title(ascii, theme));
         }
@@ -244,7 +249,12 @@ impl TableCtx<'_> {
             table_rows.push(Row::new([Cell::from(Line::from(spans))]));
         }
 
-        full_width_table(table_rows, Cell::from(header), theme, theme.panel("Matrix"))
+        full_width_table(
+            table_rows,
+            Cell::from(header),
+            theme,
+            panel_block(theme, ReadPanel::Matrix),
+        )
     }
 }
 
@@ -385,10 +395,10 @@ pub fn draw(
             frame.render_widget(ctx.matrix_table(visible), rows[1]);
         }
         _ => {
-            let (title, empty_message) = match params.panel {
-                ReadPanel::Labeled => ("Labeled", "No labeled registers."),
-                ReadPanel::Custom => ("Custom", "No custom rules."),
-                _ => ("Pinned", "No pinned registers."),
+            let empty_message = match params.panel {
+                ReadPanel::Labeled => "No labeled registers.",
+                ReadPanel::Custom => "No custom rules.",
+                _ => "No pinned registers.",
             };
             let len = app.panel_len() as usize;
             if len == 0 {
@@ -396,17 +406,14 @@ pub fn draw(
 
                 let t = Table::new(table_rows, [Constraint::Percentage(100)])
                     .header(Row::new([Cell::from(header)]).style(theme.header_style()))
-                    .block(theme.panel(title));
+                    .block(panel_block(theme, params.panel));
 
                 frame.render_widget(t, rows[1]);
             } else {
                 let top = (params.pinned_top as usize).min(len - 1);
                 let cells = app.panel_window(top, visible as usize);
                 let ascii = show_ascii.then(|| app.ascii_string_for(cells.iter().copied()));
-                frame.render_widget(
-                    ctx.list_table(&cells, top, title, ascii.as_deref()),
-                    rows[1],
-                );
+                frame.render_widget(ctx.list_table(&cells, top, ascii.as_deref()), rows[1]);
             }
         }
     }

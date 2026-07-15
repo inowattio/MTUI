@@ -162,6 +162,27 @@ impl Theme {
             .border_type(BorderType::Rounded)
             .border_style(self.dim_style())
     }
+
+    pub fn tabbed_panel(&self, names: &[&'static str], active: usize) -> Block<'static> {
+        let mut spans = vec![Span::raw(" ")];
+        for (i, name) in names.iter().enumerate() {
+            if i > 0 {
+                spans.push(Span::styled(" \u{2502} ", self.dim_style()));
+            }
+            let style = if i == active {
+                self.accent_style()
+            } else {
+                self.dim_style()
+            };
+            spans.push(Span::styled(*name, style));
+        }
+        spans.push(Span::raw(" "));
+        Block::default()
+            .title_top(Line::from(spans))
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(self.dim_style())
+    }
 }
 
 pub fn spinner_frame(frame: u64) -> &'static str {

@@ -22,6 +22,7 @@ fn convert_key(code: CrosstermKeyCode) -> Option<input::KeyCode> {
         CrosstermKeyCode::Backspace => input::KeyCode::Backspace,
         CrosstermKeyCode::Delete => input::KeyCode::Delete,
         CrosstermKeyCode::Tab => input::KeyCode::Tab,
+        CrosstermKeyCode::BackTab => input::KeyCode::BackTab,
         CrosstermKeyCode::Up => input::KeyCode::Up,
         CrosstermKeyCode::Down => input::KeyCode::Down,
         CrosstermKeyCode::Left => input::KeyCode::Left,
