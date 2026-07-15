@@ -520,8 +520,6 @@ field_enum! {
         Api,
         Display,
         Theme,
-        Cycle,
-        Clear,
         Keybinds,
         Config,
     }
@@ -535,8 +533,6 @@ impl SettingsCategory {
             SettingsCategory::Api => "API",
             SettingsCategory::Display => "Display",
             SettingsCategory::Theme => "Theme",
-            SettingsCategory::Cycle => "Cycle types",
-            SettingsCategory::Clear => "Clear data",
             SettingsCategory::Keybinds => "Keybinds",
             SettingsCategory::Config => "Config",
         }
@@ -546,9 +542,17 @@ impl SettingsCategory {
         use SettingsField::*;
         match self {
             SettingsCategory::General => &[Name, StartupPanel, IgnoreDirty, ShowMock],
-            SettingsCategory::Data => {
-                &[RegistersBatch, AutoUpdate, ReadOnly, HistoryCap, MatrixCols]
-            }
+            SettingsCategory::Data => &[
+                RegistersBatch,
+                AutoUpdate,
+                ReadOnly,
+                HistoryCap,
+                MatrixCols,
+                CycleHoldings,
+                CycleInputs,
+                CycleCoils,
+                CycleDiscretes,
+            ],
             SettingsCategory::Api => &[ApiPort, ApiSlaveOverride, LogWrites],
             SettingsCategory::Display => &[ShowClock, ShowFrameTime, ShowContinuation],
             SettingsCategory::Theme => &[
@@ -563,10 +567,15 @@ impl SettingsCategory {
                 ThemeErr,
                 ThemeSelectedFg,
             ],
-            SettingsCategory::Cycle => &[CycleHoldings, CycleInputs, CycleCoils, CycleDiscretes],
-            SettingsCategory::Clear => &[ClearPins, ClearLabels, ClearCustom],
             SettingsCategory::Keybinds => &[],
-            SettingsCategory::Config => &[Save, LoadConfig, NextConfig],
+            SettingsCategory::Config => &[
+                ClearPins,
+                ClearLabels,
+                ClearCustom,
+                Save,
+                LoadConfig,
+                NextConfig,
+            ],
         }
     }
 
