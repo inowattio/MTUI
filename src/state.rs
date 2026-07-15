@@ -435,6 +435,7 @@ field_enum! {
         CycleCoils,
         CycleDiscretes,
         IgnoreDirty,
+        ShowMock,
         ClearPins,
         ClearLabels,
         ClearCustom,
@@ -476,6 +477,7 @@ impl SettingsField {
                 | SettingsField::ShowFrameTime
                 | SettingsField::StartupPanel
                 | SettingsField::IgnoreDirty
+                | SettingsField::ShowMock
                 | SettingsField::CycleHoldings
                 | SettingsField::CycleInputs
                 | SettingsField::CycleCoils
@@ -543,7 +545,7 @@ impl SettingsCategory {
     pub fn fields(self) -> &'static [SettingsField] {
         use SettingsField::*;
         match self {
-            SettingsCategory::General => &[Name, StartupPanel, IgnoreDirty],
+            SettingsCategory::General => &[Name, StartupPanel, IgnoreDirty, ShowMock],
             SettingsCategory::Data => {
                 &[RegistersBatch, AutoUpdate, ReadOnly, HistoryCap, MatrixCols]
             }

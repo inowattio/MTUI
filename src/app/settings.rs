@@ -97,6 +97,7 @@ impl App {
     pub fn settings_adjust(&mut self, field: SettingsField, delta: i64) {
         match field {
             SettingsField::IgnoreDirty => self.config.ignore_dirty = !self.config.ignore_dirty,
+            SettingsField::ShowMock => self.config.show_mock = !self.config.show_mock,
             SettingsField::ReadOnly => self.config.read_only = !self.config.read_only,
             SettingsField::ApiSlaveOverride => {
                 self.config.allow_api_slave_id = !self.config.allow_api_slave_id

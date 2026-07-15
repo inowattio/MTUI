@@ -475,13 +475,15 @@ async fn handle_discovery_key(key_event: KeyEvent, app: &mut App) {
             }
         }
         KeyCode::Left => {
+            let show_mock = app.config.show_mock;
             if let Some(d) = app.discovery_mut() {
-                cycle_field(d, field, false);
+                cycle_field(d, field, false, show_mock);
             }
         }
         KeyCode::Right => {
+            let show_mock = app.config.show_mock;
             if let Some(d) = app.discovery_mut() {
-                cycle_field(d, field, true);
+                cycle_field(d, field, true, show_mock);
             }
         }
         KeyCode::Backspace => {
@@ -559,12 +561,16 @@ fn handle_scan_popup_key(key_event: KeyEvent, app: &mut App, kb: Keybinds) {
     }
 }
 
-fn cycle_field(d: &mut DiscoveryParams, field: DiscoveryField, forward: bool) {
-    const KINDS: [InterfaceKind; 3] = [
-        InterfaceKind::Mock,
-        InterfaceKind::Wired,
-        InterfaceKind::Network,
-    ];
+fn cycle_field(d: &mut DiscoveryParams, field: DiscoveryField, forward: bool, show_mock: bool) {
+    let kinds: &[InterfaceKind] = if show_mock {
+        &[
+            InterfaceKind::Mock,
+            InterfaceKind::Wired,
+            InterfaceKind::Network,
+        ]
+    } else {
+        &[InterfaceKind::Wired, InterfaceKind::Network]
+    };
     const BAUDS: [u32; 6] = [9600, 19200, 38400, 57600, 115200, 230400];
     const DATA_BITS: [DataBits; 4] = [
         DataBits::Five,
@@ -583,7 +589,7 @@ fn cycle_field(d: &mut DiscoveryParams, field: DiscoveryField, forward: bool) {
 
     match field {
         DiscoveryField::Interface => {
-            d.interface = cycle(&KINDS, d.interface, forward);
+            d.interface = cycle(kinds, d.interface, forward);
             d.selected = 0;
         }
         DiscoveryField::Port => {

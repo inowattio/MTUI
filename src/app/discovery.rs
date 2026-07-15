@@ -57,6 +57,10 @@ impl App {
             }
             Interface::Mock => d.interface = InterfaceKind::Mock,
         }
+
+        if !config.show_mock && d.interface == InterfaceKind::Mock {
+            d.interface = InterfaceKind::Wired;
+        }
         d
     }
 

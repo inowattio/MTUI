@@ -210,6 +210,7 @@ fn field_view(
             on_off(device.ignore_dirty),
             Kind::Toggle,
         ),
+        SettingsField::ShowMock => ("Show mock device", on_off(device.show_mock), Kind::Toggle),
         SettingsField::ReadOnly => ("Read-only", on_off(device.read_only), Kind::Toggle),
         SettingsField::ApiPort => (
             "API port",
