@@ -159,7 +159,7 @@ pub struct Labels {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Label {
-    #[serde(rename = "i")]
+    #[serde(rename = "a")]
     pub address: u16,
     #[serde(rename = "t")]
     pub text: String,
@@ -454,7 +454,7 @@ macro_rules! interpretation_columns {
 }
 
 interpretation_columns! {
-    IndexHex => index_hex : "index (hex)" = false,
+    AddressHex => address_hex : "address (hex)" = false,
     U8s => u8s : "u8s" = false,
     I8s => i8s : "i8s" = false,
     U16 => u16 : "u16" = true,

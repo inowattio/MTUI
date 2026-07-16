@@ -11,7 +11,7 @@ pub struct Interpretor {
     header: String,
 }
 
-const INDEX_W: usize = 5;
+const ADDRESS_W: usize = 7;
 const TIME_W: usize = 12;
 const AGO_W: usize = 9;
 const INSPECT_W: usize = 21;
@@ -134,7 +134,7 @@ impl Interpretor {
         if self.config.ago {
             let _ = write!(header, "{:<w$} ", "ago", w = AGO_W);
         }
-        let _ = write!(header, "{:>w$}: ", "index", w = INDEX_W);
+        let _ = write!(header, "{:>w$}: ", "address", w = ADDRESS_W);
 
         for col in COLUMNS {
             if (col.enabled)(&self.config) {
@@ -170,7 +170,7 @@ impl Interpretor {
     }
 
     pub fn prefix_width(&self) -> u16 {
-        let mut width = (INDEX_W + 2) as u16; // index + ": "
+        let mut width = (ADDRESS_W + 2) as u16; // address + ": "
         if self.config.time {
             width += (TIME_W + 1) as u16; // value + trailing space
         }
@@ -191,15 +191,15 @@ impl Interpretor {
             .collect()
     }
 
-    fn write_index(&self, out: &mut String, value: u16) {
-        if self.config.index_hex {
-            let _ = write!(out, "{value:>w$X}: ", w = INDEX_W);
+    fn write_address(&self, out: &mut String, value: u16) {
+        if self.config.address_hex {
+            let _ = write!(out, "{value:>w$X}: ", w = ADDRESS_W);
         } else {
-            let _ = write!(out, "{value:>w$}: ", w = INDEX_W);
+            let _ = write!(out, "{value:>w$}: ", w = ADDRESS_W);
         }
     }
 
-    pub fn placeholder(&self, index: u16, label: Option<&str>) -> String {
+    pub fn placeholder(&self, address: u16, label: Option<&str>) -> String {
         let dash = "--";
         let mut row = String::new();
 
@@ -209,7 +209,7 @@ impl Interpretor {
         if self.config.ago {
             let _ = write!(row, "{dash:<w$} ", w = AGO_W);
         }
-        self.write_index(&mut row, index);
+        self.write_address(&mut row, address);
 
         for col in COLUMNS {
             if (col.enabled)(&self.config) {
@@ -246,7 +246,7 @@ impl Interpretor {
             let ago = format_ago(now.signed_duration_since(read_at));
             let _ = write!(row, "{ago:<w$} ", w = AGO_W);
         }
-        self.write_index(&mut row, address);
+        self.write_address(&mut row, address);
 
         let ctx = RowCtx::new(self.word_order, value, next, custom);
         for col in COLUMNS {

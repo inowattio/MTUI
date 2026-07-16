@@ -128,7 +128,7 @@ pub struct BitEntry {
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 pub struct CustomRule {
-    #[serde(rename = "i")]
+    #[serde(rename = "a")]
     pub address: u16,
     pub repr: CustomRepr,
     #[serde(default)]
@@ -592,7 +592,7 @@ mod tests {
 
     #[test]
     fn deserialize_is_terse() {
-        let r: CustomRule = serde_json::from_str(r#"{"i": 7, "repr": "U16"}"#).unwrap();
+        let r: CustomRule = serde_json::from_str(r#"{"a": 7, "repr": "U16"}"#).unwrap();
         assert_eq!(r.address, 7);
         assert_eq!(r.repr, CustomRepr::U16);
         assert!(r.ops.is_empty());

@@ -18,7 +18,7 @@ pub(super) fn draw(
     let (top, end) = super::window(search.top as usize, visible, len);
 
     let query_line = Line::from(vec![
-        Span::styled(" index/label: ", theme.dim_style()),
+        Span::styled(" address/label: ", theme.dim_style()),
         Span::styled(search.query.clone(), theme.accent_style()),
         Span::styled("_", theme.accent_style()),
         Span::styled(format!("   ({len})"), theme.dim_style()),

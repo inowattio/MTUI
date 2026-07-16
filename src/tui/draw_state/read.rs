@@ -204,7 +204,7 @@ impl TableCtx<'_> {
             block = block.title_bottom(ascii_title(ascii, theme));
         }
 
-        // 2-char type marker alongside the index.
+        // 2-char type marker alongside the address.
         self.scrollable_table(rows, &header, 2 + app.interpreter.prefix_width(), block)
     }
 
