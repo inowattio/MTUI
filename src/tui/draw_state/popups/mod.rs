@@ -23,7 +23,7 @@ use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Clear, Paragraph};
+use ratatui::widgets::{Borders, Clear, Paragraph};
 use ratatui::Frame;
 
 pub fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup: &Popup) {
@@ -104,7 +104,10 @@ pub(super) fn render(
     let height = lines.len() as u16 + 2;
     let rect = centered_rect(width, height, area);
     frame.render_widget(Clear, rect);
-    frame.render_widget(Paragraph::new(lines).block(theme.panel(title)), rect);
+    frame.render_widget(
+        Paragraph::new(lines).block(theme.panel(&format!(" {title}")).borders(Borders::ALL)),
+        rect,
+    );
 }
 
 pub(super) fn centered_rect(width: u16, height: u16, area: Rect) -> Rect {

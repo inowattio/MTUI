@@ -50,7 +50,7 @@ const SEP: &str = " ";
 pub fn width(items: &[Hint]) -> usize {
     let tokens: usize = items.iter().map(Hint::width).sum::<usize>()
         + SEP.chars().count() * items.len().saturating_sub(1);
-    tokens + 2 + 2
+    tokens + 1 + 2
 }
 
 pub fn min_width(min: u16, items: &[Hint]) -> u16 {
@@ -72,7 +72,6 @@ pub fn footer<const N: usize>(theme: &Theme, items: [Hint; N]) -> Line<'static> 
         spans.push(Span::styled("] ", dim));
         spans.push(Span::styled(h.label, dim));
     }
-    spans.push(Span::styled(" ", dim));
     Line::from(spans)
 }
 

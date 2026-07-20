@@ -127,7 +127,7 @@ fn draw_footer(params: &SettingsParams, app: &App, frame: &mut Frame, area: Rect
         frame.render_widget(
             Paragraph::new(
                 Line::from(Span::styled(
-                    "\u{25cf} unsaved changes  ",
+                    "\u{25cf} unsaved changes",
                     theme.warn_style(),
                 ))
                 .right_aligned(),

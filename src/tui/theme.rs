@@ -135,7 +135,7 @@ impl Theme {
 
     pub fn status_line(&self, status: &StatusMessage) -> Line<'static> {
         Line::from(Span::styled(
-            format!(" {}", status.text),
+            status.text.clone(),
             self.message_style(status.kind),
         ))
     }
@@ -157,14 +157,14 @@ impl Theme {
 
     pub fn panel(&self, title: &str) -> Block<'static> {
         Block::default()
-            .title_top(Line::styled(format!(" {title} "), self.accent_style()))
-            .borders(Borders::ALL)
+            .title_top(Line::styled(format!("{title} "), self.accent_style()))
+            .borders(Borders::TOP | Borders::BOTTOM)
             .border_type(BorderType::Rounded)
             .border_style(self.dim_style())
     }
 
     pub fn tabbed_panel(&self, names: &[&'static str], active: usize) -> Block<'static> {
-        let mut spans = vec![Span::raw(" ")];
+        let mut spans = Vec::new();
         for (i, name) in names.iter().enumerate() {
             if i > 0 {
                 spans.push(Span::styled(" \u{2502} ", self.dim_style()));
@@ -179,7 +179,7 @@ impl Theme {
         spans.push(Span::raw(" "));
         Block::default()
             .title_top(Line::from(spans))
-            .borders(Borders::ALL)
+            .borders(Borders::TOP | Borders::BOTTOM)
             .border_type(BorderType::Rounded)
             .border_style(self.dim_style())
     }

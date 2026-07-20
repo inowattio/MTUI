@@ -22,7 +22,7 @@ fn panel_block(theme: &Theme, active: ReadPanel) -> Block<'static> {
 
 fn ascii_title(ascii: &str, theme: &Theme) -> Line<'static> {
     Line::from(vec![
-        Span::styled(" ASCII ", theme.dim_style()),
+        Span::styled("ASCII ", theme.dim_style()),
         Span::styled(format!("'{ascii}' "), theme.base()),
     ])
     .left_aligned()
@@ -50,7 +50,7 @@ fn with_hscroll_hint(
     let left = if offset > 0 { '\u{25c2}' } else { ' ' };
     let right = if offset < max_offset { '\u{25b8}' } else { ' ' };
     block.title_bottom(
-        Line::styled(format!(" {left} cols {right} "), theme.dim_style()).right_aligned(),
+        Line::styled(format!(" {left} cols {right}"), theme.dim_style()).right_aligned(),
     )
 }
 
@@ -329,11 +329,8 @@ pub fn draw(
     }
     right.push(cell_seg);
 
-    let mut left_line = vec![Span::raw(" ")];
-    left_line.extend(theme.join_dotted(right.into_iter().rev()));
-
-    let mut right_line = theme.join_dotted(identity.into_iter().rev());
-    right_line.push(Span::raw(" "));
+    let left_line = theme.join_dotted(right.into_iter().rev());
+    let right_line = theme.join_dotted(identity.into_iter().rev());
 
     let info_rows = Layout::default()
         .direction(Direction::Vertical)
@@ -483,8 +480,8 @@ fn draw_graph(
     };
     let label = app.label_text(kind, address);
     let title = match &label {
-        Some(l) => format!(" Graph [{mode}] \u{201c}{l}\u{201d} "),
-        None => format!(" Graph [{mode}] "),
+        Some(l) => format!("Graph [{mode}] \u{201c}{l}\u{201d}"),
+        None => format!("Graph [{mode}]"),
     };
 
     let block = if !bit_plot && app.graph_cycle_len() > 1 {
