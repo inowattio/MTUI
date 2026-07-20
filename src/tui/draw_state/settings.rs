@@ -287,6 +287,11 @@ fn field_view(
             on_off(device.show_frame_time),
             Kind::Toggle,
         ),
+        SettingsField::ShowAscii => (
+            "Show ASCII of all data",
+            on_off(device.show_ascii),
+            Kind::Toggle,
+        ),
         SettingsField::ThemeBorder => color_view("Border", device.theme.border),
         SettingsField::ThemeAccent => color_view("Accent / titles", device.theme.accent),
         SettingsField::ThemeText => color_view("Text", device.theme.text),

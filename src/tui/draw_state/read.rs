@@ -250,7 +250,7 @@ pub fn draw(
         .iter()
         .any(|&(kind, address)| kind == info_type && address == info_addr);
 
-    let show_ascii = app.interpreter.shows_ascii() && !params.graph;
+    let show_ascii = app.config.show_ascii && !params.graph;
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Length(2), Constraint::Min(0)])

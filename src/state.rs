@@ -442,6 +442,7 @@ field_enum! {
         ShowContinuation,
         ShowClock,
         ShowFrameTime,
+        ShowAscii,
         ThemeBorder,
         ThemeAccent,
         ThemeText,
@@ -475,6 +476,7 @@ impl SettingsField {
                 | SettingsField::ShowContinuation
                 | SettingsField::ShowClock
                 | SettingsField::ShowFrameTime
+                | SettingsField::ShowAscii
                 | SettingsField::StartupPanel
                 | SettingsField::IgnoreDirty
                 | SettingsField::ShowMock
@@ -554,7 +556,7 @@ impl SettingsCategory {
                 CycleDiscretes,
             ],
             SettingsCategory::Api => &[ApiPort, ApiSlaveOverride, LogWrites],
-            SettingsCategory::Display => &[ShowClock, ShowFrameTime, ShowContinuation],
+            SettingsCategory::Display => &[ShowClock, ShowFrameTime, ShowAscii, ShowContinuation],
             SettingsCategory::Theme => &[
                 ThemeBorder,
                 ThemeAccent,
