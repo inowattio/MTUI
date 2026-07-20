@@ -1,6 +1,7 @@
 use crate::app::App;
 use crate::state::State;
 use crate::tui::draw_state;
+use crate::tui::hints;
 use crate::tui::make_bottom_title::make_bottom_title;
 use crate::tui::make_top_title::make_top_title;
 use crate::tui::theme::status_span;
@@ -15,7 +16,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     let theme = app.config.theme;
 
     let mode = make_top_title(&app.state);
-    let key_hints = make_bottom_title(&theme, &app.state, &app.config.keybinds);
+    let key_hints = make_bottom_title(&theme, app);
     let mut clock_spans = Vec::new();
     if app.config.show_clock {
         let clock = Local::now().format("%H:%M:%S.%3f").to_string();
@@ -37,7 +38,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     let mut left_top = vec![status_span(&app.connection, &theme)];
     left_top.extend(live);
 
-    let outer = Block::default()
+    let mut outer = Block::default()
         .title_top(Line::from(left_top))
         .title_top(Line::styled(format!(" {mode}"), theme.base()).right_aligned())
         .title_bottom(clock_line)
@@ -45,6 +46,15 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         .style(Style::default().fg(theme.border))
         .borders(Borders::TOP | Borders::BOTTOM)
         .border_type(BorderType::Rounded);
+
+    // h_max_offset is written during the table draw below, so this reads the
+    // previous frame's value; it settles on the next redraw.
+    if let State::Read(p) = &app.state {
+        let max = app.h_max_offset.get();
+        if let Some(hint) = hints::hscroll(&theme, p.col_offset.min(max), max) {
+            outer = outer.title_top(hint.centered());
+        }
+    }
 
     let area = frame.area();
     let inner = outer.inner(area);

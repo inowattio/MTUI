@@ -75,6 +75,18 @@ pub fn footer<const N: usize>(theme: &Theme, items: [Hint; N]) -> Line<'static> 
     Line::from(spans)
 }
 
+pub fn hscroll(theme: &Theme, offset: u16, max_offset: u16) -> Option<Line<'static>> {
+    if max_offset == 0 {
+        return None;
+    }
+    let left = if offset > 0 { '\u{25c2}' } else { ' ' };
+    let right = if offset < max_offset { '\u{25b8}' } else { ' ' };
+    Some(Line::styled(
+        format!(" {left} cols {right} "),
+        theme.dim_style(),
+    ))
+}
+
 pub fn more(theme: &Theme, above: usize, below: usize) -> Line<'static> {
     let dim = theme.dim_style();
     let mut spans: Vec<Span<'static>> = Vec::new();

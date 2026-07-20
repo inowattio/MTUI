@@ -21,11 +21,7 @@ fn panel_block(theme: &Theme, active: ReadPanel) -> Block<'static> {
 }
 
 fn ascii_title(ascii: &str, theme: &Theme) -> Line<'static> {
-    Line::from(vec![
-        Span::styled("ASCII ", theme.dim_style()),
-        Span::styled(format!("'{ascii}' "), theme.base()),
-    ])
-    .left_aligned()
+    Line::from(Span::styled(format!(" '{ascii}'"), theme.base())).right_aligned()
 }
 
 fn hscroll(text: &str, prefix: u16, offset: u16) -> String {
@@ -36,22 +32,6 @@ fn hscroll(text: &str, prefix: u16, offset: u16) -> String {
     let mut out: String = text.chars().take(prefix).collect();
     out.extend(text.chars().skip(prefix + offset as usize));
     out
-}
-
-fn with_hscroll_hint(
-    block: Block<'static>,
-    theme: &Theme,
-    offset: u16,
-    max_offset: u16,
-) -> Block<'static> {
-    if max_offset == 0 {
-        return block;
-    }
-    let left = if offset > 0 { '\u{25c2}' } else { ' ' };
-    let right = if offset < max_offset { '\u{25b8}' } else { ' ' };
-    block.title_bottom(
-        Line::styled(format!(" {left} cols {right}"), theme.dim_style()).right_aligned(),
-    )
 }
 
 fn full_width_table(
@@ -107,8 +87,6 @@ impl TableCtx<'_> {
                 Row::new([Cell::from(cell)]).style(style)
             })
             .collect();
-        let block = with_hscroll_hint(block, self.theme, h_off, self.app.h_max_offset.get());
-
         full_width_table(
             table_rows,
             Cell::from(hscroll(header, prefix, h_off)),
@@ -151,10 +129,10 @@ impl TableCtx<'_> {
         let mut block = panel_block(theme, ReadPanel::Main);
         if let Some(error) = &params.read_error {
             block = block.title_bottom(
-                Line::styled(format!(" \u{26a0} {error} "), theme.err_style()).left_aligned(),
+                Line::styled(format!("\u{26a0} {error}"), theme.err_style()).left_aligned(),
             );
         } else if let Some(ascii) = ascii {
-            block = block.title_bottom(ascii_title(ascii, theme));
+            block = block.title_top(ascii_title(ascii, theme));
         }
 
         self.scrollable_table(rows, header, app.interpreter.prefix_width(), block)
@@ -201,7 +179,7 @@ impl TableCtx<'_> {
 
         let mut block = panel_block(theme, params.panel);
         if let Some(ascii) = ascii {
-            block = block.title_bottom(ascii_title(ascii, theme));
+            block = block.title_top(ascii_title(ascii, theme));
         }
 
         // 2-char type marker alongside the address.
@@ -349,10 +327,15 @@ pub fn draw(
 
     let header = app.interpreter.header();
 
-    let visible = rows[1].height.saturating_sub(3).max(1);
+    // Tab line + header row; the read-error message adds a bottom title row.
+    let error_row = params.panel == ReadPanel::Main && params.read_error.is_some();
+    let visible = rows[1]
+        .height
+        .saturating_sub(2 + u16::from(error_row))
+        .max(1);
     app.visible_rows.set(visible);
     // Inner table width. Panels without interpretation columns leave the offset at zero.
-    let inner_width = rows[1].width.saturating_sub(2);
+    let inner_width = rows[1].width;
     app.h_max_offset.set(0);
 
     if params.graph {
@@ -484,12 +467,7 @@ fn draw_graph(
         None => format!("Graph [{mode}]"),
     };
 
-    let block = if !bit_plot && app.graph_cycle_len() > 1 {
-        let hint = hints::footer(theme, [Hint::key(app.config.keybinds.dump, "cycle")]);
-        theme.panel(&title).title_bottom(hint.right_aligned())
-    } else {
-        theme.panel(&title)
-    };
+    let block = theme.panel(&title);
     let inner = block.inner(area);
     frame.render_widget(block, area);
 

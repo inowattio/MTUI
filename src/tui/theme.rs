@@ -158,7 +158,7 @@ impl Theme {
     pub fn panel(&self, title: &str) -> Block<'static> {
         Block::default()
             .title_top(Line::styled(format!("{title} "), self.accent_style()))
-            .borders(Borders::TOP | Borders::BOTTOM)
+            .borders(Borders::TOP)
             .border_type(BorderType::Rounded)
             .border_style(self.dim_style())
     }
@@ -179,7 +179,7 @@ impl Theme {
         spans.push(Span::raw(" "));
         Block::default()
             .title_top(Line::from(spans))
-            .borders(Borders::TOP | Borders::BOTTOM)
+            .borders(Borders::TOP)
             .border_type(BorderType::Rounded)
             .border_style(self.dim_style())
     }
