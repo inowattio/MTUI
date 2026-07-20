@@ -50,7 +50,7 @@ const SEP: &str = " ";
 pub fn width(items: &[Hint]) -> usize {
     let tokens: usize = items.iter().map(Hint::width).sum::<usize>()
         + SEP.chars().count() * items.len().saturating_sub(1);
-    tokens + 1 + 2
+    tokens + 2 + 2
 }
 
 pub fn min_width(min: u16, items: &[Hint]) -> u16 {

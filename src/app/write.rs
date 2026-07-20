@@ -43,6 +43,7 @@ impl App {
             position: write_pos,
             value,
             write_type,
+            bit_cursor: 15,
             ..Default::default()
         }));
     }
