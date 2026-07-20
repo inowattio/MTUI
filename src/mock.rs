@@ -35,8 +35,9 @@ use tokio_modbus::{ExceptionCode, Request, Response, Slave, SlaveId};
 ///   1004       accepted-write counter, 1005..=1006 energy (m10k)
 ///   1100       status word (bit0 run, bit1 grid, bit2 warn, bit15 heartbeat)
 ///   1101       alarm count
+///   65520..=65535 zeros, so the end of the address space is readable
 ///
-/// Input registers (0..=499 mapped):
+/// Input registers (0..=499 and 65520..=65535 mapped):
 ///   0..=2      voltages L1-L3 x10, 3..=5 currents x100, 6 frequency x100,
 ///   7          temperature x10, 8..=9 active power kW (f32),
 ///   10..=11    power factor (f32), 12..=13 apparent power VA (u32),
@@ -72,8 +73,9 @@ pub struct MockContext {
 
 const KNOWN_SLAVES: RangeInclusive<SlaveId> = 0..=9;
 const WRITABLE: RangeInclusive<u16> = 50..=199;
-const HOLDING_ZONES: [RangeInclusive<u16>; 2] = [0..=499, 1000..=1199];
-const INPUT_ZONE: RangeInclusive<u16> = 0..=499;
+const TAIL_ZONE: RangeInclusive<u16> = 65520..=65535;
+const HOLDING_ZONES: [RangeInclusive<u16>; 3] = [0..=499, 1000..=1199, TAIL_ZONE];
+const INPUT_ZONES: [RangeInclusive<u16>; 2] = [0..=499, TAIL_ZONE];
 const COIL_ZONE: RangeInclusive<u16> = 0..=255;
 const DISCRETE_ZONE: RangeInclusive<u16> = 0..=255;
 
@@ -451,7 +453,7 @@ impl Client for MockContext {
             }
 
             Request::ReadInputRegisters(addr, count) => {
-                if !mapped(&[INPUT_ZONE], addr, count) {
+                if !mapped(&INPUT_ZONES, addr, count) {
                     return Ok(Err(ExceptionCode::IllegalDataAddress));
                 }
                 let regs = (0..count).map(|i| self.input_value(addr + i, t)).collect();
