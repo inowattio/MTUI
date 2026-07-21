@@ -271,6 +271,7 @@ impl App {
             self.notify_no_cycle_types();
             return;
         }
+        self.stop_sweep();
         let p = self.read_mut();
         p.read_duration = None;
         p.read_error = None;

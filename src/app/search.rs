@@ -85,6 +85,9 @@ impl App {
     }
 
     fn jump_to_cell(&mut self, register_type: RegisterType, position: u16) {
+        if register_type != self.read().register_type {
+            self.stop_sweep();
+        }
         let rows = self.visible_rows.get();
         let cols = self.config.matrix_cols;
         let p = self.read_mut();

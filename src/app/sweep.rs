@@ -33,8 +33,7 @@ impl App {
         self.sweep.continuous = continuous;
 
         if self.sweep.active {
-            self.sweep.active = false;
-            log::info!("Sweep stopped");
+            self.stop_sweep();
         } else {
             self.sweep.current = from;
             self.sweep.errored = false;
@@ -52,6 +51,13 @@ impl App {
             );
         }
         self.close_popup();
+    }
+
+    pub(super) fn stop_sweep(&mut self) {
+        if self.sweep.active {
+            self.sweep.active = false;
+            log::info!("Sweep stopped");
+        }
     }
 
     pub(super) fn advance_sweep(&mut self, errored: bool) {
