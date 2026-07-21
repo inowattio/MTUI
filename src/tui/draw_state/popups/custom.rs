@@ -16,12 +16,23 @@ fn section(field: CustomField) -> &'static str {
     }
 }
 
-fn joined<T>(items: &[T], display: impl Fn(&T) -> String) -> String {
-    if items.is_empty() {
-        "(none)".to_string()
-    } else {
-        items.iter().map(display).collect::<Vec<_>>().join("  ")
+/// Pack item strings into rows of at most `width` chars (two-space
+/// separated), never splitting an item.
+fn wrap_items(items: Vec<String>, width: usize) -> Vec<String> {
+    let mut rows: Vec<String> = Vec::new();
+    let mut row = String::new();
+    for item in items {
+        if !row.is_empty() {
+            if row.chars().count() + 2 + item.chars().count() > width {
+                rows.push(std::mem::take(&mut row));
+            } else {
+                row.push_str("  ");
+            }
+        }
+        row.push_str(&item);
     }
+    rows.push(row);
+    rows
 }
 
 pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &CustomParams) {
@@ -79,6 +90,24 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &
         }
     }
 
+    // "> " marker + 12-char label + space, matching field_row's prefix.
+    let value_width = inner.saturating_sub(15).max(8);
+    let list_rows =
+        |lines: &mut Vec<Line>, label: &str, items: Vec<String>, empty: &str, selected: bool| {
+            let mut rows = if items.is_empty() {
+                vec![empty.to_string()]
+            } else {
+                wrap_items(items, value_width)
+            };
+            lines.push(field_row(theme, label, 12, rows.remove(0), selected));
+            for row in rows {
+                lines.push(Line::from(vec![
+                    Span::raw(" ".repeat(15)),
+                    Span::styled(row, theme.line_style(selected)),
+                ]));
+            }
+        };
+
     let entry_hints = |lines: &mut Vec<Line>, buffer: &str, example: &str| {
         lines.push(Line::from(Span::styled(
             format!("    add: {buffer}_   {example}"),
@@ -127,33 +156,37 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &
                 ));
             }
             CustomField::Next => {
-                let value = if c.next.is_empty() {
-                    "(contiguous)".to_string()
-                } else {
-                    joined(&c.next, u16::to_string)
-                };
-                lines.push(field_row(theme, "Next words", 12, value, selected));
+                let items = c.next.iter().map(u16::to_string).collect();
+                list_rows(&mut lines, "Next words", items, "(contiguous)", selected);
                 if selected {
                     entry_hints(&mut lines, &c.next_buffer, "address of word 2 (then 3, 4)");
                 }
             }
             CustomField::Ops => {
-                let value = joined(&c.ops, |o| o.display());
-                lines.push(field_row(theme, "Operations", 12, value, selected));
+                let items = c.ops.iter().map(|o| o.display()).collect();
+                list_rows(&mut lines, "Operations", items, "(none)", selected);
                 if selected {
                     entry_hints(&mut lines, &c.op_buffer, "e.g. *0.1  +5  /10  ^2");
                 }
             }
             CustomField::Enum => {
-                let value = joined(&c.enum_map, |e| format!("{}\u{2192}{}", e.value, e.text));
-                lines.push(field_row(theme, "Enum", 12, value, selected));
+                let items = c
+                    .enum_map
+                    .iter()
+                    .map(|e| format!("{}\u{2192}{}", e.value, e.text))
+                    .collect();
+                list_rows(&mut lines, "Enum", items, "(none)", selected);
                 if selected {
                     entry_hints(&mut lines, &c.enum_buffer, "e.g. 3=Running");
                 }
             }
             CustomField::Bits => {
-                let value = joined(&c.bits, |e| format!("{}\u{2192}{}", e.bit, e.name));
-                lines.push(field_row(theme, "Bits", 12, value, selected));
+                let items = c
+                    .bits
+                    .iter()
+                    .map(|e| format!("{}\u{2192}{}", e.bit, e.name))
+                    .collect();
+                list_rows(&mut lines, "Bits", items, "(none)", selected);
                 if selected {
                     entry_hints(&mut lines, &c.bit_buffer, "e.g. 0=run");
                 }
