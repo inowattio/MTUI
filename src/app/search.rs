@@ -41,7 +41,7 @@ impl App {
     }
 
     pub fn search_move(&mut self, down: bool) {
-        let rows = self.visible_rows.get();
+        let rows = crate::constants::SEARCH_POPUP_ROWS;
         if let Some(s) = self.search_mut() {
             s.selected = if down {
                 s.selected.saturating_add(1)
@@ -138,12 +138,11 @@ impl App {
         scored.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
         matches.extend(scored.into_iter().map(|(_, cell, text)| (cell, text)));
 
-        let rows = self.visible_rows.get();
         if let Some(s) = self.search_mut() {
             s.matches = matches;
             s.selected = 0;
             s.top = 0;
-            s.scroll(rows);
+            s.scroll(crate::constants::SEARCH_POPUP_ROWS);
         }
     }
 
