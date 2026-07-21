@@ -375,6 +375,8 @@ body {{ background:{PALETTE['default_bg']}; }}
             [chromium, '--headless=new', '--disable-gpu', '--hide-scrollbars',
              '--force-device-scale-factor=1',
              '--default-background-color=FF1E2021',
+             # CI runners AppArmor-block Chrome's userns sandbox (Ubuntu 24.04+)
+             *(['--no-sandbox'] if os.environ.get('CI') else []),
              f'--window-size={FW},{len(batch) * FH}',
              f'--screenshot={shot}', hpath.as_uri()],
             capture_output=True, text=True, timeout=120)
