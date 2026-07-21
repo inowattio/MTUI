@@ -375,20 +375,45 @@ pub fn draw(
             frame.render_widget(ctx.matrix_table(visible), rows[1]);
         }
         _ => {
-            let empty_message = match params.panel {
-                ReadPanel::Labeled => "No labeled registers.",
-                ReadPanel::Custom => "No custom rules.",
-                _ => "No pinned registers.",
-            };
             let len = app.panel_len() as usize;
             if len == 0 {
-                let table_rows = vec![Row::new([Cell::from(empty_message)]).style(theme.base())];
-
-                let t = Table::new(table_rows, [Constraint::Percentage(100)])
+                let t = Table::new(Vec::<Row>::new(), [Constraint::Percentage(100)])
                     .header(Row::new([Cell::from(header)]).style(theme.header_style()))
                     .block(panel_block(theme, params.panel));
-
                 frame.render_widget(t, rows[1]);
+
+                let kb = &app.config.keybinds;
+                let (message, hint) = match params.panel {
+                    ReadPanel::Labeled => (
+                        "no labeled registers yet \u{2014}",
+                        Hint::key(kb.label, "label the selected register"),
+                    ),
+                    ReadPanel::Custom => (
+                        "no custom rules yet \u{2014}",
+                        Hint::key(kb.custom, "add a rule for the selected register"),
+                    ),
+                    _ => (
+                        "nothing pinned yet \u{2014}",
+                        Hint::key(kb.pin, "pin the selected register"),
+                    ),
+                };
+                let mut spans = vec![Span::styled(message, theme.dim_style())];
+                spans.extend(hints::footer(theme, [hint]).spans);
+
+                let body_top = rows[1].y + 2;
+                let body_height = rows[1].height.saturating_sub(2);
+                if body_height > 0 {
+                    let hint_area = Rect {
+                        x: rows[1].x,
+                        y: body_top + body_height / 3,
+                        width: rows[1].width,
+                        height: 1,
+                    };
+                    frame.render_widget(
+                        Paragraph::new(Line::from(spans)).alignment(Alignment::Center),
+                        hint_area,
+                    );
+                }
             } else {
                 let top = (params.pinned_top as usize).min(len - 1);
                 let cells = app.panel_window(top, visible as usize);
