@@ -34,6 +34,15 @@ impl RegisterType {
         matches!(self, RegisterType::Holding | RegisterType::Coil)
     }
 
+    pub fn name(self) -> &'static str {
+        match self {
+            RegisterType::Holding => "Holding",
+            RegisterType::Input => "Input",
+            RegisterType::Coil => "Coil",
+            RegisterType::Discrete => "Discrete",
+        }
+    }
+
     pub fn marker(self) -> &'static str {
         match self {
             RegisterType::Holding => "H",

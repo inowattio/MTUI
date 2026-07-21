@@ -294,11 +294,26 @@ pub fn draw(
         Span::styled(app.config.registers_batch.to_string(), theme.base()),
     ]);
 
-    let mut cell_seg = vec![
-        Span::styled(format!("{info_type:?}"), theme.base()),
-        Span::styled(" @ ", theme.dim_style()),
-        Span::styled(info_addr.to_string(), theme.accent_style()),
-    ];
+    let cycle = &app.config.cycle_types;
+    let types: Vec<RegisterType> = RegisterType::ALL
+        .into_iter()
+        .filter(|&t| cycle.enabled(t) || t == info_type)
+        .collect();
+    let active = types.iter().position(|&t| t == info_type).unwrap_or(0);
+
+    let names: Vec<String> = types
+        .iter()
+        .enumerate()
+        .map(|(i, t)| {
+            if i == active {
+                format!("{} @ {info_addr}", t.name())
+            } else {
+                t.marker().to_string()
+            }
+        })
+        .collect();
+
+    let mut cell_seg = theme.tab_spans(names, active);
     if is_pinned {
         cell_seg.push(Span::styled(" (pinned)", theme.changed_style()));
     }

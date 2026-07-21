@@ -163,9 +163,13 @@ impl Theme {
             .border_style(self.dim_style())
     }
 
-    pub fn tabbed_panel(&self, names: &[&'static str], active: usize) -> Block<'static> {
+    pub fn tab_spans(
+        &self,
+        names: impl IntoIterator<Item = impl Into<String>>,
+        active: usize,
+    ) -> Vec<Span<'static>> {
         let mut spans = Vec::new();
-        for (i, name) in names.iter().enumerate() {
+        for (i, name) in names.into_iter().enumerate() {
             if i > 0 {
                 spans.push(Span::styled(" \u{2502} ", self.dim_style()));
             }
@@ -174,8 +178,13 @@ impl Theme {
             } else {
                 self.dim_style()
             };
-            spans.push(Span::styled(*name, style));
+            spans.push(Span::styled(name.into(), style));
         }
+        spans
+    }
+
+    pub fn tabbed_panel(&self, names: &[&'static str], active: usize) -> Block<'static> {
+        let mut spans = self.tab_spans(names.iter().copied(), active);
         spans.push(Span::raw(" "));
         Block::default()
             .title_top(Line::from(spans))
