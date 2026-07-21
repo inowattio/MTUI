@@ -1,5 +1,5 @@
 use crate::app::PinnedRegisters;
-use crate::custom::{CustomOp, CustomRepr, CustomRule, EnumEntry, OpKind};
+use crate::custom::{BitEntry, CustomOp, CustomRepr, CustomRule, EnumEntry, OpKind};
 use crate::input::KeyCode;
 use crate::modbus::{DeviceConfig, Interface};
 use crate::register::RegisterType;
@@ -256,6 +256,21 @@ fn plain(address: u16, repr: CustomRepr, decimals: Option<u8>, suffix: &str) -> 
     }
 }
 
+fn flags(address: u16, entries: &[(u8, &str)]) -> CustomRule {
+    CustomRule {
+        address,
+        repr: CustomRepr::U16,
+        bits: entries
+            .iter()
+            .map(|&(bit, name)| BitEntry {
+                bit,
+                name: name.to_string(),
+            })
+            .collect(),
+        ..Default::default()
+    }
+}
+
 fn switch(address: u16, entries: &[(i64, &str)]) -> CustomRule {
     CustomRule {
         address,
@@ -339,6 +354,7 @@ fn demo_rules() -> CustomRules {
             switch(53, &[(0, "off"), (1, "on")]),
             plain(54, CustomRepr::U16, None, " %"),
             scaled(1000, CustomRepr::U32, 1000.0, 2, " kWh"),
+            flags(1100, &[(0, "run"), (1, "grid"), (2, "warn"), (15, "beat")]),
         ],
         inputs: vec![
             scaled(0, CustomRepr::U16, 10.0, 1, " V"),
