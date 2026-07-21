@@ -328,11 +328,12 @@ where
 }
 
 macro_rules! timeout_as {
-    ($this:ident, $slave:expr, $action:ident, ($($arg:expr),* $(,)?)) => {
+    ($this:ident, $slave:expr, $action:ident, ($($arg:expr),* $(,)?), $desc:expr) => {
         {
             let mut hold = $this.context.lock().await;
 
             if $this.poisoned.load(Ordering::Relaxed) {
+                log::info!("Reconnecting after timeout");
                 let mut fresh = ModbusDevice::connect_context(&$this.config).await?;
                 fresh.set_slave(Slave($this.default_slave.load(Ordering::Relaxed)));
                 *hold = fresh;
@@ -350,12 +351,29 @@ macro_rules! timeout_as {
             if override_slave.is_some() {
                 hold.set_slave(Slave($this.default_slave.load(Ordering::Relaxed)));
             }
+            let desc = match override_slave {
+                Some(id) => format!("{} (slave {id})", $desc),
+                None => $desc,
+            };
             match outcome {
-                Ok(Ok(Ok(value))) => Ok(value),
-                Ok(Ok(Err(error))) => Err(anyhow::Error::from(error)),
-                Ok(Err(error)) => Err(anyhow::Error::from(error)),
+                Ok(Ok(Ok(value))) => {
+                    match format!("{value:?}").as_str() {
+                        "()" => log::info!("{desc} \u{b7} ok"),
+                        shown => log::info!("{desc} \u{b7} ok \u{b7} {shown}"),
+                    }
+                    Ok(value)
+                }
+                Ok(Ok(Err(error))) => {
+                    log::warn!("{desc} \u{b7} {error}");
+                    Err(anyhow::Error::from(error))
+                }
+                Ok(Err(error)) => {
+                    log::warn!("{desc} \u{b7} {error}");
+                    Err(anyhow::Error::from(error))
+                }
                 Err(error) => {
                     $this.poisoned.store(true, Ordering::Relaxed);
+                    log::warn!("{desc} \u{b7} timed out");
                     Err(error)
                 }
             }
@@ -364,8 +382,8 @@ macro_rules! timeout_as {
 }
 
 macro_rules! timeout {
-    ($this:ident, $action:ident, ($($arg:expr),* $(,)?)) => {
-        timeout_as!($this, None::<SlaveId>, $action, ($($arg),*))
+    ($this:ident, $action:ident, ($($arg:expr),* $(,)?), $desc:expr) => {
+        timeout_as!($this, None::<SlaveId>, $action, ($($arg),*), $desc)
     };
 }
 
@@ -478,18 +496,20 @@ impl ModbusDevice {
         count: u16,
     ) -> Result<Vec<u16>> {
         let bits_to_words = |bits: Vec<bool>| bits.into_iter().map(u16::from).collect();
+        let desc = format!("Read {register_type:?} @ {address} with {count} value(s)");
         match register_type {
             RegisterType::Holding => {
-                timeout_as!(self, slave, read_holding_registers, (address, count))
+                timeout_as!(self, slave, read_holding_registers, (address, count), desc)
             }
             RegisterType::Input => {
-                timeout_as!(self, slave, read_input_registers, (address, count))
+                timeout_as!(self, slave, read_input_registers, (address, count), desc)
             }
             RegisterType::Coil => {
-                timeout_as!(self, slave, read_coils, (address, count)).map(bits_to_words)
+                timeout_as!(self, slave, read_coils, (address, count), desc).map(bits_to_words)
             }
             RegisterType::Discrete => {
-                timeout_as!(self, slave, read_discrete_inputs, (address, count)).map(bits_to_words)
+                timeout_as!(self, slave, read_discrete_inputs, (address, count), desc)
+                    .map(bits_to_words)
             }
         }
     }
@@ -501,12 +521,19 @@ impl ModbusDevice {
         address: u16,
         values: &[u16],
     ) -> Result<()> {
+        let desc = format!("Write {register_type:?} @ {address} with values {values:?}");
         match register_type {
             RegisterType::Coil => {
                 let coils: Vec<bool> = values.iter().map(|&v| v != 0).collect();
-                timeout_as!(self, slave, write_multiple_coils, (address, &coils))
+                timeout_as!(self, slave, write_multiple_coils, (address, &coils), desc)
             }
-            _ => timeout_as!(self, slave, write_multiple_registers, (address, values)),
+            _ => timeout_as!(
+                self,
+                slave,
+                write_multiple_registers,
+                (address, values),
+                desc
+            ),
         }
     }
 
@@ -515,19 +542,39 @@ impl ModbusDevice {
     }
 
     pub async fn inputs(&self, address: u16, quantity: u16) -> Result<Vec<u16>> {
-        timeout!(self, read_input_registers, (address, quantity))
+        timeout!(
+            self,
+            read_input_registers,
+            (address, quantity),
+            format!("Read Input @ {address} with {quantity} value(s)")
+        )
     }
 
     pub async fn holdings(&self, address: u16, quantity: u16) -> Result<Vec<u16>> {
-        timeout!(self, read_holding_registers, (address, quantity))
+        timeout!(
+            self,
+            read_holding_registers,
+            (address, quantity),
+            format!("Read Holding @ {address} with {quantity} value(s)")
+        )
     }
 
     pub async fn coils(&self, address: u16, quantity: u16) -> Result<Vec<bool>> {
-        timeout!(self, read_coils, (address, quantity))
+        timeout!(
+            self,
+            read_coils,
+            (address, quantity),
+            format!("Read Coil @ {address} with {quantity} value(s)")
+        )
     }
 
     pub async fn discretes(&self, address: u16, quantity: u16) -> Result<Vec<bool>> {
-        timeout!(self, read_discrete_inputs, (address, quantity))
+        timeout!(
+            self,
+            read_discrete_inputs,
+            (address, quantity),
+            format!("Read Discrete @ {address} with {quantity} value(s)")
+        )
     }
 
     fn assemble_words(&self, data: &[u16]) -> Vec<u32> {
@@ -600,19 +647,39 @@ impl ModbusDevice {
     }
 
     pub async fn write_register(&self, address: u16, data: u16) -> Result<()> {
-        timeout!(self, write_single_register, (address, data))
+        timeout!(
+            self,
+            write_single_register,
+            (address, data),
+            format!("Write Holding @ {address} with value {data}")
+        )
     }
 
     pub async fn write_registers(&self, address: u16, data: &[u16]) -> Result<()> {
-        timeout!(self, write_multiple_registers, (address, data))
+        timeout!(
+            self,
+            write_multiple_registers,
+            (address, data),
+            format!("Write Holding @ {address} with values {data:?}")
+        )
     }
 
     pub async fn write_coil(&self, address: u16, data: bool) -> Result<()> {
-        timeout!(self, write_single_coil, (address, data))
+        timeout!(
+            self,
+            write_single_coil,
+            (address, data),
+            format!("Write Coil @ {address} with value {data}")
+        )
     }
 
     pub async fn write_coils(&self, address: u16, data: &[bool]) -> Result<()> {
-        timeout!(self, write_multiple_coils, (address, data))
+        timeout!(
+            self,
+            write_multiple_coils,
+            (address, data),
+            format!("Write Coil @ {address} with values {data:?}")
+        )
     }
 
     pub async fn write_register_word(&self, address: u16, data: i32) -> Result<()> {
@@ -637,7 +704,11 @@ impl ModbusDevice {
         timeout!(
             self,
             read_device_identification,
-            (access.into_read_code(), object_id)
+            (access.into_read_code(), object_id),
+            format!(
+                "Read device identification {} object {object_id}",
+                access.label()
+            )
         )
     }
 
@@ -673,7 +744,12 @@ impl ModbusDevice {
     }
 
     pub async fn custom(&self, code: u8, data: &[u8]) -> Result<Vec<u8>> {
-        let response = timeout!(self, call, (Request::Custom(code, data.into())))?;
+        let response = timeout!(
+            self,
+            call,
+            (Request::Custom(code, data.into())),
+            format!("Raw function 0x{code:02X} with data {data:?}")
+        )?;
         match response {
             Response::Custom(_, bytes) => Ok(bytes.to_vec()),
             _ => anyhow::bail!("Unexpected response type."),
