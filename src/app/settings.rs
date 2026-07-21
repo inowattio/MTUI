@@ -117,6 +117,9 @@ impl App {
             }
             SettingsField::ShowRam => self.config.show_ram = !self.config.show_ram,
             SettingsField::ShowAscii => self.config.show_ascii = !self.config.show_ascii,
+            SettingsField::ShowInactiveTabs => {
+                self.config.show_inactive_tabs = !self.config.show_inactive_tabs
+            }
             SettingsField::StartupPanel => {
                 self.config.startup.panel =
                     cycle(&ReadPanel::ALL, self.config.startup.panel, delta > 0);

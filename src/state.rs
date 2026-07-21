@@ -446,6 +446,7 @@ field_enum! {
         ShowFrameTime,
         ShowRam,
         ShowAscii,
+        ShowInactiveTabs,
         ThemeBorder,
         ThemeAccent,
         ThemeText,
@@ -481,6 +482,7 @@ impl SettingsField {
                 | SettingsField::ShowFrameTime
                 | SettingsField::ShowRam
                 | SettingsField::ShowAscii
+                | SettingsField::ShowInactiveTabs
                 | SettingsField::StartupPanel
                 | SettingsField::StartupType
                 | SettingsField::IgnoreDirty
@@ -573,6 +575,7 @@ impl SettingsCategory {
                 ShowFrameTime,
                 ShowRam,
                 ShowAscii,
+                ShowInactiveTabs,
                 ShowContinuation,
             ],
             SettingsCategory::Theme => &[

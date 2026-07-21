@@ -303,6 +303,11 @@ fn field_view(
             on_off(device.show_ascii),
             Kind::Toggle,
         ),
+        SettingsField::ShowInactiveTabs => (
+            "Show inactive tabs",
+            on_off(device.show_inactive_tabs),
+            Kind::Toggle,
+        ),
         SettingsField::ThemeBorder => color_view("Border", device.theme.border),
         SettingsField::ThemeAccent => color_view("Accent / titles", device.theme.accent),
         SettingsField::ThemeText => color_view("Text", device.theme.text),

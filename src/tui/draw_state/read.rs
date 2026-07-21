@@ -15,7 +15,10 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Axis, Block, Cell, Chart, Dataset, GraphType, Paragraph, Row, Table};
 use ratatui::Frame;
 
-fn panel_block(theme: &Theme, active: ReadPanel) -> Block<'static> {
+fn panel_block(theme: &Theme, active: ReadPanel, show_inactive: bool) -> Block<'static> {
+    if !show_inactive {
+        return theme.tabbed_panel(&[active.name()], 0);
+    }
     let names = ReadPanel::ALL.map(ReadPanel::name);
     let index = ReadPanel::ALL.iter().position(|&p| p == active);
     theme.tabbed_panel(&names, index.unwrap_or(0))
@@ -127,7 +130,7 @@ impl TableCtx<'_> {
             rows.push((text, style));
         }
 
-        let mut block = panel_block(theme, ReadPanel::Main);
+        let mut block = panel_block(theme, ReadPanel::Main, app.config.show_inactive_tabs);
         if let Some(error) = &params.read_error {
             block = block.title_bottom(
                 Line::styled(format!("\u{26a0} {error}"), theme.err_style()).left_aligned(),
@@ -178,7 +181,7 @@ impl TableCtx<'_> {
             rows.push((text, style));
         }
 
-        let mut block = panel_block(theme, params.panel);
+        let mut block = panel_block(theme, params.panel, app.config.show_inactive_tabs);
         if let Some(ascii) = ascii {
             block = block.title_top(ascii_title(ascii, theme));
         }
@@ -232,7 +235,7 @@ impl TableCtx<'_> {
             table_rows,
             Cell::from(header),
             theme,
-            panel_block(theme, ReadPanel::Matrix),
+            panel_block(theme, ReadPanel::Matrix, app.config.show_inactive_tabs),
         )
     }
 }
@@ -295,10 +298,14 @@ pub fn draw(
     ]);
 
     let cycle = &app.config.cycle_types;
-    let types: Vec<RegisterType> = RegisterType::ALL
-        .into_iter()
-        .filter(|&t| cycle.enabled(t) || t == info_type)
-        .collect();
+    let types: Vec<RegisterType> = if app.config.show_inactive_tabs {
+        RegisterType::ALL
+            .into_iter()
+            .filter(|&t| cycle.enabled(t) || t == info_type)
+            .collect()
+    } else {
+        vec![info_type]
+    };
     let active = types.iter().position(|&t| t == info_type).unwrap_or(0);
 
     let names: Vec<String> = types
@@ -395,7 +402,11 @@ pub fn draw(
             if len == 0 {
                 let t = Table::new(Vec::<Row>::new(), [Constraint::Percentage(100)])
                     .header(Row::new([Cell::from(header)]).style(theme.header_style()))
-                    .block(panel_block(theme, params.panel));
+                    .block(panel_block(
+                        theme,
+                        params.panel,
+                        app.config.show_inactive_tabs,
+                    ));
                 frame.render_widget(t, rows[1]);
 
                 let kb = &app.config.keybinds;
