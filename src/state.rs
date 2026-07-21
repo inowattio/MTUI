@@ -558,9 +558,13 @@ impl SettingsCategory {
                 CycleDiscretes,
             ],
             SettingsCategory::Api => &[ApiPort, ApiSlaveOverride, LogWrites],
-            SettingsCategory::Display => {
-                &[ShowClock, ShowFrameTime, ShowRam, ShowAscii, ShowContinuation]
-            }
+            SettingsCategory::Display => &[
+                ShowClock,
+                ShowFrameTime,
+                ShowRam,
+                ShowAscii,
+                ShowContinuation,
+            ],
             SettingsCategory::Theme => &[
                 ThemeBorder,
                 ThemeAccent,
