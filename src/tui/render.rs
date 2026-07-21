@@ -22,6 +22,14 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         let clock = Local::now().format("%H:%M:%S.%3f").to_string();
         clock_spans.push(Span::styled(format!("{clock} "), theme.accent_style()));
     }
+    if app.config.show_ram {
+        if let Some(bytes) = crate::compat::ram_bytes() {
+            clock_spans.push(Span::styled(
+                format!("{:.1}MiB ", bytes as f64 / (1024. * 1024.)),
+                theme.dim_style(),
+            ));
+        }
+    }
     if app.config.show_frame_time {
         clock_spans.push(Span::styled(
             format!("{:.2?}ms ", app.last_frame.as_micros() as f64 / 1000.),

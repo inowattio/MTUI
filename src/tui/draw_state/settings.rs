@@ -287,6 +287,7 @@ fn field_view(
             on_off(device.show_frame_time),
             Kind::Toggle,
         ),
+        SettingsField::ShowRam => ("Show RAM usage", on_off(device.show_ram), Kind::Toggle),
         SettingsField::ShowAscii => (
             "Show ASCII of all data",
             on_off(device.show_ascii),

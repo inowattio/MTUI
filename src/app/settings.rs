@@ -111,6 +111,7 @@ impl App {
             SettingsField::ShowFrameTime => {
                 self.config.show_frame_time = !self.config.show_frame_time
             }
+            SettingsField::ShowRam => self.config.show_ram = !self.config.show_ram,
             SettingsField::ShowAscii => self.config.show_ascii = !self.config.show_ascii,
             SettingsField::StartupPanel => {
                 self.config.startup.panel =

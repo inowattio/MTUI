@@ -8,6 +8,18 @@ pub async fn sleep(duration: Duration) {
     futures_timer::Delay::new(duration).await;
 }
 
+/// Resident set size of the current process, in bytes.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn ram_bytes() -> Option<usize> {
+    memory_stats::memory_stats().map(|stats| stats.physical_mem)
+}
+
+/// Size of the wasm linear memory, in bytes (grows, never shrinks).
+#[cfg(target_arch = "wasm32")]
+pub fn ram_bytes() -> Option<usize> {
+    Some(core::arch::wasm32::memory_size(0) * 65536)
+}
+
 #[derive(Debug)]
 pub struct Elapsed;
 
