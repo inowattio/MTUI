@@ -140,7 +140,13 @@ async fn run_action(app: &mut App, action: KeybindAction) {
         AppLogs => app.open_log_view(),
         Stats => app.open_stats(),
         Sweep => app.open_sweep(),
-        Clear => app.clear_session_data(),
+        Clear => {
+            if app.read().graph {
+                app.clear_graph_history();
+            } else {
+                app.clear_session_data();
+            }
+        }
         NextConfig => app.cycle_config(),
         SwitchView | SwitchViewBack => {
             let rows = app.visible_rows.get();

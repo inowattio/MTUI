@@ -137,6 +137,33 @@ impl App {
         }
     }
 
+    pub fn clear_graph_history(&mut self) {
+        let (kind, address) = self.cursor_cell();
+        let addresses: Vec<u16> = if kind.is_bit() {
+            vec![address]
+        } else {
+            match self.active_graph_column() {
+                Some(Column::Custom) => self
+                    .custom_rule((kind, address))
+                    .map_or_else(|| vec![address], |rule| rule.word_addresses()),
+                Some(column) => {
+                    let width = column.graph_width().unwrap_or(1) as u16;
+                    (0..width).map(|o| address.wrapping_add(o)).collect()
+                }
+                None => vec![address],
+            }
+        };
+        let n: usize = addresses
+            .iter()
+            .filter_map(|&a| self.value_history.remove(&(kind, a)))
+            .map(|h| h.len())
+            .sum();
+        log::info!("Cleared graph history at {address} ({n} sample(s))");
+        self.set_read_status(StatusMessage::ok(format!(
+            "Cleared graph history ({n} sample(s))"
+        )));
+    }
+
     pub fn cycle_graph_interpretation(&mut self) {
         let cols = self.graphable_columns();
         if cols.is_empty() {
