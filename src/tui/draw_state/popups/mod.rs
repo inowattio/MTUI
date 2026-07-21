@@ -50,7 +50,16 @@ pub fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup
         Popup::Label(l) => label::draw(frame, area, theme, kb, l),
         Popup::Custom(c) => custom::draw(frame, area, theme, app, c),
         Popup::Columns(params) => columns::draw(frame, area, theme, app, params),
-        Popup::Write(write) => write::draw(frame, area, theme, kb, write),
+        Popup::Write(write) => {
+            write::draw(
+                frame,
+                area,
+                theme,
+                kb,
+                write,
+                app.write_custom_preview(write),
+            );
+        }
         Popup::Slave(value) => slave::draw(frame, area, theme, kb, *value),
         Popup::SweepConfig(s) => sweep_config::draw(frame, area, theme, kb, s, app.sweep.active),
         Popup::Logs(logs) => logs::draw(frame, area, theme, kb, logs),

@@ -37,9 +37,10 @@ pub(super) fn draw(
     theme: &Theme,
     kb: &Keybinds,
     write: &WriteParams,
+    custom: Option<String>,
 ) {
     if write.write_type == WriteType::Coil {
-        draw_coil(frame, area, theme, kb, write);
+        draw_coil(frame, area, theme, kb, write, custom);
         return;
     }
 
@@ -142,9 +143,15 @@ pub(super) fn draw(
         Line::default(),
         value_line,
         Line::from(vec![continuation(), detail]),
-        Line::from(bit_spans),
-        caret_line,
     ];
+    if let Some(text) = custom {
+        lines.push(Line::from(vec![
+            label("Custom", theme),
+            Span::styled(text, theme.base()),
+        ]));
+    }
+    lines.push(Line::from(bit_spans));
+    lines.push(caret_line);
 
     let dword = write.write_type == WriteType::DWord;
     let func = if write.force_multiple || dword {
@@ -182,7 +189,14 @@ fn alt_view(typed: i64, unsigned: i64, signed: i64, bits: u16) -> Option<String>
     }
 }
 
-fn draw_coil(frame: &mut Frame, area: Rect, theme: &Theme, kb: &Keybinds, write: &WriteParams) {
+fn draw_coil(
+    frame: &mut Frame,
+    area: Rect,
+    theme: &Theme,
+    kb: &Keybinds,
+    write: &WriteParams,
+    custom: Option<String>,
+) {
     let on = write.value.unwrap_or(0) != 0;
     let (state, state_style) = if on {
         ("\u{25c9} ON", theme.ok_style())
@@ -197,6 +211,12 @@ fn draw_coil(frame: &mut Frame, area: Rect, theme: &Theme, kb: &Keybinds, write:
             Span::styled(state, state_style),
         ]),
     ];
+    if let Some(text) = custom {
+        lines.push(Line::from(vec![
+            label("Custom", theme),
+            Span::styled(text, theme.base()),
+        ]));
+    }
 
     push_result(&mut lines, theme, write);
 

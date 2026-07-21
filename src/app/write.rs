@@ -1,5 +1,6 @@
 use super::{App, BackgroundTask, PendingWrite, WriteOutcome, WriteType};
 use crate::compat;
+use crate::constants::UNINTERPRETABLE;
 use crate::register::RegisterType;
 use crate::state::{Popup, StatusMessage, WriteParams};
 
@@ -63,6 +64,43 @@ impl App {
         if let Some(device) = &mut self.device {
             device.set_word_order(next);
         }
+    }
+
+    pub fn write_custom_preview(&self, w: &WriteParams) -> Option<String> {
+        let number = w.value?;
+        let kind = if w.write_type == WriteType::Coil {
+            RegisterType::Coil
+        } else {
+            RegisterType::Holding
+        };
+        let cell = (kind, w.position);
+        let rule = self.custom_rule(cell)?;
+
+        let write_registers = if w.write_type == WriteType::DWord {
+            2
+        } else {
+            1
+        };
+        if rule.repr.register_count() < write_registers {
+            return Some(UNINTERPRETABLE.to_string());
+        }
+
+        let order = self.config.device.word_order;
+        let (value, second) = match w.write_type {
+            WriteType::Coil => ((number != 0) as u16, None),
+            WriteType::Word => (number as u16, None),
+            WriteType::DWord => {
+                let [first, second] = order.split_word(number as u32);
+                (first, Some(second))
+            }
+        };
+        let at = |address: u16| {
+            if address == w.position.wrapping_add(1) && second.is_some() {
+                return second;
+            }
+            self.read_log.get(&(kind, address)).map(|&(v, _)| v)
+        };
+        self.custom_value(cell, value, order, &at)
     }
 
     pub fn commit_write(&mut self) {
