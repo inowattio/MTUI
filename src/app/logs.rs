@@ -2,7 +2,7 @@ use super::{App, WriteType};
 use crate::modbus::Interface;
 use crate::state::{LogViewParams, LogsParams, Popup, ReadPanel, State, StatusMessage};
 use crate::writes_log::{SharedWritesLog, WriteKind};
-use chrono::{Local, SecondsFormat};
+use chrono::Local;
 use std::fs;
 
 impl App {
@@ -149,19 +149,23 @@ impl App {
             return StatusMessage::info("Nothing read yet to dump.");
         }
 
-        let filename = format!("dump_{}.txt", Local::now().format("%Y%m%d_%H%M%S"));
+        let now = Local::now();
+        let filename = format!("dump_{}.txt", now.format("%Y%m%d_%H%M%S"));
 
-        let mut out = String::from("read_at\ttype\taddress\thex\tdecimal\tlabel\n");
-        for (&(kind, address), &(value, read_at)) in &self.read_log {
-            let label = self
-                .labels
-                .get(&(kind, address))
-                .map(String::as_str)
-                .unwrap_or("");
-            out.push_str(&format!(
-                "{}\t{kind:?}\t{address}\t{value:04X}\t{value}\t{label}\n",
-                read_at.to_rfc3339_opts(SecondsFormat::Millis, true),
-            ));
+        let mut out = String::new();
+        let mut last_kind = None;
+        for &cell in self.read_log.keys() {
+            if last_kind != Some(cell.0) {
+                if last_kind.is_some() {
+                    out.push('\n');
+                }
+                out.push_str(&format!("{:?}\n{}\n", cell.0, self.interpreter.header()));
+                last_kind = Some(cell.0);
+            }
+            if let Some((row, _)) = self.cell_row(cell, now) {
+                out.push_str(row.trim_end());
+                out.push('\n');
+            }
         }
 
         match fs::write(&filename, out) {
