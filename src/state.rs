@@ -430,6 +430,8 @@ field_enum! {
         ApiPort,
         ApiSlaveOverride,
         StartupPanel,
+        StartupType,
+        StartupAddress,
         CycleHoldings,
         CycleInputs,
         CycleCoils,
@@ -480,6 +482,7 @@ impl SettingsField {
                 | SettingsField::ShowRam
                 | SettingsField::ShowAscii
                 | SettingsField::StartupPanel
+                | SettingsField::StartupType
                 | SettingsField::IgnoreDirty
                 | SettingsField::ShowMock
                 | SettingsField::CycleHoldings
@@ -545,7 +548,14 @@ impl SettingsCategory {
     pub fn fields(self) -> &'static [SettingsField] {
         use SettingsField::*;
         match self {
-            SettingsCategory::General => &[Name, StartupPanel, IgnoreDirty, ShowMock],
+            SettingsCategory::General => &[
+                Name,
+                StartupPanel,
+                StartupType,
+                StartupAddress,
+                IgnoreDirty,
+                ShowMock,
+            ],
             SettingsCategory::Data => &[
                 RegistersBatch,
                 AutoUpdate,

@@ -241,6 +241,16 @@ fn field_view(
             device.startup.panel.name().to_string(),
             Kind::Toggle,
         ),
+        SettingsField::StartupType => (
+            "Startup type",
+            device.startup.register_type.name().to_string(),
+            Kind::Toggle,
+        ),
+        SettingsField::StartupAddress => (
+            "Startup address",
+            device.startup.address.to_string(),
+            Kind::Number,
+        ),
         SettingsField::CycleHoldings => (
             "Cycle holdings",
             on_off(device.cycle_types.holdings),

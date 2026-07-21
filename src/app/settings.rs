@@ -1,6 +1,7 @@
 use super::App;
 
 use crate::num_ops::cycle;
+use crate::register::RegisterType;
 use crate::state::{ReadPanel, SettingsField, SettingsParams, State, StatusMessage};
 use crate::tui::theme::{self, Theme};
 use ratatui::style::Color;
@@ -64,6 +65,7 @@ impl App {
             SettingsField::RegistersBatch
             | SettingsField::HistoryCap
             | SettingsField::MatrixCols => Some((1, u16::MAX as i64, 1)),
+            SettingsField::StartupAddress => Some((0, u16::MAX as i64, 1)),
             SettingsField::AutoUpdate => Some((0, u32::MAX as i64, 100)),
             SettingsField::ApiPort => Some((-1, u16::MAX as i64, 1)),
             _ => None,
@@ -76,6 +78,7 @@ impl App {
             SettingsField::AutoUpdate => self.config.update_interval_ms.map_or(0, |n| n as i64),
             SettingsField::HistoryCap => self.config.graph_history_cap as i64,
             SettingsField::MatrixCols => self.config.matrix_cols as i64,
+            SettingsField::StartupAddress => self.config.startup.address as i64,
             SettingsField::ApiPort => self.config.port.map_or(-1, |p| p as i64),
             _ => 0,
         }
@@ -89,6 +92,7 @@ impl App {
             }
             SettingsField::HistoryCap => self.config.graph_history_cap = value as u16,
             SettingsField::MatrixCols => self.config.matrix_cols = value as u16,
+            SettingsField::StartupAddress => self.config.startup.address = value as u16,
             SettingsField::ApiPort => self.config.port = (value >= 0).then_some(value as u16),
             _ => {}
         }
@@ -116,6 +120,13 @@ impl App {
             SettingsField::StartupPanel => {
                 self.config.startup.panel =
                     cycle(&ReadPanel::ALL, self.config.startup.panel, delta > 0);
+            }
+            SettingsField::StartupType => {
+                self.config.startup.register_type = cycle(
+                    &RegisterType::ALL,
+                    self.config.startup.register_type,
+                    delta > 0,
+                );
             }
             SettingsField::CycleHoldings
             | SettingsField::CycleInputs
