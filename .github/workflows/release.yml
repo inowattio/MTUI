@@ -40,11 +40,29 @@ jobs:
             exit 1
           fi
 
-      - name: Bump version, commit and tag
+      - name: Bump version
+        run: sed -i "0,/^version = /s/^version = .*/version = \"${{ inputs.version }}\"/" Cargo.toml
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Install demo gif dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fonts-dejavu-core fonts-freefont-ttf imagemagick
+          pip install pyte
+
+      - name: Regenerate demo gif
+        run: python3 .github/resources/demo.py
+
+      - name: Commit and tag
         id: tag
         run: |
           VERSION="${{ inputs.version }}"
-          sed -i "0,/^version = /s/^version = .*/version = \"$VERSION\"/" Cargo.toml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -am "chore: release v$VERSION"
