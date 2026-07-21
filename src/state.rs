@@ -822,7 +822,7 @@ impl Default for ReadParams {
             pinned_top: 0,
             popup: None,
             graph: false,
-            graph_column: Column::U16,
+            graph_column: Column::Custom,
             refresh_timer: Instant::now(),
             register_type: Default::default(),
             read_duration: None,
