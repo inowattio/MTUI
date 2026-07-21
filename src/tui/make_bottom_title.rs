@@ -1,4 +1,5 @@
 use crate::app::App;
+use crate::input::KeyCode;
 use crate::state::{SettingsFocus, State};
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
@@ -34,10 +35,12 @@ pub fn make_bottom_title(theme: &Theme, app: &App) -> Line<'static> {
             };
             hints::footer(theme, [primary, Hint::key(kb.exit, "Back")])
         }
-        State::Logs(_) => hints::footer(
+        State::Logs(l) => hints::footer(
             theme,
             [
                 Hint::pair(kb.move_up, kb.move_down, "Scroll"),
+                Hint::pair(KeyCode::Left, KeyCode::Right, "Pan"),
+                Hint::key(kb.write, if l.wrap { "Unwrap" } else { "Wrap" }),
                 Hint::key(kb.exit, "Back"),
             ],
         ),

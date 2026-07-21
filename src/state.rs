@@ -918,6 +918,8 @@ impl ConnectionStatus {
 pub struct LogViewParams {
     pub top: u16,
     pub follow: bool,
+    pub h_offset: u16,
+    pub wrap: bool,
     pub previous: ReadParams,
 }
 

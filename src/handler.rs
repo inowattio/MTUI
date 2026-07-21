@@ -621,6 +621,9 @@ fn handle_logs_view_key(key_event: KeyEvent, app: &mut App) {
         c if c == kb.move_down => app.log_view_scroll(1),
         c if c == kb.page_up => app.log_view_scroll(-(app.visible_rows.get() as i32)),
         c if c == kb.page_down => app.log_view_scroll(app.visible_rows.get() as i32),
+        c if c == kb.write => app.log_view_toggle_wrap(),
+        KeyCode::Left => app.log_view_hscroll(false),
+        KeyCode::Right => app.log_view_hscroll(true),
         _ => {}
     }
 }

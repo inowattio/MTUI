@@ -46,9 +46,18 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     let mut left_top = vec![status_span(&app.connection, &theme)];
     left_top.extend(live);
 
+    let mut mode_spans = Vec::new();
+    if let State::Logs(l) = &app.state {
+        mode_spans.push(Span::styled(
+            format!(" {} \u{b7}", draw_state::logs::counter(l, app)),
+            theme.dim_style(),
+        ));
+    }
+    mode_spans.push(Span::styled(format!(" {mode}"), theme.base()));
+
     let mut outer = Block::default()
         .title_top(Line::from(left_top))
-        .title_top(Line::styled(format!(" {mode}"), theme.base()).right_aligned())
+        .title_top(Line::from(mode_spans).right_aligned())
         .title_bottom(clock_line)
         .title_bottom(key_hints.right_aligned())
         .style(Style::default().fg(theme.border))

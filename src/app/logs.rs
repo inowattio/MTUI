@@ -97,9 +97,34 @@ impl App {
         self.state = State::Logs(LogViewParams {
             top: 0,
             follow: true,
+            h_offset: 0,
+            wrap: false,
             previous,
         });
         self.log_view_scroll(i32::MAX);
+    }
+
+    pub fn log_view_hscroll(&mut self, right: bool) {
+        const STEP: u16 = 8;
+        let max = self.h_max_offset.get();
+        if let Some(l) = self.log_view_mut() {
+            if l.wrap {
+                return;
+            }
+            let current = l.h_offset.min(max);
+            l.h_offset = if right {
+                (current + STEP).min(max)
+            } else {
+                current.saturating_sub(STEP)
+            };
+        }
+    }
+
+    pub fn log_view_toggle_wrap(&mut self) {
+        if let Some(l) = self.log_view_mut() {
+            l.wrap = !l.wrap;
+            l.h_offset = 0;
+        }
     }
 
     pub fn close_log_view(&mut self) {
