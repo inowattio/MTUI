@@ -27,24 +27,42 @@ impl App {
             return;
         }
 
-        let value = self
-            .previous_values
-            .get(&(kind, write_pos))
-            .map(|&v| v as i64);
-
         let write_type = if kind == RegisterType::Coil {
             WriteType::Coil
+        } else if self
+            .custom_rule((kind, write_pos))
+            .is_some_and(|rule| rule.repr.register_count() >= 2)
+        {
+            WriteType::DWord
         } else {
             WriteType::Word
         };
 
+        let value = match write_type {
+            WriteType::DWord => {
+                let lo = self.previous_values.get(&(kind, write_pos));
+                let hi = self.previous_values.get(&(kind, write_pos.wrapping_add(1)));
+                match (lo, hi) {
+                    (Some(&a), Some(&b)) => {
+                        Some(self.config.device.word_order.make_word(a, b) as i64)
+                    }
+                    _ => None,
+                }
+            }
+            _ => self
+                .previous_values
+                .get(&(kind, write_pos))
+                .map(|&v| v as i64),
+        };
+
+        let bit_cursor = write_type.bits() - 1;
         let p = self.read_mut();
         p.status = None;
         p.popup = Some(Popup::Write(WriteParams {
             position: write_pos,
             value,
             write_type,
-            bit_cursor: 15,
+            bit_cursor,
             ..Default::default()
         }));
     }
