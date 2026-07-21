@@ -1,5 +1,6 @@
 use crate::app::App;
 use crate::config::Keybinds;
+use crate::constants::NO_VALUE;
 use crate::interpretator::format_ago;
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
@@ -36,7 +37,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, kb: &Keybinds, 
         Some((min, avg, max)) => {
             format!("{min:.2?} min \u{b7} {avg:.2?} avg \u{b7} {max:.2?} max")
         }
-        None => "--".to_string(),
+        None => NO_VALUE.to_string(),
     };
 
     let mut lines: Vec<Line> = vec![

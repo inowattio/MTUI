@@ -1,4 +1,5 @@
 use crate::config::{Column, InterpretorConfig};
+use crate::constants::{NO_VALUE, UNINTERPRETABLE};
 use crate::modbus::WordOrder;
 use crate::register::RegisterCellValue;
 use chrono::{DateTime, Local};
@@ -40,7 +41,7 @@ impl RowCtx {
             next,
             word,
             dword: order.make_dword(word, second),
-            custom: custom.unwrap_or("--").to_string(),
+            custom: custom.unwrap_or(NO_VALUE).to_string(),
         }
     }
 
@@ -60,18 +61,18 @@ const COLUMNS: &[ColumnSpec] = &[
     ColumnSpec { name: "u8s",     width: 8,  enabled: |c| c.u8s,      render: |c, _, o| { let _ = write!(o, "{}/{}", (c.value >> 8) as u8, (c.value & 0xFF) as u8); } },
     ColumnSpec { name: "i8s",     width: 9,  enabled: |c| c.i8s,      render: |c, _, o| { let _ = write!(o, "{}/{}", (c.value >> 8) as u8 as i8, (c.value & 0xFF) as u8 as i8); } },
     ColumnSpec { name: "hex",     width: 4,  enabled: |c| c.hex,      render: |c, _, o| { let _ = write!(o, "{:04X}", c.value); } },
-    ColumnSpec { name: "hex32",   width: 9,  enabled: |c| c.hex32,    render: |c, _, o| if c.two() { let _ = write!(o, "{:08X}", c.word); } else { o.push('-'); } },
+    ColumnSpec { name: "hex32",   width: 9,  enabled: |c| c.hex32,    render: |c, _, o| if c.two() { let _ = write!(o, "{:08X}", c.word); } else { o.push_str(UNINTERPRETABLE); } },
     ColumnSpec { name: "f16",     width: 10, enabled: |c| c.f16,      render: |c, w, o| float_cell(f16_to_f32(c.value), w, o) },
-    ColumnSpec { name: "bcd",     width: 6,  enabled: |c| c.bcd,      render: |c, _, o| match bcd_to_decimal(c.value) { Some(n) => { let _ = write!(o, "{n}"); } None => o.push_str("--") } },
-    ColumnSpec { name: "bcd32",   width: 10, enabled: |c| c.bcd32,    render: |c, _, o| if c.two() { match bcd_to_decimal(c.word) { Some(n) => { let _ = write!(o, "{n}"); } None => o.push_str("--") } } else { o.push('-'); } },
-    ColumnSpec { name: "u32",     width: 10, enabled: |c| c.u32,      render: |c, _, o| if c.two() { let _ = write!(o, "{}", c.word); } else { o.push('-'); } },
-    ColumnSpec { name: "i32",     width: 11, enabled: |c| c.i32,      render: |c, _, o| if c.two() { let _ = write!(o, "{}", c.word as i32); } else { o.push('-'); } },
-    ColumnSpec { name: "u32m10k", width: 11, enabled: |c| c.u32_m10k, render: |c, _, o| if c.two() { let (h, l) = m10k_to_u32(c.word); let _ = write!(o, "{h}/{l}"); } else { o.push('-'); } },
-    ColumnSpec { name: "i32m10k", width: 14, enabled: |c| c.i32_m10k, render: |c, _, o| if c.two() { let (h, l) = m10k_to_i32(c.word); let _ = write!(o, "{h}/{l}"); } else { o.push('-'); } },
-    ColumnSpec { name: "u64",     width: 20, enabled: |c| c.u64,      render: |c, _, o| if c.four() { let _ = write!(o, "{}", c.dword); } else { o.push('-'); } },
-    ColumnSpec { name: "i64",     width: 21, enabled: |c| c.i64,      render: |c, _, o| if c.four() { let _ = write!(o, "{}", c.dword as i64); } else { o.push('-'); } },
-    ColumnSpec { name: "f32",     width: 10, enabled: |c| c.f32,      render: |c, w, o| if c.two() { float_cell(f32::from_bits(c.word), w, o) } else { o.push('-'); } },
-    ColumnSpec { name: "f64",     width: 12, enabled: |c| c.f64,      render: |c, w, o| if c.four() { float_cell(f64::from_bits(c.dword), w, o) } else { o.push('-'); } },
+    ColumnSpec { name: "bcd",     width: 6,  enabled: |c| c.bcd,      render: |c, _, o| match bcd_to_decimal(c.value) { Some(n) => { let _ = write!(o, "{n}"); } None => o.push_str(UNINTERPRETABLE) } },
+    ColumnSpec { name: "bcd32",   width: 10, enabled: |c| c.bcd32,    render: |c, _, o| if c.two() { match bcd_to_decimal(c.word) { Some(n) => { let _ = write!(o, "{n}"); } None => o.push_str(UNINTERPRETABLE) } } else { o.push_str(UNINTERPRETABLE); } },
+    ColumnSpec { name: "u32",     width: 10, enabled: |c| c.u32,      render: |c, _, o| if c.two() { let _ = write!(o, "{}", c.word); } else { o.push_str(UNINTERPRETABLE); } },
+    ColumnSpec { name: "i32",     width: 11, enabled: |c| c.i32,      render: |c, _, o| if c.two() { let _ = write!(o, "{}", c.word as i32); } else { o.push_str(UNINTERPRETABLE); } },
+    ColumnSpec { name: "u32m10k", width: 11, enabled: |c| c.u32_m10k, render: |c, _, o| if c.two() { let (h, l) = m10k_to_u32(c.word); let _ = write!(o, "{h}/{l}"); } else { o.push_str(UNINTERPRETABLE); } },
+    ColumnSpec { name: "i32m10k", width: 14, enabled: |c| c.i32_m10k, render: |c, _, o| if c.two() { let (h, l) = m10k_to_i32(c.word); let _ = write!(o, "{h}/{l}"); } else { o.push_str(UNINTERPRETABLE); } },
+    ColumnSpec { name: "u64",     width: 20, enabled: |c| c.u64,      render: |c, _, o| if c.four() { let _ = write!(o, "{}", c.dword); } else { o.push_str(UNINTERPRETABLE); } },
+    ColumnSpec { name: "i64",     width: 21, enabled: |c| c.i64,      render: |c, _, o| if c.four() { let _ = write!(o, "{}", c.dword as i64); } else { o.push_str(UNINTERPRETABLE); } },
+    ColumnSpec { name: "f32",     width: 10, enabled: |c| c.f32,      render: |c, w, o| if c.two() { float_cell(f32::from_bits(c.word), w, o) } else { o.push_str(UNINTERPRETABLE); } },
+    ColumnSpec { name: "f64",     width: 12, enabled: |c| c.f64,      render: |c, w, o| if c.four() { float_cell(f64::from_bits(c.dword), w, o) } else { o.push_str(UNINTERPRETABLE); } },
     ColumnSpec { name: "ascii",   width: 5,  enabled: |c| c.ascii,    render: |c, _, o| ascii_cell(c.value, c.next[0].unwrap_or_default(), o) },
     ColumnSpec { name: "bits",    width: 19, enabled: |c| c.bits,     render: |c, _, o| bits_cell(c.value, o) },
     ColumnSpec { name: "custom",  width: 18, enabled: |c| c.custom,   render: |c, _, o| o.push_str(&c.custom) },
@@ -200,20 +201,19 @@ impl Interpretor {
     }
 
     pub fn placeholder(&self, address: u16, label: Option<&str>) -> String {
-        let dash = "--";
         let mut row = String::new();
 
         if self.config.time {
-            let _ = write!(row, "{dash:<w$} ", w = TIME_W);
+            let _ = write!(row, "{NO_VALUE:<w$} ", w = TIME_W);
         }
         if self.config.ago {
-            let _ = write!(row, "{dash:<w$} ", w = AGO_W);
+            let _ = write!(row, "{NO_VALUE:<w$} ", w = AGO_W);
         }
         self.write_address(&mut row, address);
 
         for col in COLUMNS {
             if (col.enabled)(&self.config) {
-                let _ = write!(row, "{dash:<w$} ", w = col.width);
+                let _ = write!(row, "{NO_VALUE:<w$} ", w = col.width);
             }
         }
 

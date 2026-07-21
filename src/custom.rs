@@ -1,3 +1,4 @@
+use crate::constants::UNINTERPRETABLE;
 use crate::interpretator::f16_to_f32;
 use crate::modbus::WordOrder;
 use serde::{Deserialize, Serialize};
@@ -257,7 +258,7 @@ impl CustomRule {
         }
 
         let number = if !value.is_finite() {
-            "--".to_string()
+            UNINTERPRETABLE.to_string()
         } else {
             match self.decimals {
                 Some(d) => format!("{value:.*}", d as usize),
@@ -555,7 +556,10 @@ mod tests {
             text: "Off".into(),
         }];
 
-        assert_eq!(r.evaluate(&[0x7FC0, 0x0000], WordOrder::ABCD), "--");
+        assert_eq!(
+            r.evaluate(&[0x7FC0, 0x0000], WordOrder::ABCD),
+            UNINTERPRETABLE
+        );
     }
 
     #[test]
@@ -565,7 +569,7 @@ mod tests {
             op: OpKind::Div,
             v: 0.0,
         }];
-        assert_eq!(r.evaluate(&[10], WordOrder::ABCD), "--");
+        assert_eq!(r.evaluate(&[10], WordOrder::ABCD), UNINTERPRETABLE);
     }
 
     #[test]

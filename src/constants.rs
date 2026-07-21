@@ -2,6 +2,10 @@ use std::time::Duration;
 
 pub const CONFIG_PATH: &str = "config.json";
 
+pub const NO_VALUE: &str = "\u{b7}";
+
+pub const UNINTERPRETABLE: &str = "\u{2205}";
+
 pub const EVENT_HANDLER_TICKRATE: Duration = Duration::from_millis(100);
 
 pub mod keybind {

@@ -1,5 +1,6 @@
 use super::App;
 use crate::config::Column;
+use crate::constants::NO_VALUE;
 use crate::interpretator::{fmt_num, format_ago, graph_value};
 use crate::num_ops::cycle;
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
@@ -217,7 +218,7 @@ impl App {
     fn aggregate_text(&self, cell: RegisterCell, column: Column, mode: InspectMode) -> String {
         let series = self.column_history(cell, column);
         if series.is_empty() {
-            return "--".to_string();
+            return NO_VALUE.to_string();
         }
         let is_float = column.graph_is_float() || series.iter().any(|v| v.fract() != 0.0);
         match mode {

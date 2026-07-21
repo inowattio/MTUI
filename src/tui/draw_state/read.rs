@@ -1,6 +1,7 @@
 use super::popups::draw_popup;
 use crate::app::App;
 use crate::config::Column;
+use crate::constants::{NO_VALUE, UNINTERPRETABLE};
 use crate::interpretator::fmt_num;
 use crate::register::{RegisterCell, RegisterType};
 use crate::state::{ReadPanel, ReadParams};
@@ -216,7 +217,7 @@ impl TableCtx<'_> {
                         let style = theme.row_style(zebra, app.cell_changed(cell));
                         (format!("{value: >5}"), style)
                     }
-                    None => (format!("{: >5}", "--"), theme.dim_style()),
+                    None => (format!("{NO_VALUE: >5}"), theme.dim_style()),
                 };
                 if addr == params.position {
                     style = theme.selected_style();
@@ -484,7 +485,7 @@ fn draw_graph(
     let mode = if bit_plot {
         "bit"
     } else {
-        column.map_or("--", Column::name)
+        column.map_or(UNINTERPRETABLE, Column::name)
     };
     let label = app.label_text(kind, address);
     let title = match &label {
