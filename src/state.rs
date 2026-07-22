@@ -220,6 +220,7 @@ pub struct DeviceIdParams {
     pub objects: Vec<(u8, String)>,
     pub status: Option<StatusMessage>,
     pub loading: bool,
+    pub h_offset: u16,
 }
 
 field_enum! {

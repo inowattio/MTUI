@@ -43,7 +43,21 @@ impl App {
             return;
         };
         params.access = cycle(&DeviceIdAccess::ALL, params.access, forward);
+        params.h_offset = 0;
         self.device_id_refresh();
+    }
+
+    pub fn device_id_hscroll(&mut self, right: bool) {
+        const STEP: u16 = 8;
+        let max = self.h_max_offset.get();
+        if let Some(params) = self.device_id_mut() {
+            let current = params.h_offset.min(max);
+            params.h_offset = if right {
+                (current + STEP).min(max)
+            } else {
+                current.saturating_sub(STEP)
+            };
+        }
     }
 
     pub fn device_id_refresh(&mut self) {

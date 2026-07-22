@@ -213,8 +213,10 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
         PopupKind::DeviceId => match key_event.code {
             c if c == kb.exit || c == kb.device_id => app.close_popup(),
             c if c == kb.refresh || c == kb.action => app.device_id_refresh(),
-            KeyCode::Left => app.device_id_cycle(false),
-            KeyCode::Right => app.device_id_cycle(true),
+            c if c == kb.switch_view => app.device_id_cycle(true),
+            c if c == kb.switch_view_back => app.device_id_cycle(false),
+            KeyCode::Left => app.device_id_hscroll(false),
+            KeyCode::Right => app.device_id_hscroll(true),
             _ => {}
         },
 
