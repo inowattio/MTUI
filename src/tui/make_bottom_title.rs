@@ -16,12 +16,13 @@ pub fn make_bottom_title(theme: &Theme, app: &App) -> Line<'static> {
             ];
             if p.graph {
                 let [panel, read, help] = base;
+                let hold = Hint::key(kb.pin, "Hold");
                 let clear = Hint::key(kb.clear, "Clear");
                 if !app.cursor_cell().0.is_bit() && app.graph_cycle_len() > 1 {
                     let cycle = Hint::key(kb.dump, "Cycle");
-                    hints::footer(theme, [cycle, clear, panel, read, help])
+                    hints::footer(theme, [cycle, hold, clear, panel, read, help])
                 } else {
-                    hints::footer(theme, [clear, panel, read, help])
+                    hints::footer(theme, [hold, clear, panel, read, help])
                 }
             } else {
                 hints::footer(theme, base)

@@ -35,6 +35,11 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         return Ok(());
     }
 
+    if app.read().graph && key_event.code == kb.pin {
+        app.graph_hold_series();
+        return Ok(());
+    }
+
     if let Some(action) = kb.action_for(key_event.code) {
         run_action(app, action).await;
         return Ok(());

@@ -449,10 +449,22 @@ impl App {
         let read_main = sweeping || matches!(panel, ReadPanel::Main | ReadPanel::Matrix);
         self.connection = ConnectionStatus::Reading;
 
+        let mut graph_registers = self.graph_extra_registers();
+        if read_main {
+            let read_end = read_start.saturating_add(amount - 1);
+            graph_registers.retain(|&(kind, address)| {
+                kind != register_type || !(read_start..=read_end).contains(&address)
+            });
+        }
+
         let panel_registers = if read_main {
-            Vec::new()
+            graph_registers
         } else {
-            self.panel_refresh_window(amount as usize)
+            let mut regs = self.panel_refresh_window(amount as usize);
+            regs.extend(graph_registers);
+            regs.sort();
+            regs.dedup();
+            regs
         };
 
         self.background_task = Some(BackgroundTask::Refresh(compat::spawn(async move {
@@ -461,7 +473,16 @@ impl App {
                 let main = Self::aquire_data_with(&device, amount, read_start, register_type)
                     .await
                     .map_err(|e| e.to_string());
-                (Some(main), None)
+                let extra = if panel_registers.is_empty() {
+                    None
+                } else {
+                    Some(
+                        Self::aquire_pinned_data_with(&device, &panel_registers, amount)
+                            .await
+                            .map_err(|e| e.to_string()),
+                    )
+                };
+                (Some(main), extra)
             } else {
                 let pinned = Self::aquire_pinned_data_with(&device, &panel_registers, amount)
                     .await

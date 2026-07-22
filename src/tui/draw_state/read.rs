@@ -9,10 +9,12 @@ use crate::tui::hints::{self, Hint};
 use crate::tui::theme::{spinner_frame, Theme};
 use chrono::Local;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
-use ratatui::style::Style;
+use ratatui::style::{Color, Style};
 use ratatui::symbols;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Axis, Block, Cell, Chart, Dataset, GraphType, Paragraph, Row, Table};
+use ratatui::widgets::{
+    Axis, Block, Cell, Chart, Dataset, GraphType, LegendPosition, Paragraph, Row, Table,
+};
 use ratatui::Frame;
 
 fn panel_block(theme: &Theme, active: ReadPanel, show_inactive: bool) -> Block<'static> {
@@ -515,6 +517,32 @@ pub fn live_status(app: &App, params: &ReadParams, theme: &Theme) -> Vec<Span<'s
     spans
 }
 
+const SERIES_COLORS: [Color; 3] = [Color::LightBlue, Color::LightMagenta, Color::LightYellow];
+
+fn series_history(app: &App, cell: RegisterCell, column: Option<Column>) -> Vec<f64> {
+    if cell.0.is_bit() {
+        app.value_history(cell)
+            .map(|h| h.iter().map(|&v| v as f64).collect())
+            .unwrap_or_default()
+    } else {
+        column.map_or_else(Vec::new, |c| app.column_history(cell, c))
+    }
+}
+
+fn step_points(points: Vec<(f64, f64)>) -> Vec<(f64, f64)> {
+    let mut steps = Vec::with_capacity(points.len() * 2);
+    for pair in points.windows(2) {
+        let (x0, y0) = pair[0];
+        let (x1, _) = pair[1];
+        steps.push((x0, y0));
+        steps.push((x1, y0));
+    }
+    if let Some(&last) = points.last() {
+        steps.push(last);
+    }
+    steps
+}
+
 fn draw_graph(
     frame: &mut Frame,
     area: Rect,
@@ -550,31 +578,16 @@ fn draw_graph(
         return;
     }
 
-    let points: Vec<(f64, f64)> = if bit_plot {
-        app.value_history(cell)
-            .map(|h| {
-                h.iter()
-                    .enumerate()
-                    .map(|(i, &v)| (i as f64, v as f64))
-                    .collect()
-            })
-            .unwrap_or_default()
-    } else {
-        app.column_history(cell, column.unwrap())
-            .into_iter()
-            .enumerate()
-            .map(|(i, v)| (i as f64, v))
-            .collect()
-    };
+    let primary = series_history(app, cell, column);
 
     let is_float = match column {
         _ if bit_plot => false,
-        Some(Column::Custom) => points.iter().any(|&(_, y)| y.fract() != 0.0),
+        Some(Column::Custom) => primary.iter().any(|&y| y.fract() != 0.0),
         Some(c) => c.graph_is_float(),
         None => false,
     };
 
-    if points.len() < 2 {
+    if primary.len() < 2 {
         let kb = &app.config.keybinds;
         let mut spans = vec![Span::styled(
             "Collecting samples\u{2026} read this register a few times  ",
@@ -600,29 +613,54 @@ fn draw_graph(
         .constraints([Constraint::Min(0), Constraint::Length(1)])
         .split(inner);
 
-    let count = points.len();
-    let last = points[count - 1].1;
-    let prev = points[count - 2].1;
+    let held: Vec<(RegisterCell, Vec<f64>)> = app
+        .read()
+        .graph_series
+        .iter()
+        .filter(|&&c| c != cell)
+        .map(|&c| (c, series_history(app, c, column)))
+        .filter(|(_, history)| history.len() >= 2)
+        .collect();
+
+    let count = primary.len();
+    let last = primary[count - 1];
+    let prev = primary[count - 2];
     let delta = last - prev;
     let mut min = f64::MAX;
     let mut max = f64::MIN;
     let mut sum = 0.0;
-    for &(_, y) in &points {
+    for &y in &primary {
         min = min.min(y);
         max = max.max(y);
         sum += y;
     }
     let avg = sum / count as f64;
     let span = max - min;
-    let (y_lo, y_hi) = if bit_plot {
+
+    let (mut lo, mut hi) = (min, max);
+    for (_, history) in &held {
+        for &y in history {
+            lo = lo.min(y);
+            hi = hi.max(y);
+        }
+    }
+
+    let (y_lo, y_hi) = if bit_plot && held.is_empty() {
         (0.0, 1.0)
-    } else if span < f64::EPSILON {
-        (min - 1.0, max + 1.0)
+    } else if (hi - lo).abs() < f64::EPSILON {
+        (lo - 1.0, hi + 1.0)
     } else {
-        let pad = span * 0.08;
-        (min - pad, max + pad)
+        let pad = (hi - lo) * 0.08;
+        (lo - pad, hi + pad)
     };
-    let x_hi = (count - 1) as f64;
+
+    let max_len = held
+        .iter()
+        .map(|(_, history)| history.len())
+        .max()
+        .unwrap_or(0)
+        .max(count);
+    let x_hi = (max_len - 1) as f64;
 
     let y_labels: Vec<Span> = if bit_plot {
         vec![
@@ -637,39 +675,79 @@ fn draw_graph(
             })
             .collect()
     };
+
     let x_labels = vec![
-        Span::styled(format!("-{}", count - 1), theme.dim_style()),
-        Span::styled(format!("-{}", (count - 1) / 2), theme.dim_style()),
+        Span::styled(format!("-{}", max_len - 1), theme.dim_style()),
+        Span::styled(format!("-{}", (max_len - 1) / 2), theme.dim_style()),
         Span::styled("now", theme.accent_style()),
     ];
 
-    // For a square wave, hold each sample's value until the next sample so
-    // the connecting line steps rather than ramps between levels.
-    let stepped: Vec<(f64, f64)>;
-    let plot_data: &[(f64, f64)] = if bit_plot {
-        let mut steps = Vec::with_capacity(points.len() * 2);
-        for pair in points.windows(2) {
-            let (x0, y0) = pair[0];
-            let (x1, _) = pair[1];
-            steps.push((x0, y0));
-            steps.push((x1, y0));
+    let to_points = |history: &[f64]| -> Vec<(f64, f64)> {
+        let offset = (max_len - history.len()) as f64;
+        history
+            .iter()
+            .enumerate()
+            .map(|(i, &v)| (offset + i as f64, v))
+            .collect()
+    };
+    let series_points = |c: RegisterCell, history: &[f64]| {
+        let points = to_points(history);
+        if c.0.is_bit() {
+            step_points(points)
+        } else {
+            points
         }
-        if let Some(&last) = points.last() {
-            steps.push(last);
-        }
-        stepped = steps;
-        &stepped
-    } else {
-        &points
+    };
+    let series_name = |c: RegisterCell| {
+        app.label_text(c.0, c.1)
+            .unwrap_or_else(|| format!("{}{}", c.0.marker(), c.1))
     };
 
-    let datasets = vec![Dataset::default()
+    let primary_points = series_points(cell, &primary);
+    let held_points: Vec<(RegisterCell, Vec<(f64, f64)>)> = held
+        .iter()
+        .map(|(c, history)| (*c, series_points(*c, history)))
+        .collect();
+
+    let mut names: Vec<String> = held_points
+        .iter()
+        .map(|&(c, _)| series_name(c))
+        .chain(std::iter::once(series_name(cell)))
+        .collect();
+    let name_width = names.iter().map(|n| n.chars().count()).max().unwrap_or(0);
+    for name in &mut names {
+        while name.chars().count() < name_width {
+            name.push(' ');
+        }
+    }
+    let primary_name = names.pop().unwrap_or_default();
+
+    let mut datasets: Vec<Dataset> = held_points
+        .iter()
+        .zip(names)
+        .enumerate()
+        .map(|(i, ((_, points), name))| {
+            Dataset::default()
+                .name(name)
+                .marker(symbols::Marker::Braille)
+                .graph_type(GraphType::Line)
+                .style(Style::default().fg(SERIES_COLORS[i % SERIES_COLORS.len()]))
+                .data(points)
+        })
+        .collect();
+    let mut primary_dataset = Dataset::default()
         .marker(symbols::Marker::Braille)
         .graph_type(GraphType::Line)
         .style(theme.accent_style())
-        .data(plot_data)];
+        .data(&primary_points);
+    if !held_points.is_empty() {
+        primary_dataset = primary_dataset.name(primary_name);
+    }
+    datasets.push(primary_dataset);
 
     let chart = Chart::new(datasets)
+        .hidden_legend_constraints((Constraint::Ratio(1, 2), Constraint::Ratio(1, 2)))
+        .legend_position(Some(LegendPosition::BottomLeft))
         .x_axis(
             Axis::default()
                 .title(Span::styled("samples", theme.dim_style()))

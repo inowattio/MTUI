@@ -1,5 +1,6 @@
 use super::{fuzzy_rank, App};
 use crate::config::Column;
+use crate::register::RegisterCell;
 use crate::state::{ColumnsParams, Popup, StatusMessage};
 
 impl App {
@@ -87,6 +88,26 @@ impl App {
         p.graph = !p.graph;
     }
 
+    pub fn graph_hold_series(&mut self) {
+        const MAX_HELD: usize = 3;
+        let cell = self.cursor_cell();
+        let name = self
+            .label_text(cell.0, cell.1)
+            .unwrap_or_else(|| format!("{}{}", cell.0.marker(), cell.1));
+
+        let p = self.read_mut();
+        let message = if let Some(i) = p.graph_series.iter().position(|&c| c == cell) {
+            p.graph_series.remove(i);
+            StatusMessage::ok(format!("Released \u{201c}{name}\u{201d} from the graph"))
+        } else if p.graph_series.len() >= MAX_HELD {
+            StatusMessage::warn(format!("Up to {MAX_HELD} held series"))
+        } else {
+            p.graph_series.push(cell);
+            StatusMessage::ok(format!("Holding \u{201c}{name}\u{201d} on the graph"))
+        };
+        self.set_read_status(message);
+    }
+
     pub fn copy_address(&mut self) {
         #[cfg(not(target_arch = "wasm32"))]
         let message = {
@@ -125,6 +146,29 @@ impl App {
 
     pub fn graph_cycle_len(&self) -> usize {
         self.graphable_columns().len()
+    }
+
+    pub(super) fn graph_extra_registers(&self) -> Vec<RegisterCell> {
+        if !self.read().graph {
+            return Vec::new();
+        }
+        let column = self.active_graph_column();
+        let mut regs: Vec<RegisterCell> = Vec::new();
+        for &(kind, address) in &self.read().graph_series {
+            if kind.is_bit() {
+                regs.push((kind, address));
+            } else if column == Some(Column::Custom) {
+                if let Some(rule) = self.custom_rule((kind, address)) {
+                    regs.extend(rule.word_addresses().into_iter().map(|a| (kind, a)));
+                }
+            } else {
+                let width = column.and_then(Column::graph_width).unwrap_or(1) as u16;
+                regs.extend((0..width).map(|o| (kind, address.wrapping_add(o))));
+            }
+        }
+        regs.sort();
+        regs.dedup();
+        regs
     }
 
     pub fn active_graph_column(&self) -> Option<Column> {
