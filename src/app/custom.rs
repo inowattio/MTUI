@@ -221,7 +221,7 @@ impl App {
         match built {
             Ok((cell, rule)) => {
                 self.custom_rules.insert(cell, rule);
-                self.dirty = true;
+                self.refresh_dirty();
                 self.read_mut().popup = None;
                 log::info!("Custom rule set \u{b7} {:?}@{}", cell.0, cell.1);
             }
@@ -237,7 +237,7 @@ impl App {
             return;
         };
         if self.custom_rules.remove(&cell).is_some() {
-            self.dirty = true;
+            self.refresh_dirty();
             log::info!("Custom rule removed \u{b7} {:?}@{}", cell.0, cell.1);
         }
         self.read_mut().popup = None;

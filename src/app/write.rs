@@ -82,6 +82,7 @@ impl App {
         if let Some(device) = &mut self.device {
             device.set_word_order(next);
         }
+        self.refresh_dirty();
     }
 
     pub fn write_custom_preview(&self, w: &WriteParams) -> Option<String> {

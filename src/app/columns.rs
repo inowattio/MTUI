@@ -192,5 +192,6 @@ impl App {
 
     pub fn toggle_column(&mut self, column: Column) {
         self.interpreter.toggle(column);
+        self.refresh_dirty();
     }
 }

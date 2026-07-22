@@ -175,7 +175,7 @@ impl App {
         } else {
             self.labels.insert(key, text);
         }
-        self.dirty = true;
+        self.refresh_dirty();
 
         self.read_mut().popup = None;
     }

@@ -326,6 +326,7 @@ pub struct App {
     pub paused: bool,
     pub headless: bool,
     pub dirty: bool,
+    saved_config: String,
     pub sweep: SweepState,
     pub stats: CommStats,
     reconnect: ReconnectState,

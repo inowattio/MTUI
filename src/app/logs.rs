@@ -7,7 +7,7 @@ use std::fs;
 
 impl App {
     fn note_cleared(&mut self, n: usize, noun: &str) {
-        self.dirty = true;
+        self.refresh_dirty();
         log::info!("Cleared {n} {noun}(s)");
         self.set_settings_status(StatusMessage::ok(format!("Cleared {n} {noun}(s)")));
     }
@@ -225,7 +225,7 @@ impl App {
         };
 
         self.pinned_registers.sort();
-        self.dirty = true;
+        self.refresh_dirty();
 
         let len = self.panel_len();
         let scroll_rows = self.panel_scroll_rows();

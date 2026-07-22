@@ -49,6 +49,7 @@ impl App {
             paused: false,
             headless: false,
             dirty: false,
+            saved_config: String::new(),
             sweep: SweepState::default(),
             stats: CommStats::default(),
             reconnect: ReconnectState::default(),
@@ -84,6 +85,7 @@ impl App {
         };
 
         app.apply_config(config, device);
+        app.mark_config_saved();
         app.visible_rows.set(app.config.registers_batch.max(1));
 
         if app.device.is_some() {

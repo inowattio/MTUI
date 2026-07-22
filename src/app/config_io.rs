@@ -73,7 +73,7 @@ impl App {
             self.custom_rules.extend(incoming);
         }
 
-        self.dirty = true;
+        self.refresh_dirty();
         self.close_popup();
         log::info!("Imported {pins} pin(s), {labels} label(s), {rules} rule(s) from clipboard");
         self.set_read_status(StatusMessage::ok(format!(
@@ -81,18 +81,36 @@ impl App {
         )));
     }
 
-    pub(super) fn persist_config(&mut self) -> Outcome {
-        self.config.labels = (&self.labels).into();
+    fn effective_config(&self) -> Config {
+        let mut config = self.config.clone();
+        config.labels = (&self.labels).into();
 
         let rebuilt: CustomRules = (&self.custom_rules).into();
-        self.config.custom_rules.holdings = rebuilt.holdings;
-        self.config.custom_rules.inputs = rebuilt.inputs;
-        self.config.custom_rules.coils = rebuilt.coils;
-        self.config.custom_rules.discretes = rebuilt.discretes;
+        config.custom_rules.holdings = rebuilt.holdings;
+        config.custom_rules.inputs = rebuilt.inputs;
+        config.custom_rules.coils = rebuilt.coils;
+        config.custom_rules.discretes = rebuilt.discretes;
 
-        self.config.pinned_registers = self.pinned_registers.as_slice().into();
+        config.pinned_registers = self.pinned_registers.as_slice().into();
+        config.interpretations = self.interpreter.config();
+        config
+    }
 
-        self.config.interpretations = self.interpreter.config();
+    fn serialize_config(config: &Config) -> String {
+        serde_json::to_string(config).unwrap_or_default()
+    }
+
+    pub(super) fn mark_config_saved(&mut self) {
+        self.saved_config = Self::serialize_config(&self.effective_config());
+        self.dirty = false;
+    }
+
+    pub(super) fn refresh_dirty(&mut self) {
+        self.dirty = Self::serialize_config(&self.effective_config()) != self.saved_config;
+    }
+
+    pub(super) fn persist_config(&mut self) -> Outcome {
+        self.config = self.effective_config();
         if let State::Read(p) = &self.state {
             self.config.startup = Startup {
                 address: p.position,
@@ -101,9 +119,13 @@ impl App {
             };
         }
 
-        save_config(&self.config_path, &self.config)
+        let result = save_config(&self.config_path, &self.config)
             .map(|()| format!("Saved to {}", self.config_path))
-            .map_err(|e| format!("Save failed: {e}"))
+            .map_err(|e| format!("Save failed: {e}"));
+        if result.is_ok() {
+            self.mark_config_saved();
+        }
+        result
     }
 
     pub fn config_path(&self) -> &str {
@@ -143,7 +165,7 @@ impl App {
                     self.apply_config(*config, Some(device));
 
                     self.config_path = path.clone();
-                    self.dirty = false;
+                    self.mark_config_saved();
 
                     let read = self.startup_read_params();
                     match &mut self.state {

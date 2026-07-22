@@ -154,7 +154,7 @@ impl App {
         self.refresh_writes_log_state();
         self.sync_api_read_only();
         self.sync_api_allow_slave_id();
-        self.dirty = true;
+        self.refresh_dirty();
     }
 
     pub fn settings_digit(&mut self, field: SettingsField, digit: u8) {
@@ -166,7 +166,7 @@ impl App {
                 };
                 let value = (current * 10 + digit as i64).clamp(0, 255) as u8;
                 *slot = Color::Indexed(value);
-                self.dirty = true;
+                self.refresh_dirty();
             }
             return;
         }
@@ -175,7 +175,7 @@ impl App {
         };
         let value = (self.numeric_get(field).max(0) * 10 + digit as i64).clamp(min, max);
         self.numeric_set(field, value);
-        self.dirty = true;
+        self.refresh_dirty();
     }
 
     pub fn settings_text_input(&mut self, field: SettingsField, c: char) {
@@ -187,11 +187,11 @@ impl App {
             }
             SettingsField::Name => {
                 self.config.name.push(c);
-                self.dirty = true;
+                self.refresh_dirty();
             }
             SettingsField::NextConfig => {
                 self.config.next_config.push(c);
-                self.dirty = true;
+                self.refresh_dirty();
             }
             _ => {}
         }
@@ -206,12 +206,12 @@ impl App {
         }
         if field == SettingsField::Name {
             self.config.name.pop();
-            self.dirty = true;
+            self.refresh_dirty();
             return;
         }
         if field == SettingsField::NextConfig {
             self.config.next_config.pop();
-            self.dirty = true;
+            self.refresh_dirty();
             return;
         }
         if field.is_theme_color() {
@@ -225,7 +225,7 @@ impl App {
                         }
                     }
                 }
-                self.dirty = true;
+                self.refresh_dirty();
             }
             return;
         }
@@ -234,16 +234,13 @@ impl App {
         };
         let value = self.numeric_get(field);
         self.numeric_set(field, if value >= 10 { value / 10 } else { min });
-        self.dirty = true;
+        self.refresh_dirty();
     }
 
     pub fn settings_save(&mut self) {
         let result = self.persist_config();
         match &result {
-            Ok(_) => {
-                self.dirty = false;
-                log::info!("Configuration saved");
-            }
+            Ok(_) => log::info!("Configuration saved"),
             Err(error) => log::error!("Save failed \u{b7} {error}"),
         }
         self.set_settings_status(result.into());

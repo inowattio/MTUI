@@ -135,7 +135,7 @@ impl App {
                 self.refresh_writes_log_state();
                 self.interpreter.set_word_order(config.word_order);
                 self.config.device = config;
-                self.dirty = true;
+                self.refresh_dirty();
                 self.clear_read_accumulation();
                 self.connection = ConnectionStatus::Unknown;
                 self.logged_connection = ConnectionStatus::Unknown;
