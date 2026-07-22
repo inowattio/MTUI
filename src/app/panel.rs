@@ -222,7 +222,11 @@ impl App {
     }
 
     fn aggregate_text(&self, cell: RegisterCell, column: Column, mode: InspectMode) -> String {
-        let series = self.column_history(cell, column);
+        let series: Vec<f64> = self
+            .column_history(cell, column)
+            .into_iter()
+            .map(|(_, v)| v)
+            .collect();
         if series.is_empty() {
             return NO_VALUE.to_string();
         }
@@ -248,7 +252,7 @@ impl App {
         }
     }
 
-    pub fn column_history(&self, cell: RegisterCell, column: Column) -> Vec<f64> {
+    pub fn column_history(&self, cell: RegisterCell, column: Column) -> Vec<(DateTime<Utc>, f64)> {
         let order = self.config.device.word_order;
         if column == Column::Custom {
             let Some(rule) = self.custom_rule(cell) else {
@@ -265,7 +269,12 @@ impl App {
         self.combined_history(cell.0, &addresses, |regs| graph_value(column, order, regs))
     }
 
-    fn combined_history<F>(&self, kind: RegisterType, addresses: &[u16], mut value: F) -> Vec<f64>
+    fn combined_history<F>(
+        &self,
+        kind: RegisterType,
+        addresses: &[u16],
+        mut value: F,
+    ) -> Vec<(DateTime<Utc>, f64)>
     where
         F: FnMut(&[u16]) -> Option<f64>,
     {
@@ -282,10 +291,14 @@ impl App {
         let mut values = Vec::with_capacity(len);
         for i in 0..len {
             for (k, history) in histories.iter().enumerate() {
-                regs[k] = history[history.len() - len + i];
+                regs[k] = history[history.len() - len + i].0;
             }
+
+            // The words of one sample come from the same batch read, so the
+            // first word's timestamp stands for the whole sample
+            let at = histories[0][histories[0].len() - len + i].1;
             if let Some(v) = value(&regs) {
-                values.push(v);
+                values.push((at, v));
             }
         }
         values
@@ -295,7 +308,7 @@ impl App {
         self.custom_rules.len()
     }
 
-    pub fn value_history(&self, cell: RegisterCell) -> Option<&VecDeque<u16>> {
+    pub fn value_history(&self, cell: RegisterCell) -> Option<&VecDeque<(u16, DateTime<Utc>)>> {
         self.value_history.get(&cell)
     }
 

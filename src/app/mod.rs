@@ -340,7 +340,7 @@ pub struct App {
     previous_values: BTreeMap<RegisterCell, u16>,
     changed: BTreeMap<RegisterCell, DateTime<Utc>>,
     read_log: BTreeMap<RegisterCell, (u16, DateTime<Utc>)>,
-    value_history: BTreeMap<RegisterCell, VecDeque<u16>>,
+    value_history: BTreeMap<RegisterCell, VecDeque<(u16, DateTime<Utc>)>>,
     labels: BTreeMap<RegisterCell, String>,
     custom_rules: BTreeMap<RegisterCell, CustomRule>,
     pending_write: Option<PendingWrite>,

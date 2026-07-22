@@ -449,6 +449,7 @@ field_enum! {
         ShowAscii,
         ShowInactiveTabs,
         ShowReadWindow,
+        GraphTimeAxis,
         ChangedExpiry,
         ThemeBorder,
         ThemeAccent,
@@ -487,6 +488,7 @@ impl SettingsField {
                 | SettingsField::ShowAscii
                 | SettingsField::ShowInactiveTabs
                 | SettingsField::ShowReadWindow
+                | SettingsField::GraphTimeAxis
                 | SettingsField::StartupPanel
                 | SettingsField::StartupType
                 | SettingsField::IgnoreDirty
@@ -581,6 +583,7 @@ impl SettingsCategory {
                 ShowAscii,
                 ShowInactiveTabs,
                 ShowReadWindow,
+                GraphTimeAxis,
                 ChangedExpiry,
                 ShowContinuation,
             ],

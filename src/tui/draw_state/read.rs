@@ -7,7 +7,7 @@ use crate::register::{RegisterCell, RegisterType};
 use crate::state::{ReadPanel, ReadParams};
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::{spinner_frame, Theme};
-use chrono::Local;
+use chrono::{DateTime, Local, Utc};
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::symbols;
@@ -519,13 +519,57 @@ pub fn live_status(app: &App, params: &ReadParams, theme: &Theme) -> Vec<Span<'s
 
 const SERIES_COLORS: [Color; 3] = [Color::LightBlue, Color::LightMagenta, Color::LightYellow];
 
-fn series_history(app: &App, cell: RegisterCell, column: Option<Column>) -> Vec<f64> {
+/// A series of (sample time, value) points.
+type Series = Vec<(DateTime<Utc>, f64)>;
+
+fn series_history(app: &App, cell: RegisterCell, column: Option<Column>) -> Series {
     if cell.0.is_bit() {
         app.value_history(cell)
-            .map(|h| h.iter().map(|&v| v as f64).collect())
+            .map(|h| h.iter().map(|&(v, t)| (t, v as f64)).collect())
             .unwrap_or_default()
     } else {
         column.map_or_else(Vec::new, |c| app.column_history(cell, c))
+    }
+}
+
+fn split_gaps(points: Vec<(f64, f64)>) -> Vec<Vec<(f64, f64)>> {
+    if points.len() < 3 {
+        return vec![points];
+    }
+    let mut deltas: Vec<f64> = points.windows(2).map(|w| w[1].0 - w[0].0).collect();
+    deltas.sort_by(f64::total_cmp);
+    let gap = (deltas[deltas.len() / 2] * 2.5).max(1.0);
+
+    let mut segments = Vec::new();
+    let mut current: Vec<(f64, f64)> = Vec::new();
+    for point in points {
+        if current.last().is_some_and(|&(x, _)| point.0 - x > gap) {
+            segments.push(std::mem::take(&mut current));
+        }
+        current.push(point);
+    }
+    segments.push(current);
+    segments
+}
+
+fn segment_dataset(segment: &[(f64, f64)], style: Style) -> Dataset<'_> {
+    Dataset::default()
+        .marker(symbols::Marker::Braille)
+        .graph_type(if segment.len() == 1 {
+            GraphType::Scatter
+        } else {
+            GraphType::Line
+        })
+        .style(style)
+        .data(segment)
+}
+
+fn fmt_secs_ago(x: f64) -> String {
+    let ago = -x;
+    if ago >= 120.0 {
+        format!("-{:.0}m", ago / 60.0)
+    } else {
+        format!("-{ago:.0}s")
     }
 }
 
@@ -582,7 +626,7 @@ fn draw_graph(
 
     let is_float = match column {
         _ if bit_plot => false,
-        Some(Column::Custom) => primary.iter().any(|&y| y.fract() != 0.0),
+        Some(Column::Custom) => primary.iter().any(|&(_, y)| y.fract() != 0.0),
         Some(c) => c.graph_is_float(),
         None => false,
     };
@@ -610,10 +654,15 @@ fn draw_graph(
 
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Min(0), Constraint::Length(1)])
+        .constraints([
+            Constraint::Min(0),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+        ])
         .split(inner);
 
-    let held: Vec<(RegisterCell, Vec<f64>)> = app
+    let held: Vec<(RegisterCell, Series)> = app
         .read()
         .graph_series
         .iter()
@@ -623,13 +672,13 @@ fn draw_graph(
         .collect();
 
     let count = primary.len();
-    let last = primary[count - 1];
-    let prev = primary[count - 2];
+    let last = primary[count - 1].1;
+    let prev = primary[count - 2].1;
     let delta = last - prev;
     let mut min = f64::MAX;
     let mut max = f64::MIN;
     let mut sum = 0.0;
-    for &y in &primary {
+    for &(_, y) in &primary {
         min = min.min(y);
         max = max.max(y);
         sum += y;
@@ -639,7 +688,7 @@ fn draw_graph(
 
     let (mut lo, mut hi) = (min, max);
     for (_, history) in &held {
-        for &y in history {
+        for &(_, y) in history {
             lo = lo.min(y);
             hi = hi.max(y);
         }
@@ -654,62 +703,90 @@ fn draw_graph(
         (lo - pad, hi + pad)
     };
 
+    let time_axis = app.config.graph_time_axis;
+    let now = Utc::now();
+    let rel = |t: DateTime<Utc>| -(now.signed_duration_since(t).num_milliseconds() as f64 / 1000.0);
     let max_len = held
         .iter()
         .map(|(_, history)| history.len())
         .max()
         .unwrap_or(0)
-        .max(count);
-    let x_hi = (max_len - 1) as f64;
+        .max(primary.len());
+    let x_lo = if time_axis {
+        let mut x_lo = rel(primary[0].0);
+        for (_, history) in &held {
+            if let Some(&(t, _)) = history.first() {
+                x_lo = x_lo.min(rel(t));
+            }
+        }
+        x_lo.min(-1.0)
+    } else {
+        -((max_len - 1) as f64)
+    };
 
+    let plot_h = chunks[0].height.max(2) as usize;
+    let y_count = [5usize, 6, 4, 7, 3]
+        .into_iter()
+        .find(|n| (plot_h - 1).is_multiple_of(n - 1))
+        .unwrap_or(5);
     let y_labels: Vec<Span> = if bit_plot {
         vec![
             Span::styled("0", theme.dim_style()),
             Span::styled("1", theme.dim_style()),
         ]
     } else {
-        (0..=4)
+        (0..y_count)
             .map(|i| {
-                let v = y_lo + (y_hi - y_lo) * (i as f64 / 4.0);
+                let v = y_lo + (y_hi - y_lo) * (i as f64 / (y_count - 1) as f64);
                 Span::styled(fmt_num(v, is_float), theme.dim_style())
             })
             .collect()
     };
+    let y_gutter = y_labels.iter().map(Span::width).max().unwrap_or(0);
 
-    let x_labels = vec![
-        Span::styled(format!("-{}", max_len - 1), theme.dim_style()),
-        Span::styled(format!("-{}", (max_len - 1) / 2), theme.dim_style()),
-        Span::styled("now", theme.accent_style()),
-    ];
-
-    let to_points = |history: &[f64]| -> Vec<(f64, f64)> {
-        let offset = (max_len - history.len()) as f64;
-        history
-            .iter()
-            .enumerate()
-            .map(|(i, &v)| (offset + i as f64, v))
-            .collect()
-    };
-    let series_points = |c: RegisterCell, history: &[f64]| {
-        let points = to_points(history);
-        if c.0.is_bit() {
-            step_points(points)
+    let to_points = |history: &[(DateTime<Utc>, f64)]| -> Vec<(f64, f64)> {
+        if time_axis {
+            history.iter().map(|&(t, v)| (rel(t), v)).collect()
         } else {
-            points
+            let base = 1.0 - history.len() as f64;
+            history
+                .iter()
+                .enumerate()
+                .map(|(i, &(_, v))| (base + i as f64, v))
+                .collect()
         }
+    };
+    let series_segments = |c: RegisterCell, history: &[(DateTime<Utc>, f64)]| {
+        let points = to_points(history);
+        let segments = if time_axis {
+            split_gaps(points)
+        } else {
+            vec![points]
+        };
+        segments
+            .into_iter()
+            .map(|segment| {
+                if c.0.is_bit() {
+                    step_points(segment)
+                } else {
+                    segment
+                }
+            })
+            .collect::<Vec<_>>()
     };
     let series_name = |c: RegisterCell| {
         app.label_text(c.0, c.1)
             .unwrap_or_else(|| format!("{}{}", c.0.marker(), c.1))
     };
 
-    let primary_points = series_points(cell, &primary);
-    let held_points: Vec<(RegisterCell, Vec<(f64, f64)>)> = held
+    let primary_segments = series_segments(cell, &primary);
+    type Segments = Vec<Vec<(f64, f64)>>;
+    let held_segments: Vec<(RegisterCell, Segments)> = held
         .iter()
-        .map(|(c, history)| (*c, series_points(*c, history)))
+        .map(|(c, history)| (*c, series_segments(*c, history)))
         .collect();
 
-    let mut names: Vec<String> = held_points
+    let mut names: Vec<String> = held_segments
         .iter()
         .map(|&(c, _)| series_name(c))
         .chain(std::iter::once(series_name(cell)))
@@ -722,39 +799,29 @@ fn draw_graph(
     }
     let primary_name = names.pop().unwrap_or_default();
 
-    let mut datasets: Vec<Dataset> = held_points
-        .iter()
-        .zip(names)
-        .enumerate()
-        .map(|(i, ((_, points), name))| {
-            Dataset::default()
-                .name(name)
-                .marker(symbols::Marker::Braille)
-                .graph_type(GraphType::Line)
-                .style(Style::default().fg(SERIES_COLORS[i % SERIES_COLORS.len()]))
-                .data(points)
-        })
-        .collect();
-    let mut primary_dataset = Dataset::default()
-        .marker(symbols::Marker::Braille)
-        .graph_type(GraphType::Line)
-        .style(theme.accent_style())
-        .data(&primary_points);
-    if !held_points.is_empty() {
-        primary_dataset = primary_dataset.name(primary_name);
+    let mut datasets: Vec<Dataset> = Vec::new();
+    for (i, ((_, segments), name)) in held_segments.iter().zip(names).enumerate() {
+        let style = Style::default().fg(SERIES_COLORS[i % SERIES_COLORS.len()]);
+        for (j, segment) in segments.iter().enumerate() {
+            let mut dataset = segment_dataset(segment, style);
+            if j == 0 {
+                dataset = dataset.name(name.clone());
+            }
+            datasets.push(dataset);
+        }
     }
-    datasets.push(primary_dataset);
+    for (j, segment) in primary_segments.iter().enumerate() {
+        let mut dataset = segment_dataset(segment, theme.accent_style());
+        if j == 0 && !held_segments.is_empty() {
+            dataset = dataset.name(primary_name.clone());
+        }
+        datasets.push(dataset);
+    }
 
     let chart = Chart::new(datasets)
         .hidden_legend_constraints((Constraint::Ratio(1, 2), Constraint::Ratio(1, 2)))
         .legend_position(Some(LegendPosition::BottomLeft))
-        .x_axis(
-            Axis::default()
-                .title(Span::styled("samples", theme.dim_style()))
-                .style(theme.dim_style())
-                .bounds([0.0, x_hi])
-                .labels(x_labels),
-        )
+        .x_axis(Axis::default().style(theme.dim_style()).bounds([x_lo, 0.0]))
         .y_axis(
             Axis::default()
                 .title(Span::styled("value", theme.dim_style()))
@@ -763,6 +830,51 @@ fn draw_graph(
                 .labels(y_labels),
         );
     frame.render_widget(chart, chunks[0]);
+
+    let width = chunks[1].width as usize;
+    let mut axis_line = " ".repeat(y_gutter.min(width));
+    axis_line.push('\u{2514}');
+    axis_line.push_str(&"\u{2500}".repeat(width.saturating_sub(y_gutter + 1)));
+    frame.render_widget(
+        Paragraph::new(Line::from(Span::styled(axis_line, theme.dim_style()))),
+        chunks[1],
+    );
+
+    let plot_left = y_gutter + 1;
+    let plot_w = width.saturating_sub(plot_left).max(2);
+    let mut row: Vec<char> = vec![' '; width];
+    let mut now_start = width;
+    const X_TICKS: usize = 5;
+    for i in 0..X_TICKS {
+        let f = i as f64 / (X_TICKS - 1) as f64;
+        let text = if i == X_TICKS - 1 {
+            "now".to_string()
+        } else if time_axis {
+            fmt_secs_ago(x_lo * (1.0 - f))
+        } else {
+            format!("{:.0}", x_lo * (1.0 - f))
+        };
+        let len = text.chars().count();
+        let center = plot_left + (f * (plot_w - 1) as f64).round() as usize;
+        let start = center
+            .saturating_sub(len / 2)
+            .min(width.saturating_sub(len));
+        if i == X_TICKS - 1 {
+            now_start = start;
+        }
+        for (k, ch) in text.chars().enumerate() {
+            row[start + k] = ch;
+        }
+    }
+    let row: String = row.into_iter().collect();
+    let (dim_part, now_part) = row.split_at(now_start.min(row.len()));
+    frame.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::styled(dim_part.to_string(), theme.dim_style()),
+            Span::styled(now_part.to_string(), theme.accent_style()),
+        ])),
+        chunks[2],
+    );
 
     let delta_style = if delta > 0.0 {
         theme.ok_style()
@@ -800,5 +912,5 @@ fn draw_graph(
         Span::styled("  n ", theme.dim_style()),
         Span::styled(format!("{count}"), theme.base()),
     ]);
-    frame.render_widget(Paragraph::new(footer), chunks[1]);
+    frame.render_widget(Paragraph::new(footer), chunks[3]);
 }

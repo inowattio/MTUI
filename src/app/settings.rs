@@ -129,6 +129,9 @@ impl App {
             SettingsField::ShowReadWindow => {
                 self.config.show_read_window = !self.config.show_read_window
             }
+            SettingsField::GraphTimeAxis => {
+                self.config.graph_time_axis = !self.config.graph_time_axis
+            }
             SettingsField::StartupPanel => {
                 self.config.startup.panel =
                     cycle(&ReadPanel::ALL, self.config.startup.panel, delta > 0);

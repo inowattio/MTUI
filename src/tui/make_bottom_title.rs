@@ -20,7 +20,7 @@ pub fn make_bottom_title(theme: &Theme, app: &App) -> Line<'static> {
                 let clear = Hint::key(kb.clear, "Clear");
                 if !app.cursor_cell().0.is_bit() && app.graph_cycle_len() > 1 {
                     let cycle = Hint::key(kb.dump, "Cycle");
-                    hints::footer(theme, [cycle, hold, clear, panel, read, help])
+                    hints::footer(theme, [cycle, hold, clear, read, help])
                 } else {
                     hints::footer(theme, [hold, clear, panel, read, help])
                 }

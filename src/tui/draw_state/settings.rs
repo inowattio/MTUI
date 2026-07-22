@@ -313,6 +313,15 @@ fn field_view(
             on_off(device.show_read_window),
             Kind::Toggle,
         ),
+        SettingsField::GraphTimeAxis => (
+            "Graph X axis",
+            if device.graph_time_axis {
+                "time".to_string()
+            } else {
+                "samples".to_string()
+            },
+            Kind::Toggle,
+        ),
         SettingsField::ChangedExpiry => (
             "Changed highlight (ms)",
             device

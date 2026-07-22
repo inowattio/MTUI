@@ -537,7 +537,7 @@ impl App {
                 self.read_log.insert(cell, (value, read_at));
 
                 let history = self.value_history.entry(cell).or_default();
-                history.push_back(value);
+                history.push_back((value, read_at));
                 while history.len() > history_cap {
                     history.pop_front();
                 }
