@@ -74,9 +74,7 @@ impl Theme {
     }
 
     pub fn changed_style(&self) -> Style {
-        Style::default()
-            .fg(self.changed)
-            .add_modifier(Modifier::BOLD)
+        Style::default().fg(self.changed)
     }
 
     pub fn selected_style(&self) -> Style {
