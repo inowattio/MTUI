@@ -206,6 +206,10 @@ impl App {
     }
 
     pub fn request_quit(&mut self) {
+        if self.read().graph {
+            self.read_mut().graph = false;
+            return;
+        }
         if self.dirty && !self.config.ignore_dirty {
             self.read_mut().popup = Some(Popup::Quit);
         } else {
