@@ -66,7 +66,9 @@ impl App {
             | SettingsField::HistoryCap
             | SettingsField::MatrixCols => Some((1, u16::MAX as i64, 1)),
             SettingsField::StartupAddress => Some((0, u16::MAX as i64, 1)),
-            SettingsField::AutoUpdate => Some((0, u32::MAX as i64, 100)),
+            SettingsField::AutoUpdate | SettingsField::ChangedExpiry => {
+                Some((0, u32::MAX as i64, 100))
+            }
             SettingsField::ApiPort => Some((-1, u16::MAX as i64, 1)),
             _ => None,
         }
@@ -76,6 +78,7 @@ impl App {
         match field {
             SettingsField::RegistersBatch => self.config.registers_batch as i64,
             SettingsField::AutoUpdate => self.config.update_interval_ms.map_or(0, |n| n as i64),
+            SettingsField::ChangedExpiry => self.config.changed_expiry_ms.map_or(0, |n| n as i64),
             SettingsField::HistoryCap => self.config.graph_history_cap as i64,
             SettingsField::MatrixCols => self.config.matrix_cols as i64,
             SettingsField::StartupAddress => self.config.startup.address as i64,
@@ -89,6 +92,9 @@ impl App {
             SettingsField::RegistersBatch => self.config.registers_batch = value as u16,
             SettingsField::AutoUpdate => {
                 self.config.update_interval_ms = (value > 0).then_some(value as u64)
+            }
+            SettingsField::ChangedExpiry => {
+                self.config.changed_expiry_ms = (value > 0).then_some(value as u64)
             }
             SettingsField::HistoryCap => self.config.graph_history_cap = value as u16,
             SettingsField::MatrixCols => self.config.matrix_cols = value as u16,

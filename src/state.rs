@@ -448,6 +448,7 @@ field_enum! {
         ShowAscii,
         ShowInactiveTabs,
         ShowReadWindow,
+        ChangedExpiry,
         ThemeBorder,
         ThemeAccent,
         ThemeText,
@@ -579,6 +580,7 @@ impl SettingsCategory {
                 ShowAscii,
                 ShowInactiveTabs,
                 ShowReadWindow,
+                ChangedExpiry,
                 ShowContinuation,
             ],
             SettingsCategory::Theme => &[

@@ -165,7 +165,13 @@ impl App {
     }
 
     pub fn cell_changed(&self, cell: RegisterCell) -> bool {
-        self.changed.get(&cell).copied().unwrap_or(false)
+        let Some(&at) = self.changed.get(&cell) else {
+            return false;
+        };
+        match self.config.changed_expiry_ms {
+            None => true,
+            Some(ms) => Utc::now().signed_duration_since(at).num_milliseconds() < ms as i64,
+        }
     }
 
     pub fn inspect_lines(&self, mode: InspectMode) -> (RegisterCell, Vec<(&'static str, String)>) {

@@ -338,7 +338,7 @@ pub struct App {
     #[cfg(not(target_arch = "wasm32"))]
     network_scan_task: Option<TaskHandle<Vec<String>>>,
     previous_values: BTreeMap<RegisterCell, u16>,
-    changed: BTreeMap<RegisterCell, bool>,
+    changed: BTreeMap<RegisterCell, DateTime<Utc>>,
     read_log: BTreeMap<RegisterCell, (u16, DateTime<Utc>)>,
     value_history: BTreeMap<RegisterCell, VecDeque<u16>>,
     labels: BTreeMap<RegisterCell, String>,

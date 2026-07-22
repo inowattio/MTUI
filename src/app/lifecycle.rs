@@ -509,7 +509,9 @@ impl App {
             for &(cell, value) in data {
                 let did_change =
                     matches!(self.previous_values.get(&cell), Some(&prev) if prev != value);
-                self.changed.insert(cell, did_change);
+                if did_change {
+                    self.changed.insert(cell, read_at);
+                }
                 self.previous_values.insert(cell, value);
                 self.read_log.insert(cell, (value, read_at));
 
