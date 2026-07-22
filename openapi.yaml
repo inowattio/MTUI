@@ -1,6 +1,6 @@
 openapi: 3.1.0
 info:
-  title: mtui HTTP API
+  title: MTUI HTTP API
   description: |
     HTTP API exposed by MTUI for reading and writing Modbus
     registers on the currently connected device, plus a health probe.
@@ -8,9 +8,10 @@ info:
     The server binds to `0.0.0.0` on a configurable port and proxies requests
     to the live Modbus device backing the TUI. When no device is connected,
     register operations return `503 Service Unavailable`.
-  version: 0.2.2
+  version: 0.9.4
   license:
-    name: See repository
+    name: GPL-2.0-only
+    identifier: GPL-2.0-only
 
 servers:
   - url: http://{host}:{port}
@@ -116,13 +117,13 @@ paths:
                 summary: Write one holding register
                 value:
                   type: Holding
-                  address: 40001
+                  address: 50
                   values: [1234]
               multiple:
                 summary: Write three consecutive holding registers
                 value:
                   type: Holding
-                  address: 40001
+                  address: 50
                   values: [1234, 5678, 9012]
               coils:
                 summary: Write three consecutive coils (on, off, on)
@@ -134,7 +135,7 @@ paths:
                 summary: Write one holding register to slave 5
                 value:
                   type: Holding
-                  address: 40001
+                  address: 50
                   values: [1234]
                   slave_id: 5
       responses:
