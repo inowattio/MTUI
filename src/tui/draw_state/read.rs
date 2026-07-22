@@ -104,6 +104,10 @@ impl TableCtx<'_> {
         let now = Local::now();
         let mut rows: Vec<(String, Style)> = Vec::with_capacity(visible as usize);
 
+        let show_window = app.config.show_read_window;
+        let (read_start, read_amount) = app.read_window();
+        let read_end = read_start.saturating_add(read_amount - 1);
+
         for i in 0..visible {
             let Some(addr) = params.window_start.checked_add(i) else {
                 break;
@@ -127,7 +131,16 @@ impl TableCtx<'_> {
                 base_style
             };
 
-            rows.push((text, style));
+            if show_window {
+                let marker = if (read_start..=read_end).contains(&addr) {
+                    "\u{258e}"
+                } else {
+                    " "
+                };
+                rows.push((format!("{marker}{text}"), style));
+            } else {
+                rows.push((text, style));
+            }
         }
 
         let mut block = panel_block(theme, ReadPanel::Main, app.config.show_inactive_tabs);
@@ -139,7 +152,12 @@ impl TableCtx<'_> {
             block = block.title_top(ascii_title(ascii, theme));
         }
 
-        self.scrollable_table(rows, header, app.interpreter.prefix_width(), block)
+        if show_window {
+            let header = format!(" {header}");
+            self.scrollable_table(rows, &header, 1 + app.interpreter.prefix_width(), block)
+        } else {
+            self.scrollable_table(rows, header, app.interpreter.prefix_width(), block)
+        }
     }
 
     fn list_table(

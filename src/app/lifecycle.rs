@@ -409,6 +409,23 @@ impl App {
         Ok(collection)
     }
 
+    pub fn read_window(&self) -> (u16, u16) {
+        let sweeping = self.sweep.active;
+        let amount = if sweeping && self.sweep.errored {
+            1
+        } else {
+            self.config.registers_batch.max(1)
+        };
+        let position = self.read().position;
+        let max_read_start = u16::MAX - (amount - 1);
+        let start = if sweeping {
+            position.min(max_read_start)
+        } else {
+            position.saturating_sub(amount / 2).min(max_read_start)
+        };
+        (start, amount)
+    }
+
     pub async fn refresh(&mut self) {
         if self.background_task.is_some() || !self.is_reading() {
             return;
@@ -418,26 +435,15 @@ impl App {
         };
 
         let sweeping = self.sweep.active;
-        let amount = if sweeping && self.sweep.errored {
-            1
-        } else {
-            self.config.registers_batch.max(1)
-        };
+        let (read_start, amount) = self.read_window();
         let visible = self.visible_rows.get().max(1);
         let cols = self.config.matrix_cols;
-        let (panel, position, register_type) = {
+        let (panel, register_type) = {
             let p = self.read_mut();
             p.refresh_timer = Instant::now();
             p.loading = true;
             p.scroll_to_cursor(visible, cols);
-            (p.panel, p.position, p.register_type)
-        };
-        let max_read_start = u16::MAX - (amount - 1);
-
-        let read_start = if sweeping {
-            position.min(max_read_start)
-        } else {
-            position.saturating_sub(amount / 2).min(max_read_start)
+            (p.panel, p.register_type)
         };
 
         let read_main = sweeping || matches!(panel, ReadPanel::Main | ReadPanel::Matrix);

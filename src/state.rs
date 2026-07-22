@@ -447,6 +447,7 @@ field_enum! {
         ShowRam,
         ShowAscii,
         ShowInactiveTabs,
+        ShowReadWindow,
         ThemeBorder,
         ThemeAccent,
         ThemeText,
@@ -483,6 +484,7 @@ impl SettingsField {
                 | SettingsField::ShowRam
                 | SettingsField::ShowAscii
                 | SettingsField::ShowInactiveTabs
+                | SettingsField::ShowReadWindow
                 | SettingsField::StartupPanel
                 | SettingsField::StartupType
                 | SettingsField::IgnoreDirty
@@ -576,6 +578,7 @@ impl SettingsCategory {
                 ShowRam,
                 ShowAscii,
                 ShowInactiveTabs,
+                ShowReadWindow,
                 ShowContinuation,
             ],
             SettingsCategory::Theme => &[

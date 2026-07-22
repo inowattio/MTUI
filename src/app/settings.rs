@@ -120,6 +120,9 @@ impl App {
             SettingsField::ShowInactiveTabs => {
                 self.config.show_inactive_tabs = !self.config.show_inactive_tabs
             }
+            SettingsField::ShowReadWindow => {
+                self.config.show_read_window = !self.config.show_read_window
+            }
             SettingsField::StartupPanel => {
                 self.config.startup.panel =
                     cycle(&ReadPanel::ALL, self.config.startup.panel, delta > 0);
