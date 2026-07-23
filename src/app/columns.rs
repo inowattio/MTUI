@@ -1,6 +1,6 @@
 use super::{fuzzy_rank, App};
 use crate::config::Column;
-use crate::num_ops::step_hscroll;
+use crate::num_ops::{step_hscroll, wrap_index};
 use crate::register::RegisterCell;
 use crate::state::{ColumnsParams, Popup, StatusMessage};
 
@@ -55,12 +55,7 @@ impl App {
             } else {
                 (rows, count - rows, p.selected - rows)
             };
-            let new_row = if down {
-                (row + 1) % col_len
-            } else {
-                (row + col_len - 1) % col_len
-            };
-            p.selected = col_start + new_row;
+            p.selected = col_start + wrap_index(row, col_len, down);
         }
     }
 
