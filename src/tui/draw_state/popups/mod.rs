@@ -134,9 +134,13 @@ pub(super) fn query_line(theme: &Theme, query: &str, count: usize) -> Line<'stat
     Line::from(vec![
         Span::styled(" > ", theme.accent_style()),
         Span::styled(query.to_string(), theme.base()),
-        Span::styled("_", theme.accent_style()),
+        cursor_span(theme),
         Span::styled(format!("   ({count})"), theme.dim_style()),
     ])
+}
+
+pub(super) fn cursor_span(theme: &Theme) -> Span<'static> {
+    Span::styled("_", theme.accent_style())
 }
 
 pub(super) fn window(top: usize, visible: usize, len: usize) -> (usize, usize) {

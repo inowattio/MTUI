@@ -39,3 +39,11 @@ pub(crate) fn field_row(
         Span::styled(value, theme.line_style(selected)),
     ])
 }
+
+pub(crate) fn dim_line(
+    theme: &crate::tui::theme::Theme,
+    text: impl Into<std::borrow::Cow<'static, str>>,
+) -> ratatui::text::Line<'static> {
+    use ratatui::text::{Line, Span};
+    Line::from(Span::styled(text, theme.dim_style()))
+}

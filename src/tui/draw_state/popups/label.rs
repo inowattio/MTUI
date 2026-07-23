@@ -28,7 +28,7 @@ pub(super) fn draw(
         Line::from(vec![
             Span::styled("Text: ", theme.dim_style()),
             Span::styled(text, text_style),
-            Span::styled("_", theme.accent_style()),
+            super::cursor_span(theme),
         ]),
         hints::footer(
             theme,

@@ -2,6 +2,7 @@ use crate::app::App;
 use crate::input::KeyCode;
 use crate::modbus::DeviceIdAccess;
 use crate::state::DeviceIdParams;
+use crate::tui::draw_state::dim_line;
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
 use ratatui::layout::Rect;
@@ -60,7 +61,7 @@ pub(super) fn draw(
         } else {
             " no objects"
         };
-        lines.push(Line::from(Span::styled(text, theme.dim_style())));
+        lines.push(dim_line(theme, text));
     } else {
         for &(id, ref value) in &params.objects {
             let shown: String = value.chars().skip(offset).collect();

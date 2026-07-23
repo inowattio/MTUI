@@ -1,6 +1,7 @@
 use crate::app::App;
 use crate::logger::{self, LogEntry, LogLevel};
 use crate::state::LogViewParams;
+use crate::tui::draw_state::dim_line;
 use crate::tui::theme::Theme;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
@@ -111,10 +112,7 @@ pub fn draw(params: &LogViewParams, app: &App, frame: &mut Frame, area: Rect, th
     let mut lines: Vec<Line> = Vec::new();
 
     if len == 0 {
-        lines.push(Line::from(Span::styled(
-            " (no activity yet)",
-            theme.dim_style(),
-        )));
+        lines.push(dim_line(theme, " (no activity yet)"));
     } else if params.wrap && params.follow {
         // Fill from the bottom so the newest entry is fully visible
         let mut rows: Vec<Line> = Vec::new();

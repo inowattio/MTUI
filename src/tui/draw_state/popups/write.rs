@@ -110,7 +110,7 @@ pub(super) fn draw(
             write.value.map_or_else(String::new, |n| n.to_string()),
             theme.base(),
         ),
-        Span::styled("_", theme.accent_style()),
+        super::cursor_span(theme),
     ]);
     let detail = match write.value {
         None => Span::styled("(empty)", theme.dim_style()),

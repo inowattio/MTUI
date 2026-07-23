@@ -1,6 +1,7 @@
 use crate::app::App;
 use crate::input::KeyCode;
 use crate::state::ColumnsParams;
+use crate::tui::draw_state::dim_line;
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
 use ratatui::layout::Rect;
@@ -25,10 +26,7 @@ pub(super) fn draw(
     let mut lines: Vec<Line> = vec![query_line, Line::default()];
 
     if count == 0 {
-        lines.push(Line::from(Span::styled(
-            " no matching columns",
-            theme.dim_style(),
-        )));
+        lines.push(dim_line(theme, " no matching columns"));
     } else {
         let cell = |i: usize| -> Vec<Span<'static>> {
             let column = matches[i];

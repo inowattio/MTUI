@@ -162,14 +162,12 @@ fn color_row(
     color: Color,
     selected: bool,
 ) -> Line<'static> {
-    Line::from(vec![
-        Span::styled(
-            format!("{}{label:<24} ", marker(selected)),
-            theme.dim_style(),
-        ),
-        Span::styled(format!("{value:<18}"), theme.line_style(selected)),
-        Span::styled("\u{2588}\u{2588}\u{2588}", Style::default().fg(color)),
-    ])
+    let mut line = field_row(theme, label, 24, format!("{value:<18}"), selected);
+    line.spans.push(Span::styled(
+        "\u{2588}\u{2588}\u{2588}",
+        Style::default().fg(color),
+    ));
+    line
 }
 
 fn field_view(

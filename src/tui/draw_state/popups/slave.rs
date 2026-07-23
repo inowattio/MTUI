@@ -10,7 +10,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, kb: &Keybinds, 
         Line::from(vec![
             Span::styled("ID: ", theme.dim_style()),
             Span::styled(value.min(u8::MAX as u16).to_string(), theme.accent_style()),
-            Span::styled("_", theme.accent_style()),
+            super::cursor_span(theme),
         ]),
         hints::footer(
             theme,

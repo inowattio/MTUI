@@ -1,9 +1,10 @@
 use crate::app::App;
 use crate::state::{DiscoveryField, DiscoveryParams, InterfaceKind};
-use crate::tui::draw_state::{edit_value, marker};
+use crate::tui::draw_state::{dim_line, edit_value, marker};
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::{spinner_frame, Theme};
 use ratatui::layout::Rect;
+use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::Frame;
 use std::net::Ipv4Addr;
@@ -79,17 +80,9 @@ fn render_field(
         } else {
             theme.accent_style()
         };
-        let mut spans = vec![
-            Span::styled(marker, label_style),
-            Span::styled("[ Connect ]", button_style),
-        ];
-        if let Some(reason) = blocked {
-            spans.push(Span::styled(
-                format!("   \u{2717} {reason}"),
-                theme.err_style(),
-            ));
-        }
-        return Line::from(spans);
+        let suffix =
+            blocked.map(|reason| Span::styled(format!("   \u{2717} {reason}"), theme.err_style()));
+        return button_line(marker, label_style, "Connect", button_style, suffix);
     }
 
     if field == DiscoveryField::ScanNetwork {
@@ -98,22 +91,20 @@ fn render_field(
         } else {
             theme.accent_style()
         };
-        let mut spans = vec![
-            Span::styled(marker, label_style),
-            Span::styled("[ Scan network ]", button_style),
-        ];
-        if let Some((done, total)) = scan {
-            spans.push(Span::styled(
+        let suffix = if let Some((done, total)) = scan {
+            Some(Span::styled(
                 format!("   scanning\u{2026} {done}/{total}"),
                 theme.warn_style(),
-            ));
+            ))
         } else if !params.found.is_empty() {
-            spans.push(Span::styled(
+            Some(Span::styled(
                 format!("   {} found", params.found.len()),
                 theme.dim_style(),
-            ));
-        }
-        return Line::from(spans);
+            ))
+        } else {
+            None
+        };
+        return button_line(marker, label_style, "Scan network", button_style, suffix);
     }
 
     let (name, value, is_cyclable) = field_view(params, field);
@@ -131,6 +122,21 @@ fn render_field(
         Span::styled(format!("{marker}{name:<22} "), label_style),
         Span::styled(value_text, value_style),
     ])
+}
+
+fn button_line(
+    marker: &'static str,
+    label_style: Style,
+    label: &str,
+    button_style: Style,
+    suffix: Option<Span<'static>>,
+) -> Line<'static> {
+    let mut spans = vec![
+        Span::styled(marker, label_style),
+        Span::styled(format!("[ {label} ]"), button_style),
+    ];
+    spans.extend(suffix);
+    Line::from(spans)
 }
 
 fn field_view(p: &DiscoveryParams, field: DiscoveryField) -> (&'static str, String, bool) {
@@ -211,10 +217,7 @@ fn draw_scan_popup(
 
     let len = params.found.len();
     if len == 0 {
-        lines.push(Line::from(Span::styled(
-            " No devices found on this subnet.",
-            theme.dim_style(),
-        )));
+        lines.push(dim_line(theme, " No devices found on this subnet."));
         lines.push(Line::default());
         let footer = [Hint::key(kb.exit, "Close")];
         let width = hints::min_width(44, &footer);

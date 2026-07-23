@@ -1,6 +1,7 @@
 use crate::app::App;
 use crate::input::KeyCode;
 use crate::state::InspectMode;
+use crate::tui::draw_state::dim_line;
 use crate::tui::hints::Hint;
 use crate::tui::theme::Theme;
 use ratatui::layout::Rect;
@@ -15,10 +16,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, mode
 
     let mut lines: Vec<Line> = Vec::new();
     if entries.is_empty() {
-        lines.push(Line::from(Span::styled(
-            " no data read yet",
-            theme.dim_style(),
-        )));
+        lines.push(dim_line(theme, " no data read yet"));
     } else {
         let cell = |i: usize| -> Vec<Span<'static>> {
             let (name, value) = &entries[i];
