@@ -497,10 +497,6 @@ impl From<&BTreeMap<RegisterCell, CustomRule>> for CustomRules {
     }
 }
 
-fn bits_to_words(bits: Vec<bool>) -> Vec<u16> {
-    bits.into_iter().map(u16::from).collect()
-}
-
 fn ensure_parent_dir(path: &str) -> Result<(), String> {
     match std::path::Path::new(path).parent() {
         Some(parent) if !parent.as_os_str().is_empty() => {

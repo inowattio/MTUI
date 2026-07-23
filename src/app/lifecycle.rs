@@ -1,7 +1,7 @@
 use super::{
-    bits_to_words, default_config_path, fetch_config_or_exit, reconnect_backoff, App,
-    BackgroundTask, CommStats, ConnectTaskResult, DeviceIdTaskResult, LoadConfigTaskResult,
-    RawTaskResult, ReconnectState, RefreshTaskResult, SweepState, WriteOutcome,
+    default_config_path, fetch_config_or_exit, reconnect_backoff, App, BackgroundTask, CommStats,
+    ConnectTaskResult, DeviceIdTaskResult, LoadConfigTaskResult, RawTaskResult, ReconnectState,
+    RefreshTaskResult, SweepState, WriteOutcome,
 };
 use crate::compat::{self, Instant, TaskPoll};
 use crate::config::{Config, InterpretorConfig};
@@ -348,12 +348,9 @@ impl App {
         position: u16,
         amount: u16,
     ) -> Result<Vec<u16>, anyhow::Error> {
-        Ok(match register_type {
-            RegisterType::Holding => device.holdings(position, amount).await?,
-            RegisterType::Input => device.inputs(position, amount).await?,
-            RegisterType::Coil => bits_to_words(device.coils(position, amount).await?),
-            RegisterType::Discrete => bits_to_words(device.discretes(position, amount).await?),
-        })
+        device
+            .read_typed(None, register_type, position, amount)
+            .await
     }
 
     async fn aquire_data_with(

@@ -172,7 +172,7 @@ impl WordOrder {
 mod tests {
     use super::WordOrder;
     #[cfg(not(target_arch = "wasm32"))]
-    use super::{DeviceConfig, Interface, InterfaceNetworkParams, ModbusDevice};
+    use super::{DeviceConfig, Interface, InterfaceNetworkParams, ModbusDevice, RegisterType};
     #[cfg(not(target_arch = "wasm32"))]
     use std::sync::atomic::{AtomicUsize, Ordering};
     #[cfg(not(target_arch = "wasm32"))]
@@ -234,7 +234,7 @@ mod tests {
 
         // The next command must rebuild the context, clear the flag, and still
         // return a value.
-        let result = device.holdings(0, 1).await;
+        let result = device.read_typed(None, RegisterType::Holding, 0, 1).await;
         assert!(result.is_ok(), "command after reconnect failed: {result:?}");
         assert!(
             !device.poisoned.load(Ordering::Relaxed),
@@ -280,7 +280,13 @@ mod tests {
 
         // Silent server: the command times out and poisons the context. No
         // reconnect happens yet, so the connection count stays at one.
-        assert!(device.holdings(0, 1).await.is_err(), "expected a timeout");
+        assert!(
+            device
+                .read_typed(None, RegisterType::Holding, 0, 1)
+                .await
+                .is_err(),
+            "expected a timeout"
+        );
         assert!(
             device.poisoned.load(Ordering::Relaxed),
             "a timed-out command must poison the context"
@@ -293,7 +299,10 @@ mod tests {
 
         // Poisoned: the next command must reconnect (a second TCP connection)
         // before touching the wire, discarding the desynchronized transport.
-        assert!(device.holdings(0, 1).await.is_err());
+        assert!(device
+            .read_typed(None, RegisterType::Holding, 0, 1)
+            .await
+            .is_err());
         wait_for(&connections, 2).await;
         assert_eq!(
             connections.load(Ordering::Relaxed),
@@ -550,42 +559,6 @@ impl ModbusDevice {
 
     pub fn set_word_order(&mut self, word_order: WordOrder) {
         self.config.word_order = word_order;
-    }
-
-    pub async fn inputs(&self, address: u16, quantity: u16) -> Result<Vec<u16>> {
-        timeout!(
-            self,
-            read_input_registers,
-            (address, quantity),
-            format!("Read Input @ {address} with {quantity} value(s)")
-        )
-    }
-
-    pub async fn holdings(&self, address: u16, quantity: u16) -> Result<Vec<u16>> {
-        timeout!(
-            self,
-            read_holding_registers,
-            (address, quantity),
-            format!("Read Holding @ {address} with {quantity} value(s)")
-        )
-    }
-
-    pub async fn coils(&self, address: u16, quantity: u16) -> Result<Vec<bool>> {
-        timeout!(
-            self,
-            read_coils,
-            (address, quantity),
-            format!("Read Coil @ {address} with {quantity} value(s)")
-        )
-    }
-
-    pub async fn discretes(&self, address: u16, quantity: u16) -> Result<Vec<bool>> {
-        timeout!(
-            self,
-            read_discrete_inputs,
-            (address, quantity),
-            format!("Read Discrete @ {address} with {quantity} value(s)")
-        )
     }
 
     pub async fn write_register(&self, address: u16, data: u16) -> Result<()> {
