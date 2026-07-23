@@ -1,5 +1,6 @@
 use crate::config::{Column, InterpretorConfig};
 use crate::constants::{NO_VALUE, UNINTERPRETABLE};
+use crate::custom::CustomRepr;
 use crate::modbus::WordOrder;
 use crate::register::RegisterCellValue;
 use chrono::{DateTime, Local};
@@ -95,22 +96,31 @@ impl Column {
     pub fn graph_is_float(self) -> bool {
         matches!(self, Column::F16 | Column::F32 | Column::F64)
     }
+
+    pub fn custom_repr(self) -> Option<CustomRepr> {
+        Some(match self {
+            Column::U16 => CustomRepr::U16,
+            Column::I16 => CustomRepr::I16,
+            Column::F16 => CustomRepr::F16,
+            Column::U32 => CustomRepr::U32,
+            Column::I32 => CustomRepr::I32,
+            Column::F32 => CustomRepr::F32,
+            Column::U64 => CustomRepr::U64,
+            Column::I64 => CustomRepr::I64,
+            Column::F64 => CustomRepr::F64,
+            _ => return None,
+        })
+    }
 }
 
 pub fn graph_value(column: Column, order: WordOrder, regs: &[u16]) -> Option<f64> {
-    let word = |a: usize| order.make_word(regs[a], regs[a + 1]);
+    if let Some(repr) = column.custom_repr() {
+        let raw = order.assemble(regs.get(..repr.register_count())?)?;
+        return Some(repr.decode(raw));
+    }
     Some(match column {
-        Column::U16 => regs[0] as f64,
-        Column::I16 => regs[0] as i16 as f64,
-        Column::F16 => f16_to_f32(regs[0]) as f64,
         Column::Bcd => bcd_to_decimal(regs[0])? as f64,
-        Column::U32 => word(0) as f64,
-        Column::I32 => word(0) as i32 as f64,
-        Column::F32 => f32::from_bits(word(0)) as f64,
-        Column::Bcd32 => bcd_to_decimal(word(0))? as f64,
-        Column::U64 => order.make_dword(word(0), word(2)) as f64,
-        Column::I64 => order.make_dword(word(0), word(2)) as i64 as f64,
-        Column::F64 => f64::from_bits(order.make_dword(word(0), word(2))),
+        Column::Bcd32 => bcd_to_decimal(order.make_word(regs[0], regs[1]))? as f64,
         _ => return None,
     })
 }

@@ -40,6 +40,20 @@ impl CustomRepr {
         }
     }
 
+    pub fn decode(self, raw: u64) -> f64 {
+        match self {
+            CustomRepr::U16 => raw as f64,
+            CustomRepr::I16 => raw as u16 as i16 as f64,
+            CustomRepr::F16 => f16_to_f32(raw as u16) as f64,
+            CustomRepr::U32 => raw as f64,
+            CustomRepr::I32 => raw as u32 as i32 as f64,
+            CustomRepr::F32 => f32::from_bits(raw as u32) as f64,
+            CustomRepr::U64 => raw as f64,
+            CustomRepr::I64 => raw as i64 as f64,
+            CustomRepr::F64 => f64::from_bits(raw),
+        }
+    }
+
     pub fn label(self) -> &'static str {
         match self {
             CustomRepr::U16 => "u16",
@@ -167,30 +181,11 @@ impl CustomRule {
 
     fn raw_bits(&self, words: &[u16], order: WordOrder) -> Option<u64> {
         let order = self.word_order.unwrap_or(order);
-        Some(match self.repr.register_count() {
-            1 => *words.first()? as u64,
-            2 => order.make_word(*words.first()?, *words.get(1)?) as u64,
-            _ => {
-                let (&a, &b) = (words.first()?, words.get(1)?);
-                let (&c, &d) = (words.get(2)?, words.get(3)?);
-                order.make_dword(order.make_word(a, b), order.make_word(c, d))
-            }
-        })
+        order.assemble(words.get(..self.repr.register_count())?)
     }
 
     fn base_value(&self, words: &[u16], order: WordOrder) -> Option<f64> {
-        let raw = self.raw_bits(words, order)?;
-        Some(match self.repr {
-            CustomRepr::U16 => raw as f64,
-            CustomRepr::I16 => raw as u16 as i16 as f64,
-            CustomRepr::F16 => f16_to_f32(raw as u16) as f64,
-            CustomRepr::U32 => raw as f64,
-            CustomRepr::I32 => raw as u32 as i32 as f64,
-            CustomRepr::F32 => f32::from_bits(raw as u32) as f64,
-            CustomRepr::U64 => raw as f64,
-            CustomRepr::I64 => raw as i64 as f64,
-            CustomRepr::F64 => f64::from_bits(raw),
-        })
+        Some(self.repr.decode(self.raw_bits(words, order)?))
     }
 
     pub fn raw(&self, words: &[u16], order: WordOrder) -> Option<u64> {

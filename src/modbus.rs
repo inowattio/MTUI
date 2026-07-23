@@ -147,6 +147,17 @@ impl WordOrder {
         [first, second]
     }
 
+    pub fn assemble(self, words: &[u16]) -> Option<u64> {
+        Some(match words.len() {
+            1 => u64::from(*words.first()?),
+            2 => u64::from(self.make_word(*words.first()?, *words.get(1)?)),
+            _ => self.make_dword(
+                self.make_word(*words.first()?, *words.get(1)?),
+                self.make_word(*words.get(2)?, *words.get(3)?),
+            ),
+        })
+    }
+
     pub fn next(self) -> Self {
         match self {
             Self::ABCD => Self::BADC,
@@ -577,75 +588,6 @@ impl ModbusDevice {
         )
     }
 
-    fn assemble_words(&self, data: &[u16]) -> Vec<u32> {
-        data.chunks_exact(2)
-            .map(|word| self.config.word_order.make_word(word[0], word[1]))
-            .collect()
-    }
-
-    fn assemble_dword(&self, q: &[u16]) -> u64 {
-        let high = self.config.word_order.make_word(q[0], q[1]);
-        let low = self.config.word_order.make_word(q[2], q[3]);
-        self.config.word_order.make_dword(high, low)
-    }
-
-    pub async fn input_word(&self, address: u16) -> Result<u32> {
-        let data = self.inputs(address, 2).await?;
-        anyhow::ensure!(data.len() == 2, "Expected 2 values.");
-        Ok(self.config.word_order.make_word(data[0], data[1]))
-    }
-
-    pub async fn input_words(&self, address: u16, quantity: u16) -> Result<Vec<u32>> {
-        let register_count = quantity
-            .checked_mul(2)
-            .ok_or_else(|| anyhow::anyhow!("Input word quantity is too large."))?;
-        let data = self.inputs(address, register_count).await?;
-        anyhow::ensure!(
-            data.len() == register_count as usize,
-            "Expected {register_count} values."
-        );
-        Ok(self.assemble_words(&data))
-    }
-
-    pub async fn holding_word(&self, address: u16) -> Result<u32> {
-        let data = self.holdings(address, 2).await?;
-        anyhow::ensure!(data.len() == 2, "Expected 2 values.");
-        Ok(self.config.word_order.make_word(data[0], data[1]))
-    }
-
-    pub async fn holding_dword(&self, address: u16) -> Result<u64> {
-        let data = self.holdings(address, 4).await?;
-        anyhow::ensure!(data.len() == 4, "Expected 4 values.");
-        Ok(self.assemble_dword(&data))
-    }
-
-    pub async fn holding_words(&self, address: u16, quantity: u16) -> Result<Vec<u32>> {
-        let register_count = quantity
-            .checked_mul(2)
-            .ok_or_else(|| anyhow::anyhow!("Holding word quantity is too large."))?;
-        let data = self.holdings(address, register_count).await?;
-        anyhow::ensure!(
-            data.len() == register_count as usize,
-            "Expected {register_count} values."
-        );
-        Ok(self.assemble_words(&data))
-    }
-
-    pub async fn holding_dwords(&self, address: u16, quantity: u16) -> Result<Vec<u64>> {
-        let register_count = quantity
-            .checked_mul(4)
-            .ok_or_else(|| anyhow::anyhow!("Holding dword quantity is too large."))?;
-        let data = self.holdings(address, register_count).await?;
-        anyhow::ensure!(
-            data.len() == register_count as usize,
-            "Expected {register_count} values."
-        );
-        Ok(data
-            .chunks_exact(4)
-            .map(|dword| self.assemble_dword(dword))
-            .collect())
-    }
-
     pub async fn write_register(&self, address: u16, data: u16) -> Result<()> {
         timeout!(
             self,
@@ -673,27 +615,9 @@ impl ModbusDevice {
         )
     }
 
-    pub async fn write_coils(&self, address: u16, data: &[bool]) -> Result<()> {
-        timeout!(
-            self,
-            write_multiple_coils,
-            (address, data),
-            format!("Write Coil @ {address} with values {data:?}")
-        )
-    }
-
     pub async fn write_register_word(&self, address: u16, data: i32) -> Result<()> {
         let words = self.config.word_order.split_word(data as u32);
         self.write_registers(address, &words).await
-    }
-
-    pub async fn write_register_words(&self, address: u16, data: &[i32]) -> Result<()> {
-        for (i, item) in data.iter().enumerate() {
-            self.write_register_word(address + (i * 2) as u16, *item)
-                .await?;
-        }
-
-        Ok(())
     }
 
     pub async fn device_identification(
