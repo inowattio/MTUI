@@ -1,7 +1,7 @@
 use super::{parse_hex_bytes, App, BackgroundTask, DeviceIdTaskResult, RawTaskResult};
 use crate::compat;
 use crate::modbus::DeviceIdAccess;
-use crate::num_ops::{cycle, wrap_index};
+use crate::num_ops::{cycle, step_hscroll, wrap_index};
 use crate::state::{DeviceIdParams, Popup, RawField, RawParams, StatusMessage};
 
 impl App {
@@ -48,15 +48,9 @@ impl App {
     }
 
     pub fn device_id_hscroll(&mut self, right: bool) {
-        const STEP: u16 = 8;
         let max = self.h_max_offset.get();
         if let Some(params) = self.device_id_mut() {
-            let current = params.h_offset.min(max);
-            params.h_offset = if right {
-                (current + STEP).min(max)
-            } else {
-                current.saturating_sub(STEP)
-            };
+            params.h_offset = step_hscroll(params.h_offset, max, right);
         }
     }
 

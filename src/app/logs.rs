@@ -1,5 +1,6 @@
 use super::{App, WriteType};
 use crate::modbus::Interface;
+use crate::num_ops::step_hscroll;
 use crate::state::{LogViewParams, LogsParams, Popup, ReadPanel, State, StatusMessage};
 use crate::writes_log::{SharedWritesLog, WriteKind};
 use chrono::Local;
@@ -105,18 +106,12 @@ impl App {
     }
 
     pub fn log_view_hscroll(&mut self, right: bool) {
-        const STEP: u16 = 8;
         let max = self.h_max_offset.get();
         if let Some(l) = self.log_view_mut() {
             if l.wrap {
                 return;
             }
-            let current = l.h_offset.min(max);
-            l.h_offset = if right {
-                (current + STEP).min(max)
-            } else {
-                current.saturating_sub(STEP)
-            };
+            l.h_offset = step_hscroll(l.h_offset, max, right);
         }
     }
 

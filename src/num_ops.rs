@@ -115,3 +115,13 @@ pub fn cycle<T: Copy + PartialEq>(items: &[T], current: T, forward: bool) -> T {
     };
     items[j]
 }
+
+pub fn step_hscroll(current: u16, max: u16, right: bool) -> u16 {
+    const STEP: u16 = 8;
+    let current = current.min(max);
+    if right {
+        (current + STEP).min(max)
+    } else {
+        current.saturating_sub(STEP)
+    }
+}

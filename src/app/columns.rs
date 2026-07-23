@@ -1,5 +1,6 @@
 use super::{fuzzy_rank, App};
 use crate::config::Column;
+use crate::num_ops::step_hscroll;
 use crate::register::RegisterCell;
 use crate::state::{ColumnsParams, Popup, StatusMessage};
 
@@ -222,16 +223,9 @@ impl App {
     }
 
     pub fn scroll_columns(&mut self, right: bool) {
-        const STEP: u16 = 8;
         let max = self.h_max_offset.get();
         let p = self.read_mut();
-        // Re-clamp first so a stale offset responds on the first key press.
-        let current = p.col_offset.min(max);
-        p.col_offset = if right {
-            (current + STEP).min(max)
-        } else {
-            current.saturating_sub(STEP)
-        };
+        p.col_offset = step_hscroll(p.col_offset, max, right);
     }
 
     pub fn toggle_column(&mut self, column: Column) {
