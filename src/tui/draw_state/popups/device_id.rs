@@ -73,8 +73,7 @@ pub(super) fn draw(
 
     super::push_status(&mut lines, theme, params.status.as_ref());
 
-    lines.push(Line::default());
-    lines.push(hints::footer(theme, footer));
+    super::push_footer(&mut lines, theme, footer);
 
     super::render(frame, area, theme, "Device identification", width, lines);
 }

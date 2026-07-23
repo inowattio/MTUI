@@ -171,8 +171,7 @@ pub(super) fn draw(
 
     push_result(&mut lines, theme, write);
 
-    lines.push(Line::default());
-    lines.push(hints::footer(theme, footer1));
+    super::push_footer(&mut lines, theme, footer1);
     lines.push(hints::footer(theme, footer2));
 
     let title = format!("Write [{:?}] @ {}", write.write_type, write.position);
@@ -226,8 +225,7 @@ fn draw_coil(
         Hint::key(kb.exit, "Exit"),
     ];
     let width = hints::min_width(44, &footer);
-    lines.push(Line::default());
-    lines.push(hints::footer(theme, footer));
+    super::push_footer(&mut lines, theme, footer);
 
     let title = format!("Write coil @ {}", write.position);
     super::render(frame, area, theme, &title, width, lines);

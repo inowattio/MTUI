@@ -2,7 +2,7 @@ use crate::app::App;
 use crate::config::Keybinds;
 use crate::constants::NO_VALUE;
 use crate::interpretator::format_ago;
-use crate::tui::hints::{self, Hint};
+use crate::tui::hints::Hint;
 use crate::tui::theme::Theme;
 use chrono::Utc;
 use ratatui::layout::Rect;
@@ -64,8 +64,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, kb: &Keybinds, 
         lines.push(field("Error", format!("{short} \u{b7} {ago}")));
     }
 
-    lines.push(Line::default());
-    lines.push(hints::footer(theme, [Hint::key(kb.exit, "Close")]));
+    super::push_footer(&mut lines, theme, [Hint::key(kb.exit, "Close")]);
 
     let content_w = lines.iter().map(Line::width).max().unwrap_or(0) as u16;
     // borders (2) + a column of right padding

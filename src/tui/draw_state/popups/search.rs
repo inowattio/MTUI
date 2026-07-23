@@ -55,8 +55,7 @@ pub(super) fn draw(
     ];
     lines.push(hints::more(theme, top, len.saturating_sub(end)));
     let width = hints::min_width(44, &footer);
-    lines.push(Line::default());
-    lines.push(hints::footer(theme, footer));
+    super::push_footer(&mut lines, theme, footer);
 
     super::render(frame, area, theme, "Go to", width, lines);
 }

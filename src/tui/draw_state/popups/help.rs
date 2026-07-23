@@ -87,8 +87,7 @@ pub(super) fn draw(
     ];
     let grid_w = 2 + col_key_w.iter().map(|&kw| cell_w(kw)).sum::<usize>();
     let width = grid_w.max(hints::width(&footer)) as u16;
-    lines.push(Line::default());
-    lines.push(hints::footer(theme, footer));
+    super::push_footer(&mut lines, theme, footer);
 
     super::render(frame, area, theme, "Help", width, lines);
 }

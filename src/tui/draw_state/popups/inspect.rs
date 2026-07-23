@@ -1,7 +1,7 @@
 use crate::app::App;
 use crate::input::KeyCode;
 use crate::state::InspectMode;
-use crate::tui::hints::{self, Hint};
+use crate::tui::hints::Hint;
 use crate::tui::theme::Theme;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
@@ -30,9 +30,9 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, mode
         };
         lines.extend(super::two_column(entries.len(), cell));
     }
-    lines.push(Line::default());
     let kb = &app.config.keybinds;
-    lines.push(hints::footer(
+    super::push_footer(
+        &mut lines,
         theme,
         [
             Hint::pair(kb.move_up, kb.move_down, "Move"),
@@ -41,7 +41,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, mode
             Hint::key(kb.word_order, "Cycle order"),
             Hint::key(kb.exit, "Close"),
         ],
-    ));
+    );
 
     let width = ((NAME + VALUE + 3) as u16) * 2 + 3;
     let title = format!("Inspect [{}]", mode.name());

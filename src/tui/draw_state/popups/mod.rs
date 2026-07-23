@@ -156,6 +156,15 @@ pub(super) fn push_status(
     }
 }
 
+pub(super) fn push_footer<const N: usize>(
+    lines: &mut Vec<Line<'static>>,
+    theme: &Theme,
+    items: [Hint; N],
+) {
+    lines.push(Line::default());
+    lines.push(hints::footer(theme, items));
+}
+
 pub(super) fn two_column(
     count: usize,
     mut cell: impl FnMut(usize) -> Vec<Span<'static>>,

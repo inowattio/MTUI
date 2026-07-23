@@ -226,8 +226,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &
         )));
     }
 
-    lines.push(Line::default());
-    lines.push(hints::footer(theme, footer));
+    super::push_footer(&mut lines, theme, footer);
 
     let title = format!("Custom rule \u{b7} {:?} @ {}", c.register_type, c.address);
     super::render(frame, area, theme, &title, width, lines);

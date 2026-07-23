@@ -1,6 +1,6 @@
 use crate::config::Keybinds;
 use crate::state::{RawField, RawParams};
-use crate::tui::hints::{self, Hint};
+use crate::tui::hints::Hint;
 use crate::tui::theme::Theme;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
@@ -46,15 +46,15 @@ pub(super) fn draw(
         lines.push(theme.status_line(status));
     }
 
-    lines.push(Line::default());
-    lines.push(hints::footer(
+    super::push_footer(
+        &mut lines,
         theme,
         [
             Hint::pair(kb.move_up, kb.move_down, "Field"),
             Hint::key(kb.action, "Send"),
             Hint::key(kb.exit, "Close"),
         ],
-    ));
+    );
 
     super::render(frame, area, theme, "Raw function", 60, lines);
 }
