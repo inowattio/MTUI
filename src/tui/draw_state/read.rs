@@ -9,7 +9,7 @@ use crate::tui::hints::{self, Hint};
 use crate::tui::theme::{spinner_frame, Theme};
 use chrono::{DateTime, Local, Utc};
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
-use ratatui::style::{Color, Style};
+use ratatui::style::{Color, Modifier, Style};
 use ratatui::symbols;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{
@@ -170,7 +170,12 @@ impl TableCtx<'_> {
     ) -> Table<'static> {
         let (params, app, theme) = (self.params, self.app, self.theme);
         let now = Local::now();
-        let header = format!("{:<2}{}", "T", app.interpreter.header());
+        let show_window = app.config.show_read_window;
+        let read_cells = show_window.then(|| app.panel_read_cells());
+        let mut header = format!("{:<2}{}", "T", app.interpreter.header());
+        if show_window {
+            header.insert(0, ' ');
+        }
 
         let mut rows: Vec<(String, Style)> = Vec::with_capacity(cells.len() + 3);
         let mut prev_kind: Option<RegisterType> = None;
@@ -191,7 +196,17 @@ impl TableCtx<'_> {
                 }
             };
 
-            let text = format!("{:<2}{text}", kind.marker());
+            let text = match &read_cells {
+                Some(read_cells) => {
+                    let marker = if read_cells.contains(&(kind, address)) {
+                        "\u{258e}"
+                    } else {
+                        " "
+                    };
+                    format!("{marker}{:<2}{text}", kind.marker())
+                }
+                None => format!("{:<2}{text}", kind.marker()),
+            };
 
             let style = if (top + ord) as u16 == params.pinned_index {
                 theme.selected_style()
@@ -206,14 +221,19 @@ impl TableCtx<'_> {
             block = block.title_top(ascii_title(ascii, theme));
         }
 
-        // 2-char type marker alongside the address.
-        self.scrollable_table(rows, &header, 2 + app.interpreter.prefix_width(), block)
+        // 2-char type marker alongside the address, plus the read-window marker
+        let prefix = 2 + u16::from(show_window) + app.interpreter.prefix_width();
+        self.scrollable_table(rows, &header, prefix, block)
     }
 
     fn matrix_table(&self, visible: u16) -> Table<'static> {
         let (params, app, theme) = (self.params, self.app, self.theme);
         let cols = app.config.matrix_cols.max(1);
         let base = params.window_start - (params.window_start % cols);
+
+        let show_window = app.config.show_read_window;
+        let (read_start, read_amount) = app.read_window();
+        let read_end = read_start.saturating_add(read_amount - 1);
 
         let mut header = format!("{: >5}  ", "");
         for c in 0..cols {
@@ -244,6 +264,9 @@ impl TableCtx<'_> {
                 };
                 if addr == params.position {
                     style = theme.selected_style();
+                }
+                if show_window && (read_start..=read_end).contains(&addr) {
+                    style = style.add_modifier(Modifier::UNDERLINED);
                 }
                 spans.push(Span::styled(text, style));
                 spans.push(Span::raw(" "));

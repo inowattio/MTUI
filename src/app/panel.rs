@@ -95,6 +95,11 @@ impl App {
         len as u16
     }
 
+    pub fn panel_read_cells(&self) -> Vec<RegisterCell> {
+        let (_, amount) = self.read_window();
+        self.panel_refresh_window(amount as usize)
+    }
+
     pub(super) fn panel_refresh_window(&self, batch: usize) -> Vec<RegisterCell> {
         let cursor = self.cursor_cell();
         let kind = cursor.0;
