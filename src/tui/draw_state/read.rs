@@ -671,28 +671,24 @@ fn draw_graph(
         .filter(|(_, history)| history.len() >= 2)
         .collect();
 
-    let count = primary.len();
-    let last = primary[count - 1].1;
-    let prev = primary[count - 2].1;
-    let delta = last - prev;
+    let last = primary[primary.len() - 1].1;
+    let delta = last - primary[primary.len() - 2].1;
     let mut min = f64::MAX;
     let mut max = f64::MIN;
     let mut sum = 0.0;
-    for &(_, y) in &primary {
+    let mut count = 0usize;
+    for &(_, y) in primary
+        .iter()
+        .chain(held.iter().flat_map(|(_, history)| history.iter()))
+    {
         min = min.min(y);
         max = max.max(y);
         sum += y;
+        count += 1;
     }
     let avg = sum / count as f64;
     let span = max - min;
-
-    let (mut lo, mut hi) = (min, max);
-    for (_, history) in &held {
-        for &(_, y) in history {
-            lo = lo.min(y);
-            hi = hi.max(y);
-        }
-    }
+    let (lo, hi) = (min, max);
 
     let (y_lo, y_hi) = if bit_plot && held.is_empty() {
         (0.0, 1.0)
@@ -903,11 +899,16 @@ fn draw_graph(
     } else {
         format!("{avg:.1}")
     };
-    let footer = Line::from(vec![
-        Span::styled("cur ", theme.dim_style()),
-        Span::styled(fmt_num(last, is_float), theme.accent_style()),
-        Span::styled(format!("  \u{0394}{delta_str}"), delta_style),
-        Span::styled("   min ", theme.dim_style()),
+    let mut spans = Vec::new();
+    if held.is_empty() {
+        spans.extend([
+            Span::styled("cur ", theme.dim_style()),
+            Span::styled(fmt_num(last, is_float), theme.accent_style()),
+            Span::styled(format!("  \u{0394}{delta_str}   "), delta_style),
+        ]);
+    }
+    spans.extend([
+        Span::styled("min ", theme.dim_style()),
         Span::styled(fmt_num(min, is_float), theme.base()),
         Span::styled("  max ", theme.dim_style()),
         Span::styled(fmt_num(max, is_float), theme.base()),
@@ -918,5 +919,5 @@ fn draw_graph(
         Span::styled("  n ", theme.dim_style()),
         Span::styled(format!("{count}"), theme.base()),
     ]);
-    frame.render_widget(Paragraph::new(footer), chunks[3]);
+    frame.render_widget(Paragraph::new(Line::from(spans)), chunks[3]);
 }
