@@ -26,9 +26,10 @@ pub const PALETTE: &[Color] = &[
     Color::White,
 ];
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(default)]
 pub struct Theme {
+    pub bg: Color,
     pub border: Color,
     pub accent: Color,
     pub text: Color,
@@ -39,26 +40,64 @@ pub struct Theme {
     pub warn: Color,
     pub err: Color,
     pub selected_fg: Color,
+    pub selected_bg: Color,
 }
+
+const DEFAULT: Theme = Theme {
+    bg: Color::Reset,
+    border: Color::LightGreen,
+    accent: Color::LightGreen,
+    text: Color::White,
+    dim: Color::DarkGray,
+    changed: Color::Yellow,
+    zebra: Color::Indexed(235),
+    ok: Color::LightGreen,
+    warn: Color::Yellow,
+    err: Color::LightRed,
+    selected_fg: Color::Black,
+    selected_bg: Color::LightGreen,
+};
+
+const LIGHT: Theme = Theme {
+    bg: Color::Indexed(255),
+    border: Color::Blue,
+    accent: Color::Blue,
+    text: Color::Black,
+    dim: Color::DarkGray,
+    changed: Color::Indexed(166),
+    zebra: Color::Indexed(253),
+    ok: Color::Green,
+    warn: Color::Indexed(130),
+    err: Color::Red,
+    selected_fg: Color::White,
+    selected_bg: Color::Blue,
+};
+
+const AMBER: Theme = Theme {
+    bg: Color::Indexed(233),
+    border: Color::Indexed(130),
+    accent: Color::Indexed(214),
+    text: Color::Indexed(223),
+    dim: Color::Indexed(94),
+    changed: Color::Indexed(229),
+    zebra: Color::Indexed(236),
+    ok: Color::Indexed(142),
+    warn: Color::Indexed(208),
+    err: Color::Indexed(196),
+    selected_fg: Color::Black,
+    selected_bg: Color::Indexed(214),
+};
 
 impl Default for Theme {
     fn default() -> Self {
-        Self {
-            border: Color::LightGreen,
-            accent: Color::LightGreen,
-            text: Color::White,
-            dim: Color::DarkGray,
-            changed: Color::Yellow,
-            zebra: Color::Indexed(235),
-            ok: Color::LightGreen,
-            warn: Color::Yellow,
-            err: Color::LightRed,
-            selected_fg: Color::Black,
-        }
+        DEFAULT
     }
 }
 
 impl Theme {
+    pub const PRESETS: &'static [(&'static str, Theme)] =
+        &[("Default", DEFAULT), ("Light", LIGHT), ("Amber", AMBER)];
+
     pub fn base(&self) -> Style {
         Style::default().fg(self.text)
     }
@@ -79,7 +118,7 @@ impl Theme {
 
     pub fn selected_style(&self) -> Style {
         Style::default()
-            .bg(self.accent)
+            .bg(self.selected_bg)
             .fg(self.selected_fg)
             .add_modifier(Modifier::BOLD)
     }

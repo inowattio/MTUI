@@ -22,6 +22,7 @@ use crate::state::Popup;
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
 use ratatui::layout::Rect;
+use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Borders, Clear, Paragraph};
 use ratatui::Frame;
@@ -114,7 +115,9 @@ pub(super) fn render(
     let rect = centered_rect(width, height, area);
     frame.render_widget(Clear, rect);
     frame.render_widget(
-        Paragraph::new(lines).block(theme.panel(&format!(" {title}")).borders(Borders::ALL)),
+        Paragraph::new(lines)
+            .style(Style::default().bg(theme.bg))
+            .block(theme.panel(&format!(" {title}")).borders(Borders::ALL)),
         rect,
     );
 }

@@ -8,6 +8,7 @@ use ratatui::style::Color;
 
 fn theme_field(theme: &mut Theme, field: SettingsField) -> Option<&mut Color> {
     Some(match field {
+        SettingsField::ThemeBg => &mut theme.bg,
         SettingsField::ThemeBorder => &mut theme.border,
         SettingsField::ThemeAccent => &mut theme.accent,
         SettingsField::ThemeText => &mut theme.text,
@@ -18,6 +19,7 @@ fn theme_field(theme: &mut Theme, field: SettingsField) -> Option<&mut Color> {
         SettingsField::ThemeWarn => &mut theme.warn,
         SettingsField::ThemeErr => &mut theme.err,
         SettingsField::ThemeSelectedFg => &mut theme.selected_fg,
+        SettingsField::ThemeSelectedBg => &mut theme.selected_bg,
         _ => return None,
     })
 }
@@ -149,6 +151,16 @@ impl App {
             | SettingsField::CycleDiscretes => {
                 let rt = field.cycle_register_type().expect("cycle field");
                 self.config.cycle_types.toggle(rt);
+            }
+            SettingsField::ThemePreset => {
+                let presets = Theme::PRESETS;
+                let index = match presets.iter().position(|&(_, t)| t == self.config.theme) {
+                    Some(i) if delta > 0 => (i + 1) % presets.len(),
+                    Some(i) => (i + presets.len() - 1) % presets.len(),
+                    None if delta > 0 => 0,
+                    None => presets.len() - 1,
+                };
+                self.config.theme = presets[index].1;
             }
             f if f.is_theme_color() => {
                 if let Some(slot) = theme_field(&mut self.config.theme, f) {

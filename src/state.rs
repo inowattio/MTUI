@@ -451,6 +451,8 @@ field_enum! {
         ShowReadWindow,
         GraphTimeAxis,
         ChangedExpiry,
+        ThemePreset,
+        ThemeBg,
         ThemeBorder,
         ThemeAccent,
         ThemeText,
@@ -461,6 +463,7 @@ field_enum! {
         ThemeWarn,
         ThemeErr,
         ThemeSelectedFg,
+        ThemeSelectedBg,
         Save,
         LoadConfig,
         NextConfig,
@@ -497,6 +500,7 @@ impl SettingsField {
                 | SettingsField::CycleInputs
                 | SettingsField::CycleCoils
                 | SettingsField::CycleDiscretes
+                | SettingsField::ThemePreset
         )
     }
 
@@ -513,7 +517,8 @@ impl SettingsField {
     pub fn is_theme_color(self) -> bool {
         matches!(
             self,
-            SettingsField::ThemeBorder
+            SettingsField::ThemeBg
+                | SettingsField::ThemeBorder
                 | SettingsField::ThemeAccent
                 | SettingsField::ThemeText
                 | SettingsField::ThemeDim
@@ -523,6 +528,7 @@ impl SettingsField {
                 | SettingsField::ThemeWarn
                 | SettingsField::ThemeErr
                 | SettingsField::ThemeSelectedFg
+                | SettingsField::ThemeSelectedBg
         )
     }
 }
@@ -588,9 +594,11 @@ impl SettingsCategory {
                 ShowContinuation,
             ],
             SettingsCategory::Theme => &[
+                ThemePreset,
                 ThemeBorder,
                 ThemeAccent,
                 ThemeText,
+                ThemeBg,
                 ThemeDim,
                 ThemeChanged,
                 ThemeZebra,
@@ -598,6 +606,7 @@ impl SettingsCategory {
                 ThemeWarn,
                 ThemeErr,
                 ThemeSelectedFg,
+                ThemeSelectedBg,
             ],
             SettingsCategory::Keybinds => &[],
             SettingsCategory::Config => &[

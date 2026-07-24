@@ -327,9 +327,18 @@ fn field_view(
                 .map_or_else(|| "never".to_string(), |n| n.to_string()),
             Kind::Number,
         ),
-        SettingsField::ThemeBorder => color_view("Border", device.theme.border),
+        SettingsField::ThemePreset => (
+            "Preset",
+            Theme::PRESETS
+                .iter()
+                .find(|&&(_, t)| t == device.theme)
+                .map_or_else(|| "custom".to_string(), |&(name, _)| name.to_string()),
+            Kind::Toggle,
+        ),
+        SettingsField::ThemeBorder => color_view("Frame border", device.theme.border),
         SettingsField::ThemeAccent => color_view("Accent / titles", device.theme.accent),
         SettingsField::ThemeText => color_view("Text", device.theme.text),
+        SettingsField::ThemeBg => color_view("Background", device.theme.bg),
         SettingsField::ThemeDim => color_view("Dim / muted", device.theme.dim),
         SettingsField::ThemeChanged => color_view("Changed value", device.theme.changed),
         SettingsField::ThemeZebra => color_view("Zebra stripe", device.theme.zebra),
@@ -337,6 +346,7 @@ fn field_view(
         SettingsField::ThemeWarn => color_view("Warning", device.theme.warn),
         SettingsField::ThemeErr => color_view("Error", device.theme.err),
         SettingsField::ThemeSelectedFg => color_view("Selected text", device.theme.selected_fg),
+        SettingsField::ThemeSelectedBg => color_view("Selected bg", device.theme.selected_bg),
         SettingsField::Save => (
             "Save configuration",
             app.config_path().to_string(),

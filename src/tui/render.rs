@@ -60,7 +60,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         .title_top(Line::from(mode_spans).right_aligned())
         .title_bottom(clock_line)
         .title_bottom(key_hints.right_aligned())
-        .style(Style::default().fg(theme.border))
+        .style(Style::default().fg(theme.border).bg(theme.bg))
         .borders(Borders::TOP | Borders::BOTTOM)
         .border_type(BorderType::Rounded);
 
