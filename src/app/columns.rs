@@ -193,15 +193,15 @@ impl App {
                 None => vec![address],
             }
         };
-        let n: usize = addresses
-            .iter()
-            .filter_map(|&a| self.value_history.remove(&(kind, a)))
-            .map(|h| h.len())
-            .sum();
-        log::info!("Cleared graph history at {address} ({n} sample(s))");
-        self.set_read_status(StatusMessage::ok(format!(
-            "Cleared graph history ({n} sample(s))"
-        )));
+        addresses
+            .into_iter()
+            .map(|a| (kind, a))
+            .chain(self.graph_extra_registers())
+            .for_each(|cell| {
+                let _ = self.value_history.remove(&cell);
+            });
+        log::info!("Cleared graph history");
+        self.set_read_status(StatusMessage::ok("Cleared graph history"));
     }
 
     pub fn cycle_graph_interpretation(&mut self) {
