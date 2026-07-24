@@ -1,6 +1,6 @@
 use crate::app::App;
 use crate::input::KeyCode;
-use crate::state::{SettingsFocus, State};
+use crate::state::{ReadPanel, SettingsFocus, State};
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
 use ratatui::text::Line;
@@ -25,7 +25,29 @@ pub fn make_bottom_title(theme: &Theme, app: &App) -> Line<'static> {
                     hints::footer(theme, [hold, clear, panel, read, help])
                 }
             } else {
-                hints::footer(theme, base)
+                let [panel, read, help] = base;
+                if p.panel == ReadPanel::Matrix {
+                    hints::footer(
+                        theme,
+                        [
+                            Hint::pair(kb.move_up, kb.move_down, "Row"),
+                            Hint::pair(KeyCode::Left, KeyCode::Right, "Col"),
+                            panel,
+                            read,
+                            help,
+                        ],
+                    )
+                } else {
+                    hints::footer(
+                        theme,
+                        [
+                            Hint::pair(kb.move_up, kb.move_down, "Move"),
+                            panel,
+                            read,
+                            help,
+                        ],
+                    )
+                }
             }
         }
         State::Settings(s) => {
