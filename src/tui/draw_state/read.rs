@@ -792,10 +792,16 @@ fn draw_graph(
         .chain(std::iter::once(series_name(cell)))
         .collect();
     let name_width = names.iter().map(|n| n.chars().count()).max().unwrap_or(0);
-    for name in &mut names {
+    let latest = held
+        .iter()
+        .map(|(_, history)| history[history.len() - 1].1)
+        .chain(std::iter::once(last));
+    for (name, value) in names.iter_mut().zip(latest) {
         while name.chars().count() < name_width {
             name.push(' ');
         }
+        name.push(' ');
+        name.push_str(&fmt_num(value, is_float));
     }
     let primary_name = names.pop().unwrap_or_default();
 
