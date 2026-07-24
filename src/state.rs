@@ -384,13 +384,11 @@ fn scroll_window(cursor: &mut u16, top: &mut u16, rows: u16, len: u16) {
         return;
     }
     *cursor = (*cursor).min(len - 1);
+    *top = (*top).min(len.saturating_sub(rows));
     if *cursor < *top {
         *top = *cursor;
     } else if *cursor >= top.saturating_add(rows) {
         *top = cursor.saturating_sub(rows - 1);
-    }
-    if *top >= len {
-        *top = len.saturating_sub(rows).min(*cursor);
     }
 }
 
@@ -948,4 +946,31 @@ pub enum State {
     Read(ReadParams),
     Settings(SettingsParams),
     Logs(LogViewParams),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::scroll_window;
+
+    fn run(cursor: u16, top: u16, rows: u16, len: u16) -> (u16, u16) {
+        let (mut cursor, mut top) = (cursor, top);
+        scroll_window(&mut cursor, &mut top, rows, len);
+        (cursor, top)
+    }
+
+    #[test]
+    fn scroll_window_follows_cursor() {
+        assert_eq!(run(25, 10, 10, 100), (25, 16));
+        assert_eq!(run(5, 10, 10, 100), (5, 5));
+        assert_eq!(run(12, 10, 10, 100), (12, 10));
+    }
+
+    #[test]
+    fn scroll_window_clamps_to_shorter_list() {
+        // Switching from a long panel to a short one must not leave the
+        // window hanging past the end with only the last item visible
+        assert_eq!(run(50, 45, 20, 4), (3, 0));
+        assert_eq!(run(50, 45, 3, 10), (9, 7));
+        assert_eq!(run(0, 0, 5, 0), (0, 0));
+    }
 }
