@@ -463,7 +463,15 @@ pub fn draw(
                 }
             } else {
                 let top = (params.pinned_top as usize).min(len - 1);
-                let cells = app.panel_window(top, visible as usize);
+                let mut cells = app.panel_window(top, visible as usize);
+
+                let mut used = 0usize;
+                let mut prev_kind: Option<RegisterType> = None;
+                cells.retain(|&(kind, _)| {
+                    used += 1 + usize::from(prev_kind.is_some_and(|pk| pk != kind));
+                    prev_kind = Some(kind);
+                    used <= visible as usize
+                });
                 let ascii = show_ascii.then(|| app.ascii_string_for(cells.iter().copied()));
                 frame.render_widget(ctx.list_table(&cells, top, ascii.as_deref()), rows[1]);
             }
