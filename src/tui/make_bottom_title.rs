@@ -26,12 +26,14 @@ pub fn make_bottom_title(theme: &Theme, app: &App) -> Line<'static> {
                 }
             } else {
                 let [panel, read, help] = base;
+                let kind = Hint::key(kb.toggle, "Type");
                 if p.panel == ReadPanel::Matrix {
                     hints::footer(
                         theme,
                         [
                             Hint::pair(kb.move_up, kb.move_down, "Row"),
                             Hint::pair(KeyCode::Left, KeyCode::Right, "Col"),
+                            kind,
                             panel,
                             read,
                             help,
@@ -42,6 +44,7 @@ pub fn make_bottom_title(theme: &Theme, app: &App) -> Line<'static> {
                         theme,
                         [
                             Hint::pair(kb.move_up, kb.move_down, "Move"),
+                            kind,
                             panel,
                             read,
                             help,
