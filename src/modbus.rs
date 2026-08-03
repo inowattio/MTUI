@@ -355,6 +355,7 @@ macro_rules! timeout_as {
 
             if $this.poisoned.load(Ordering::Relaxed) {
                 log::info!("Reconnecting after timeout");
+                let _ = hold.disconnect().await;
                 let mut fresh = ModbusDevice::connect_context(&$this.config).await?;
                 fresh.set_slave(Slave($this.default_slave.load(Ordering::Relaxed)));
                 *hold = fresh;
