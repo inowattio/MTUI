@@ -2,10 +2,7 @@ use crate::app::{App, AppResult};
 use crate::config::{KeybindAction, Keybinds};
 use crate::input::{KeyCode, KeyEvent};
 use crate::modbus::{DataBits, Parity, StopBits, WordOrder};
-use crate::num_ops::{
-    cycle, decrement_option_by, digit_add, digit_add_option, digit_remove, digit_remove_option,
-    increment_option_by, negate_opt_option, set_option_to_zero, set_to_zero, wrap_index,
-};
+use crate::num_ops::{cycle, digit_add, digit_remove, wrap_index};
 use crate::state::{
     CustomParams, DiscoveryField, DiscoveryParams, InterfaceKind, LogsParams, PopupKind, ReadPanel,
     SettingsCategory, SettingsField, SettingsFocus, SweepConfigParams, SweepField,
@@ -254,13 +251,13 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
             c if c == kb.write => app.write_toggle_type(),
             c if c == kb.move_up => {
                 if let Some(w) = app.write_mut() {
-                    decrement_option_by(&mut w.value, 1);
+                    w.value = w.value.and_then(|v| v.checked_sub(1));
                 }
                 app.clamp_write_value();
             }
             c if c == kb.move_down => {
                 if let Some(w) = app.write_mut() {
-                    increment_option_by(&mut w.value, 1);
+                    w.value = w.value.and_then(|v| v.checked_add(1));
                 }
                 app.clamp_write_value();
             }
@@ -269,19 +266,24 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
             c if c == kb.pause => app.write_toggle_bit(),
             KeyCode::Char('-') => {
                 if let Some(w) = app.write_mut() {
-                    negate_opt_option(&mut w.value);
+                    w.value = w.value.and_then(|v| v.checked_neg());
                 }
                 app.clamp_write_value();
             }
             KeyCode::Backspace => {
                 if let Some(w) = app.write_mut() {
-                    digit_remove_option(&mut w.value);
+                    w.value = w.value.map(|mut n| {
+                        digit_remove(&mut n);
+                        n
+                    });
                 }
             }
             KeyCode::Char(c) if c.is_ascii_digit() => {
                 let digit = c as u8 - b'0';
                 if let Some(w) = app.write_mut() {
-                    digit_add_option(&mut w.value, digit);
+                    let mut n = w.value.unwrap_or_default();
+                    digit_add(&mut n, digit);
+                    w.value = Some(n);
                 }
                 app.clamp_write_value();
             }
@@ -427,10 +429,12 @@ fn paste_digits(digits: &str, app: &mut App) {
     match app.popup_kind() {
         Some(PopupKind::Write) => {
             if let Some(w) = app.write_mut() {
-                set_option_to_zero(&mut w.value);
+                let mut n = 0;
                 for digit in digits {
-                    digit_add_option(&mut w.value, digit);
+                    digit_add(&mut n, digit);
                 }
+
+                w.value = Some(n);
             }
             app.clamp_write_value();
         }
@@ -442,7 +446,7 @@ fn paste_digits(digits: &str, app: &mut App) {
         None => {
             let cols = app.config.matrix_cols;
             let p = app.read_mut();
-            set_to_zero(&mut p.position);
+            p.position = 0;
             for digit in digits {
                 digit_add(&mut p.position, digit);
             }

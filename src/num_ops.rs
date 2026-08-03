@@ -1,29 +1,4 @@
-use num_traits::{CheckedAdd, CheckedDiv, CheckedMul, CheckedNeg, CheckedSub, Zero};
-
-pub fn negate_opt_option<T>(v: &mut Option<T>)
-where
-    T: CheckedNeg,
-{
-    *v = v.take().and_then(|n| n.checked_neg());
-}
-
-pub fn digit_remove_option<T>(v: &mut Option<T>)
-where
-    T: Copy + PartialEq + From<u8> + CheckedDiv<Output = T>,
-{
-    *v = v.and_then(|n| {
-        let ten = T::from(10);
-        let zero = T::from(0);
-
-        if n.checked_div(&ten) == Some(zero) {
-            return None;
-        }
-
-        let mut c = n;
-        digit_remove(&mut c);
-        Some(c)
-    });
-}
+use num_traits::{CheckedAdd, CheckedDiv, CheckedMul};
 
 pub fn digit_remove<T>(v: &mut T)
 where
@@ -33,17 +8,6 @@ where
     if let Some(c) = v.checked_div(&ten) {
         *v = c;
     }
-}
-
-pub fn digit_add_option<T>(v: &mut Option<T>, digit: u8)
-where
-    T: Copy + From<u8> + CheckedAdd<Output = T> + CheckedMul<Output = T>,
-{
-    *v = v.map_or(Some(T::from(digit)), |n| {
-        let mut c = n;
-        digit_add(&mut c, digit);
-        Some(c)
-    });
 }
 
 pub fn digit_add<T>(v: &mut T, digit: u8)
@@ -57,40 +21,6 @@ where
 
     if let Some(c) = v.checked_mul(&ten).and_then(|n| n.checked_add(&d)) {
         *v = c;
-    }
-}
-
-pub fn decrement_option_by<T>(v: &mut Option<T>, by: u16)
-where
-    T: Copy + From<u16> + CheckedSub<Output = T>,
-{
-    let zero = T::from(0);
-
-    *v = v.map_or(Some(zero), |c| c.checked_sub(&by.into()).or(Some(c)));
-}
-
-pub fn increment_option_by<T>(v: &mut Option<T>, by: u16)
-where
-    T: Copy + From<u16> + CheckedAdd<Output = T>,
-{
-    let zero = T::from(0);
-
-    *v = v.map_or(Some(zero), |c| c.checked_add(&by.into()).or(Some(c)));
-}
-
-pub fn set_to_zero<T>(v: &mut T)
-where
-    T: Zero,
-{
-    *v = T::zero();
-}
-
-pub fn set_option_to_zero<T>(v: &mut Option<T>)
-where
-    T: Zero,
-{
-    if let Some(v) = v {
-        *v = T::zero();
     }
 }
 
