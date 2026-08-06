@@ -87,10 +87,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         .min(full.height.saturating_sub(PADDED_MIN_HEIGHT) / 2);
     let area = full.inner(Margin::new(pad_h, pad_v));
     if area != full {
-        frame.render_widget(
-            Block::default().style(Style::default().bg(theme.bg)),
-            full,
-        );
+        frame.render_widget(Block::default().style(Style::default().bg(theme.bg)), full);
     }
     let inner = outer.inner(area);
     frame.render_widget(outer, area);
