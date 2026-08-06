@@ -9,13 +9,11 @@ pub fn make_bottom_title(theme: &Theme, app: &App) -> Line<'static> {
     let kb = &app.config.keybinds;
     match &app.state {
         State::Read(p) => {
-            let base = [
-                Hint::key(kb.switch_view, "Panel"),
-                Hint::key(kb.action, "Read"),
-                Hint::key(kb.help, "Help"),
-            ];
+            let panel = Hint::key(kb.switch_view, "Panel");
+            let read = Hint::key(kb.action, "Read");
+            let help = Hint::key(kb.help, "Help");
+
             if p.graph {
-                let [panel, read, help] = base;
                 let hold = Hint::key(kb.pin, "Hold");
                 let clear = Hint::key(kb.clear, "Clear");
                 if !app.cursor_cell().0.is_bit() && app.graph_cycle_len() > 1 {
@@ -25,7 +23,6 @@ pub fn make_bottom_title(theme: &Theme, app: &App) -> Line<'static> {
                     hints::footer(theme, [hold, clear, panel, read, help])
                 }
             } else {
-                let [panel, read, help] = base;
                 let kind = Hint::key(kb.toggle, "Type");
                 if p.panel == ReadPanel::Matrix {
                     hints::footer(
