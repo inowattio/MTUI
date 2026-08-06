@@ -28,6 +28,17 @@ required-features = ["web"]
 [features]
 web = []
 
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+nursery = { level = "deny", priority = -1 }
+suboptimal_flops = "allow"
+use_self = "allow"
+missing_const_for_fn = "allow"
+redundant_pub_crate = "allow"
+significant_drop_tightening = "allow"
+derive_partial_eq_without_eq = "allow"
+option_if_let_else = "allow"
+
 [dependencies]
 ratatui = { version = "0.30.2", default-features = false, features = ["serde"] }
 tokio = { version = "1.53.1", default-features = false, features = ["sync", "macros"] }

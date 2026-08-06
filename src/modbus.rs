@@ -243,6 +243,7 @@ mod tests {
 
     #[cfg(not(target_arch = "wasm32"))]
     #[tokio::test]
+    #[allow(clippy::collection_is_never_read)]
     async fn command_timeout_poisons_and_next_command_reconnects() {
         // A server that accepts TCP connections but never replies, so every
         // Modbus command times out. Counting accepted connections lets us
