@@ -449,6 +449,8 @@ field_enum! {
         ShowReadWindow,
         GraphTimeAxis,
         ChangedExpiry,
+        PaddingHorizontal,
+        PaddingVertical,
         ThemePreset,
         ThemeBg,
         ThemeBorder,
@@ -590,6 +592,8 @@ impl SettingsCategory {
                 GraphTimeAxis,
                 ChangedExpiry,
                 ShowContinuation,
+                PaddingHorizontal,
+                PaddingVertical,
             ],
             SettingsCategory::Theme => &[
                 ThemePreset,

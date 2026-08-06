@@ -320,6 +320,16 @@ fn field_view(
             },
             Kind::Toggle,
         ),
+        SettingsField::PaddingHorizontal => (
+            "Horizontal padding",
+            device.padding_horizontal.to_string(),
+            Kind::Number,
+        ),
+        SettingsField::PaddingVertical => (
+            "Vertical padding",
+            device.padding_vertical.to_string(),
+            Kind::Number,
+        ),
         SettingsField::ChangedExpiry => (
             "Changed highlight (ms)",
             device

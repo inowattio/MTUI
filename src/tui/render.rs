@@ -6,6 +6,7 @@ use crate::tui::make_bottom_title::make_bottom_title;
 use crate::tui::make_top_title::make_top_title;
 use crate::tui::theme::status_span;
 use chrono::Local;
+use ratatui::layout::Margin;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders};
@@ -73,7 +74,24 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         }
     }
 
-    let area = frame.area();
+    const PADDED_MIN_WIDTH: u16 = 91;
+    const PADDED_MIN_HEIGHT: u16 = 19;
+    let full = frame.area();
+    let pad_h = app
+        .config
+        .padding_horizontal
+        .min(full.width.saturating_sub(PADDED_MIN_WIDTH) / 2);
+    let pad_v = app
+        .config
+        .padding_vertical
+        .min(full.height.saturating_sub(PADDED_MIN_HEIGHT) / 2);
+    let area = full.inner(Margin::new(pad_h, pad_v));
+    if area != full {
+        frame.render_widget(
+            Block::default().style(Style::default().bg(theme.bg)),
+            full,
+        );
+    }
     let inner = outer.inner(area);
     frame.render_widget(outer, area);
 

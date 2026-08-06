@@ -68,6 +68,7 @@ impl App {
             | SettingsField::HistoryCap
             | SettingsField::MatrixCols => Some((1, u16::MAX as i64, 1)),
             SettingsField::StartupAddress => Some((0, u16::MAX as i64, 1)),
+            SettingsField::PaddingHorizontal | SettingsField::PaddingVertical => Some((0, 50, 1)),
             SettingsField::AutoUpdate | SettingsField::ChangedExpiry => {
                 Some((0, u32::MAX as i64, 100))
             }
@@ -84,6 +85,8 @@ impl App {
             SettingsField::HistoryCap => self.config.graph_history_cap as i64,
             SettingsField::MatrixCols => self.config.matrix_cols as i64,
             SettingsField::StartupAddress => self.config.startup.address as i64,
+            SettingsField::PaddingHorizontal => self.config.padding_horizontal as i64,
+            SettingsField::PaddingVertical => self.config.padding_vertical as i64,
             SettingsField::ApiPort => self.config.port.map_or(-1, |p| p as i64),
             _ => 0,
         }
@@ -101,6 +104,8 @@ impl App {
             SettingsField::HistoryCap => self.config.graph_history_cap = value as u16,
             SettingsField::MatrixCols => self.config.matrix_cols = value as u16,
             SettingsField::StartupAddress => self.config.startup.address = value as u16,
+            SettingsField::PaddingHorizontal => self.config.padding_horizontal = value as u16,
+            SettingsField::PaddingVertical => self.config.padding_vertical = value as u16,
             SettingsField::ApiPort => self.config.port = (value >= 0).then_some(value as u16),
             _ => {}
         }
