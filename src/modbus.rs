@@ -143,8 +143,7 @@ impl WordOrder {
     }
 
     pub fn split_word(self, data: u32) -> [u16; 2] {
-        let (first, second) = self.ordered((data >> 16) as u16, data as u16);
-        [first, second]
+        self.ordered((data >> 16) as u16, data as u16).into()
     }
 
     pub fn assemble(self, words: &[u16]) -> Option<u64> {
