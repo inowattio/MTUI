@@ -76,7 +76,7 @@ impl EventHandler {
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         let (sender, receiver) = mpsc::unbounded_channel();
-        tokio::spawn(event_processor(sender.clone()));
+        tokio::spawn(event_processor(sender));
 
         Self { receiver }
     }
