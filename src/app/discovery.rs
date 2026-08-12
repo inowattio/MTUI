@@ -149,6 +149,10 @@ impl App {
             Err(e) => {
                 log::error!("Connect failed \u{b7} {e}");
                 self.set_discovery_status(StatusMessage::err(format!("Connection failed: {e}")));
+                if self.device.is_none() {
+                    self.connection = ConnectionStatus::Error(e);
+                    self.logged_connection = self.connection.clone();
+                }
             }
         }
     }

@@ -4,7 +4,9 @@ use crate::config::{Config, CustomRules, Startup};
 use crate::custom::CustomRule;
 use crate::modbus::ModbusDevice;
 use crate::register::RegisterCell;
-use crate::state::{DumpParams, ImportParams, Outcome, Popup, State, StatusMessage};
+use crate::state::{
+    ConnectionStatus, DumpParams, ImportParams, Outcome, Popup, State, StatusMessage,
+};
 use std::collections::BTreeMap;
 use std::fs;
 
@@ -176,7 +178,13 @@ impl App {
 
                     Ok(format!("Loaded {path}"))
                 }
-                Err(e) => Err(format!("Load failed: device: {e}")),
+                Err(e) => {
+                    if self.device.is_none() {
+                        self.connection = ConnectionStatus::Error(e.clone());
+                        self.logged_connection = self.connection.clone();
+                    }
+                    Err(format!("Load failed: device: {e}"))
+                }
             },
             None => Err("Load failed: task stopped unexpectedly".to_string()),
         };
