@@ -109,6 +109,8 @@ impl App {
 
         self.set_discovery_status(StatusMessage::warn("Connecting\u{2026}"));
 
+        self.device = None;
+        self.sync_api_device();
         self.background_task = Some(BackgroundTask::Connect(compat::spawn(async move {
             let result = ModbusDevice::new(&device_config)
                 .await

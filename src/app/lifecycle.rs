@@ -320,6 +320,8 @@ impl App {
             log::warn!("Connection lost \u{b7} reconnecting\u{2026}");
         }
         let config = self.config.device.clone();
+        self.device = None;
+        self.sync_api_device();
         self.background_task = Some(BackgroundTask::Reconnect(compat::spawn(async move {
             ModbusDevice::new(&config).await.map_err(|e| e.to_string())
         })));
