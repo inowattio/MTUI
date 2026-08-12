@@ -471,11 +471,7 @@ async fn handle_discovery_key(key_event: KeyEvent, app: &mut App) {
 
     match key_event.code {
         c if c == kb.exit => {
-            if app.device.is_some() {
-                app.close_popup();
-            } else {
-                app.quit();
-            }
+            app.close_popup()
         }
         c if c == kb.action => match field {
             DiscoveryField::ScanNetwork => app.start_network_scan(),
