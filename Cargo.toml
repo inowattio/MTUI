@@ -1,7 +1,7 @@
 [package]
 name = "mtui"
 version = "0.9.6"
-edition = "2021"
+edition = "2024"
 license = "GPL-2.0-only"
 description = "An extensive Modbus client for your terminal."
 repository = "https://github.com/inowattio/mtui"
