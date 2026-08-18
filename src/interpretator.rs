@@ -212,10 +212,6 @@ impl Interpretor {
         prefix.chars().count() as u16
     }
 
-    pub fn shows_ascii(&self) -> bool {
-        self.config.ascii
-    }
-
     pub fn ascii_string(&self, data: &[RegisterCellValue]) -> String {
         data.iter()
             .flat_map(|&(_, v)| v.to_be_bytes())
