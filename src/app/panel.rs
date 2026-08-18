@@ -179,14 +179,14 @@ impl App {
         }
     }
 
-    pub fn inspect_lines(&self, mode: InspectMode) -> (RegisterCell, Vec<(&'static str, String)>) {
+    pub fn inspect_lines(&self, mode: InspectMode) -> Vec<(&'static str, String)> {
         let cell = self.cursor_cell();
         if mode != InspectMode::Now {
-            return (cell, self.inspect_aggregates(cell, mode));
+            return self.inspect_aggregates(cell, mode);
         }
         let (kind, addr) = cell;
         let Some(&(value, time)) = self.read_log.get(&cell) else {
-            return (cell, Vec::new());
+            return Vec::new();
         };
         let at = |address: u16| self.read_log.get(&(kind, address)).map(|&(v, _)| v);
         let custom = self.custom_value(cell, value, self.config.device.word_order, &at);
@@ -206,7 +206,7 @@ impl App {
             custom.as_deref(),
             label,
         ));
-        (cell, lines)
+        lines
     }
 
     fn inspect_aggregates(

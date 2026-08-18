@@ -9,7 +9,7 @@ use ratatui::text::{Line, Span};
 use ratatui::Frame;
 
 pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, mode: InspectMode) {
-    let (_, entries) = app.inspect_lines(mode);
+    let entries = app.inspect_lines(mode);
 
     const NAME: usize = 9;
     const VALUE: usize = 21;
