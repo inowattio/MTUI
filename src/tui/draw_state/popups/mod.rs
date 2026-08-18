@@ -17,7 +17,6 @@ mod sweep_config;
 mod write;
 
 use crate::app::App;
-use crate::input::KeyCode;
 use crate::state::Popup;
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
@@ -36,16 +35,10 @@ pub fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup
             frame,
             area,
             theme,
+            kb,
             "Dump",
             &format!("Dump {} read register(s) to a file?", app.read_count()),
             &d.result,
-            hints::footer(
-                theme,
-                [
-                    Hint::key(kb.action, "Confirm"),
-                    Hint::pair(KeyCode::Backspace, kb.exit, "Cancel"),
-                ],
-            ),
         ),
         Popup::Search(s) => search::draw(frame, area, theme, kb, s),
         Popup::Label(l) => label::draw(frame, area, theme, kb, l),
@@ -70,36 +63,14 @@ pub fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup
         Popup::DeviceId(params) => device_id::draw(frame, area, theme, app, params),
         Popup::Raw(params) => raw::draw(frame, area, theme, kb, params),
         Popup::Import(params) => import::draw(frame, area, theme, kb, params),
-        Popup::CycleConfig => confirm::draw(
-            frame,
-            area,
-            theme,
-            "Unsaved changes",
-            " Load next configuration anyway?",
-            &None,
-            hints::footer(
-                theme,
-                [
-                    Hint::key(kb.action, "Confirm"),
-                    Hint::pair(KeyCode::Backspace, kb.exit, "Cancel"),
-                ],
-            ),
-        ),
-        Popup::Quit => confirm::draw(
-            frame,
-            area,
-            theme,
-            "Unsaved changes",
-            " Quit anyway?",
-            &None,
-            hints::footer(
-                theme,
-                [
-                    Hint::key(kb.action, "Confirm"),
-                    Hint::pair(KeyCode::Backspace, kb.exit, "Cancel"),
-                ],
-            ),
-        ),
+        Popup::CycleConfig | Popup::Quit => {
+            let prompt = if matches!(popup, Popup::Quit) {
+                " Quit anyway?"
+            } else {
+                " Load next configuration anyway?"
+            };
+            confirm::draw(frame, area, theme, kb, "Unsaved changes", prompt, &None);
+        }
     }
 }
 

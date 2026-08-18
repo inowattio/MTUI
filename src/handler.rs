@@ -379,26 +379,19 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
             }
         }
 
-        PopupKind::Import => match key_event.code {
-            c if c == kb.action => app.apply_import(),
-            c if c == kb.exit => app.cancel_import(),
-            KeyCode::Backspace => app.cancel_import(),
-            _ => {}
-        },
-
-        PopupKind::CycleConfig => match key_event.code {
-            c if c == kb.action => app.confirm_cycle_config(),
-            c if c == kb.exit => app.close_popup(),
-            KeyCode::Backspace => app.close_popup(),
-            _ => {}
-        },
-
-        PopupKind::Quit => match key_event.code {
-            c if c == kb.action => app.quit(),
-            c if c == kb.exit => app.close_popup(),
-            KeyCode::Backspace => app.close_popup(),
-            _ => {}
-        },
+        PopupKind::Import | PopupKind::CycleConfig | PopupKind::Quit => {
+            type Action = fn(&mut App);
+            let (confirm, cancel): (Action, Action) = match kind {
+                PopupKind::Import => (App::apply_import, App::cancel_import),
+                PopupKind::CycleConfig => (App::confirm_cycle_config, App::close_popup),
+                _ => (App::quit, App::close_popup),
+            };
+            match key_event.code {
+                c if c == kb.action => confirm(app),
+                c if c == kb.exit || c == KeyCode::Backspace => cancel(app),
+                _ => {}
+            }
+        }
     }
 }
 
