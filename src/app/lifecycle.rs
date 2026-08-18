@@ -4,9 +4,10 @@ use super::{
     RefreshTaskResult, SweepState, WriteOutcome,
 };
 use crate::compat::{self, Instant, TaskPoll};
-use crate::config::{Config, InterpretorConfig};
+use crate::config::Config;
+use crate::custom::CustomRule;
 use crate::interpretator::Interpretor;
-use crate::modbus::{Interface, ModbusDevice, WordOrder};
+use crate::modbus::{Interface, ModbusDevice};
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
 use crate::state::{
     ConnectionStatus, Popup, PopupKind, PopupPayload, ReadPanel, ReadParams, State, StatusMessage,
@@ -32,16 +33,18 @@ impl App {
             .inspect_err(|e| println!("Could not initialize device: {e}"))
             .ok();
 
+        let (interpreter, pinned_registers, labels, custom_rules) =
+            Self::derive_config_views(&config);
         let mut app = Self {
             origin_config_path: config_path.clone(),
             config_path,
-            interpreter: Interpretor::new(InterpretorConfig::default(), WordOrder::default()),
-            pinned_registers: Vec::new(),
-            labels: BTreeMap::new(),
-            custom_rules: BTreeMap::new(),
+            interpreter,
+            pinned_registers,
+            labels,
+            custom_rules,
             state: State::Read(ReadParams::default()),
-            config: Config::default(),
-            device: None,
+            config,
+            device,
             running: true,
             connection: ConnectionStatus::Unknown,
             frame: 0,
@@ -84,7 +87,11 @@ impl App {
             clipboard: None,
         };
 
-        app.apply_config(config, device);
+        app.sync_api_device();
+        app.sync_api_read_only();
+        app.sync_api_allow_slave_id();
+        app.refresh_writes_log_state();
+
         app.mark_config_saved();
         app.visible_rows.set(app.config.registers_batch.max(1));
 
@@ -107,13 +114,30 @@ impl App {
         app
     }
 
+    fn derive_config_views(
+        config: &Config,
+    ) -> (
+        Interpretor,
+        Vec<RegisterCell>,
+        BTreeMap<RegisterCell, String>,
+        BTreeMap<RegisterCell, CustomRule>,
+    ) {
+        (
+            Interpretor::new(config.interpretations.clone(), config.device.word_order),
+            config.pinned_registers.clone().into(),
+            config.labels.clone().into(),
+            config.custom_rules.clone().into(),
+        )
+    }
+
     pub(super) fn apply_config(&mut self, config: Config, device: Option<ModbusDevice>) {
+        (
+            self.interpreter,
+            self.pinned_registers,
+            self.labels,
+            self.custom_rules,
+        ) = Self::derive_config_views(&config);
         self.device = device;
-        self.interpreter =
-            Interpretor::new(config.interpretations.clone(), config.device.word_order);
-        self.pinned_registers = config.pinned_registers.clone().into();
-        self.labels = config.labels.clone().into();
-        self.custom_rules = config.custom_rules.clone().into();
         self.config = config;
         self.sweep.active = false;
 
