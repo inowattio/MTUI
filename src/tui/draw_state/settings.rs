@@ -193,11 +193,12 @@ fn field_view(
             "API port",
             match device.port {
                 None => "off".to_string(),
-                _ if app.api_bind_state() == ApiBindState::Failed => match device.port {
-                    Some(0) => "any (bind failed)".to_string(),
-                    Some(n) => format!("{n} (bind failed)"),
-                    None => unreachable!(),
-                },
+                Some(0) if app.api_bind_state() == ApiBindState::Failed => {
+                    "any (bind failed)".to_string()
+                }
+                Some(n) if app.api_bind_state() == ApiBindState::Failed => {
+                    format!("{n} (bind failed)")
+                }
                 Some(0) => match app.api_bound_port() {
                     Some(bound) => format!("any (:{bound})"),
                     None => "any".to_string(),

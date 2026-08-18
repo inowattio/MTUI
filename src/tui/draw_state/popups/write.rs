@@ -39,15 +39,13 @@ pub(super) fn draw(
     write: &WriteParams,
     custom: Option<String>,
 ) {
-    if write.write_type == WriteType::Coil {
-        draw_coil(frame, area, theme, kb, write, custom);
-        return;
-    }
-
     let bits: u16 = match write.write_type {
         WriteType::Word => 16,
         WriteType::DWord => 32,
-        WriteType::Coil => 1, // handled by draw_coil above
+        WriteType::Coil => {
+            draw_coil(frame, area, theme, kb, write, custom);
+            return;
+        }
     };
     let raw = write.value.unwrap_or(0) as u32;
 
