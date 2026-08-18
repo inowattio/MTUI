@@ -13,20 +13,12 @@ use ratatui::Frame;
 
 const CATEGORY_WIDTH: u16 = 18;
 
-#[derive(Clone, Copy)]
-enum Kind {
-    Number,
-    Toggle,
-    Action,
-    Color(Color),
-}
-
 fn on_off(value: bool) -> String {
     if value { "on" } else { "off" }.to_string()
 }
 
-fn color_view(name: &'static str, color: Color) -> (&'static str, String, Kind) {
-    (name, color.to_string(), Kind::Color(color))
+fn color_view(name: &'static str, color: Color) -> (&'static str, String, Option<Color>) {
+    (name, color.to_string(), Some(color))
 }
 
 pub fn draw(params: &SettingsParams, app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
@@ -141,17 +133,17 @@ fn render_field(
     selected: bool,
     theme: &Theme,
 ) -> Line<'static> {
-    let (name, value, kind) = field_view(app, params, field);
+    let (name, value, color) = field_view(app, params, field);
 
-    let value_text = match (selected, kind) {
-        (true, Kind::Action) => format!("{value}  \u{2190} enter"),
-        (s, Kind::Color(_)) => edit_value(value, s, true),
-        (s, k) => edit_value(value, s, matches!(k, Kind::Toggle)),
+    let value_text = if selected && field.is_action() {
+        format!("{value}  \u{2190} enter")
+    } else {
+        edit_value(value, selected, field.is_toggle() || field.is_theme_color())
     };
 
-    match kind {
-        Kind::Color(color) => color_row(theme, name, value_text, color, selected),
-        _ => field_row(theme, name, 24, value_text, selected),
+    match color {
+        Some(color) => color_row(theme, name, value_text, color, selected),
+        None => field_row(theme, name, 24, value_text, selected),
     }
 }
 
@@ -174,39 +166,29 @@ fn field_view(
     app: &App,
     params: &SettingsParams,
     field: SettingsField,
-) -> (&'static str, String, Kind) {
+) -> (&'static str, String, Option<Color>) {
     let device = &app.config;
     match field {
-        SettingsField::Name => ("Config name", device.name.clone(), Kind::Number),
-        SettingsField::RegistersBatch => (
-            "Registers batch",
-            device.registers_batch.to_string(),
-            Kind::Number,
-        ),
+        SettingsField::Name => ("Config name", device.name.clone(), None),
+        SettingsField::RegistersBatch => {
+            ("Registers batch", device.registers_batch.to_string(), None)
+        }
         SettingsField::AutoUpdate => (
             "Auto-update (ms)",
             device
                 .update_interval_ms
                 .map_or_else(|| "off".to_string(), |n| n.to_string()),
-            Kind::Number,
+            None,
         ),
         SettingsField::HistoryCap => (
             "Graph history cap",
             device.graph_history_cap.to_string(),
-            Kind::Number,
+            None,
         ),
-        SettingsField::MatrixCols => (
-            "Matrix columns",
-            device.matrix_cols.to_string(),
-            Kind::Number,
-        ),
-        SettingsField::IgnoreDirty => (
-            "Ignore unsaved warning",
-            on_off(device.ignore_dirty),
-            Kind::Toggle,
-        ),
-        SettingsField::ShowMock => ("Show mock device", on_off(device.show_mock), Kind::Toggle),
-        SettingsField::ReadOnly => ("Read-only", on_off(device.read_only), Kind::Toggle),
+        SettingsField::MatrixCols => ("Matrix columns", device.matrix_cols.to_string(), None),
+        SettingsField::IgnoreDirty => ("Ignore unsaved warning", on_off(device.ignore_dirty), None),
+        SettingsField::ShowMock => ("Show mock device", on_off(device.show_mock), None),
+        SettingsField::ReadOnly => ("Read-only", on_off(device.read_only), None),
         SettingsField::ApiPort => (
             "API port",
             match device.port {
@@ -222,95 +204,73 @@ fn field_view(
                 },
                 Some(n) => n.to_string(),
             },
-            Kind::Number,
+            None,
         ),
         SettingsField::ApiSlaveOverride => (
             "API slave id override",
             on_off(device.allow_api_slave_id),
-            Kind::Toggle,
+            None,
         ),
-        SettingsField::LogWrites => (
-            "Log writes to file",
-            on_off(device.log_writes),
-            Kind::Toggle,
-        ),
+        SettingsField::LogWrites => ("Log writes to file", on_off(device.log_writes), None),
         SettingsField::StartupPanel => (
             "Startup panel",
             device.startup.panel.name().to_string(),
-            Kind::Toggle,
+            None,
         ),
         SettingsField::StartupType => (
             "Startup type",
             device.startup.register_type.name().to_string(),
-            Kind::Toggle,
+            None,
         ),
-        SettingsField::StartupAddress => (
-            "Startup address",
-            device.startup.address.to_string(),
-            Kind::Number,
-        ),
-        SettingsField::CycleHoldings => (
-            "Cycle holdings",
-            on_off(device.cycle_types.holdings),
-            Kind::Toggle,
-        ),
-        SettingsField::CycleInputs => (
-            "Cycle inputs",
-            on_off(device.cycle_types.inputs),
-            Kind::Toggle,
-        ),
-        SettingsField::CycleCoils => (
-            "Cycle coils",
-            on_off(device.cycle_types.coils),
-            Kind::Toggle,
-        ),
+        SettingsField::StartupAddress => {
+            ("Startup address", device.startup.address.to_string(), None)
+        }
+        SettingsField::CycleHoldings => {
+            ("Cycle holdings", on_off(device.cycle_types.holdings), None)
+        }
+        SettingsField::CycleInputs => ("Cycle inputs", on_off(device.cycle_types.inputs), None),
+        SettingsField::CycleCoils => ("Cycle coils", on_off(device.cycle_types.coils), None),
         SettingsField::CycleDiscretes => (
             "Cycle discretes",
             on_off(device.cycle_types.discretes),
-            Kind::Toggle,
+            None,
         ),
         SettingsField::ClearPins => (
             "Clear pinned registers",
             format!("{} pinned", app.pinned_registers.len()),
-            Kind::Action,
+            None,
         ),
         SettingsField::ClearLabels => (
             "Clear labels",
             format!("{} labels", app.label_count()),
-            Kind::Action,
+            None,
         ),
         SettingsField::ClearCustom => (
             "Clear custom rules",
             format!("{} rules", app.custom_count()),
-            Kind::Action,
+            None,
         ),
         SettingsField::ShowContinuation => (
             "Show \"part of\" marker",
             on_off(device.custom_rules.show_continuation),
-            Kind::Toggle,
+            None,
         ),
-        SettingsField::ShowClock => ("Show clock", on_off(device.show_clock), Kind::Toggle),
+        SettingsField::ShowClock => ("Show clock", on_off(device.show_clock), None),
         SettingsField::ShowFrameTime => (
             "Show frame render time",
             on_off(device.show_frame_time),
-            Kind::Toggle,
+            None,
         ),
-        SettingsField::ShowRam => ("Show RAM usage", on_off(device.show_ram), Kind::Toggle),
-        SettingsField::ShowAscii => (
-            "Show ASCII of all data",
-            on_off(device.show_ascii),
-            Kind::Toggle,
-        ),
+        SettingsField::ShowRam => ("Show RAM usage", on_off(device.show_ram), None),
+        SettingsField::ShowAscii => ("Show ASCII of all data", on_off(device.show_ascii), None),
         SettingsField::ShowInactiveTabs => (
             "Show inactive tabs",
             on_off(device.show_inactive_tabs),
-            Kind::Toggle,
+            None,
         ),
-        SettingsField::ShowReadWindow => (
-            "Show read window",
-            on_off(device.show_read_window),
-            Kind::Toggle,
-        ),
+        SettingsField::ShowReadWindow => {
+            ("Show read window", on_off(device.show_read_window), None)
+        }
         SettingsField::GraphTimeAxis => (
             "Graph X axis",
             if device.graph_time_axis {
@@ -318,24 +278,24 @@ fn field_view(
             } else {
                 "samples".to_string()
             },
-            Kind::Toggle,
+            None,
         ),
         SettingsField::PaddingHorizontal => (
             "Horizontal padding",
             device.padding_horizontal.to_string(),
-            Kind::Number,
+            None,
         ),
         SettingsField::PaddingVertical => (
             "Vertical padding",
             device.padding_vertical.to_string(),
-            Kind::Number,
+            None,
         ),
         SettingsField::ChangedExpiry => (
             "Changed highlight (ms)",
             device
                 .changed_expiry_ms
                 .map_or_else(|| "never".to_string(), |n| n.to_string()),
-            Kind::Number,
+            None,
         ),
         SettingsField::ThemePreset => (
             "Preset",
@@ -343,7 +303,7 @@ fn field_view(
                 .iter()
                 .find(|&&(_, t)| t == device.theme)
                 .map_or_else(|| "custom".to_string(), |&(name, _)| name.to_string()),
-            Kind::Toggle,
+            None,
         ),
         SettingsField::ThemeBorder => color_view("Frame border", device.theme.border),
         SettingsField::ThemeAccent => color_view("Accent / titles", device.theme.accent),
@@ -357,17 +317,9 @@ fn field_view(
         SettingsField::ThemeErr => color_view("Error", device.theme.err),
         SettingsField::ThemeSelectedFg => color_view("Selected text", device.theme.selected_fg),
         SettingsField::ThemeSelectedBg => color_view("Selected bg", device.theme.selected_bg),
-        SettingsField::Save => (
-            "Save configuration",
-            app.config_path().to_string(),
-            Kind::Action,
-        ),
-        SettingsField::LoadConfig => ("Load configuration", params.load_path.clone(), Kind::Number),
-        SettingsField::NextConfig => (
-            "Next configuration",
-            device.next_config.clone(),
-            Kind::Number,
-        ),
+        SettingsField::Save => ("Save configuration", app.config_path().to_string(), None),
+        SettingsField::LoadConfig => ("Load configuration", params.load_path.clone(), None),
+        SettingsField::NextConfig => ("Next configuration", device.next_config.clone(), None),
     }
 }
 

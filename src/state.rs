@@ -533,6 +533,16 @@ impl SettingsField {
                 | SettingsField::ThemeSelectedBg
         )
     }
+
+    pub fn is_action(self) -> bool {
+        matches!(
+            self,
+            SettingsField::ClearPins
+                | SettingsField::ClearLabels
+                | SettingsField::ClearCustom
+                | SettingsField::Save
+        )
+    }
 }
 
 field_enum! {
