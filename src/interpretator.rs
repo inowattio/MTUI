@@ -139,24 +139,50 @@ impl Interpretor {
     fn rebuild_header(&mut self) {
         let mut header = String::new();
 
-        if self.config.time {
-            let _ = write!(header, "{:<w$} ", "time", w = TIME_W);
-        }
-        if self.config.ago {
-            let _ = write!(header, "{:<w$} ", "ago", w = AGO_W);
-        }
+        self.write_prefix(&mut header, "time", "ago");
         let _ = write!(header, "{:>w$}: ", "address", w = ADDRESS_W);
 
-        for col in COLUMNS {
-            if (col.enabled)(&self.config) {
-                let _ = write!(header, "{:<w$} ", col.name, w = col.width);
-            }
+        for col in self.enabled_columns() {
+            let _ = write!(header, "{:<w$} ", col.name, w = col.width);
         }
         if self.config.label {
             header.push_str("label");
         }
 
         self.header = header;
+    }
+
+    fn enabled_columns(&self) -> impl Iterator<Item = &'static ColumnSpec> + '_ {
+        COLUMNS.iter().filter(|col| (col.enabled)(&self.config))
+    }
+
+    fn write_prefix(&self, out: &mut String, time: &str, ago: &str) {
+        if self.config.time {
+            let _ = write!(out, "{time:<w$} ", w = TIME_W);
+        }
+        if self.config.ago {
+            let _ = write!(out, "{ago:<w$} ", w = AGO_W);
+        }
+    }
+
+    fn write_row_prefix(
+        &self,
+        out: &mut String,
+        address: u16,
+        read: Option<(DateTime<Local>, DateTime<Local>)>,
+    ) {
+        let time = read
+            .filter(|_| self.config.time)
+            .map(|(read_at, _)| read_at.format("%H:%M:%S.%3f").to_string());
+        let ago = read
+            .filter(|_| self.config.ago)
+            .map(|(read_at, now)| format_ago(now.signed_duration_since(read_at)));
+        self.write_prefix(
+            out,
+            time.as_deref().unwrap_or(NO_VALUE),
+            ago.as_deref().unwrap_or(NO_VALUE),
+        );
+        self.write_address(out, address);
     }
 
     pub fn toggle(&mut self, column: Column) {
@@ -181,14 +207,9 @@ impl Interpretor {
     }
 
     pub fn prefix_width(&self) -> u16 {
-        let mut width = (ADDRESS_W + 2) as u16; // address + ": "
-        if self.config.time {
-            width += (TIME_W + 1) as u16; // value + trailing space
-        }
-        if self.config.ago {
-            width += (AGO_W + 1) as u16;
-        }
-        width
+        let mut prefix = String::new();
+        self.write_row_prefix(&mut prefix, 0, None);
+        prefix.chars().count() as u16
     }
 
     pub fn shows_ascii(&self) -> bool {
@@ -212,19 +233,10 @@ impl Interpretor {
 
     pub fn placeholder(&self, address: u16, label: Option<&str>) -> String {
         let mut row = String::new();
+        self.write_row_prefix(&mut row, address, None);
 
-        if self.config.time {
-            let _ = write!(row, "{NO_VALUE:<w$} ", w = TIME_W);
-        }
-        if self.config.ago {
-            let _ = write!(row, "{NO_VALUE:<w$} ", w = AGO_W);
-        }
-        self.write_address(&mut row, address);
-
-        for col in COLUMNS {
-            if (col.enabled)(&self.config) {
-                let _ = write!(row, "{NO_VALUE:<w$} ", w = col.width);
-            }
+        for col in self.enabled_columns() {
+            let _ = write!(row, "{NO_VALUE:<w$} ", w = col.width);
         }
 
         if self.config.label {
@@ -248,27 +260,17 @@ impl Interpretor {
         label: Option<&str>,
     ) -> String {
         let mut row = String::new();
-        if self.config.time {
-            let formatted = read_at.format("%H:%M:%S.%3f").to_string();
-            let _ = write!(row, "{formatted:<w$} ", w = TIME_W);
-        }
-        if self.config.ago {
-            let ago = format_ago(now.signed_duration_since(read_at));
-            let _ = write!(row, "{ago:<w$} ", w = AGO_W);
-        }
-        self.write_address(&mut row, address);
+        self.write_row_prefix(&mut row, address, Some((read_at, now)));
 
         let ctx = RowCtx::new(self.word_order, value, next, custom);
-        for col in COLUMNS {
-            if (col.enabled)(&self.config) {
-                let mark = row.len();
-                (col.render)(&ctx, col.width, &mut row);
-                let written = row[mark..].chars().count();
-                for _ in written..col.width {
-                    row.push(' ');
-                }
+        for col in self.enabled_columns() {
+            let mark = row.len();
+            (col.render)(&ctx, col.width, &mut row);
+            let written = row[mark..].chars().count();
+            for _ in written..col.width {
                 row.push(' ');
             }
+            row.push(' ');
         }
 
         if self.config.label {
