@@ -265,7 +265,7 @@ pub enum CustomField {
     Suffix,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct CustomParams {
     pub address: u16,
     pub register_type: RegisterType,
