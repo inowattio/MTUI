@@ -32,7 +32,7 @@ impl fmt::Display for Elapsed {
 impl std::error::Error for Elapsed {}
 
 pub async fn timeout<F: Future>(duration: Duration, future: F) -> Result<F::Output, Elapsed> {
-    use futures::future::{select, Either};
+    use futures::future::{Either, select};
     let sleep = sleep(duration);
     futures::pin_mut!(future);
     futures::pin_mut!(sleep);

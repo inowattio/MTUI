@@ -3,9 +3,9 @@ use crate::state::{SweepConfigParams, SweepField};
 use crate::tui::draw_state::{edit_value, field_row, marker};
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
-use ratatui::Frame;
 
 pub(super) fn draw(
     frame: &mut Frame,

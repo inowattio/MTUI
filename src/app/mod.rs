@@ -16,7 +16,7 @@ use std::collections::{BTreeMap, VecDeque};
 use std::fs;
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::atomic::Ordering;
-use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU8, AtomicUsize};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU16, AtomicUsize};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 

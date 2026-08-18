@@ -3,10 +3,10 @@ use crate::logger::{self, LogEntry, LogLevel};
 use crate::state::LogViewParams;
 use crate::tui::draw_state::dim_line;
 use crate::tui::theme::Theme;
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use ratatui::Frame;
 
 // " HH:MM:SS " + "TAG " before each message.
 const PREFIX_W: usize = 15;

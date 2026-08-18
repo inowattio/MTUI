@@ -1,4 +1,4 @@
-use super::{fuzzy_rank, App};
+use super::{App, fuzzy_rank};
 use crate::config::Column;
 use crate::num_ops::{step_hscroll, wrap_index};
 use crate::register::RegisterCell;

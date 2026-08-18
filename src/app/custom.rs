@@ -1,5 +1,5 @@
-use super::{build_custom_rule, App};
-use crate::custom::{parse_bit, parse_enum, parse_op, CustomRepr};
+use super::{App, build_custom_rule};
+use crate::custom::{CustomRepr, parse_bit, parse_enum, parse_op};
 use crate::interpretator::fmt_num;
 use crate::modbus::WordOrder;
 use crate::num_ops::{cycle, wrap_index};

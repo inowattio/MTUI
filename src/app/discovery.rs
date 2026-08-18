@@ -1,6 +1,6 @@
-#[cfg(not(target_arch = "wasm32"))]
-use super::{scan_subnet, subnet_prefix_from, ScanProgress};
 use super::{App, BackgroundTask, ConnectTaskResult, ReconnectState};
+#[cfg(not(target_arch = "wasm32"))]
+use super::{ScanProgress, scan_subnet, subnet_prefix_from};
 use crate::compat;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::compat::TaskPoll;
@@ -12,10 +12,10 @@ use crate::state::{
     ConnectionStatus, DiscoveryField, DiscoveryParams, InterfaceKind, Popup, StatusMessage,
 };
 #[cfg(not(target_arch = "wasm32"))]
+use std::sync::Arc;
+#[cfg(not(target_arch = "wasm32"))]
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
-#[cfg(not(target_arch = "wasm32"))]
-use std::sync::Arc;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Duration;
 

@@ -4,9 +4,9 @@ use crate::state::InspectMode;
 use crate::tui::draw_state::dim_line;
 use crate::tui::hints::Hint;
 use crate::tui::theme::Theme;
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
-use ratatui::Frame;
 
 pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, mode: InspectMode) {
     let entries = app.inspect_lines(mode);

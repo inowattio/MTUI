@@ -6,8 +6,9 @@ use crate::interpretator::fmt_num;
 use crate::register::{RegisterCell, RegisterType};
 use crate::state::{ReadPanel, ReadParams};
 use crate::tui::hints::{self, Hint};
-use crate::tui::theme::{spinner_frame, Theme};
+use crate::tui::theme::{Theme, spinner_frame};
 use chrono::{DateTime, Local, Utc};
+use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::symbols;
@@ -15,7 +16,6 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{
     Axis, Block, Cell, Chart, Dataset, GraphType, LegendPosition, Paragraph, Row, Table,
 };
-use ratatui::Frame;
 
 fn panel_block(theme: &Theme, active: ReadPanel, show_inactive: bool) -> Block<'static> {
     if !show_inactive {

@@ -5,11 +5,11 @@ use crate::state::{SettingsCategory, SettingsField, SettingsFocus, SettingsParam
 use crate::tui::draw_state::{edit_value, field_row, marker};
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
+use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
-use ratatui::Frame;
 
 const CATEGORY_WIDTH: u16 = 18;
 

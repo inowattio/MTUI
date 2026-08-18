@@ -2,11 +2,11 @@ use crate::app::App;
 use crate::state::{DiscoveryField, DiscoveryParams, InterfaceKind};
 use crate::tui::draw_state::{dim_line, edit_value, marker};
 use crate::tui::hints::{self, Hint};
-use crate::tui::theme::{spinner_frame, Theme};
+use crate::tui::theme::{Theme, spinner_frame};
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
-use ratatui::Frame;
 use std::net::Ipv4Addr;
 
 pub fn draw(params: &DiscoveryParams, app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {

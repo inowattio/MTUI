@@ -53,11 +53,7 @@ impl RegisterType {
     }
 
     pub fn access(self) -> &'static str {
-        if self.is_writable() {
-            "RW"
-        } else {
-            "RO"
-        }
+        if self.is_writable() { "RW" } else { "RO" }
     }
 }
 

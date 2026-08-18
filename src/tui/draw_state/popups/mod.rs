@@ -20,11 +20,11 @@ use crate::app::App;
 use crate::state::Popup;
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Borders, Clear, Paragraph};
-use ratatui::Frame;
 
 pub fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup: &Popup) {
     let kb = &app.config.keybinds;

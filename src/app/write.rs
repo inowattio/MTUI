@@ -236,15 +236,15 @@ impl App {
     }
 
     pub fn clamp_write_value(&mut self) {
-        if let Some(w) = self.write_mut() {
-            if let Some(value) = w.value {
-                let (lo, hi) = match w.write_type {
-                    WriteType::Coil => (0, 1),
-                    WriteType::Word => (i16::MIN as i64, u16::MAX as i64),
-                    WriteType::DWord => (i32::MIN as i64, u32::MAX as i64),
-                };
-                w.value = Some(value.clamp(lo, hi));
-            }
+        if let Some(w) = self.write_mut()
+            && let Some(value) = w.value
+        {
+            let (lo, hi) = match w.write_type {
+                WriteType::Coil => (0, 1),
+                WriteType::Word => (i16::MIN as i64, u16::MAX as i64),
+                WriteType::DWord => (i32::MIN as i64, u32::MAX as i64),
+            };
+            w.value = Some(value.clamp(lo, hi));
         }
     }
 

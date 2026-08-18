@@ -4,10 +4,10 @@ use crate::register::RegisterCell;
 use crate::state::SearchParams;
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
-use ratatui::Frame;
 
 const LABEL_W: usize = 24;
 

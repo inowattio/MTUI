@@ -545,17 +545,17 @@ fn handle_scan_popup_key(key_event: KeyEvent, app: &mut App, kb: Keybinds) {
             }
         }
         c if c == kb.move_up => {
-            if let Some(d) = app.discovery_mut() {
-                if len > 0 {
-                    d.scan_selected = wrap_index(d.scan_selected, len, false);
-                }
+            if let Some(d) = app.discovery_mut()
+                && len > 0
+            {
+                d.scan_selected = wrap_index(d.scan_selected, len, false);
             }
         }
         c if c == kb.move_down => {
-            if let Some(d) = app.discovery_mut() {
-                if len > 0 {
-                    d.scan_selected = wrap_index(d.scan_selected, len, true);
-                }
+            if let Some(d) = app.discovery_mut()
+                && len > 0
+            {
+                d.scan_selected = wrap_index(d.scan_selected, len, true);
             }
         }
         _ => {}
@@ -699,11 +699,11 @@ fn handle_keybinds_key(key_event: KeyEvent, app: &mut App) {
 
     // Capture mode: the next key (other than Esc) becomes the new binding.
     if app.settings().is_some_and(|s| s.kb_capturing) {
-        if key_event.code != KeyCode::Esc {
-            if let Some(&action) = KeybindAction::ALL.get(selected) {
-                app.config.keybinds.set(action, key_event.code);
-                app.dirty = true;
-            }
+        if key_event.code != KeyCode::Esc
+            && let Some(&action) = KeybindAction::ALL.get(selected)
+        {
+            app.config.keybinds.set(action, key_event.code);
+            app.dirty = true;
         }
         if let Some(s) = app.settings_mut() {
             s.kb_capturing = false;

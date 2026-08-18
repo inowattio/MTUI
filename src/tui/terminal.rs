@@ -4,8 +4,8 @@ use crate::handler::{handle_key_events, handle_paste};
 use crate::tui::render;
 use crossterm::event::{DisableBracketedPaste, EnableBracketedPaste};
 use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
-use ratatui::backend::Backend;
 use ratatui::Terminal;
+use ratatui::backend::Backend;
 use std::io;
 use std::panic;
 

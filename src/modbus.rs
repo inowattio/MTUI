@@ -9,13 +9,13 @@ use std::future::Future;
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 #[cfg(not(target_arch = "wasm32"))]
 use std::str::FromStr;
-use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::time::Duration;
 use tokio::sync::Mutex;
+use tokio_modbus::client::{Client, Context, Reader, Writer};
 #[cfg(not(target_arch = "wasm32"))]
 use tokio_modbus::client::{rtu, tcp};
-use tokio_modbus::client::{Client, Context, Reader, Writer};
 use tokio_modbus::prelude::{ReadCode, ReadDeviceIdentificationResponse, SlaveContext};
 use tokio_modbus::slave::{Slave, SlaveId};
 use tokio_modbus::{Request, Response};
@@ -172,9 +172,9 @@ mod tests {
     #[cfg(not(target_arch = "wasm32"))]
     use super::{DeviceConfig, Interface, InterfaceNetworkParams, ModbusDevice, RegisterType};
     #[cfg(not(target_arch = "wasm32"))]
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    #[cfg(not(target_arch = "wasm32"))]
     use std::sync::Arc;
+    #[cfg(not(target_arch = "wasm32"))]
+    use std::sync::atomic::{AtomicUsize, Ordering};
     #[cfg(not(target_arch = "wasm32"))]
     use std::time::Duration;
 
@@ -298,10 +298,12 @@ mod tests {
 
         // Poisoned: the next command must reconnect (a second TCP connection)
         // before touching the wire, discarding the desynchronized transport.
-        assert!(device
-            .read_typed(None, RegisterType::Holding, 0, 1)
-            .await
-            .is_err());
+        assert!(
+            device
+                .read_typed(None, RegisterType::Holding, 0, 1)
+                .await
+                .is_err()
+        );
         wait_for(&connections, 2).await;
         assert_eq!(
             connections.load(Ordering::Relaxed),

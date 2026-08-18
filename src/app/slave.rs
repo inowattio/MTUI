@@ -1,4 +1,4 @@
-use super::{parse_hex_bytes, App, BackgroundTask, DeviceIdTaskResult, RawTaskResult};
+use super::{App, BackgroundTask, DeviceIdTaskResult, RawTaskResult, parse_hex_bytes};
 use crate::compat;
 use crate::modbus::DeviceIdAccess;
 use crate::num_ops::{cycle, step_hscroll, wrap_index};

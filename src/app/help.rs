@@ -1,4 +1,4 @@
-use super::{fuzzy_rank, App};
+use super::{App, fuzzy_rank};
 use crate::config::KeybindAction;
 use crate::num_ops::wrap_index;
 use crate::state::{HelpParams, Popup};

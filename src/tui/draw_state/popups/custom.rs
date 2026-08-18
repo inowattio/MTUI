@@ -4,9 +4,9 @@ use crate::state::{CustomField, CustomParams};
 use crate::tui::draw_state::{edit_value, field_row};
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
-use ratatui::Frame;
 
 fn section(field: CustomField) -> &'static str {
     match field {

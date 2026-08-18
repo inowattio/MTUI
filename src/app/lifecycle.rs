@@ -1,7 +1,7 @@
 use super::{
-    default_config_path, fetch_config_or_exit, reconnect_backoff, App, BackgroundTask, CommStats,
-    ConnectTaskResult, DeviceIdTaskResult, LoadConfigTaskResult, RawTaskResult, ReconnectState,
-    RefreshTaskResult, SweepState, WriteOutcome,
+    App, BackgroundTask, CommStats, ConnectTaskResult, DeviceIdTaskResult, LoadConfigTaskResult,
+    RawTaskResult, ReconnectState, RefreshTaskResult, SweepState, WriteOutcome,
+    default_config_path, fetch_config_or_exit, reconnect_backoff,
 };
 use crate::compat::{self, Instant, TaskPoll};
 use crate::config::Config;
@@ -16,7 +16,7 @@ use crate::writes_log::WritesLogState;
 use chrono::Utc;
 use std::cell::Cell;
 use std::collections::BTreeMap;
-use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU8};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU16};
 use std::sync::{Arc, Mutex};
 
 impl App {
@@ -690,14 +690,14 @@ impl App {
                     }
                 }
                 self.pending_write = None;
-                if self.is_reading() {
-                    if let Some(w) = self.write_mut() {
-                        w.result = Some(if outcome.ok {
-                            StatusMessage::ok(outcome.message)
-                        } else {
-                            StatusMessage::err(outcome.message)
-                        });
-                    }
+                if self.is_reading()
+                    && let Some(w) = self.write_mut()
+                {
+                    w.result = Some(if outcome.ok {
+                        StatusMessage::ok(outcome.message)
+                    } else {
+                        StatusMessage::err(outcome.message)
+                    });
                 }
             }
         }

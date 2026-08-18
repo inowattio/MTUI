@@ -14,9 +14,9 @@ fn main() {
     println!("cargo:rustc-env=MTUI_GIT_HASH={hash}");
 
     println!("cargo:rerun-if-changed=.git/HEAD");
-    if let Ok(head) = std::fs::read_to_string(".git/HEAD") {
-        if let Some(reference) = head.strip_prefix("ref:").map(str::trim) {
-            println!("cargo:rerun-if-changed=.git/{reference}");
-        }
+    if let Ok(head) = std::fs::read_to_string(".git/HEAD")
+        && let Some(reference) = head.strip_prefix("ref:").map(str::trim)
+    {
+        println!("cargo:rerun-if-changed=.git/{reference}");
     }
 }

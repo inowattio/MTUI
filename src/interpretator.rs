@@ -235,10 +235,10 @@ impl Interpretor {
             let _ = write!(row, "{NO_VALUE:<w$} ", w = col.width);
         }
 
-        if self.config.label {
-            if let Some(text) = label {
-                row.push_str(text);
-            }
+        if self.config.label
+            && let Some(text) = label
+        {
+            row.push_str(text);
         }
 
         row
@@ -269,10 +269,10 @@ impl Interpretor {
             row.push(' ');
         }
 
-        if self.config.label {
-            if let Some(t) = label {
-                row.push_str(t);
-            }
+        if self.config.label
+            && let Some(t) = label
+        {
+            row.push_str(t);
         }
 
         row
@@ -310,11 +310,7 @@ fn float_cell<T: std::fmt::Display + std::fmt::LowerExp>(x: T, width: usize, out
 
 fn glyph(b: u8) -> char {
     let c = b as char;
-    if c.is_ascii_graphic() {
-        c
-    } else {
-        '·'
-    }
+    if c.is_ascii_graphic() { c } else { '·' }
 }
 
 fn ascii_cell(a: u16, b: u16, out: &mut String) {

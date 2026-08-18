@@ -5,9 +5,9 @@ use crate::state::DeviceIdParams;
 use crate::tui::draw_state::dim_line;
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
-use ratatui::Frame;
 
 // " 0x00  " before each value.
 const PREFIX_W: usize = 7;

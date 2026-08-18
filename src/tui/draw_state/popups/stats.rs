@@ -5,9 +5,9 @@ use crate::interpretator::format_ago;
 use crate::tui::hints::Hint;
 use crate::tui::theme::Theme;
 use chrono::Utc;
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
-use ratatui::Frame;
 use std::fmt::Write as _;
 
 const ERROR_W: usize = 48;

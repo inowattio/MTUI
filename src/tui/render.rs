@@ -6,11 +6,11 @@ use crate::tui::make_bottom_title::make_bottom_title;
 use crate::tui::make_top_title::make_top_title;
 use crate::tui::theme::status_span;
 use chrono::Local;
+use ratatui::Frame;
 use ratatui::layout::Margin;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders};
-use ratatui::Frame;
 
 pub fn render(app: &mut App, frame: &mut Frame) {
     let device = app.config.display_device();
@@ -23,13 +23,13 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         let clock = Local::now().format("%H:%M:%S.%3f").to_string();
         clock_spans.push(Span::styled(format!("{clock} "), theme.accent_style()));
     }
-    if app.config.show_ram {
-        if let Some(bytes) = crate::compat::ram_bytes() {
-            clock_spans.push(Span::styled(
-                format!("{:.1}MiB ", bytes as f64 / (1024. * 1024.)),
-                theme.dim_style(),
-            ));
-        }
+    if app.config.show_ram
+        && let Some(bytes) = crate::compat::ram_bytes()
+    {
+        clock_spans.push(Span::styled(
+            format!("{:.1}MiB ", bytes as f64 / (1024. * 1024.)),
+            theme.dim_style(),
+        ));
     }
     if app.config.show_frame_time {
         clock_spans.push(Span::styled(

@@ -53,10 +53,10 @@ async fn event_processor(tx: mpsc::UnboundedSender<Event>) {
             Some(Ok(evt)) = crossterm_event => {
                 match evt {
                     CrosstermEvent::Key(key) => {
-                        if key.kind == KeyEventKind::Press {
-                            if let Some(code) = convert_key(key.code) {
-                                let _ = tx.send(Event::Key(input::KeyEvent::new(code)));
-                            }
+                        if key.kind == KeyEventKind::Press
+                            && let Some(code) = convert_key(key.code)
+                        {
+                            let _ = tx.send(Event::Key(input::KeyEvent::new(code)));
                         }
                     },
                     CrosstermEvent::Resize(x, y) => {

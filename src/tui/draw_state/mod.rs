@@ -4,11 +4,7 @@ pub mod read;
 pub mod settings;
 
 pub(crate) fn marker(selected: bool) -> &'static str {
-    if selected {
-        "> "
-    } else {
-        "  "
-    }
+    if selected { "> " } else { "  " }
 }
 
 pub(crate) fn cyclable(value: &str) -> String {

@@ -1,4 +1,4 @@
-use super::{save_config, App, BackgroundTask, ImportPayload, LoadConfigTaskResult};
+use super::{App, BackgroundTask, ImportPayload, LoadConfigTaskResult, save_config};
 use crate::compat;
 use crate::config::{Config, CustomRules, Startup};
 use crate::custom::CustomRule;

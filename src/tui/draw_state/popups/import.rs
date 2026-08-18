@@ -3,9 +3,9 @@ use crate::input::KeyCode;
 use crate::state::ImportParams;
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
-use ratatui::Frame;
 
 pub(super) fn draw(
     frame: &mut Frame,

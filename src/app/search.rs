@@ -1,4 +1,4 @@
-use super::{fuzzy_score, App};
+use super::{App, fuzzy_score};
 use crate::register::{RegisterCell, RegisterType};
 use crate::state::{LabelParams, Popup, ReadPanel, SearchParams};
 

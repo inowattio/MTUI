@@ -1,8 +1,8 @@
 use chrono::{DateTime, Local};
 use log::{Level, LevelFilter, Log, Metadata, Record};
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 const CAP: usize = 1000;
 const TARGET_PREFIX: &str = "mtui";

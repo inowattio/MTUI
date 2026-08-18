@@ -6,8 +6,8 @@ mod native {
     use mtui::event::EventHandler;
     use mtui::logger;
     use mtui::tui::Tui;
-    use ratatui::backend::CrosstermBackend;
     use ratatui::Terminal;
+    use ratatui::backend::CrosstermBackend;
     use std::io;
 
     /// A TUI for Modbus reads and writes (RTU and TCP).

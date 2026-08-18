@@ -10,8 +10,8 @@ mod web {
     use ratatui::Terminal;
     use ratzilla::backend::webgl2::WebGl2BackendOptions;
     use ratzilla::web_sys;
-    use ratzilla::web_sys::wasm_bindgen::prelude::Closure;
     use ratzilla::web_sys::wasm_bindgen::JsCast;
+    use ratzilla::web_sys::wasm_bindgen::prelude::Closure;
     use ratzilla::{DomBackend, FontAtlasConfig, WebGl2Backend};
     use std::cell::{Cell, RefCell};
     use std::io;
