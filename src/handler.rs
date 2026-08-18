@@ -1,4 +1,4 @@
-use crate::app::{App, AppResult};
+use crate::app::App;
 use crate::config::{KeybindAction, Keybinds};
 use crate::input::{KeyCode, KeyEvent};
 use crate::modbus::{DataBits, Parity, StopBits, WordOrder};
@@ -8,38 +8,38 @@ use crate::state::{
     SettingsCategory, SettingsField, SettingsFocus, SweepConfigParams, SweepField,
 };
 
-pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
+pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) {
     let rows = app.visible_rows.get();
     let kb = app.config.keybinds;
 
     if app.settings().is_some() {
         handle_settings_key(key_event, app).await;
-        return Ok(());
+        return;
     }
 
     if app.log_view().is_some() {
         handle_logs_view_key(key_event, app);
-        return Ok(());
+        return;
     }
 
     if let Some(kind) = app.popup_kind() {
         handle_popup_key(kind, key_event, app).await;
-        return Ok(());
+        return;
     }
 
     if app.read().graph && key_event.code == kb.dump {
         app.cycle_graph_interpretation();
-        return Ok(());
+        return;
     }
 
     if app.read().graph && key_event.code == kb.pin {
         app.graph_hold_series();
-        return Ok(());
+        return;
     }
 
     if let Some(action) = kb.action_for(key_event.code) {
         run_action(app, action).await;
-        return Ok(());
+        return;
     }
 
     match key_event.code {
@@ -53,7 +53,7 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         KeyCode::Right => app.scroll_columns(true),
         KeyCode::Char(c) => {
             if !c.is_ascii_digit() {
-                return Ok(());
+                return;
             }
             let digit = c as u8 - b'0';
             {
@@ -71,7 +71,6 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<
         }
         _ => {}
     }
-    Ok(())
 }
 
 fn step_pos(value: u16, up: bool, step: u16) -> u16 {

@@ -361,7 +361,7 @@ mod web {
             let dirty = key_dirty.clone();
             wasm_bindgen_futures::spawn_local(async move {
                 let mut app = app.lock().await;
-                let _ = handle_key_events(key, &mut app).await;
+                handle_key_events(key, &mut app).await;
                 dirty.set(true);
             });
         });
