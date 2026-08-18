@@ -19,47 +19,46 @@ pub enum KeyCode {
     PageDown,
 }
 
-impl fmt::Display for KeyCode {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            KeyCode::Char(' ') => f.write_str("Space"),
-            KeyCode::Char(c) => write!(f, "{c}"),
-            KeyCode::Esc => f.write_str("Esc"),
-            KeyCode::Enter => f.write_str("Enter"),
-            KeyCode::Backspace => f.write_str("Backspace"),
-            KeyCode::Delete => f.write_str("Delete"),
-            KeyCode::Tab => f.write_str("Tab"),
-            KeyCode::BackTab => f.write_str("Shift+Tab"),
-            KeyCode::Up => f.write_str("Up"),
-            KeyCode::Down => f.write_str("Down"),
-            KeyCode::Left => f.write_str("Left"),
-            KeyCode::Right => f.write_str("Right"),
-            KeyCode::PageUp => f.write_str("PageUp"),
-            KeyCode::PageDown => f.write_str("PageDown"),
+macro_rules! named_keys {
+    ( $( $variant:ident $( ( $ch:literal ) )? => $canonical:literal $( | $alias:literal )* ),+ $(,)? ) => {
+        const NAMED_KEYS: &[(KeyCode, &str, &[&str])] = &[
+            $( (KeyCode::$variant $( ( $ch ) )?, $canonical, &[$( $alias ),*]) ),+
+        ];
+
+        impl fmt::Display for KeyCode {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                match self {
+                    $( KeyCode::$variant $( ( $ch ) )? => f.write_str($canonical), )+
+                    KeyCode::Char(c) => write!(f, "{c}"),
+                }
+            }
         }
-    }
+    };
+}
+
+named_keys! {
+    Char(' ') => "Space",
+    Esc => "Esc" | "escape",
+    Enter => "Enter" | "return",
+    Backspace => "Backspace",
+    Delete => "Delete" | "del",
+    Tab => "Tab",
+    BackTab => "Shift+Tab" | "backtab",
+    Up => "Up",
+    Down => "Down",
+    Left => "Left",
+    Right => "Right",
+    PageUp => "PageUp",
+    PageDown => "PageDown",
 }
 
 impl KeyCode {
-    pub fn from_name(s: &str) -> Option<Self> {
-        let named = match s.to_ascii_lowercase().as_str() {
-            "esc" | "escape" => Some(KeyCode::Esc),
-            "enter" | "return" => Some(KeyCode::Enter),
-            "backspace" => Some(KeyCode::Backspace),
-            "delete" | "del" => Some(KeyCode::Delete),
-            "tab" => Some(KeyCode::Tab),
-            "shift+tab" | "backtab" => Some(KeyCode::BackTab),
-            "up" => Some(KeyCode::Up),
-            "down" => Some(KeyCode::Down),
-            "left" => Some(KeyCode::Left),
-            "right" => Some(KeyCode::Right),
-            "pageup" => Some(KeyCode::PageUp),
-            "pagedown" => Some(KeyCode::PageDown),
-            "space" => Some(KeyCode::Char(' ')),
-            _ => None,
-        };
-        if named.is_some() {
-            return named;
+    fn from_name(s: &str) -> Option<Self> {
+        let named = NAMED_KEYS.iter().find(|(_, canonical, aliases)| {
+            canonical.eq_ignore_ascii_case(s) || aliases.iter().any(|a| a.eq_ignore_ascii_case(s))
+        });
+        if let Some(&(key, _, _)) = named {
+            return Some(key);
         }
         let mut chars = s.chars();
         let c = chars.next()?;
