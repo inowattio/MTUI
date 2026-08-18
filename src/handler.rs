@@ -574,29 +574,11 @@ fn handle_scan_popup_key(key_event: KeyEvent, app: &mut App, kb: Keybinds) {
 
 fn cycle_field(d: &mut DiscoveryParams, field: DiscoveryField, forward: bool, show_mock: bool) {
     let kinds: &[InterfaceKind] = if show_mock {
-        &[
-            InterfaceKind::Mock,
-            InterfaceKind::Wired,
-            InterfaceKind::Network,
-        ]
+        &InterfaceKind::ALL
     } else {
         &[InterfaceKind::Wired, InterfaceKind::Network]
     };
     const BAUDS: [u32; 6] = [9600, 19200, 38400, 57600, 115200, 230400];
-    const DATA_BITS: [DataBits; 4] = [
-        DataBits::Five,
-        DataBits::Six,
-        DataBits::Seven,
-        DataBits::Eight,
-    ];
-    const PARITY: [Parity; 3] = [Parity::None, Parity::Odd, Parity::Even];
-    const STOP_BITS: [StopBits; 2] = [StopBits::One, StopBits::Two];
-    const ORDERS: [WordOrder; 4] = [
-        WordOrder::ABCD,
-        WordOrder::BADC,
-        WordOrder::CDAB,
-        WordOrder::DCBA,
-    ];
 
     match field {
         DiscoveryField::Interface => {
@@ -610,10 +592,10 @@ fn cycle_field(d: &mut DiscoveryParams, field: DiscoveryField, forward: bool, sh
             }
         }
         DiscoveryField::Baud => d.baud_rate = cycle(&BAUDS, d.baud_rate, forward),
-        DiscoveryField::DataBits => d.data_bits = cycle(&DATA_BITS, d.data_bits, forward),
-        DiscoveryField::Parity => d.parity = cycle(&PARITY, d.parity, forward),
-        DiscoveryField::StopBits => d.stop_bits = cycle(&STOP_BITS, d.stop_bits, forward),
-        DiscoveryField::WordOrder => d.word_order = cycle(&ORDERS, d.word_order, forward),
+        DiscoveryField::DataBits => d.data_bits = cycle(&DataBits::ALL, d.data_bits, forward),
+        DiscoveryField::Parity => d.parity = cycle(&Parity::ALL, d.parity, forward),
+        DiscoveryField::StopBits => d.stop_bits = cycle(&StopBits::ALL, d.stop_bits, forward),
+        DiscoveryField::WordOrder => d.word_order = cycle(&WordOrder::ALL, d.word_order, forward),
         _ => {}
     }
 }

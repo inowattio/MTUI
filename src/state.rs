@@ -67,11 +67,13 @@ macro_rules! popups {
     };
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum InterfaceKind {
-    Mock,
-    Wired,
-    Network,
+field_enum! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum InterfaceKind {
+        Mock,
+        Wired,
+        Network,
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -1,6 +1,8 @@
 use super::{App, BackgroundTask, PendingWrite, WriteOutcome, WriteType};
 use crate::compat;
 use crate::constants::UNINTERPRETABLE;
+use crate::modbus::WordOrder;
+use crate::num_ops::cycle;
 use crate::register::RegisterType;
 use crate::state::{Popup, StatusMessage, WriteParams};
 
@@ -76,7 +78,7 @@ impl App {
     }
 
     pub fn toggle_word_order(&mut self) {
-        let next = self.config.device.word_order.next();
+        let next = cycle(&WordOrder::ALL, self.config.device.word_order, true);
         self.config.device.word_order = next;
         self.interpreter.set_word_order(next);
         if let Some(device) = &mut self.device {

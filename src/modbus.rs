@@ -39,6 +39,10 @@ macro_rules! serial_enum {
             $( $variant ),+
         }
 
+        impl $name {
+            pub const ALL: [$name; serial_enum!(@count $($variant)+)] = [$( $name::$variant ),+];
+        }
+
         #[cfg(not(target_arch = "wasm32"))]
         impl From<$name> for $native {
             fn from(val: $name) -> Self {
@@ -67,6 +71,8 @@ macro_rules! serial_enum {
             }
         }
     };
+    (@count) => (0usize);
+    (@count $head:ident $($tail:ident)*) => (1usize + serial_enum!(@count $($tail)*));
 }
 
 serial_enum!(DataBits => tokio_serial::DataBits, "Failed to parse data bits", {
@@ -113,6 +119,8 @@ pub enum WordOrder {
 }
 
 impl WordOrder {
+    pub const ALL: [WordOrder; 4] = [Self::ABCD, Self::BADC, Self::CDAB, Self::DCBA];
+
     fn swaps(self) -> (bool, bool) {
         match self {
             Self::ABCD => (false, false),
@@ -155,15 +163,6 @@ impl WordOrder {
                 self.make_word(*words.get(2)?, *words.get(3)?),
             ),
         })
-    }
-
-    pub fn next(self) -> Self {
-        match self {
-            Self::ABCD => Self::BADC,
-            Self::BADC => Self::CDAB,
-            Self::CDAB => Self::DCBA,
-            Self::DCBA => Self::ABCD,
-        }
     }
 }
 
