@@ -52,12 +52,12 @@ impl App {
         }
     }
 
-    pub fn search_commit(&mut self) -> bool {
+    pub fn search_commit(&mut self) {
         let target = self
             .popup_as::<SearchParams>()
             .and_then(|s| s.matches.get(s.selected as usize).map(|(cell, _)| *cell));
         let Some((register_type, position)) = target else {
-            return false;
+            return;
         };
 
         let from = {
@@ -68,7 +68,6 @@ impl App {
 
         self.jump_to_cell(register_type, position);
         self.read_mut().popup = None;
-        true
     }
 
     pub fn cycle_position(&mut self) {

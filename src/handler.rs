@@ -292,9 +292,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
 
         PopupKind::Search => match key_event.code {
             c if c == kb.exit => app.close_popup(),
-            c if c == kb.action => {
-                let _ = app.search_commit();
-            }
+            c if c == kb.action => app.search_commit(),
             c if c == kb.move_up => app.search_move(false),
             c if c == kb.move_down => app.search_move(true),
             KeyCode::Backspace => app.search_backspace(),
