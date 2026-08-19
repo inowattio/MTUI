@@ -50,49 +50,26 @@ impl App {
         self.read_mut().popup = Some(Popup::Stats);
     }
 
-    pub fn panel_cell_at(&self, index: usize) -> Option<RegisterCell> {
+    fn panel_cells(&self) -> Box<dyn Iterator<Item = RegisterCell> + '_> {
         match self.read().panel {
             ReadPanel::Main | ReadPanel::Pinned | ReadPanel::Matrix => {
-                self.pinned_registers.get(index).copied()
+                Box::new(self.pinned_registers.iter().copied())
             }
-            ReadPanel::Labeled => self.labels.keys().nth(index).copied(),
-            ReadPanel::Custom => self.custom_rules.keys().nth(index).copied(),
+            ReadPanel::Labeled => Box::new(self.labels.keys().copied()),
+            ReadPanel::Custom => Box::new(self.custom_rules.keys().copied()),
         }
+    }
+
+    pub fn panel_cell_at(&self, index: usize) -> Option<RegisterCell> {
+        self.panel_cells().nth(index)
     }
 
     pub fn panel_window(&self, start: usize, count: usize) -> Vec<RegisterCell> {
-        match self.read().panel {
-            ReadPanel::Main | ReadPanel::Pinned | ReadPanel::Matrix => self
-                .pinned_registers
-                .iter()
-                .skip(start)
-                .take(count)
-                .copied()
-                .collect(),
-            ReadPanel::Labeled => self
-                .labels
-                .keys()
-                .skip(start)
-                .take(count)
-                .copied()
-                .collect(),
-            ReadPanel::Custom => self
-                .custom_rules
-                .keys()
-                .skip(start)
-                .take(count)
-                .copied()
-                .collect(),
-        }
+        self.panel_cells().skip(start).take(count).collect()
     }
 
     pub fn panel_len(&self) -> u16 {
-        let len = match self.read().panel {
-            ReadPanel::Main | ReadPanel::Pinned | ReadPanel::Matrix => self.pinned_registers.len(),
-            ReadPanel::Labeled => self.labels.len(),
-            ReadPanel::Custom => self.custom_rules.len(),
-        };
-        len as u16
+        self.panel_cells().count() as u16
     }
 
     pub fn panel_read_cells(&self) -> Vec<RegisterCell> {
@@ -103,11 +80,7 @@ impl App {
     pub(super) fn panel_refresh_window(&self, batch: usize) -> Vec<RegisterCell> {
         let cursor = self.cursor_cell();
         let kind = cursor.0;
-        let same: Vec<RegisterCell> = self
-            .panel_window(0, self.panel_len() as usize)
-            .into_iter()
-            .filter(|&(k, _)| k == kind)
-            .collect();
+        let same: Vec<RegisterCell> = self.panel_cells().filter(|&(k, _)| k == kind).collect();
         if same.is_empty() {
             return Vec::new();
         }
@@ -128,13 +101,7 @@ impl App {
     }
 
     fn panel_has_type(&self, kind: RegisterType) -> bool {
-        match self.read().panel {
-            ReadPanel::Main | ReadPanel::Pinned | ReadPanel::Matrix => {
-                self.pinned_registers.iter().any(|&(k, _)| k == kind)
-            }
-            ReadPanel::Labeled => self.labels.keys().any(|&(k, _)| k == kind),
-            ReadPanel::Custom => self.custom_rules.keys().any(|&(k, _)| k == kind),
-        }
+        self.panel_cells().any(|(k, _)| k == kind)
     }
 
     pub fn panel_group_breaks(&self) -> u16 {
