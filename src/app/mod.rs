@@ -80,7 +80,21 @@ enum BackgroundTask {
     Connect(TaskHandle<ConnectTaskResult>),
     DeviceId(TaskHandle<DeviceIdTaskResult>),
     Raw(TaskHandle<RawTaskResult>),
+    SlaveScan(TaskHandle<SlaveScanTaskResult>),
     LoadConfig(TaskHandle<LoadConfigTaskResult>),
+}
+
+#[derive(Debug)]
+enum SlaveProbeOutcome {
+    Response(Vec<u16>),
+    Exception(String),
+    Silent,
+}
+
+#[derive(Debug)]
+struct SlaveScanTaskResult {
+    slave_id: u8,
+    outcome: SlaveProbeOutcome,
 }
 
 #[derive(Debug)]
@@ -633,5 +647,6 @@ mod panel;
 mod search;
 mod settings;
 mod slave;
+mod slave_scan;
 mod sweep;
 mod write;

@@ -5,7 +5,8 @@ use crate::modbus::{DataBits, Parity, StopBits, WordOrder};
 use crate::num_ops::{cycle, digit_add, digit_remove, wrap_index};
 use crate::state::{
     CustomParams, DiscoveryField, DiscoveryParams, InterfaceKind, LogsParams, PopupKind, ReadPanel,
-    SettingsCategory, SettingsField, SettingsFocus, SweepConfigParams, SweepField,
+    SettingsCategory, SettingsField, SettingsFocus, SlaveField, SlaveParams, SweepConfigParams,
+    SweepField,
 };
 
 pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) {
@@ -328,22 +329,33 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
             }
         }
 
-        PopupKind::Slave => match key_event.code {
-            c if c == kb.exit || c == kb.slave => app.close_popup(),
-            c if c == kb.action => app.commit_slave().await,
-            KeyCode::Backspace => {
-                if let Some(value) = app.popup_as_mut::<u16>() {
-                    digit_remove(value);
+        PopupKind::Slave => {
+            let Some(field) = app
+                .popup_as::<SlaveParams>()
+                .map(SlaveParams::current_field)
+            else {
+                return;
+            };
+            match key_event.code {
+                c if c == kb.exit || c == kb.slave => app.close_popup(),
+                c if c == kb.action => match field {
+                    SlaveField::Id => app.commit_slave().await,
+                    SlaveField::Hit(index) => app.commit_slave_hit(index).await,
+                    SlaveField::From | SlaveField::To | SlaveField::Mode | SlaveField::Scan => {
+                        app.slave_scan_action()
+                    }
+                },
+                c if c == kb.move_up => app.slave_move(false),
+                c if c == kb.move_down => app.slave_move(true),
+                c if c == kb.pause && field == SlaveField::Mode => app.slave_scan_toggle(),
+                KeyCode::Left | KeyCode::Right if field == SlaveField::Mode => {
+                    app.slave_scan_toggle()
                 }
+                KeyCode::Backspace => app.slave_backspace(field),
+                KeyCode::Char(c) if c.is_ascii_digit() => app.slave_digit(field, c),
+                _ => {}
             }
-            KeyCode::Char(c) if c.is_ascii_digit() => {
-                let digit = c as u8 - b'0';
-                if let Some(value) = app.popup_as_mut::<u16>() {
-                    digit_add(value, digit);
-                }
-            }
-            _ => {}
-        },
+        }
 
         PopupKind::Logs => match key_event.code {
             c if c == kb.exit || c == kb.logs => app.close_popup(),

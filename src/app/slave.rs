@@ -2,28 +2,47 @@ use super::{App, BackgroundTask, DeviceIdTaskResult, RawTaskResult, parse_hex_by
 use crate::compat;
 use crate::modbus::DeviceIdAccess;
 use crate::num_ops::{cycle, step_hscroll, wrap_index};
-use crate::state::{DeviceIdParams, Popup, RawField, RawParams, StatusMessage};
+use crate::state::{DeviceIdParams, Popup, RawField, RawParams, SlaveParams, StatusMessage};
 
 impl App {
     pub fn open_slave(&mut self) {
-        let current = self.config.device.slave_id as u16;
-        self.read_mut().popup = Some(Popup::Slave(current));
+        let (address, amount) = self.read_window();
+        let register_type = self.read().register_type;
+        self.read_mut().popup = Some(Popup::Slave(SlaveParams {
+            id: self.config.device.slave_id,
+            register_type,
+            address,
+            amount,
+            ..Default::default()
+        }));
     }
 
     pub async fn commit_slave(&mut self) {
-        let id = self
-            .popup_as::<u16>()
-            .map(|value| (*value).min(u8::MAX as u16) as u8);
+        let id = self.popup_as::<SlaveParams>().map(|p| p.id);
         if let Some(id) = id {
-            if let Some(device) = &self.device {
-                device.set_slave(id).await;
-            }
-            self.config.device.slave_id = id;
-            self.refresh_writes_log_state();
-            log::info!("Slave id set to {id}");
-            self.read_mut().popup = None;
-            self.refresh().await;
+            self.apply_slave(id).await;
         }
+    }
+
+    pub async fn commit_slave_hit(&mut self, index: usize) {
+        let id = self
+            .popup_as::<SlaveParams>()
+            .and_then(|p| p.hits.get(index))
+            .map(|hit| hit.slave_id);
+        if let Some(id) = id {
+            self.apply_slave(id).await;
+        }
+    }
+
+    async fn apply_slave(&mut self, id: u8) {
+        if let Some(device) = &self.device {
+            device.set_slave(id).await;
+        }
+        self.config.device.slave_id = id;
+        self.refresh_writes_log_state();
+        log::info!("Slave id set to {id}");
+        self.read_mut().popup = None;
+        self.refresh().await;
     }
 
     pub fn open_device_id(&mut self) {

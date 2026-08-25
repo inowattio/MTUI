@@ -1,7 +1,7 @@
 use super::{
     App, BackgroundTask, CommStats, ConnectTaskResult, DeviceIdTaskResult, LoadConfigTaskResult,
-    RawTaskResult, ReconnectState, RefreshTaskResult, SweepState, WriteOutcome,
-    default_config_path, fetch_config_or_exit, reconnect_backoff,
+    RawTaskResult, ReconnectState, RefreshTaskResult, SlaveScanTaskResult, SweepState,
+    WriteOutcome, default_config_path, fetch_config_or_exit, reconnect_backoff,
 };
 use crate::compat::{self, Instant, TaskPoll};
 use crate::config::Config;
@@ -624,6 +624,7 @@ impl App {
             Connect(Option<ConnectTaskResult>),
             DeviceId(Option<DeviceIdTaskResult>),
             Raw(Option<RawTaskResult>),
+            SlaveScan(Option<SlaveScanTaskResult>),
             LoadConfig(Option<LoadConfigTaskResult>),
         }
 
@@ -645,6 +646,7 @@ impl App {
             Some(BackgroundTask::Connect(handle)) => poll_task!(handle, Done::Connect),
             Some(BackgroundTask::DeviceId(handle)) => poll_task!(handle, Done::DeviceId),
             Some(BackgroundTask::Raw(handle)) => poll_task!(handle, Done::Raw),
+            Some(BackgroundTask::SlaveScan(handle)) => poll_task!(handle, Done::SlaveScan),
             Some(BackgroundTask::LoadConfig(handle)) => poll_task!(handle, Done::LoadConfig),
         };
         self.background_task = None;
@@ -654,6 +656,7 @@ impl App {
             Done::Connect(result) => self.apply_connect_result(result),
             Done::DeviceId(result) => self.apply_device_id_result(result),
             Done::Raw(result) => self.apply_raw_result(result),
+            Done::SlaveScan(result) => self.apply_slave_scan_result(result),
             Done::LoadConfig(result) => self.apply_load_config_result(result),
             Done::Refresh(Some(result)) => self.apply_refresh_result(result),
             Done::Refresh(None) => {

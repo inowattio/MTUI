@@ -351,6 +351,78 @@ impl SweepConfigParams {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SlaveField {
+    Id,
+    From,
+    To,
+    Mode,
+    Scan,
+    Hit(usize),
+}
+
+#[derive(Debug, PartialEq)]
+pub struct SlaveScanHit {
+    pub slave_id: u8,
+    pub result: Result<Vec<u16>, String>,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct SlaveParams {
+    pub id: u8,
+    pub selected: u16,
+    pub from: u8,
+    pub to: u8,
+    pub stop_at_first: bool,
+    pub active: bool,
+    pub current: u8,
+    pub register_type: RegisterType,
+    pub address: u16,
+    pub amount: u16,
+    pub hits: Vec<SlaveScanHit>,
+    pub status: Option<StatusMessage>,
+}
+
+impl Default for SlaveParams {
+    fn default() -> Self {
+        Self {
+            id: 0,
+            selected: 0,
+            from: 1,
+            to: 247,
+            stop_at_first: false,
+            active: false,
+            current: 0,
+            register_type: RegisterType::default(),
+            address: 0,
+            amount: 1,
+            hits: Vec::new(),
+            status: None,
+        }
+    }
+}
+
+impl SlaveParams {
+    const FIXED: [SlaveField; 5] = [
+        SlaveField::Id,
+        SlaveField::From,
+        SlaveField::To,
+        SlaveField::Mode,
+        SlaveField::Scan,
+    ];
+
+    pub fn fields(&self) -> Vec<SlaveField> {
+        let mut fields = Self::FIXED.to_vec();
+        fields.extend((0..self.hits.len()).map(SlaveField::Hit));
+        fields
+    }
+
+    pub fn current_field(&self) -> SlaveField {
+        let fields = self.fields();
+        fields[(self.selected as usize).min(fields.len() - 1)]
+    }
+}
+
 #[derive(Debug, Default, PartialEq)]
 pub struct SearchParams {
     pub query: String,
@@ -822,7 +894,7 @@ popups! {
     Custom(CustomParams),
     Columns(ColumnsParams),
     Write(WriteParams),
-    Slave(u16),
+    Slave(SlaveParams),
     Logs(LogsParams),
     SweepConfig(SweepConfigParams),
     Inspect(InspectMode),
