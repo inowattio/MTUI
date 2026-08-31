@@ -353,6 +353,16 @@ impl App {
         }
     }
 
+    pub fn adjust_batch(&mut self, increase: bool) {
+        let batch = self.config.registers_batch;
+        self.config.registers_batch = if increase {
+            batch.saturating_add(1)
+        } else {
+            batch.saturating_sub(1).max(1)
+        };
+        self.refresh_dirty();
+    }
+
     pub fn toggle_pause(&mut self) {
         self.paused = !self.paused;
         if self.paused {

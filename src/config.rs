@@ -126,6 +126,8 @@ keybinds! {
     MoveDown => move_down : "Move down" = MOVE_DOWN,
     PageUp => page_up : "Page up" = PAGE_UP,
     PageDown => page_down : "Page down" = PAGE_DOWN,
+    BatchDecrease => batch_decrease : "Decrease registers batch" = BATCH_DECREASE,
+    BatchIncrease => batch_increase : "Increase registers batch" = BATCH_INCREASE,
 }
 
 impl Keybinds {

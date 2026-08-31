@@ -160,6 +160,7 @@ async fn run_action(app: &mut App, action: KeybindAction) {
             p.scroll_pinned(scroll_rows, len);
             p.scroll_to_cursor(rows, cols);
         }
+        BatchDecrease | BatchIncrease => app.adjust_batch(action == BatchIncrease),
         MoveUp | MoveDown | PageUp | PageDown => {
             move_read_cursor(app, app.config.keybinds.get(action));
         }

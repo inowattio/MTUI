@@ -49,4 +49,6 @@ pub mod keybind {
     pub const MOVE_DOWN: KeyCode = KeyCode::Down;
     pub const PAGE_UP: KeyCode = KeyCode::Char(',');
     pub const PAGE_DOWN: KeyCode = KeyCode::Char('.');
+    pub const BATCH_DECREASE: KeyCode = KeyCode::Char('[');
+    pub const BATCH_INCREASE: KeyCode = KeyCode::Char(']');
 }
