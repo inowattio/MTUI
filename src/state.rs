@@ -495,6 +495,7 @@ field_enum! {
     pub enum SettingsField {
         Name,
         RegistersBatch,
+        ReadFullCustoms,
         AutoUpdate,
         HistoryCap,
         MatrixCols,
@@ -556,6 +557,7 @@ impl SettingsField {
         matches!(
             self,
             SettingsField::ReadOnly
+                | SettingsField::ReadFullCustoms
                 | SettingsField::ApiSlaveOverride
                 | SettingsField::LogWrites
                 | SettingsField::ShowContinuation
@@ -656,6 +658,7 @@ impl SettingsCategory {
             ],
             SettingsCategory::Data => &[
                 RegistersBatch,
+                ReadFullCustoms,
                 AutoUpdate,
                 ReadOnly,
                 HistoryCap,

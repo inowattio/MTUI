@@ -173,6 +173,11 @@ fn field_view(
         SettingsField::RegistersBatch => {
             ("Registers batch", device.registers_batch.to_string(), None)
         }
+        SettingsField::ReadFullCustoms => (
+            "Read full custom values",
+            on_off(device.read_full_customs),
+            None,
+        ),
         SettingsField::AutoUpdate => (
             "Auto-update (ms)",
             device

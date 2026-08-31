@@ -406,6 +406,7 @@ impl App {
         device: &ModbusDevice,
         regs: &[RegisterCell],
         batch: u16,
+        full_spans: &BTreeMap<RegisterCell, u16>,
     ) -> Result<Vec<RegisterCellValue>, anyhow::Error> {
         let batch = batch.max(1) as usize;
         let mut collection = Vec::with_capacity(regs.len());
@@ -413,17 +414,7 @@ impl App {
         let mut i = 0usize;
         while i < regs.len() {
             let (kind, start_addr) = regs[i];
-
-            let mut run_len = 1usize;
-            while i + run_len < regs.len() && run_len < batch {
-                let (next_kind, next_addr) = regs[i + run_len];
-
-                if next_kind == kind && start_addr.checked_add(run_len as u16) == Some(next_addr) {
-                    run_len += 1;
-                } else {
-                    break;
-                }
-            }
+            let run_len = read_run_len(regs, i, batch, full_spans);
 
             let values = Self::read_words(device, kind, start_addr, run_len as u16).await?;
             anyhow::ensure!(
@@ -498,6 +489,12 @@ impl App {
             regs
         };
 
+        let full_spans = if self.config.read_full_customs {
+            custom_full_spans(&self.custom_rules)
+        } else {
+            BTreeMap::new()
+        };
+
         self.background_task = Some(BackgroundTask::Refresh(compat::spawn(async move {
             let read_began = Instant::now();
             let (main_data, pinned_data) = if read_main {
@@ -508,16 +505,22 @@ impl App {
                     None
                 } else {
                     Some(
-                        Self::aquire_pinned_data_with(&device, &panel_registers, amount)
-                            .await
-                            .map_err(|e| e.to_string()),
+                        Self::aquire_pinned_data_with(
+                            &device,
+                            &panel_registers,
+                            amount,
+                            &full_spans,
+                        )
+                        .await
+                        .map_err(|e| e.to_string()),
                     )
                 };
                 (Some(main), extra)
             } else {
-                let pinned = Self::aquire_pinned_data_with(&device, &panel_registers, amount)
-                    .await
-                    .map_err(|e| e.to_string());
+                let pinned =
+                    Self::aquire_pinned_data_with(&device, &panel_registers, amount, &full_spans)
+                        .await
+                        .map_err(|e| e.to_string());
                 (None, Some(pinned))
             };
             let read_duration = read_began.elapsed();
@@ -714,5 +717,136 @@ impl App {
                 }
             }
         }
+    }
+}
+
+fn custom_full_spans(rules: &BTreeMap<RegisterCell, CustomRule>) -> BTreeMap<RegisterCell, u16> {
+    let mut spans = BTreeMap::new();
+    for (&(kind, _), rule) in rules {
+        let words = rule.word_addresses();
+        let mut run_start = 0usize;
+        for i in 1..=words.len() {
+            if i < words.len() && words[i - 1].checked_add(1) == Some(words[i]) {
+                continue;
+            }
+            let end = words[i - 1];
+            if i - run_start > 1 {
+                for &word in &words[run_start..i] {
+                    let span = spans.entry((kind, word)).or_insert(end);
+                    *span = (*span).max(end);
+                }
+            }
+            run_start = i;
+        }
+    }
+    spans
+}
+
+fn read_run_len(
+    regs: &[RegisterCell],
+    start: usize,
+    batch: usize,
+    full_spans: &BTreeMap<RegisterCell, u16>,
+) -> usize {
+    let (kind, start_addr) = regs[start];
+    let mut run_len = 1usize;
+    while start + run_len < regs.len() {
+        let Some(next_addr) = start_addr.checked_add(run_len as u16) else {
+            break;
+        };
+        let last_addr = next_addr - 1;
+        let in_span = full_spans
+            .get(&(kind, last_addr))
+            .is_some_and(|&end| end > last_addr);
+        if run_len >= batch && !in_span {
+            break;
+        }
+        if regs[start + run_len] != (kind, next_addr) {
+            break;
+        }
+        run_len += 1;
+    }
+    run_len
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{custom_full_spans, read_run_len};
+    use crate::custom::{CustomRepr, CustomRule};
+    use crate::register::{RegisterCell, RegisterType};
+    use std::collections::BTreeMap;
+
+    const H: RegisterType = RegisterType::Holding;
+
+    fn rules(entries: &[(u16, CustomRepr, &[u16])]) -> BTreeMap<RegisterCell, CustomRule> {
+        entries
+            .iter()
+            .map(|&(address, repr, next)| {
+                let rule = CustomRule {
+                    address,
+                    repr,
+                    next: next.to_vec(),
+                    ..Default::default()
+                };
+                ((H, address), rule)
+            })
+            .collect()
+    }
+
+    fn cells(addrs: &[u16]) -> Vec<RegisterCell> {
+        addrs.iter().map(|&a| (H, a)).collect()
+    }
+
+    #[test]
+    fn spans_cover_contiguous_rules() {
+        let spans = custom_full_spans(&rules(&[(100, CustomRepr::F64, &[])]));
+        for addr in 100..=103 {
+            assert_eq!(spans.get(&(H, addr)), Some(&103));
+        }
+        assert_eq!(spans.get(&(H, 104)), None);
+    }
+
+    #[test]
+    fn spans_skip_single_words_and_split_on_jumps() {
+        let spans = custom_full_spans(&rules(&[
+            (7, CustomRepr::U16, &[]),
+            (520, CustomRepr::F64, &[524]),
+        ]));
+        assert_eq!(spans.get(&(H, 7)), None);
+        assert_eq!(spans.get(&(H, 520)), None);
+        for addr in 524..=526 {
+            assert_eq!(spans.get(&(H, addr)), Some(&526));
+        }
+    }
+
+    #[test]
+    fn run_respects_batch_and_gaps() {
+        let none = BTreeMap::new();
+        assert_eq!(read_run_len(&cells(&[10, 11, 12, 13, 14]), 0, 2, &none), 2);
+        assert_eq!(read_run_len(&cells(&[10, 11, 20]), 0, 5, &none), 2);
+        assert_eq!(
+            read_run_len(&[(H, 10), (RegisterType::Input, 11)], 0, 5, &none),
+            1
+        );
+    }
+
+    #[test]
+    fn run_extends_to_cover_custom_span() {
+        let spans = custom_full_spans(&rules(&[(100, CustomRepr::F64, &[])]));
+        assert_eq!(read_run_len(&cells(&[100, 101, 102, 103]), 0, 2, &spans), 4);
+        assert_eq!(
+            read_run_len(&cells(&[99, 100, 101, 102, 103]), 0, 2, &spans),
+            5
+        );
+        assert_eq!(
+            read_run_len(&cells(&[100, 101, 102, 103, 104]), 0, 2, &spans),
+            4
+        );
+    }
+
+    #[test]
+    fn run_cannot_extend_past_missing_cells() {
+        let spans = custom_full_spans(&rules(&[(100, CustomRepr::F64, &[])]));
+        assert_eq!(read_run_len(&cells(&[100, 101, 105]), 0, 2, &spans), 2);
     }
 }
