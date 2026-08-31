@@ -2,6 +2,7 @@ use super::{
     AllowSlaveFlag, ApiBindState, ApiDevice, App, BindStateFlag, BoundPort, ReadOnlyFlag,
     StatusFlag,
 };
+use crate::modbus::ModbusDevice;
 use std::sync::atomic::Ordering;
 
 impl App {
@@ -94,5 +95,11 @@ impl App {
         if let Ok(mut slot) = self.api_device.lock() {
             *slot = self.device.clone();
         }
+    }
+
+    pub(super) fn take_device(&mut self) -> Option<ModbusDevice> {
+        let previous = self.device.take();
+        self.sync_api_device();
+        previous
     }
 }

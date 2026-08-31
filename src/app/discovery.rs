@@ -65,7 +65,7 @@ impl App {
     }
 
     pub fn open_discovery(&mut self) {
-        self.background_task = None;
+        self.free_background_slot();
         let params = Self::discovery_params(&self.config);
         self.read_mut().popup = Some(Popup::Discovery(params));
     }
@@ -109,10 +109,9 @@ impl App {
 
         self.set_discovery_status(StatusMessage::warn("Connecting\u{2026}"));
 
-        self.device = None;
-        self.sync_api_device();
+        let previous = self.take_device();
         self.background_task = Some(BackgroundTask::Connect(compat::spawn(async move {
-            let result = ModbusDevice::new(&device_config)
+            let result = ModbusDevice::replace(previous, &device_config)
                 .await
                 .map_err(|e| e.to_string());
             ConnectTaskResult {

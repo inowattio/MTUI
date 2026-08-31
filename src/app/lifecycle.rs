@@ -320,10 +320,11 @@ impl App {
             log::warn!("Connection lost \u{b7} reconnecting\u{2026}");
         }
         let config = self.config.device.clone();
-        self.device = None;
-        self.sync_api_device();
+        let previous = self.take_device();
         self.background_task = Some(BackgroundTask::Reconnect(compat::spawn(async move {
-            ModbusDevice::new(&config).await.map_err(|e| e.to_string())
+            ModbusDevice::replace(previous, &config)
+                .await
+                .map_err(|e| e.to_string())
         })));
     }
 
@@ -620,9 +621,14 @@ impl App {
     }
 
     pub(super) fn free_background_slot(&mut self) -> bool {
-        match &self.background_task {
+        match self.background_task.as_mut() {
             None => true,
-            Some(BackgroundTask::Refresh(_)) => {
+            Some(BackgroundTask::Refresh(handle)) => {
+                if matches!(handle.poll_result(), TaskPoll::Pending)
+                    && let Some(device) = &self.device
+                {
+                    device.poison();
+                }
                 self.background_task = None;
                 if self.is_reading() {
                     self.read_mut().loading = false;
