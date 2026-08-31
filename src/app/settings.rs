@@ -119,6 +119,9 @@ impl App {
             SettingsField::ReadFullCustoms => {
                 self.config.read_full_customs = !self.config.read_full_customs
             }
+            SettingsField::CustomBatchBySize => {
+                self.config.custom_batch_by_size = !self.config.custom_batch_by_size
+            }
             SettingsField::ApiSlaveOverride => {
                 self.config.allow_api_slave_id = !self.config.allow_api_slave_id
             }

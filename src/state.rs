@@ -496,6 +496,7 @@ field_enum! {
         Name,
         RegistersBatch,
         ReadFullCustoms,
+        CustomBatchBySize,
         AutoUpdate,
         HistoryCap,
         MatrixCols,
@@ -558,6 +559,7 @@ impl SettingsField {
             self,
             SettingsField::ReadOnly
                 | SettingsField::ReadFullCustoms
+                | SettingsField::CustomBatchBySize
                 | SettingsField::ApiSlaveOverride
                 | SettingsField::LogWrites
                 | SettingsField::ShowContinuation
@@ -659,6 +661,7 @@ impl SettingsCategory {
             SettingsCategory::Data => &[
                 RegistersBatch,
                 ReadFullCustoms,
+                CustomBatchBySize,
                 AutoUpdate,
                 ReadOnly,
                 HistoryCap,

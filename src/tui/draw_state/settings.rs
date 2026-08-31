@@ -178,6 +178,11 @@ fn field_view(
             on_off(device.read_full_customs),
             None,
         ),
+        SettingsField::CustomBatchBySize => (
+            "Custom batch by size",
+            on_off(device.custom_batch_by_size),
+            None,
+        ),
         SettingsField::AutoUpdate => (
             "Auto-update (ms)",
             device

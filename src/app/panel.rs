@@ -84,12 +84,28 @@ impl App {
         if same.is_empty() {
             return Vec::new();
         }
-        let batch = batch.max(1).min(same.len());
+        let batch = batch.max(1);
         let pos = same.iter().position(|&c| c == cursor).unwrap_or(0);
-        let start = pos.saturating_sub(batch / 2).min(same.len() - batch);
+
+        let window = if self.read().panel == ReadPanel::Custom && self.config.custom_batch_by_size {
+            let costs: Vec<usize> = same
+                .iter()
+                .map(|cell| {
+                    self.custom_rules
+                        .get(cell)
+                        .map_or(1, |rule| rule.repr.register_count())
+                })
+                .collect();
+            let (start, end) = sized_window(&costs, pos, batch);
+            &same[start..end]
+        } else {
+            let batch = batch.min(same.len());
+            let start = pos.saturating_sub(batch / 2).min(same.len() - batch);
+            &same[start..start + batch]
+        };
 
         let mut cells = BTreeSet::new();
-        for &(kind, addr) in &same[start..start + batch] {
+        for &(kind, addr) in window {
             cells.insert((kind, addr));
             if let Some(rule) = self.custom_rules.get(&(kind, addr)) {
                 for word_address in rule.word_addresses().into_iter().skip(1) {
@@ -319,5 +335,65 @@ impl App {
 
     pub fn label_text(&self, register_type: RegisterType, address: u16) -> Option<String> {
         self.labels.get(&(register_type, address)).cloned()
+    }
+}
+
+fn sized_window(costs: &[usize], pos: usize, budget: usize) -> (usize, usize) {
+    let (mut start, mut end) = (pos, pos + 1);
+    let mut left = budget.saturating_sub(costs[pos]);
+    let mut prefer_before = true;
+    loop {
+        let before = (start > 0 && costs[start - 1] <= left).then(|| costs[start - 1]);
+        let after = (end < costs.len() && costs[end] <= left).then(|| costs[end]);
+        match (before, after) {
+            (None, None) => break,
+            (Some(cost), None) => {
+                start -= 1;
+                left -= cost;
+            }
+            (None, Some(cost)) => {
+                end += 1;
+                left -= cost;
+            }
+            (Some(before), Some(after)) => {
+                if prefer_before {
+                    start -= 1;
+                    left -= before;
+                } else {
+                    end += 1;
+                    left -= after;
+                }
+                prefer_before = !prefer_before;
+            }
+        }
+    }
+    (start, end)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sized_window;
+
+    #[test]
+    fn cursor_alone_when_over_budget() {
+        assert_eq!(sized_window(&[4, 1], 0, 2), (0, 1));
+        assert_eq!(sized_window(&[2, 1], 0, 2), (0, 1));
+    }
+
+    #[test]
+    fn grows_alternately_around_cursor() {
+        assert_eq!(sized_window(&[1, 2, 1], 1, 4), (0, 3));
+        assert_eq!(sized_window(&[1, 1, 1, 1, 1], 2, 3), (1, 4));
+    }
+
+    #[test]
+    fn clamps_at_edges_by_extending_the_other_side() {
+        assert_eq!(sized_window(&[1, 1, 1, 1], 3, 3), (1, 4));
+        assert_eq!(sized_window(&[1, 1, 1, 1], 0, 3), (0, 3));
+    }
+
+    #[test]
+    fn skips_neighbors_that_do_not_fit() {
+        assert_eq!(sized_window(&[4, 1, 1], 1, 2), (1, 3));
     }
 }
