@@ -4,7 +4,7 @@ use super::{
     WriteOutcome, default_config_path, fetch_config_or_exit, reconnect_backoff,
 };
 use crate::compat::{self, Instant, TaskPoll};
-use crate::config::Config;
+use crate::config::{BatchAnchor, Config};
 use crate::custom::CustomRule;
 use crate::interpretator::Interpretor;
 use crate::modbus::{Interface, ModbusDevice};
@@ -441,10 +441,15 @@ impl App {
         let position = self.read().position;
         let max_read_start = u16::MAX - (amount - 1);
         let start = if sweeping {
-            position.min(max_read_start)
+            position
         } else {
-            position.saturating_sub(amount / 2).min(max_read_start)
-        };
+            match self.config.batch_anchor {
+                BatchAnchor::Start => position,
+                BatchAnchor::Middle => position.saturating_sub(amount / 2),
+                BatchAnchor::End => position.saturating_sub(amount - 1),
+            }
+        }
+        .min(max_read_start);
         (start, amount)
     }
 

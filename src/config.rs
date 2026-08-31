@@ -16,6 +16,7 @@ pub struct Config {
     pub startup: Startup,
     pub interpretations: InterpretorConfig,
     pub registers_batch: u16,
+    pub batch_anchor: BatchAnchor,
     pub read_full_customs: bool,
     pub custom_batch_by_size: bool,
     pub update_interval_ms: Option<u64>,
@@ -43,6 +44,26 @@ pub struct Config {
     pub custom_rules: CustomRules,
     pub keybinds: Keybinds,
     pub theme: Theme,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub enum BatchAnchor {
+    Start,
+    #[default]
+    Middle,
+    End,
+}
+
+impl BatchAnchor {
+    pub const ALL: [BatchAnchor; 3] = [BatchAnchor::Start, BatchAnchor::Middle, BatchAnchor::End];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            BatchAnchor::Start => "start",
+            BatchAnchor::Middle => "middle",
+            BatchAnchor::End => "end",
+        }
+    }
 }
 
 macro_rules! keybinds {
@@ -405,6 +426,7 @@ impl Default for Config {
             },
             interpretations: InterpretorConfig::default(),
             registers_batch: 10,
+            batch_anchor: BatchAnchor::Middle,
             read_full_customs: false,
             custom_batch_by_size: false,
             update_interval_ms: Some(1000),

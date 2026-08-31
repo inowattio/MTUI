@@ -1,5 +1,6 @@
 use super::App;
 
+use crate::config::BatchAnchor;
 use crate::num_ops::cycle;
 use crate::register::RegisterType;
 use crate::state::{ReadPanel, SettingsField, SettingsParams, State, StatusMessage};
@@ -116,6 +117,10 @@ impl App {
             SettingsField::IgnoreDirty => self.config.ignore_dirty = !self.config.ignore_dirty,
             SettingsField::ShowMock => self.config.show_mock = !self.config.show_mock,
             SettingsField::ReadOnly => self.config.read_only = !self.config.read_only,
+            SettingsField::BatchAnchor => {
+                self.config.batch_anchor =
+                    cycle(&BatchAnchor::ALL, self.config.batch_anchor, delta > 0);
+            }
             SettingsField::ReadFullCustoms => {
                 self.config.read_full_customs = !self.config.read_full_customs
             }

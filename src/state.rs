@@ -495,6 +495,7 @@ field_enum! {
     pub enum SettingsField {
         Name,
         RegistersBatch,
+        BatchAnchor,
         ReadFullCustoms,
         CustomBatchBySize,
         AutoUpdate,
@@ -558,6 +559,7 @@ impl SettingsField {
         matches!(
             self,
             SettingsField::ReadOnly
+                | SettingsField::BatchAnchor
                 | SettingsField::ReadFullCustoms
                 | SettingsField::CustomBatchBySize
                 | SettingsField::ApiSlaveOverride
@@ -660,6 +662,7 @@ impl SettingsCategory {
             ],
             SettingsCategory::Data => &[
                 RegistersBatch,
+                BatchAnchor,
                 ReadFullCustoms,
                 CustomBatchBySize,
                 AutoUpdate,

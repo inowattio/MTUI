@@ -1,5 +1,5 @@
 use super::App;
-use crate::config::Column;
+use crate::config::{BatchAnchor, Column};
 use crate::constants::NO_VALUE;
 use crate::interpretator::{fmt_num, format_ago, graph_value};
 use crate::num_ops::cycle;
@@ -96,11 +96,16 @@ impl App {
                         .map_or(1, |rule| rule.repr.register_count())
                 })
                 .collect();
-            let (start, end) = sized_window(&costs, pos, batch);
+            let (start, end) = sized_window(&costs, pos, batch, self.config.batch_anchor);
             &same[start..end]
         } else {
             let batch = batch.min(same.len());
-            let start = pos.saturating_sub(batch / 2).min(same.len() - batch);
+            let start = match self.config.batch_anchor {
+                BatchAnchor::Start => pos,
+                BatchAnchor::Middle => pos.saturating_sub(batch / 2),
+                BatchAnchor::End => pos.saturating_sub(batch - 1),
+            }
+            .min(same.len() - batch);
             &same[start..start + batch]
         };
 
@@ -338,33 +343,32 @@ impl App {
     }
 }
 
-fn sized_window(costs: &[usize], pos: usize, budget: usize) -> (usize, usize) {
+fn sized_window(costs: &[usize], pos: usize, budget: usize, anchor: BatchAnchor) -> (usize, usize) {
     let (mut start, mut end) = (pos, pos + 1);
     let mut left = budget.saturating_sub(costs[pos]);
     let mut prefer_before = true;
     loop {
         let before = (start > 0 && costs[start - 1] <= left).then(|| costs[start - 1]);
         let after = (end < costs.len() && costs[end] <= left).then(|| costs[end]);
-        match (before, after) {
+        let grow_before = match (before, after) {
             (None, None) => break,
-            (Some(cost), None) => {
-                start -= 1;
-                left -= cost;
-            }
-            (None, Some(cost)) => {
-                end += 1;
-                left -= cost;
-            }
-            (Some(before), Some(after)) => {
-                if prefer_before {
-                    start -= 1;
-                    left -= before;
-                } else {
-                    end += 1;
-                    left -= after;
+            (Some(_), None) => true,
+            (None, Some(_)) => false,
+            (Some(_), Some(_)) => match anchor {
+                BatchAnchor::Start => false,
+                BatchAnchor::End => true,
+                BatchAnchor::Middle => {
+                    prefer_before = !prefer_before;
+                    !prefer_before
                 }
-                prefer_before = !prefer_before;
-            }
+            },
+        };
+        if grow_before {
+            start -= 1;
+            left -= before.expect("checked");
+        } else {
+            end += 1;
+            left -= after.expect("checked");
         }
     }
     (start, end)
@@ -373,27 +377,46 @@ fn sized_window(costs: &[usize], pos: usize, budget: usize) -> (usize, usize) {
 #[cfg(test)]
 mod tests {
     use super::sized_window;
+    use crate::config::BatchAnchor;
+
+    fn middle(costs: &[usize], pos: usize, budget: usize) -> (usize, usize) {
+        sized_window(costs, pos, budget, BatchAnchor::Middle)
+    }
 
     #[test]
     fn cursor_alone_when_over_budget() {
-        assert_eq!(sized_window(&[4, 1], 0, 2), (0, 1));
-        assert_eq!(sized_window(&[2, 1], 0, 2), (0, 1));
+        assert_eq!(middle(&[4, 1], 0, 2), (0, 1));
+        assert_eq!(middle(&[2, 1], 0, 2), (0, 1));
     }
 
     #[test]
     fn grows_alternately_around_cursor() {
-        assert_eq!(sized_window(&[1, 2, 1], 1, 4), (0, 3));
-        assert_eq!(sized_window(&[1, 1, 1, 1, 1], 2, 3), (1, 4));
+        assert_eq!(middle(&[1, 2, 1], 1, 4), (0, 3));
+        assert_eq!(middle(&[1, 1, 1, 1, 1], 2, 3), (1, 4));
     }
 
     #[test]
     fn clamps_at_edges_by_extending_the_other_side() {
-        assert_eq!(sized_window(&[1, 1, 1, 1], 3, 3), (1, 4));
-        assert_eq!(sized_window(&[1, 1, 1, 1], 0, 3), (0, 3));
+        assert_eq!(middle(&[1, 1, 1, 1], 3, 3), (1, 4));
+        assert_eq!(middle(&[1, 1, 1, 1], 0, 3), (0, 3));
     }
 
     #[test]
     fn skips_neighbors_that_do_not_fit() {
-        assert_eq!(sized_window(&[4, 1, 1], 1, 2), (1, 3));
+        assert_eq!(middle(&[4, 1, 1], 1, 2), (1, 3));
+    }
+
+    #[test]
+    fn anchor_picks_the_growth_side() {
+        let costs = [1usize, 1, 1];
+        assert_eq!(sized_window(&costs, 1, 2, BatchAnchor::Start), (1, 3));
+        assert_eq!(sized_window(&costs, 1, 2, BatchAnchor::End), (0, 2));
+    }
+
+    #[test]
+    fn anchor_spills_to_the_other_side_at_edges() {
+        let costs = [1usize, 1, 1];
+        assert_eq!(sized_window(&costs, 2, 2, BatchAnchor::Start), (1, 3));
+        assert_eq!(sized_window(&costs, 0, 2, BatchAnchor::End), (0, 2));
     }
 }
