@@ -179,21 +179,13 @@ impl CustomRule {
         addresses
     }
 
-    fn raw_bits(&self, words: &[u16], order: WordOrder) -> Option<u64> {
+    pub fn raw(&self, words: &[u16], order: WordOrder) -> Option<u64> {
         let order = self.word_order.unwrap_or(order);
         order.assemble(words.get(..self.repr.register_count())?)
     }
 
-    fn base_value(&self, words: &[u16], order: WordOrder) -> Option<f64> {
-        Some(self.repr.decode(self.raw_bits(words, order)?))
-    }
-
-    pub fn raw(&self, words: &[u16], order: WordOrder) -> Option<u64> {
-        self.raw_bits(words, order)
-    }
-
     pub fn base(&self, words: &[u16], order: WordOrder) -> Option<f64> {
-        self.base_value(words, order)
+        Some(self.repr.decode(self.raw(words, order)?))
     }
 
     fn bit_names(&self, raw: u64) -> String {
@@ -211,7 +203,7 @@ impl CustomRule {
     }
 
     pub fn numeric(&self, words: &[u16], order: WordOrder) -> Option<f64> {
-        let base = self.base_value(words, order)?;
+        let base = self.base(words, order)?;
 
         if base.is_finite() && !self.enum_map.is_empty() {
             let key = base as i64;
@@ -231,7 +223,7 @@ impl CustomRule {
     }
 
     pub fn evaluate(&self, words: &[u16], order: WordOrder) -> String {
-        let Some(base) = self.base_value(words, order) else {
+        let Some(base) = self.base(words, order) else {
             return String::new();
         };
 
@@ -243,7 +235,7 @@ impl CustomRule {
         }
 
         if !self.bits.is_empty() {
-            let raw = self.raw_bits(words, order).unwrap_or_default();
+            let raw = self.raw(words, order).unwrap_or_default();
             return format!("{}{}{}", self.prefix, self.bit_names(raw), self.suffix);
         }
 
