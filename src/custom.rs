@@ -265,40 +265,37 @@ impl CustomRule {
     }
 }
 
-pub fn parse_op(input: &str) -> Result<CustomOp, String> {
+pub fn parse_op(input: &str) -> Result<CustomOp, &'static str> {
     let trimmed = input.trim();
     let mut chars = trimmed.chars();
     let symbol = chars.next().ok_or("empty")?;
     let op = OpKind::from_symbol(symbol).ok_or("start with + - * / or ^")?;
     let rest = chars.as_str().trim();
-    let v: f64 = rest.parse().map_err(|_| "invalid number".to_string())?;
+    let v: f64 = rest.parse().map_err(|_| "invalid number")?;
     if !v.is_finite() {
-        return Err("must be a finite number".to_string());
+        return Err("must be a finite number");
     }
     Ok(CustomOp { op, v })
 }
 
-pub fn parse_enum(input: &str) -> Result<EnumEntry, String> {
+pub fn parse_enum(input: &str) -> Result<EnumEntry, &'static str> {
     let (value, text) = input.split_once('=').ok_or("use value=text")?;
-    let value: i64 = value
-        .trim()
-        .parse()
-        .map_err(|_| "invalid value".to_string())?;
+    let value: i64 = value.trim().parse().map_err(|_| "invalid value")?;
     Ok(EnumEntry {
         value,
         text: text.trim().to_string(),
     })
 }
 
-pub fn parse_bit(input: &str) -> Result<BitEntry, String> {
+pub fn parse_bit(input: &str) -> Result<BitEntry, &'static str> {
     let (bit, name) = input.split_once('=').ok_or("use bit=name")?;
-    let bit: u8 = bit.trim().parse().map_err(|_| "invalid bit".to_string())?;
+    let bit: u8 = bit.trim().parse().map_err(|_| "invalid bit")?;
     if bit > 63 {
-        return Err("bit must be 0-63".to_string());
+        return Err("bit must be 0-63");
     }
     let name = name.trim();
     if name.is_empty() {
-        return Err("name is empty".to_string());
+        return Err("name is empty");
     }
     Ok(BitEntry {
         bit,
