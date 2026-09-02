@@ -1,7 +1,9 @@
 use crate::app::AppResult;
 use crate::constants::EVENT_HANDLER_TICKRATE;
 use crate::input;
-use crossterm::event::{Event as CrosstermEvent, KeyCode as CrosstermKeyCode, KeyEventKind};
+use crossterm::event::{
+    Event as CrosstermEvent, KeyCode as CrosstermKeyCode, KeyEventKind, KeyModifiers,
+};
 use futures::{FutureExt, StreamExt};
 use num_traits::Zero;
 use tokio::sync::mpsc;
@@ -56,7 +58,8 @@ async fn event_processor(tx: mpsc::UnboundedSender<Event>) {
                         if key.kind == KeyEventKind::Press
                             && let Some(code) = convert_key(key.code)
                         {
-                            let _ = tx.send(Event::Key(input::KeyEvent::new(code)));
+                            let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+                            let _ = tx.send(Event::Key(input::KeyEvent::with_ctrl(code, ctrl)));
                         }
                     },
                     CrosstermEvent::Resize(x, y) => {

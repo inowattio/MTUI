@@ -241,6 +241,21 @@ impl App {
         }
     }
 
+    pub fn interrupt(&mut self) {
+        let prompting = matches!(
+            &self.state,
+            State::Read(p) if p.popup == Some(Popup::Quit)
+        );
+        if prompting || !self.dirty || self.config.ignore_dirty {
+            self.running = false;
+            return;
+        }
+
+        self.close_settings();
+        self.close_log_view();
+        self.read_mut().popup = Some(Popup::Quit);
+    }
+
     pub async fn tick(&mut self) {
         self.frame = self.frame.wrapping_add(1);
         self.sync_api_status();

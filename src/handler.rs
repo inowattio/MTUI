@@ -10,6 +10,15 @@ use crate::state::{
 };
 
 pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) {
+    if key_event.is_ctrl_c() {
+        app.interrupt();
+        return;
+    }
+
+    if key_event.ctrl && matches!(key_event.code, KeyCode::Char(_)) {
+        return;
+    }
+
     let rows = app.visible_rows.get();
     let kb = app.config.keybinds;
 
@@ -763,5 +772,78 @@ fn handle_keybinds_key(key_event: KeyEvent, app: &mut App) {
             }
         }
         _ => {}
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use super::handle_key_events;
+    use crate::app::App;
+    use crate::config::Config;
+    use crate::input::{KeyCode, KeyEvent};
+    use crate::state::{Popup, PopupKind, State};
+
+    async fn app() -> App {
+        App::boot(Config::default(), String::new()).await
+    }
+
+    fn ctrl(c: char) -> KeyEvent {
+        KeyEvent::with_ctrl(KeyCode::Char(c), true)
+    }
+
+    #[tokio::test]
+    async fn ctrl_c_quits_a_clean_session_at_once() {
+        let mut app = app().await;
+        handle_key_events(ctrl('c'), &mut app).await;
+        assert!(!app.running);
+    }
+
+    #[tokio::test]
+    async fn ctrl_c_asks_before_discarding_unsaved_changes() {
+        let mut app = app().await;
+        app.dirty = true;
+        handle_key_events(ctrl('c'), &mut app).await;
+        assert!(app.running, "unsaved changes must be confirmed first");
+        assert_eq!(app.popup_kind(), Some(PopupKind::Quit));
+
+        handle_key_events(ctrl('c'), &mut app).await;
+        assert!(!app.running, "a second Ctrl+C confirms");
+    }
+
+    #[tokio::test]
+    async fn ctrl_c_in_settings_returns_to_the_read_view_to_ask() {
+        let mut app = app().await;
+        app.open_settings();
+        app.dirty = true;
+        handle_key_events(ctrl('c'), &mut app).await;
+        assert!(app.running);
+        assert!(matches!(&app.state, State::Read(p) if p.popup == Some(Popup::Quit)));
+    }
+
+    #[tokio::test]
+    async fn ignore_dirty_skips_the_prompt() {
+        let mut app = app().await;
+        app.dirty = true;
+        app.config.ignore_dirty = true;
+        handle_key_events(ctrl('c'), &mut app).await;
+        assert!(!app.running);
+    }
+
+    #[tokio::test]
+    async fn ctrl_letters_do_not_fire_the_bare_letter_binding() {
+        let mut app = app().await;
+        handle_key_events(ctrl('w'), &mut app).await;
+        assert_eq!(
+            app.popup_kind(),
+            None,
+            "Ctrl+W must not open the write popup"
+        );
+
+        handle_key_events(KeyEvent::new(KeyCode::Char('c')), &mut app).await;
+        assert_eq!(
+            app.popup_kind(),
+            Some(PopupKind::Columns),
+            "plain c still opens Columns"
+        );
     }
 }

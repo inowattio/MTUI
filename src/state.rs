@@ -50,7 +50,7 @@ macro_rules! popups {
             $( $variant $( ( $payload ) )? ),+
         }
 
-        #[derive(Clone, Copy, PartialEq, Eq)]
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
         pub enum PopupKind {
             $( $variant ),+
         }

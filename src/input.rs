@@ -82,10 +82,32 @@ impl<'de> Deserialize<'de> for KeyCode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct KeyEvent {
     pub code: KeyCode,
+    pub ctrl: bool,
 }
 
 impl KeyEvent {
     pub fn new(code: KeyCode) -> Self {
-        Self { code }
+        Self { code, ctrl: false }
+    }
+
+    pub fn with_ctrl(code: KeyCode, ctrl: bool) -> Self {
+        Self { code, ctrl }
+    }
+
+    pub fn is_ctrl_c(self) -> bool {
+        self.ctrl && matches!(self.code, KeyCode::Char('c' | 'C'))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{KeyCode, KeyEvent};
+
+    #[test]
+    fn ctrl_c_needs_the_modifier() {
+        assert!(KeyEvent::with_ctrl(KeyCode::Char('c'), true).is_ctrl_c());
+        assert!(KeyEvent::with_ctrl(KeyCode::Char('C'), true).is_ctrl_c());
+        assert!(!KeyEvent::new(KeyCode::Char('c')).is_ctrl_c());
+        assert!(!KeyEvent::with_ctrl(KeyCode::Char('x'), true).is_ctrl_c());
     }
 }
