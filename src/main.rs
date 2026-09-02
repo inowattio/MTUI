@@ -50,7 +50,6 @@ mod native {
             tui.process_events(&mut app).await?;
         }
 
-        tui.exit()?;
         Ok(())
     }
 

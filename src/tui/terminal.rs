@@ -19,20 +19,22 @@ impl<B: Backend> Tui<B>
 where
     <B as Backend>::Error: std::error::Error + Send + Sync + 'static,
 {
-    pub fn new(mut terminal: Terminal<B>, events: EventHandler) -> AppResult<Self> {
+    pub fn new(terminal: Terminal<B>, events: EventHandler) -> AppResult<Self> {
         terminal::enable_raw_mode()?;
+
+        let mut tui = Self { terminal, events };
         crossterm::execute!(io::stderr(), EnterAlternateScreen, EnableBracketedPaste)?;
 
         let panic_hook = panic::take_hook();
         panic::set_hook(Box::new(move |panic| {
-            Self::reset().expect("failed to reset the terminal");
+            let _ = restore_terminal();
             panic_hook(panic);
         }));
 
-        terminal.hide_cursor()?;
-        terminal.clear()?;
+        tui.terminal.hide_cursor()?;
+        tui.terminal.clear()?;
 
-        Ok(Self { terminal, events })
+        Ok(tui)
     }
 
     pub fn draw(&mut self, app: &mut App) -> AppResult<()> {
@@ -54,16 +56,16 @@ where
 
         Ok(())
     }
+}
 
-    fn reset() -> AppResult<()> {
-        terminal::disable_raw_mode()?;
-        crossterm::execute!(io::stderr(), LeaveAlternateScreen, DisableBracketedPaste)?;
-        Ok(())
+impl<B: Backend> Drop for Tui<B> {
+    fn drop(&mut self) {
+        let _ = self.terminal.show_cursor();
+        let _ = restore_terminal();
     }
+}
 
-    pub fn exit(&mut self) -> AppResult<()> {
-        Self::reset()?;
-        self.terminal.show_cursor()?;
-        Ok(())
-    }
+fn restore_terminal() -> io::Result<()> {
+    terminal::disable_raw_mode()?;
+    crossterm::execute!(io::stderr(), LeaveAlternateScreen, DisableBracketedPaste)
 }
