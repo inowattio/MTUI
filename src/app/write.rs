@@ -3,7 +3,7 @@ use crate::compat;
 use crate::constants::UNINTERPRETABLE;
 use crate::modbus::WordOrder;
 use crate::num_ops::cycle;
-use crate::register::RegisterType;
+use crate::register::{RegisterCell, RegisterType};
 use crate::state::{Popup, StatusMessage, WriteParams};
 
 impl App {
@@ -41,20 +41,8 @@ impl App {
         };
 
         let value = match write_type {
-            WriteType::DWord => {
-                let lo = self.previous_values.get(&(kind, write_pos));
-                let hi = self.previous_values.get(&(kind, write_pos.wrapping_add(1)));
-                match (lo, hi) {
-                    (Some(&a), Some(&b)) => {
-                        Some(self.config.device.word_order.make_word(a, b) as i64)
-                    }
-                    _ => None,
-                }
-            }
-            _ => self
-                .previous_values
-                .get(&(kind, write_pos))
-                .map(|&v| v as i64),
+            WriteType::DWord => self.dword_value((kind, write_pos)).map(i64::from),
+            _ => self.cell_value((kind, write_pos)).map(i64::from),
         };
 
         let bit_cursor = write_type.bits() - 1;
@@ -75,6 +63,12 @@ impl App {
 
     fn write(&self) -> Option<&WriteParams> {
         self.popup_as()
+    }
+
+    fn dword_value(&self, (kind, address): RegisterCell) -> Option<u32> {
+        let lo = self.cell_value((kind, address))?;
+        let hi = self.cell_value((kind, address.wrapping_add(1)))?;
+        Some(self.config.device.word_order.make_word(lo, hi))
     }
 
     pub fn toggle_word_order(&mut self) {
@@ -161,26 +155,12 @@ impl App {
         };
         let cell = (kind, position);
         let (previous, new_value) = match write_type {
-            WriteType::Word => (
-                self.previous_values.get(&cell).map(|&v| v as u64),
-                (number as u16) as u64,
+            WriteType::Word => (self.cell_value(cell).map(u64::from), (number as u16) as u64),
+            WriteType::Coil => (self.cell_value(cell).map(u64::from), (number != 0) as u64),
+            WriteType::DWord => (
+                self.dword_value(cell).map(u64::from),
+                (number as u32) as u64,
             ),
-            WriteType::Coil => (
-                self.previous_values.get(&cell).map(|&v| v as u64),
-                (number != 0) as u64,
-            ),
-            WriteType::DWord => {
-                let order = self.config.device.word_order;
-                let lo = self.previous_values.get(&cell);
-                let hi = self
-                    .previous_values
-                    .get(&(RegisterType::Holding, position.wrapping_add(1)));
-                let previous = match (lo, hi) {
-                    (Some(&a), Some(&b)) => Some(order.make_word(a, b) as u64),
-                    _ => None,
-                };
-                (previous, (number as u32) as u64)
-            }
         };
         self.pending_write = Some(PendingWrite {
             address: position,

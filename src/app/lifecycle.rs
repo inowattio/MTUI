@@ -63,7 +63,6 @@ impl App {
             network_scan: None,
             #[cfg(not(target_arch = "wasm32"))]
             network_scan_task: None,
-            previous_values: BTreeMap::new(),
             changed: BTreeMap::new(),
             read_log: BTreeMap::new(),
             value_history: BTreeMap::new(),
@@ -154,7 +153,6 @@ impl App {
     }
 
     pub(super) fn clear_read_accumulation(&mut self) {
-        self.previous_values.clear();
         self.changed.clear();
         self.read_log.clear();
         self.value_history.clear();
@@ -585,13 +583,10 @@ impl App {
             .flatten()
         {
             for &(cell, value) in data {
-                let did_change =
-                    matches!(self.previous_values.get(&cell), Some(&prev) if prev != value);
-                if did_change {
+                let previous = self.read_log.insert(cell, (value, read_at));
+                if previous.is_some_and(|(prev, _)| prev != value) {
                     self.changed.insert(cell, read_at);
                 }
-                self.previous_values.insert(cell, value);
-                self.read_log.insert(cell, (value, read_at));
 
                 let history = self.value_history.entry(cell).or_default();
                 history.push_back((value, read_at));
