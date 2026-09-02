@@ -311,6 +311,116 @@ mod tests {
             "poisoned context must reconnect before the next command"
         );
     }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[allow(clippy::collection_is_never_read)] // sockets are kept open, not read
+    async fn silent_server() -> (DeviceConfig, Arc<AtomicUsize>) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let connections = Arc::new(AtomicUsize::new(0));
+        let counter = connections.clone();
+        tokio::spawn(async move {
+            let mut held = Vec::new();
+            while let Ok((stream, _)) = listener.accept().await {
+                counter.fetch_add(1, Ordering::Relaxed);
+                held.push(stream);
+            }
+        });
+        let config = DeviceConfig {
+            interface: Interface::Network(InterfaceNetworkParams {
+                ip: "127.0.0.1".to_string(),
+                port: addr.port(),
+            }),
+            slave_id: 1,
+            timeout_connect_ms: 500,
+            timeout_command_ms: 100,
+            time_between_commands_ms: 0,
+            word_order: WordOrder::default(),
+        };
+        (config, connections)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn closed_device_fails_fast_without_reconnecting() {
+        let (config, connections) = silent_server().await;
+        let device = ModbusDevice::new(&config).await.expect("connect");
+        wait_for(&connections, 1).await;
+
+        // A stale clone on a poisoned device would normally reconnect on its next command.
+        let stale = device.clone();
+        device.poisoned.store(true, Ordering::Relaxed);
+        device.close().await;
+        assert!(stale.is_closed(), "closing is shared by every clone");
+
+        let error = stale
+            .read_typed(None, RegisterType::Holding, 0, 1)
+            .await
+            .expect_err("a closed device must refuse commands");
+        assert!(
+            error.to_string().contains("device closed"),
+            "unexpected error: {error}"
+        );
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert_eq!(
+            connections.load(Ordering::Relaxed),
+            1,
+            "a closed device must never reopen the transport"
+        );
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn close_waits_for_the_command_in_flight() {
+        let device = ModbusDevice::new(&DeviceConfig::default()).await.unwrap();
+        let busy = device.clone();
+        // answers after a few milliseconds, so this read holds the transport when `close` is called.
+        let in_flight =
+            tokio::spawn(async move { busy.read_typed(None, RegisterType::Holding, 0, 1).await });
+        tokio::task::yield_now().await;
+
+        device.close().await;
+
+        let result = in_flight.await.unwrap();
+        assert!(
+            result.is_ok(),
+            "close must let the running command finish: {result:?}"
+        );
+        assert!(
+            device
+                .read_typed(None, RegisterType::Holding, 0, 1)
+                .await
+                .is_err(),
+            "commands after close must fail"
+        );
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn replace_closes_the_previous_device_first() {
+        let config = DeviceConfig::default();
+        let previous = ModbusDevice::new(&config).await.unwrap();
+        let stale = previous.clone();
+
+        let fresh = ModbusDevice::replace(Some(previous), &config)
+            .await
+            .expect("replacement connects");
+
+        assert!(stale.is_closed());
+        assert!(!fresh.is_closed());
+        assert!(
+            stale
+                .read_typed(None, RegisterType::Holding, 0, 1)
+                .await
+                .is_err()
+        );
+        assert!(
+            fresh
+                .read_typed(None, RegisterType::Holding, 0, 1)
+                .await
+                .is_ok()
+        );
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -353,8 +463,14 @@ macro_rules! timeout_as {
         {
             let mut hold = $this.context.lock().await;
 
+            if $this.closed.load(Ordering::Relaxed) {
+                log::warn!("{} \u{b7} device closed", $desc);
+                anyhow::bail!("device closed");
+            }
+
             if $this.poisoned.load(Ordering::Relaxed) {
                 log::info!("Reconnecting after timeout");
+                let _ = hold.disconnect().await;
                 let mut fresh = ModbusDevice::connect_context(&$this.config).await?;
                 fresh.set_slave(Slave($this.default_slave.load(Ordering::Relaxed)));
                 *hold = fresh;
@@ -449,6 +565,7 @@ pub struct ModbusDevice {
     config: DeviceConfig,
     default_slave: Arc<AtomicU8>,
     poisoned: Arc<AtomicBool>,
+    closed: Arc<AtomicBool>,
 }
 
 impl Debug for ModbusDevice {
@@ -466,8 +583,28 @@ impl ModbusDevice {
             context: Arc::new(Mutex::new(context)),
             default_slave: Arc::new(AtomicU8::new(config.slave_id)),
             poisoned: Arc::new(AtomicBool::new(false)),
+            closed: Arc::new(AtomicBool::new(false)),
             config: config.clone(),
         })
+    }
+
+    pub async fn replace(previous: Option<Self>, config: &DeviceConfig) -> Result<Self> {
+        if let Some(previous) = previous {
+            previous.close().await;
+        }
+        Self::new(config).await
+    }
+
+    pub async fn close(&self) {
+        self.closed.store(true, Ordering::Relaxed);
+        let mut hold = self.context.lock().await;
+        if let Err(error) = hold.disconnect().await {
+            log::debug!("Disconnect \u{b7} {error}");
+        }
+    }
+
+    pub fn is_closed(&self) -> bool {
+        self.closed.load(Ordering::Relaxed)
     }
 
     async fn connect_context(config: &DeviceConfig) -> Result<Context> {
@@ -507,6 +644,14 @@ impl ModbusDevice {
     pub async fn set_slave(&self, slave_id: SlaveId) {
         self.default_slave.store(slave_id, Ordering::Relaxed);
         self.context.lock().await.set_slave(Slave(slave_id));
+    }
+
+    pub fn poison(&self) {
+        self.poisoned.store(true, Ordering::Relaxed);
+    }
+
+    pub fn is_poisoned(&self) -> bool {
+        self.poisoned.load(Ordering::Relaxed)
     }
 
     pub async fn read_typed(

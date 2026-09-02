@@ -142,9 +142,10 @@ impl App {
         let config: Config =
             serde_json::from_str(&content).map_err(|e| format!("Load failed: {e}"))?;
 
+        let previous = self.take_device();
         let device_config = config.device.clone();
         self.background_task = Some(BackgroundTask::LoadConfig(compat::spawn(async move {
-            let result = ModbusDevice::new(&device_config)
+            let result = ModbusDevice::replace(previous, &device_config)
                 .await
                 .map_err(|e| e.to_string());
             LoadConfigTaskResult {

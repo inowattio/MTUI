@@ -137,6 +137,7 @@ async fn read_handler(State(state): State<ApiState>, Json(request): Json<ReadReq
         .await;
     match result {
         Ok(values) => Json(ReadResponse { values }).into_response(),
+        Err(_) if device.is_closed() => StatusCode::SERVICE_UNAVAILABLE.into_response(),
         Err(e) => {
             log::error!("API read failed: {e}");
             StatusCode::BAD_GATEWAY.into_response()
@@ -191,6 +192,7 @@ async fn write_handler(
             );
             StatusCode::NO_CONTENT
         }
+        Err(_) if device.is_closed() => StatusCode::SERVICE_UNAVAILABLE,
         Err(e) => {
             log::error!("API write failed: {e}");
             StatusCode::BAD_GATEWAY

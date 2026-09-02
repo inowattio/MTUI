@@ -45,6 +45,13 @@ pub async fn timeout<F: Future>(duration: Duration, future: F) -> Result<F::Outp
 #[derive(Debug)]
 pub struct TaskHandle<T> {
     receiver: futures::channel::oneshot::Receiver<T>,
+    abort: futures::future::AbortHandle,
+}
+
+impl<T> Drop for TaskHandle<T> {
+    fn drop(&mut self) {
+        self.abort.abort();
+    }
 }
 
 pub enum TaskPoll<T> {
@@ -70,10 +77,13 @@ where
     F: Future<Output = T> + Send + 'static,
 {
     let (sender, receiver) = futures::channel::oneshot::channel();
+    let (future, abort) = futures::future::abortable(future);
     tokio::spawn(async move {
-        let _ = sender.send(future.await);
+        if let Ok(value) = future.await {
+            let _ = sender.send(value);
+        }
     });
-    TaskHandle { receiver }
+    TaskHandle { receiver, abort }
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -83,8 +93,59 @@ where
     F: Future<Output = T> + 'static,
 {
     let (sender, receiver) = futures::channel::oneshot::channel();
+    let (future, abort) = futures::future::abortable(future);
     wasm_bindgen_futures::spawn_local(async move {
-        let _ = sender.send(future.await);
+        if let Ok(value) = future.await {
+            let _ = sender.send(value);
+        }
     });
-    TaskHandle { receiver }
+    TaskHandle { receiver, abort }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+
+    async fn settle(guard: &Arc<()>) {
+        for _ in 0..200 {
+            if Arc::strong_count(guard) == 1 {
+                return;
+            }
+            tokio::task::yield_now().await;
+            sleep(Duration::from_millis(1)).await;
+        }
+        panic!("task kept running after its handle was dropped");
+    }
+
+    #[tokio::test]
+    async fn dropping_the_handle_aborts_the_task() {
+        let guard = Arc::new(());
+        let held = guard.clone();
+        let handle = spawn(async move {
+            let _held = held;
+            sleep(Duration::from_secs(60)).await;
+        });
+        tokio::task::yield_now().await;
+        assert_eq!(Arc::strong_count(&guard), 2, "task must own its clone");
+
+        drop(handle);
+        settle(&guard).await;
+    }
+
+    #[tokio::test]
+    async fn finished_task_delivers_its_result() {
+        let mut handle = spawn(async { 7 });
+        for _ in 0..200 {
+            match handle.poll_result() {
+                TaskPoll::Finished(value) => {
+                    assert_eq!(value, 7);
+                    return;
+                }
+                TaskPoll::Pending => tokio::task::yield_now().await,
+                TaskPoll::Gone => panic!("task vanished without a result"),
+            }
+        }
+        panic!("task never finished");
+    }
 }

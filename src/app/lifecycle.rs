@@ -320,8 +320,11 @@ impl App {
             log::warn!("Connection lost \u{b7} reconnecting\u{2026}");
         }
         let config = self.config.device.clone();
+        let previous = self.take_device();
         self.background_task = Some(BackgroundTask::Reconnect(compat::spawn(async move {
-            ModbusDevice::new(&config).await.map_err(|e| e.to_string())
+            ModbusDevice::replace(previous, &config)
+                .await
+                .map_err(|e| e.to_string())
         })));
     }
 
@@ -618,9 +621,14 @@ impl App {
     }
 
     pub(super) fn free_background_slot(&mut self) -> bool {
-        match &self.background_task {
+        match self.background_task.as_mut() {
             None => true,
-            Some(BackgroundTask::Refresh(_)) => {
+            Some(BackgroundTask::Refresh(handle)) => {
+                if matches!(handle.poll_result(), TaskPoll::Pending)
+                    && let Some(device) = &self.device
+                {
+                    device.poison();
+                }
                 self.background_task = None;
                 if self.is_reading() {
                     self.read_mut().loading = false;
@@ -776,10 +784,16 @@ fn read_run_len(
 
 #[cfg(test)]
 mod tests {
+    #[cfg(not(target_arch = "wasm32"))]
+    use super::{App, BackgroundTask};
     use super::{custom_full_spans, read_run_len};
+    #[cfg(not(target_arch = "wasm32"))]
+    use crate::config::Config;
     use crate::custom::{CustomRepr, CustomRule};
     use crate::register::{RegisterCell, RegisterType};
     use std::collections::BTreeMap;
+    #[cfg(not(target_arch = "wasm32"))]
+    use std::time::Duration;
 
     const H: RegisterType = RegisterType::Holding;
 
@@ -853,5 +867,51 @@ mod tests {
     fn run_cannot_extend_past_missing_cells() {
         let spans = custom_full_spans(&rules(&[(100, CustomRepr::F64, &[])]));
         assert_eq!(read_run_len(&cells(&[100, 101, 105]), 0, 2, &spans), 2);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    async fn app_with_refresh_in_flight() -> App {
+        let mut app = App::boot(Config::default(), String::new()).await;
+        app.refresh().await;
+        assert!(
+            matches!(app.background_task, Some(BackgroundTask::Refresh(_))),
+            "boot must land in a reading view so refresh() spawns a task"
+        );
+        app
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn freeing_a_pending_refresh_poisons_the_kept_device() {
+        let mut app = app_with_refresh_in_flight().await;
+        let device = app.device.clone().expect("mock device");
+        assert!(!device.is_poisoned());
+
+        assert!(app.free_background_slot());
+        assert!(app.background_task.is_none());
+        assert!(
+            device.is_poisoned(),
+            "an aborted refresh may have left a reply on the line"
+        );
+
+        let result = device.read_typed(None, RegisterType::Holding, 0, 1).await;
+        assert!(result.is_ok(), "command after poison failed: {result:?}");
+        assert!(!device.is_poisoned());
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn freeing_a_finished_refresh_leaves_the_device_clean() {
+        let mut app = app_with_refresh_in_flight().await;
+        let device = app.device.clone().expect("mock device");
+
+        tokio::time::sleep(Duration::from_millis(400)).await;
+
+        assert!(app.free_background_slot());
+        assert!(app.background_task.is_none());
+        assert!(
+            !device.is_poisoned(),
+            "nothing was interrupted, no reconnect needed"
+        );
     }
 }
