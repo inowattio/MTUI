@@ -2,7 +2,10 @@ use crate::app::WriteType;
 use crate::compat::Instant;
 use crate::config::Column;
 use crate::custom::{BitEntry, CustomOp, CustomRepr, EnumEntry};
-use crate::modbus::{DataBits, DeviceIdAccess, Parity, StopBits, WordOrder};
+use crate::modbus::{
+    DataBits, DeviceConfig, DeviceIdAccess, Interface, InterfaceNetworkParams,
+    InterfaceWiredParams, Parity, StopBits, WordOrder,
+};
 use crate::num_ops::{cycle, wrap_index};
 use crate::register::{RegisterCell, RegisterType};
 use serde::{Deserialize, Serialize};
@@ -79,28 +82,40 @@ field_enum! {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DiscoveryField {
     Interface,
-    Port,
+    SlaveId,
+    ConnectTimeout,
+    CommandTimeout,
+    BetweenCommands,
+    WordOrder,
+    Connect,
+    Port(usize),
+    CustomPath,
     Baud,
     DataBits,
     Parity,
     StopBits,
     Ip,
     NetPort,
-    SlaveId,
-    ConnectTimeout,
-    CommandTimeout,
-    BetweenCommands,
-    WordOrder,
     ScanNetwork,
-    Connect,
+    Found(usize),
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum DiscoveryColumn {
+    #[default]
+    Common,
+    Side,
 }
 
 #[derive(Debug, PartialEq)]
 pub struct DiscoveryParams {
     pub interface: InterfaceKind,
+    pub column: DiscoveryColumn,
     pub selected: u16,
+    pub side_selected: u16,
     pub ports: Vec<String>,
     pub port_index: u16,
+    pub custom_path: String,
     pub baud_rate: u32,
     pub data_bits: DataBits,
     pub parity: Parity,
@@ -113,8 +128,6 @@ pub struct DiscoveryParams {
     pub between_commands_ms: u64,
     pub word_order: WordOrder,
     pub found: Vec<String>,
-    pub scan_open: bool,
-    pub scan_selected: u16,
     pub status: Option<StatusMessage>,
 }
 
@@ -122,9 +135,12 @@ impl Default for DiscoveryParams {
     fn default() -> Self {
         Self {
             interface: InterfaceKind::Mock,
+            column: DiscoveryColumn::Common,
             selected: 0,
+            side_selected: 0,
             ports: Vec::new(),
             port_index: 0,
+            custom_path: String::new(),
             baud_rate: 9600,
             data_bits: DataBits::Eight,
             parity: Parity::None,
@@ -137,37 +153,132 @@ impl Default for DiscoveryParams {
             between_commands_ms: 3,
             word_order: WordOrder::default(),
             found: Vec::new(),
-            scan_open: false,
-            scan_selected: 0,
             status: None,
         }
     }
 }
 
 impl DiscoveryParams {
-    pub fn fields(&self) -> Vec<DiscoveryField> {
+    pub const COMMON: [DiscoveryField; 7] = [
+        DiscoveryField::Interface,
+        DiscoveryField::SlaveId,
+        DiscoveryField::ConnectTimeout,
+        DiscoveryField::CommandTimeout,
+        DiscoveryField::BetweenCommands,
+        DiscoveryField::WordOrder,
+        DiscoveryField::Connect,
+    ];
+
+    pub fn side_fields(&self) -> Vec<DiscoveryField> {
         use DiscoveryField::*;
-        let mut fields = vec![Interface];
         match self.interface {
-            InterfaceKind::Mock => {}
-            InterfaceKind::Wired => fields.extend([Port, Baud, DataBits, Parity, StopBits]),
-            InterfaceKind::Network => fields.extend([Ip, NetPort, ScanNetwork]),
+            InterfaceKind::Mock => Vec::new(),
+            InterfaceKind::Wired => (0..self.ports.len())
+                .map(Port)
+                .chain([CustomPath, Baud, DataBits, Parity, StopBits])
+                .collect(),
+            InterfaceKind::Network => [Ip, NetPort, ScanNetwork]
+                .into_iter()
+                .chain((0..self.found.len()).map(Found))
+                .collect(),
         }
-        fields.extend([
-            SlaveId,
-            ConnectTimeout,
-            CommandTimeout,
-            BetweenCommands,
-            WordOrder,
-            Connect,
-        ]);
-        fields
+    }
+
+    pub fn custom_path_active(&self) -> bool {
+        !self.custom_path.trim().is_empty()
+    }
+
+    pub fn serial_path(&self) -> Option<String> {
+        if self.custom_path_active() {
+            return Some(self.custom_path.trim().to_string());
+        }
+        self.ports.get(self.port_index as usize).cloned()
+    }
+
+    pub fn device_config(&self) -> DeviceConfig {
+        let interface = match self.interface {
+            InterfaceKind::Mock => Interface::Mock,
+            InterfaceKind::Wired => Interface::Wired(InterfaceWiredParams {
+                path: self.serial_path().unwrap_or_default(),
+                baud_rate: self.baud_rate,
+                data_bits: self.data_bits,
+                parity: self.parity,
+                stop_bits: self.stop_bits,
+            }),
+            InterfaceKind::Network => Interface::Network(InterfaceNetworkParams {
+                ip: self.ip.clone(),
+                port: self.net_port,
+            }),
+        };
+        DeviceConfig {
+            interface,
+            slave_id: self.slave_id,
+            timeout_connect_ms: self.connect_timeout_ms,
+            timeout_command_ms: self.command_timeout_ms,
+            time_between_commands_ms: self.between_commands_ms,
+            word_order: self.word_order,
+        }
     }
 
     pub fn current_field(&self) -> DiscoveryField {
-        let fields = self.fields();
-        let i = (self.selected as usize).min(fields.len() - 1);
-        fields[i]
+        if self.column == DiscoveryColumn::Side {
+            let side = self.side_fields();
+            let index = (self.side_selected as usize).min(side.len().saturating_sub(1));
+            if let Some(&field) = side.get(index) {
+                return field;
+            }
+        }
+        clamp_pick(self.selected, &Self::COMMON)
+    }
+
+    pub fn move_cursor(&mut self, down: bool) {
+        match self.column {
+            DiscoveryColumn::Common => {
+                self.selected = wrap_index(self.selected, Self::COMMON.len() as u16, down);
+            }
+            DiscoveryColumn::Side => {
+                let count = self.side_fields().len() as u16;
+                if count > 0 {
+                    self.side_selected = wrap_index(self.side_selected.min(count - 1), count, down);
+                }
+            }
+        }
+    }
+
+    pub fn toggle_column(&mut self) {
+        self.column = match self.column {
+            DiscoveryColumn::Common if !self.side_fields().is_empty() => DiscoveryColumn::Side,
+            _ => DiscoveryColumn::Common,
+        };
+        self.clamp_side();
+    }
+
+    pub fn set_interface(&mut self, interface: InterfaceKind) {
+        self.interface = interface;
+        self.side_selected = 0;
+        self.clamp_side();
+    }
+
+    pub fn set_found(&mut self, found: Vec<String>) {
+        self.found = found;
+        self.clamp_side();
+    }
+
+    pub fn focus_connect(&mut self) {
+        self.column = DiscoveryColumn::Common;
+        self.selected = Self::COMMON
+            .iter()
+            .position(|&f| f == DiscoveryField::Connect)
+            .map_or(0, |i| i as u16);
+    }
+
+    fn clamp_side(&mut self) {
+        let count = self.side_fields().len() as u16;
+        if count == 0 {
+            self.column = DiscoveryColumn::Common;
+        } else {
+            self.side_selected = self.side_selected.min(count - 1);
+        }
     }
 }
 

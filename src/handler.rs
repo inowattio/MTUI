@@ -415,12 +415,20 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
 }
 
 pub fn handle_paste(data: String, app: &mut App) {
-    if app.discovery().is_some() || app.settings().is_some() || app.log_view().is_some() {
+    if app.settings().is_some() || app.log_view().is_some() {
         return;
     }
 
     let trimmed = data.trim();
     if trimmed.is_empty() {
+        return;
+    }
+
+    if let Some(d) = app.discovery_mut() {
+        if d.current_field() == DiscoveryField::CustomPath {
+            let first_line = trimmed.lines().next().unwrap_or_default();
+            d.custom_path.push_str(first_line);
+        }
         return;
     }
 
@@ -470,43 +478,32 @@ fn paste_digits(digits: &str, app: &mut App) {
 
 async fn handle_discovery_key(key_event: KeyEvent, app: &mut App) {
     let kb = app.config.keybinds;
-
-    if app.discovery().is_some_and(|d| d.scan_open) {
-        handle_scan_popup_key(key_event, app, kb);
+    let Some(field) = app.discovery().map(DiscoveryParams::current_field) else {
         return;
-    }
-
-    let (field, count) = match app.discovery() {
-        Some(d) => (d.current_field(), d.fields().len() as u16),
-        None => return,
     };
 
     match key_event.code {
         c if c == kb.exit => app.close_popup(),
         c if c == kb.action => match field {
             DiscoveryField::ScanNetwork => app.start_network_scan(),
+            DiscoveryField::Port(index) => app.choose_port(index),
+            DiscoveryField::Found(index) => app.use_found_ip(index),
             _ => app.discovery_connect(),
         },
-        c if c == kb.move_up => {
+        c if c == kb.move_up || c == kb.move_down => {
             if let Some(d) = app.discovery_mut() {
-                d.selected = wrap_index(d.selected, count, false);
+                d.move_cursor(c == kb.move_down);
             }
         }
-        c if c == kb.move_down => {
+        c if c == kb.switch_view || c == kb.switch_view_back => {
             if let Some(d) = app.discovery_mut() {
-                d.selected = wrap_index(d.selected, count, true);
+                d.toggle_column();
             }
         }
-        KeyCode::Left => {
+        KeyCode::Left | KeyCode::Right => {
             let show_mock = app.config.show_mock;
             if let Some(d) = app.discovery_mut() {
-                cycle_field(d, field, false, show_mock);
-            }
-        }
-        KeyCode::Right => {
-            let show_mock = app.config.show_mock;
-            if let Some(d) = app.discovery_mut() {
-                cycle_field(d, field, true, show_mock);
+                cycle_field(d, field, key_event.code == KeyCode::Right, show_mock);
             }
         }
         KeyCode::Backspace => {
@@ -514,6 +511,9 @@ async fn handle_discovery_key(key_event: KeyEvent, app: &mut App) {
                 match field {
                     DiscoveryField::Ip => {
                         d.ip.pop();
+                    }
+                    DiscoveryField::CustomPath => {
+                        d.custom_path.pop();
                     }
                     DiscoveryField::NetPort => digit_remove(&mut d.net_port),
                     DiscoveryField::SlaveId => digit_remove(&mut d.slave_id),
@@ -529,6 +529,7 @@ async fn handle_discovery_key(key_event: KeyEvent, app: &mut App) {
                 let digit = (c as u8).saturating_sub(b'0');
                 match field {
                     DiscoveryField::Ip if c.is_ascii_digit() || c == '.' => d.ip.push(c),
+                    DiscoveryField::CustomPath if !c.is_control() => d.custom_path.push(c),
                     DiscoveryField::NetPort if c.is_ascii_digit() => {
                         digit_add(&mut d.net_port, digit)
                     }
@@ -552,57 +553,16 @@ async fn handle_discovery_key(key_event: KeyEvent, app: &mut App) {
     }
 }
 
-fn handle_scan_popup_key(key_event: KeyEvent, app: &mut App, kb: Keybinds) {
-    let len = app.discovery().map_or(0, |d| d.found.len() as u16);
-    match key_event.code {
-        c if c == kb.exit => {
-            if let Some(d) = app.discovery_mut() {
-                d.scan_open = false;
-            }
-        }
-        c if c == kb.action => {
-            if len > 0 {
-                let selected = app.discovery().map_or(0, |d| d.scan_selected);
-                app.use_found_ip(selected);
-            }
-        }
-        c if c == kb.move_up => {
-            if let Some(d) = app.discovery_mut()
-                && len > 0
-            {
-                d.scan_selected = wrap_index(d.scan_selected, len, false);
-            }
-        }
-        c if c == kb.move_down => {
-            if let Some(d) = app.discovery_mut()
-                && len > 0
-            {
-                d.scan_selected = wrap_index(d.scan_selected, len, true);
-            }
-        }
-        _ => {}
-    }
-}
-
 fn cycle_field(d: &mut DiscoveryParams, field: DiscoveryField, forward: bool, show_mock: bool) {
     let kinds: &[InterfaceKind] = if show_mock {
         &InterfaceKind::ALL
     } else {
         &[InterfaceKind::Wired, InterfaceKind::Network]
     };
-    const BAUDS: [u32; 9] = [1200, 2400, 4000, 9600, 19200, 38400, 57600, 115200, 230400];
+    const BAUDS: [u32; 6] = [9600, 19200, 38400, 57600, 115200, 230400];
 
     match field {
-        DiscoveryField::Interface => {
-            d.interface = cycle(kinds, d.interface, forward);
-            d.selected = 0;
-        }
-        DiscoveryField::Port => {
-            if !d.ports.is_empty() {
-                let n = d.ports.len() as u16;
-                d.port_index = wrap_index(d.port_index, n, forward);
-            }
-        }
+        DiscoveryField::Interface => d.set_interface(cycle(kinds, d.interface, forward)),
         DiscoveryField::Baud => d.baud_rate = cycle(&BAUDS, d.baud_rate, forward),
         DiscoveryField::DataBits => d.data_bits = cycle(&DataBits::ALL, d.data_bits, forward),
         DiscoveryField::Parity => d.parity = cycle(&Parity::ALL, d.parity, forward),
@@ -781,10 +741,41 @@ mod tests {
     use crate::app::App;
     use crate::config::Config;
     use crate::input::{KeyCode, KeyEvent};
-    use crate::state::{Popup, PopupKind, State};
+    use crate::state::{DiscoveryField, DiscoveryParams, InterfaceKind, Popup, PopupKind, State};
 
     async fn app() -> App {
         App::boot(Config::default(), String::new()).await
+    }
+
+    #[tokio::test]
+    async fn the_custom_serial_path_is_typed_and_pasted() {
+        let mut app = app().await;
+        app.open_discovery();
+        {
+            let d = app.discovery_mut().unwrap();
+            *d = DiscoveryParams {
+                ports: vec!["/dev/ttyUSB0".to_string()],
+                ..DiscoveryParams::default()
+            };
+            d.set_interface(InterfaceKind::Wired);
+            d.toggle_column();
+            d.move_cursor(true); // past the single port row onto the custom path
+        }
+        assert_eq!(
+            app.discovery().unwrap().current_field(),
+            DiscoveryField::CustomPath
+        );
+
+        for c in "/dev/ttyAMA0".chars() {
+            handle_key_events(KeyEvent::new(KeyCode::Char(c)), &mut app).await;
+        }
+        handle_key_events(KeyEvent::new(KeyCode::Backspace), &mut app).await;
+        super::handle_paste("1\n".to_string(), &mut app);
+
+        let d = app.discovery().unwrap();
+        assert_eq!(d.custom_path, "/dev/ttyAMA1");
+        assert_eq!(d.serial_path().as_deref(), Some("/dev/ttyAMA1"));
+        assert_eq!(app.popup_kind(), Some(PopupKind::Discovery), "still open");
     }
 
     fn ctrl(c: char) -> KeyEvent {
