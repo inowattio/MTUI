@@ -26,8 +26,6 @@ use tokio_serial::SerialStream;
 pub enum Interface {
     Wired(InterfaceWiredParams),
     Network(InterfaceNetworkParams),
-    /// A serial gateway: RTU frames, CRC included, carried over a plain TCP
-    /// stream with no MBAP header.
     RtuOverTcp(InterfaceNetworkParams),
     Mock,
 }
@@ -408,8 +406,6 @@ mod tests {
             .await
             .expect("connect to the gateway");
 
-        // The gateway only answers CRC-valid RTU frames: a Modbus TCP client
-        // would have sent an MBAP header and timed out here.
         let values = device
             .read_typed(None, RegisterType::Holding, 100, 3)
             .await
