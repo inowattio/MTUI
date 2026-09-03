@@ -308,7 +308,7 @@ impl App {
     }
 
     fn maybe_reconnect(&mut self) -> bool {
-        if self.device.is_none() || !self.is_reading() {
+        if !self.is_reading() {
             return false;
         }
 
@@ -943,12 +943,38 @@ mod tests {
         assert!(app.reconnect.link_lost);
         assert_eq!(app.reconnect.attempts, 1);
         assert!(app.reconnect.next_at.is_some(), "retry is scheduled");
+        assert!(
+            app.device.is_none(),
+            "a failed attempt leaves no device behind"
+        );
 
         app.tick().await;
         assert!(
             app.background_task.is_none(),
             "no new attempt inside the backoff window"
         );
+
+        app.reconnect.next_at = None;
+        app.tick().await;
+        assert!(
+            matches!(app.background_task, Some(BackgroundTask::Reconnect(_))),
+            "retry after backoff with no device present"
+        );
+        settle(&mut app).await;
+        assert_eq!(app.reconnect.attempts, 2);
+        assert!(app.reconnect.next_at.is_some());
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn no_device_and_no_lost_link_means_no_reconnect() {
+        let mut app = App::boot(Config::default(), String::new()).await;
+        app.config.device.interface = missing_serial_port();
+        app.device = None;
+        app.connection = ConnectionStatus::Error("Connection failed".to_string());
+
+        app.tick().await;
+        assert!(app.background_task.is_none());
     }
 
     #[cfg(not(target_arch = "wasm32"))]
