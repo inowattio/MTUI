@@ -1,6 +1,6 @@
 [package]
 name = "mtui"
-version = "0.9.9"
+version = "0.9.10"
 edition = "2024"
 rust-version = "1.96"
 license = "GPL-2.0-only"
