@@ -19,6 +19,22 @@ use std::sync::atomic::Ordering;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Duration;
 
+#[cfg(not(target_arch = "wasm32"))]
+fn local_subnet_prefix() -> Option<String> {
+    match local_ip_address::local_ip().ok()? {
+        std::net::IpAddr::V4(ip) if !ip.is_loopback() => {
+            let [a, b, c, _] = ip.octets();
+            Some(format!("{a}.{b}.{c}."))
+        }
+        _ => None,
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn local_subnet_prefix() -> Option<String> {
+    None
+}
+
 impl App {
     pub fn discovery(&self) -> Option<&DiscoveryParams> {
         self.popup_as()
@@ -32,6 +48,10 @@ impl App {
         let device = &config.device;
         let mut d = DiscoveryParams {
             ports: Self::available_ports(),
+            ip: match &device.interface {
+                Interface::Network(n) => n.ip.clone(),
+                _ => local_subnet_prefix().unwrap_or_else(|| "127.0.0.1".to_string()),
+            },
             slave_id: device.slave_id,
             connect_timeout_ms: device.timeout_connect_ms,
             command_timeout_ms: device.timeout_command_ms,
@@ -52,7 +72,6 @@ impl App {
             }
             Interface::Network(n) => {
                 d.interface = InterfaceKind::Network;
-                d.ip = n.ip.clone();
                 d.net_port = n.port;
             }
             Interface::Mock => d.interface = InterfaceKind::Mock,
@@ -192,8 +211,7 @@ impl App {
         if d.interface != InterfaceKind::Network {
             return;
         }
-        let Some(prefix) = subnet_prefix_from(&d.ip).or_else(crate::state::local_subnet_prefix)
-        else {
+        let Some(prefix) = subnet_prefix_from(&d.ip).or_else(local_subnet_prefix) else {
             self.set_discovery_status(StatusMessage::err("Couldn't determine a subnet to scan"));
             return;
         };
@@ -254,5 +272,36 @@ impl App {
         if let Some(d) = self.discovery_mut() {
             d.status = Some(msg);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::app::App;
+    use crate::config::Config;
+    use crate::modbus::{Interface, InterfaceNetworkParams};
+    use crate::state::InterfaceKind;
+
+    #[test]
+    fn configured_network_address_is_shown_as_is() {
+        let mut config = Config::default();
+        config.device.interface = Interface::Network(InterfaceNetworkParams {
+            ip: "10.1.2.3".to_string(),
+            port: 1502,
+        });
+        let d = App::discovery_params(&config);
+        assert_eq!(d.interface, InterfaceKind::Network);
+        assert_eq!(d.ip, "10.1.2.3");
+        assert_eq!(d.net_port, 1502);
+    }
+
+    #[test]
+    fn other_interfaces_prefill_a_subnet_or_loopback() {
+        let d = App::discovery_params(&Config::default());
+        assert!(
+            d.ip == "127.0.0.1" || d.ip.ends_with('.'),
+            "unexpected prefill: {}",
+            d.ip
+        );
     }
 }
