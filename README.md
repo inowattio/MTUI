@@ -7,7 +7,7 @@ Made in pure safe Rust, based on [tokio-modbus](https://crates.io/crates/tokio-m
 Play the GIF to see a quick tour, or better yet, try it in your browser (mock device only): **<https://inowattio.github.io/MTUI/>**
 
 ## Features
-- Modbus TCP and RTU, plus a built-in mock device for playing around
+- Modbus TCP, RTU, RTU-over-TCP and a built-in mock device for playing around
 - Live register reading with auto-refresh, pause/resume and slave id selection
 - Interpretation columns with configurable word order: u16, i16, hex, binary, ASCII, u32, i32, f32, f64, M10K (and more!)
 - Panels: main view, pinned, labeled, custom rules and an address matrix
