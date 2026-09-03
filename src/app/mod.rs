@@ -325,7 +325,7 @@ impl From<anyhow::Error> for ReadError {
     fn from(error: anyhow::Error) -> Self {
         let kind = if error.downcast_ref::<ExceptionCode>().is_some() {
             ReadFailure::Exception
-        } else if error.downcast_ref::<compat::Elapsed>().is_some() {
+        } else if error.downcast_ref::<crate::compat::Elapsed>().is_some() {
             ReadFailure::Timeout
         } else {
             ReadFailure::Transport
