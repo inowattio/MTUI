@@ -195,6 +195,11 @@ fn field_view(
                 .map_or_else(|| "off".to_string(), |n| n.to_string()),
             None,
         ),
+        SettingsField::ReconnectOnTimeout => (
+            "Reconnect on timeout",
+            on_off(device.reconnect_on_timeout),
+            None,
+        ),
         SettingsField::HistoryCap => (
             "Graph history cap",
             device.graph_history_cap.to_string(),

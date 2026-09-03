@@ -483,6 +483,7 @@ field_enum! {
         ReadFullCustoms,
         CustomBatchBySize,
         AutoUpdate,
+        ReconnectOnTimeout,
         HistoryCap,
         MatrixCols,
         ReadOnly,
@@ -548,6 +549,7 @@ impl SettingsField {
                 | SettingsField::CustomBatchBySize
                 | SettingsField::ApiSlaveOverride
                 | SettingsField::LogWrites
+                | SettingsField::ReconnectOnTimeout
                 | SettingsField::ShowContinuation
                 | SettingsField::ShowClock
                 | SettingsField::ShowFrameTime
@@ -650,6 +652,7 @@ impl SettingsCategory {
                 ReadFullCustoms,
                 CustomBatchBySize,
                 AutoUpdate,
+                ReconnectOnTimeout,
                 ReadOnly,
                 HistoryCap,
                 MatrixCols,

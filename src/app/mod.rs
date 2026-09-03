@@ -308,17 +308,31 @@ impl CommStats {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ReadFailure {
+    Exception,
+    Timeout,
+    Transport,
+}
+
 #[derive(Debug)]
 struct ReadError {
     message: String,
-    answered: bool,
+    kind: ReadFailure,
 }
 
 impl From<anyhow::Error> for ReadError {
     fn from(error: anyhow::Error) -> Self {
+        let kind = if error.downcast_ref::<ExceptionCode>().is_some() {
+            ReadFailure::Exception
+        } else if error.downcast_ref::<compat::Elapsed>().is_some() {
+            ReadFailure::Timeout
+        } else {
+            ReadFailure::Transport
+        };
         Self {
-            answered: error.downcast_ref::<ExceptionCode>().is_some(),
             message: error.to_string(),
+            kind,
         }
     }
 }
@@ -717,6 +731,32 @@ mod tests {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.0);
         }
+    }
+
+    #[test]
+    fn read_failures_are_classified_by_cause() {
+        use super::{ReadError, ReadFailure};
+        use tokio_modbus::ExceptionCode;
+
+        let kind = |error: anyhow::Error| ReadError::from(error).kind;
+        assert_eq!(
+            kind(anyhow::Error::from(ExceptionCode::IllegalDataAddress)),
+            ReadFailure::Exception
+        );
+        assert_eq!(
+            kind(anyhow::Error::from(crate::compat::Elapsed)),
+            ReadFailure::Timeout
+        );
+        assert_eq!(
+            kind(anyhow::Error::from(std::io::Error::from(
+                std::io::ErrorKind::BrokenPipe
+            ))),
+            ReadFailure::Transport
+        );
+        assert_eq!(
+            kind(anyhow::anyhow!("Expected 2 value(s), got 1")),
+            ReadFailure::Transport
+        );
     }
 
     #[test]

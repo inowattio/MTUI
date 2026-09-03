@@ -131,6 +131,9 @@ impl App {
                 self.config.allow_api_slave_id = !self.config.allow_api_slave_id
             }
             SettingsField::LogWrites => self.config.log_writes = !self.config.log_writes,
+            SettingsField::ReconnectOnTimeout => {
+                self.config.reconnect_on_timeout = !self.config.reconnect_on_timeout
+            }
             SettingsField::ShowContinuation => {
                 self.config.custom_rules.show_continuation =
                     !self.config.custom_rules.show_continuation

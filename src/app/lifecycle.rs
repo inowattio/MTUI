@@ -1,6 +1,6 @@
 use super::{
     App, BackgroundTask, CommStats, ConfigError, ConnectTaskResult, DeviceIdTaskResult,
-    LoadConfigTaskResult, RawTaskResult, ReadError, ReconnectState, RefreshTaskResult,
+    LoadConfigTaskResult, RawTaskResult, ReadError, ReadFailure, ReconnectState, RefreshTaskResult,
     SlaveScanTaskResult, SweepState, WriteOutcome, default_config_path, load_config,
     reconnect_backoff,
 };
@@ -603,10 +603,15 @@ impl App {
                 ConnectionStatus::Connected
             }
             (Some(Err(e)), _) | (_, Some(Err(e))) => {
-                if e.answered {
-                    self.reconnect = ReconnectState::default();
-                } else {
+                let link_lost = match e.kind {
+                    ReadFailure::Exception => false,
+                    ReadFailure::Timeout => self.config.reconnect_on_timeout,
+                    ReadFailure::Transport => true,
+                };
+                if link_lost {
                     self.reconnect.link_lost = true;
+                } else {
+                    self.reconnect = ReconnectState::default();
                 }
                 ConnectionStatus::Error(e.message.clone())
             }
@@ -811,7 +816,8 @@ mod tests {
     use crate::custom::{CustomRepr, CustomRule};
     #[cfg(not(target_arch = "wasm32"))]
     use crate::modbus::{
-        DataBits, DeviceConfig, Interface, InterfaceWiredParams, ModbusDevice, Parity, StopBits,
+        DataBits, DeviceConfig, Interface, InterfaceNetworkParams, InterfaceWiredParams,
+        ModbusDevice, Parity, StopBits,
     };
     use crate::register::{RegisterCell, RegisterType};
     #[cfg(not(target_arch = "wasm32"))]
@@ -946,10 +952,8 @@ mod tests {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    #[tokio::test]
-    async fn a_silent_device_counts_as_a_lost_link() {
+    async fn app_with_silent_device() -> App {
         let mut app = App::boot(Config::default(), String::new()).await;
-        // Slave 200 does not exist on the mock bus so every read times out
         let silent = ModbusDevice::new(&DeviceConfig {
             slave_id: 200,
             timeout_command_ms: 50,
@@ -959,6 +963,63 @@ mod tests {
         .unwrap();
         app.device = Some(silent);
         app.config.device.interface = missing_serial_port();
+        app
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn a_silent_device_counts_as_a_lost_link_by_default() {
+        let mut app = app_with_silent_device().await;
+        assert!(app.config.reconnect_on_timeout);
+
+        app.refresh().await;
+        settle(&mut app).await;
+
+        assert!(matches!(app.connection, ConnectionStatus::Error(_)));
+        assert!(app.reconnect.link_lost);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn timeouts_are_left_alone_when_the_setting_is_off() {
+        let mut app = app_with_silent_device().await;
+        app.config.reconnect_on_timeout = false;
+
+        app.refresh().await;
+        settle(&mut app).await;
+        assert!(matches!(app.connection, ConnectionStatus::Error(_)));
+        assert!(!app.reconnect.link_lost);
+
+        app.tick().await;
+        assert!(
+            app.background_task.is_none(),
+            "a timeout must not reconnect with the setting off"
+        );
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn a_dropped_connection_is_a_lost_link_even_with_the_setting_off() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        tokio::spawn(async move {
+            while let Ok((stream, _)) = listener.accept().await {
+                drop(stream);
+            }
+        });
+        let config = DeviceConfig {
+            interface: Interface::Network(InterfaceNetworkParams {
+                ip: "127.0.0.1".to_string(),
+                port,
+            }),
+            timeout_connect_ms: 500,
+            timeout_command_ms: 500,
+            ..DeviceConfig::default()
+        };
+        let mut app = App::boot(Config::default(), String::new()).await;
+        app.device = Some(ModbusDevice::new(&config).await.expect("connect"));
+        app.config.device = config;
+        app.config.reconnect_on_timeout = false;
 
         app.refresh().await;
         settle(&mut app).await;
