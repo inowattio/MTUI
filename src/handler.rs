@@ -558,14 +558,13 @@ async fn handle_discovery_key(key_event: KeyEvent, app: &mut App) {
 }
 
 fn cycle_field(d: &mut DiscoveryParams, field: DiscoveryField, forward: bool, show_mock: bool) {
-    let kinds: &[InterfaceKind] = if show_mock {
-        &InterfaceKind::ALL
-    } else {
-        &[InterfaceKind::Wired, InterfaceKind::Network]
-    };
+    let kinds: Vec<InterfaceKind> = InterfaceKind::ALL
+        .into_iter()
+        .filter(|&kind| show_mock || kind != InterfaceKind::Mock)
+        .collect();
 
     match field {
-        DiscoveryField::Interface => d.set_interface(cycle(kinds, d.interface, forward)),
+        DiscoveryField::Interface => d.set_interface(cycle(&kinds, d.interface, forward)),
         DiscoveryField::Baud => d.cycle_baud(forward),
         DiscoveryField::DataBits => d.data_bits = cycle(&DataBits::ALL, d.data_bits, forward),
         DiscoveryField::Parity => d.parity = cycle(&Parity::ALL, d.parity, forward),
@@ -816,6 +815,36 @@ mod tests {
         handle_key_events(KeyEvent::new(KeyCode::Left), &mut app).await;
         handle_key_events(KeyEvent::new(KeyCode::Left), &mut app).await;
         assert_eq!(app.discovery().unwrap().baud_rate, 115_200);
+    }
+
+    #[tokio::test]
+    async fn the_interface_cycle_includes_rtu_over_tcp() {
+        let mut app = app().await;
+        app.open_discovery();
+        let kind = |app: &App| app.discovery().unwrap().interface;
+        assert_eq!(kind(&app), InterfaceKind::Mock);
+        for expected in [
+            InterfaceKind::Wired,
+            InterfaceKind::Network,
+            InterfaceKind::RtuOverTcp,
+            InterfaceKind::Mock,
+        ] {
+            handle_key_events(KeyEvent::new(KeyCode::Right), &mut app).await;
+            assert_eq!(kind(&app), expected);
+        }
+
+        app.config.show_mock = false;
+        app.discovery_mut()
+            .unwrap()
+            .set_interface(InterfaceKind::Wired);
+        for expected in [
+            InterfaceKind::Network,
+            InterfaceKind::RtuOverTcp,
+            InterfaceKind::Wired,
+        ] {
+            handle_key_events(KeyEvent::new(KeyCode::Right), &mut app).await;
+            assert_eq!(kind(&app), expected);
+        }
     }
 
     fn ctrl(c: char) -> KeyEvent {

@@ -76,6 +76,22 @@ field_enum! {
         Mock,
         Wired,
         Network,
+        RtuOverTcp,
+    }
+}
+
+impl InterfaceKind {
+    pub fn label(self) -> &'static str {
+        match self {
+            InterfaceKind::Mock => "Mock",
+            InterfaceKind::Wired => "Wired (serial)",
+            InterfaceKind::Network => "Network (TCP)",
+            InterfaceKind::RtuOverTcp => "RTU over TCP",
+        }
+    }
+
+    pub fn uses_tcp(self) -> bool {
+        matches!(self, InterfaceKind::Network | InterfaceKind::RtuOverTcp)
     }
 }
 
@@ -177,7 +193,7 @@ impl DiscoveryParams {
                 .map(Port)
                 .chain([CustomPath, Baud, DataBits, Parity, StopBits])
                 .collect(),
-            InterfaceKind::Network => [Ip, NetPort, ScanNetwork]
+            InterfaceKind::Network | InterfaceKind::RtuOverTcp => [Ip, NetPort, ScanNetwork]
                 .into_iter()
                 .chain((0..self.found.len()).map(Found))
                 .collect(),
@@ -222,6 +238,13 @@ impl DiscoveryParams {
         self.ports.get(self.port_index as usize).cloned()
     }
 
+    fn network_params(&self) -> InterfaceNetworkParams {
+        InterfaceNetworkParams {
+            ip: self.ip.clone(),
+            port: self.net_port,
+        }
+    }
+
     pub fn device_config(&self) -> DeviceConfig {
         let interface = match self.interface {
             InterfaceKind::Mock => Interface::Mock,
@@ -232,10 +255,8 @@ impl DiscoveryParams {
                 parity: self.parity,
                 stop_bits: self.stop_bits,
             }),
-            InterfaceKind::Network => Interface::Network(InterfaceNetworkParams {
-                ip: self.ip.clone(),
-                port: self.net_port,
-            }),
+            InterfaceKind::Network => Interface::Network(self.network_params()),
+            InterfaceKind::RtuOverTcp => Interface::RtuOverTcp(self.network_params()),
         };
         DeviceConfig {
             interface,

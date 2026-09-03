@@ -97,7 +97,9 @@ pub fn draw(params: &DiscoveryParams, app: &App, frame: &mut Frame, area: Rect, 
 
 fn blocked_reason(p: &DiscoveryParams) -> Option<&'static str> {
     match p.interface {
-        InterfaceKind::Network => p.ip.parse::<Ipv4Addr>().is_err().then_some("invalid IP"),
+        InterfaceKind::Network | InterfaceKind::RtuOverTcp => {
+            p.ip.parse::<Ipv4Addr>().is_err().then_some("invalid IP")
+        }
         InterfaceKind::Wired if p.serial_path().is_none() => Some("no serial port"),
         InterfaceKind::Wired if p.baud_rate == 0 => Some("baud rate is 0"),
         InterfaceKind::Wired => None,
@@ -137,14 +139,7 @@ fn common_lines(
 
 fn common_view(p: &DiscoveryParams, field: DiscoveryField) -> (&'static str, String, bool) {
     match field {
-        DiscoveryField::Interface => {
-            let name = match p.interface {
-                InterfaceKind::Mock => "Mock",
-                InterfaceKind::Wired => "Wired (serial)",
-                InterfaceKind::Network => "Network (TCP)",
-            };
-            ("Interface", name.to_string(), true)
-        }
+        DiscoveryField::Interface => ("Interface", p.interface.label().to_string(), true),
         DiscoveryField::SlaveId => ("Slave ID", p.slave_id.to_string(), false),
         DiscoveryField::ConnectTimeout => (
             "Connect timeout (ms)",
@@ -233,8 +228,13 @@ fn side_lines(
                 ));
             }
         }
-        InterfaceKind::Network => {
-            lines.push(section_title(theme, "NETWORK"));
+        InterfaceKind::Network | InterfaceKind::RtuOverTcp => {
+            let title = if p.interface == InterfaceKind::RtuOverTcp {
+                "RTU GATEWAY (TCP)"
+            } else {
+                "NETWORK"
+            };
+            lines.push(section_title(theme, title));
             let ip_style = p.ip.parse::<Ipv4Addr>().is_err().then(|| theme.err_style());
             let on = selected(DiscoveryField::Ip);
             lines.push(row(

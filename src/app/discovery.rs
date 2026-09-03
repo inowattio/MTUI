@@ -45,7 +45,7 @@ impl App {
         let mut d = DiscoveryParams {
             ports: Self::available_ports(),
             ip: match &device.interface {
-                Interface::Network(n) => n.ip.clone(),
+                Interface::Network(n) | Interface::RtuOverTcp(n) => n.ip.clone(),
                 _ => local_subnet_prefix().unwrap_or_else(|| "127.0.0.1".to_string()),
             },
             slave_id: device.slave_id,
@@ -69,6 +69,10 @@ impl App {
             }
             Interface::Network(n) => {
                 d.interface = InterfaceKind::Network;
+                d.net_port = n.port;
+            }
+            Interface::RtuOverTcp(n) => {
+                d.interface = InterfaceKind::RtuOverTcp;
                 d.net_port = n.port;
             }
             Interface::Mock => d.interface = InterfaceKind::Mock,
@@ -179,7 +183,7 @@ impl App {
         let Some(d) = self.discovery() else {
             return;
         };
-        if d.interface != InterfaceKind::Network {
+        if !d.interface.uses_tcp() {
             return;
         }
         let Some(prefix) = subnet_prefix_from(&d.ip).or_else(local_subnet_prefix) else {
@@ -403,6 +407,38 @@ mod tests {
             "the popup must not silently swap in a different port"
         );
         assert_eq!(d.baud_rate, 19200);
+    }
+
+    #[test]
+    fn rtu_over_tcp_shares_the_network_side_and_maps_to_its_own_interface() {
+        let mut d = DiscoveryParams {
+            ip: "10.0.0.9".to_string(),
+            net_port: 8899,
+            ..DiscoveryParams::default()
+        };
+        d.set_interface(InterfaceKind::RtuOverTcp);
+        assert_eq!(
+            d.side_fields(),
+            vec![
+                DiscoveryField::Ip,
+                DiscoveryField::NetPort,
+                DiscoveryField::ScanNetwork
+            ]
+        );
+        assert!(matches!(
+            d.device_config().interface,
+            Interface::RtuOverTcp(ref n) if n.ip == "10.0.0.9" && n.port == 8899
+        ));
+
+        let mut config = Config::default();
+        config.device.interface = Interface::RtuOverTcp(InterfaceNetworkParams {
+            ip: "10.0.0.9".to_string(),
+            port: 8899,
+        });
+        let d = App::discovery_params(&config);
+        assert_eq!(d.interface, InterfaceKind::RtuOverTcp);
+        assert_eq!(d.ip, "10.0.0.9");
+        assert_eq!(d.net_port, 8899);
     }
 
     #[test]

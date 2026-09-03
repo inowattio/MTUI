@@ -26,6 +26,9 @@ use tokio_serial::SerialStream;
 pub enum Interface {
     Wired(InterfaceWiredParams),
     Network(InterfaceNetworkParams),
+    /// A serial gateway: RTU frames, CRC included, carried over a plain TCP
+    /// stream with no MBAP header.
+    RtuOverTcp(InterfaceNetworkParams),
     Mock,
 }
 
@@ -340,6 +343,86 @@ mod tests {
         (config, connections)
     }
 
+    // not really worth it to pull in an entire crate just for a function
+    #[cfg(not(target_arch = "wasm32"))]
+    fn crc16(data: &[u8]) -> u16 {
+        let mut crc = 0xFFFFu16;
+        for &byte in data {
+            crc ^= u16::from(byte);
+            for _ in 0..8 {
+                crc = if crc & 1 == 1 {
+                    (crc >> 1) ^ 0xA001
+                } else {
+                    crc >> 1
+                };
+            }
+        }
+        crc
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    async fn rtu_gateway() -> u16 {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        tokio::spawn(async move {
+            while let Ok((mut stream, _)) = listener.accept().await {
+                tokio::spawn(async move {
+                    let mut frame = [0u8; 8];
+                    while stream.read_exact(&mut frame).await.is_ok() {
+                        if crc16(&frame[..6]) != u16::from_le_bytes([frame[6], frame[7]]) {
+                            return;
+                        }
+                        let address = u16::from_be_bytes([frame[2], frame[3]]);
+                        let count = u16::from_be_bytes([frame[4], frame[5]]);
+                        let mut response = vec![frame[0], frame[1], (count * 2) as u8];
+                        for i in 0..count {
+                            response.extend((address + i).to_be_bytes());
+                        }
+                        response.extend(crc16(&response).to_le_bytes());
+                        if stream.write_all(&response).await.is_err() {
+                            return;
+                        }
+                    }
+                });
+            }
+        });
+        port
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn rtu_over_tcp_sends_rtu_frames_down_the_socket() {
+        let port = rtu_gateway().await;
+        let config = DeviceConfig {
+            interface: Interface::RtuOverTcp(InterfaceNetworkParams {
+                ip: "127.0.0.1".to_string(),
+                port,
+            }),
+            slave_id: 7,
+            timeout_connect_ms: 500,
+            timeout_command_ms: 500,
+            ..DeviceConfig::default()
+        };
+        let device = ModbusDevice::new(&config)
+            .await
+            .expect("connect to the gateway");
+
+        // The gateway only answers CRC-valid RTU frames: a Modbus TCP client
+        // would have sent an MBAP header and timed out here.
+        let values = device
+            .read_typed(None, RegisterType::Holding, 100, 3)
+            .await
+            .expect("read through RTU framing");
+        assert_eq!(values, vec![100, 101, 102]);
+
+        let other = device
+            .read_typed(Some(9), RegisterType::Holding, 5, 1)
+            .await
+            .expect("the slave override travels in the RTU address byte");
+        assert_eq!(other, vec![5]);
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     #[tokio::test]
     async fn closed_device_fails_fast_without_reconnecting() {
@@ -559,6 +642,14 @@ impl DeviceIdAccess {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+fn socket_addr(interface: &InterfaceNetworkParams) -> Result<SocketAddr> {
+    Ok(SocketAddr::V4(SocketAddrV4::new(
+        Ipv4Addr::from_str(&interface.ip)?,
+        interface.port,
+    )))
+}
+
 #[derive(Clone)]
 pub struct ModbusDevice {
     context: Arc<Mutex<Context>>,
@@ -625,12 +716,16 @@ impl ModbusDevice {
                 rtu::attach_slave(port, Slave(config.slave_id))
             }
             Interface::Network(interface) => {
-                let socket_addr = SocketAddr::V4(SocketAddrV4::new(
-                    Ipv4Addr::from_str(&interface.ip)?,
-                    interface.port,
-                ));
-                let connection = tcp::connect_slave(socket_addr, Slave(config.slave_id));
+                let connection =
+                    tcp::connect_slave(socket_addr(interface)?, Slave(config.slave_id));
                 timeout(connection, timeout_connect, Duration::default()).await??
+            }
+            Interface::RtuOverTcp(interface) => {
+                let connect = tokio::net::TcpStream::connect(socket_addr(interface)?);
+                let stream = timeout(connect, timeout_connect, Duration::default()).await??;
+
+                let _ = stream.set_nodelay(true);
+                rtu::attach_slave(stream, Slave(config.slave_id))
             }
             Interface::Mock => MockContext::make(),
         };

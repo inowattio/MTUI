@@ -252,6 +252,7 @@ impl Config {
             Interface::Mock => "Mock".to_string(),
             Interface::Wired(p) => format!("Wired {} ({})", p.path, p.baud_rate),
             Interface::Network(p) => format!("Network: {}:{}", p.ip, p.port),
+            Interface::RtuOverTcp(p) => format!("RTU over TCP: {}:{}", p.ip, p.port),
         }
     }
 }

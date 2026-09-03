@@ -42,6 +42,7 @@ impl App {
             Interface::Mock => "mock",
             Interface::Wired(_) => "wired",
             Interface::Network(_) => "network",
+            Interface::RtuOverTcp(_) => "rtu-tcp",
         };
         let name = format!("writes_{kind}_{}.txt", self.config.device.slave_id);
         #[cfg(not(target_arch = "wasm32"))]
