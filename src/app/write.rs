@@ -132,6 +132,13 @@ impl App {
             return;
         }
 
+        let Some(device) = self.device.clone() else {
+            if let Some(w) = self.write_mut() {
+                w.result = Some(StatusMessage::err("No device connected"));
+            }
+            return;
+        };
+
         let (position, number, write_type, force_multiple) = {
             let Some(w) = self.write_mut() else {
                 return;
@@ -142,10 +149,6 @@ impl App {
             };
             w.result = Some(StatusMessage::info("Writing..."));
             (w.position, number, w.write_type, w.force_multiple)
-        };
-
-        let Some(device) = self.device.clone() else {
-            return;
         };
 
         let kind = if write_type == WriteType::Coil {
@@ -279,5 +282,54 @@ impl App {
             }
         }
         from
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use crate::app::{App, BackgroundTask};
+    use crate::config::Config;
+    use crate::register::RegisterType;
+    use crate::state::{MessageKind, WriteParams};
+
+    async fn write_popup() -> App {
+        let mut app = App::boot(Config::default(), String::new()).await;
+        app.read_mut().register_type = RegisterType::Holding;
+        app.open_write();
+        app.write_mut().expect("write popup").value = Some(1);
+        app
+    }
+
+    #[tokio::test]
+    async fn committing_without_a_device_reports_it() {
+        let mut app = write_popup().await;
+        app.device = None;
+
+        app.commit_write();
+
+        let result = app
+            .popup_as::<WriteParams>()
+            .and_then(|w| w.result.clone())
+            .expect("a status is shown");
+        assert_eq!(result.kind, MessageKind::Err);
+        assert_eq!(result.text, "No device connected");
+        assert!(app.background_task.is_none(), "nothing to run");
+    }
+
+    #[tokio::test]
+    async fn committing_with_a_device_starts_the_write() {
+        let mut app = write_popup().await;
+
+        app.commit_write();
+
+        let result = app
+            .popup_as::<WriteParams>()
+            .and_then(|w| w.result.clone())
+            .expect("a status is shown");
+        assert_eq!(result.text, "Writing...");
+        assert!(matches!(
+            app.background_task,
+            Some(BackgroundTask::Write(_))
+        ));
     }
 }
