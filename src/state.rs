@@ -188,6 +188,33 @@ impl DiscoveryParams {
         !self.custom_path.trim().is_empty()
     }
 
+    pub const BAUD_PRESETS: [u32; 11] = [
+        1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600,
+    ];
+
+    pub fn is_preset_baud(&self) -> bool {
+        Self::BAUD_PRESETS.contains(&self.baud_rate)
+    }
+
+    pub fn cycle_baud(&mut self, forward: bool) {
+        let presets = Self::BAUD_PRESETS;
+        let current = self.baud_rate;
+        self.baud_rate = if forward {
+            presets
+                .iter()
+                .copied()
+                .find(|&rate| rate > current)
+                .unwrap_or(presets[0])
+        } else {
+            presets
+                .iter()
+                .rev()
+                .copied()
+                .find(|&rate| rate < current)
+                .unwrap_or(presets[presets.len() - 1])
+        };
+    }
+
     pub fn serial_path(&self) -> Option<String> {
         if self.custom_path_active() {
             return Some(self.custom_path.trim().to_string());

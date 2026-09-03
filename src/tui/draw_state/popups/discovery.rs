@@ -1,6 +1,6 @@
 use crate::app::App;
 use crate::state::{DiscoveryColumn, DiscoveryField, DiscoveryParams, InterfaceKind};
-use crate::tui::draw_state::{dim_line, edit_value, field_row, marker};
+use crate::tui::draw_state::{cyclable, dim_line, edit_value, field_row, marker};
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::{Theme, spinner_frame};
 use ratatui::Frame;
@@ -98,7 +98,9 @@ pub fn draw(params: &DiscoveryParams, app: &App, frame: &mut Frame, area: Rect, 
 fn blocked_reason(p: &DiscoveryParams) -> Option<&'static str> {
     match p.interface {
         InterfaceKind::Network => p.ip.parse::<Ipv4Addr>().is_err().then_some("invalid IP"),
-        InterfaceKind::Wired => p.serial_path().is_none().then_some("no serial port"),
+        InterfaceKind::Wired if p.serial_path().is_none() => Some("no serial port"),
+        InterfaceKind::Wired if p.baud_rate == 0 => Some("baud rate is 0"),
+        InterfaceKind::Wired => None,
         InterfaceKind::Mock => None,
     }
 }
@@ -194,8 +196,19 @@ fn side_lines(
                 theme,
             ));
             lines.push(Line::default());
+
+            let on = selected(DiscoveryField::Baud);
+            let value = if on {
+                cyclable(&format!("{}_", p.baud_rate))
+            } else {
+                p.baud_rate.to_string()
+            };
+            let mut baud = row(theme, "Baud", SIDE_LABEL, value, on, None);
+            if !p.is_preset_baud() {
+                baud.spans.push(Span::styled("  custom", theme.dim_style()));
+            }
+            lines.push(baud);
             let serial = [
-                (DiscoveryField::Baud, "Baud", p.baud_rate.to_string()),
                 (
                     DiscoveryField::DataBits,
                     "Data bits",

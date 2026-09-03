@@ -348,6 +348,35 @@ mod tests {
     }
 
     #[test]
+    fn baud_steps_to_the_nearest_preset_and_wraps() {
+        let mut d = DiscoveryParams::default();
+        assert_eq!(d.baud_rate, 9600);
+        d.cycle_baud(true);
+        assert_eq!(d.baud_rate, 19200);
+        d.cycle_baud(false);
+        d.cycle_baud(false);
+        assert_eq!(d.baud_rate, 4800);
+
+        d.baud_rate = 250_000;
+        assert!(!d.is_preset_baud());
+        d.cycle_baud(true);
+        assert_eq!(d.baud_rate, 460_800);
+        d.baud_rate = 250_000;
+        d.cycle_baud(false);
+        assert_eq!(d.baud_rate, 230_400);
+
+        d.baud_rate = 921_600;
+        d.cycle_baud(true);
+        assert_eq!(d.baud_rate, 1200, "wraps past the top");
+        d.cycle_baud(false);
+        assert_eq!(d.baud_rate, 921_600, "wraps past the bottom");
+
+        d.baud_rate = 0;
+        d.cycle_baud(true);
+        assert_eq!(d.baud_rate, 1200);
+    }
+
+    #[test]
     fn a_typed_path_needs_no_enumerated_ports() {
         let mut d = wired_with_ports(&[]);
         assert_eq!(d.serial_path(), None);

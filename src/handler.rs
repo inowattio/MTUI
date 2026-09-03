@@ -515,6 +515,7 @@ async fn handle_discovery_key(key_event: KeyEvent, app: &mut App) {
                     DiscoveryField::CustomPath => {
                         d.custom_path.pop();
                     }
+                    DiscoveryField::Baud => digit_remove(&mut d.baud_rate),
                     DiscoveryField::NetPort => digit_remove(&mut d.net_port),
                     DiscoveryField::SlaveId => digit_remove(&mut d.slave_id),
                     DiscoveryField::ConnectTimeout => digit_remove(&mut d.connect_timeout_ms),
@@ -530,6 +531,9 @@ async fn handle_discovery_key(key_event: KeyEvent, app: &mut App) {
                 match field {
                     DiscoveryField::Ip if c.is_ascii_digit() || c == '.' => d.ip.push(c),
                     DiscoveryField::CustomPath if !c.is_control() => d.custom_path.push(c),
+                    DiscoveryField::Baud if c.is_ascii_digit() => {
+                        digit_add(&mut d.baud_rate, digit)
+                    }
                     DiscoveryField::NetPort if c.is_ascii_digit() => {
                         digit_add(&mut d.net_port, digit)
                     }
@@ -559,11 +563,10 @@ fn cycle_field(d: &mut DiscoveryParams, field: DiscoveryField, forward: bool, sh
     } else {
         &[InterfaceKind::Wired, InterfaceKind::Network]
     };
-    const BAUDS: [u32; 6] = [9600, 19200, 38400, 57600, 115200, 230400];
 
     match field {
         DiscoveryField::Interface => d.set_interface(cycle(kinds, d.interface, forward)),
-        DiscoveryField::Baud => d.baud_rate = cycle(&BAUDS, d.baud_rate, forward),
+        DiscoveryField::Baud => d.cycle_baud(forward),
         DiscoveryField::DataBits => d.data_bits = cycle(&DataBits::ALL, d.data_bits, forward),
         DiscoveryField::Parity => d.parity = cycle(&Parity::ALL, d.parity, forward),
         DiscoveryField::StopBits => d.stop_bits = cycle(&StopBits::ALL, d.stop_bits, forward),
@@ -776,6 +779,43 @@ mod tests {
         assert_eq!(d.custom_path, "/dev/ttyAMA1");
         assert_eq!(d.serial_path().as_deref(), Some("/dev/ttyAMA1"));
         assert_eq!(app.popup_kind(), Some(PopupKind::Discovery), "still open");
+    }
+
+    #[tokio::test]
+    async fn the_baud_rate_is_typed_or_stepped() {
+        let mut app = app().await;
+        app.open_discovery();
+        {
+            let d = app.discovery_mut().unwrap();
+
+            *d = DiscoveryParams::default();
+            d.set_interface(InterfaceKind::Wired);
+            d.toggle_column();
+            d.move_cursor(true);
+        }
+        assert_eq!(
+            app.discovery().unwrap().current_field(),
+            DiscoveryField::Baud
+        );
+
+        for _ in 0..4 {
+            handle_key_events(KeyEvent::new(KeyCode::Backspace), &mut app).await;
+        }
+        assert_eq!(app.discovery().unwrap().baud_rate, 0, "9600 erased");
+        for c in "250000".chars() {
+            handle_key_events(KeyEvent::new(KeyCode::Char(c)), &mut app).await;
+        }
+        assert_eq!(app.discovery().unwrap().baud_rate, 250_000);
+
+        handle_key_events(KeyEvent::new(KeyCode::Right), &mut app).await;
+        assert_eq!(
+            app.discovery().unwrap().baud_rate,
+            460_800,
+            "next preset above"
+        );
+        handle_key_events(KeyEvent::new(KeyCode::Left), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Left), &mut app).await;
+        assert_eq!(app.discovery().unwrap().baud_rate, 115_200);
     }
 
     fn ctrl(c: char) -> KeyEvent {
