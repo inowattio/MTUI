@@ -1,7 +1,8 @@
 use super::{
     App, BackgroundTask, CommStats, ConfigError, ConnectTaskResult, DeviceIdTaskResult,
-    LoadConfigTaskResult, RawTaskResult, ReconnectState, RefreshTaskResult, SlaveScanTaskResult,
-    SweepState, WriteOutcome, default_config_path, load_config, reconnect_backoff,
+    LoadConfigTaskResult, RawTaskResult, ReadError, ReconnectState, RefreshTaskResult,
+    SlaveScanTaskResult, SweepState, WriteOutcome, default_config_path, load_config,
+    reconnect_backoff,
 };
 use crate::compat::{self, Instant, TaskPoll};
 use crate::config::{BatchAnchor, Config};
@@ -311,13 +312,10 @@ impl App {
             return false;
         }
 
-        if !matches!(self.config.device.interface, Interface::Network(_)) {
+        if matches!(self.config.device.interface, Interface::Mock) {
             return false;
         }
-        if !matches!(
-            self.connection,
-            ConnectionStatus::Error(_) | ConnectionStatus::Reconnecting
-        ) {
+        if !self.reconnect.link_lost {
             return false;
         }
 
@@ -524,7 +522,7 @@ impl App {
             let (main_data, pinned_data) = if read_main {
                 let main = Self::aquire_data_with(&device, amount, read_start, register_type)
                     .await
-                    .map_err(|e| e.to_string());
+                    .map_err(ReadError::from);
                 let extra = if panel_registers.is_empty() {
                     None
                 } else {
@@ -536,7 +534,7 @@ impl App {
                             &full_spans,
                         )
                         .await
-                        .map_err(|e| e.to_string()),
+                        .map_err(ReadError::from),
                     )
                 };
                 (Some(main), extra)
@@ -544,7 +542,7 @@ impl App {
                 let pinned =
                     Self::aquire_pinned_data_with(&device, &panel_registers, amount, &full_spans)
                         .await
-                        .map_err(|e| e.to_string());
+                        .map_err(ReadError::from);
                 (None, Some(pinned))
             };
             let read_duration = read_began.elapsed();
@@ -561,7 +559,7 @@ impl App {
     fn apply_refresh_result(&mut self, result: RefreshTaskResult) {
         match (&result.main_data, &result.pinned_data) {
             (Some(Ok(_)), _) | (_, Some(Ok(_))) => self.stats.record_read_ok(result.read_duration),
-            (Some(Err(e)), _) | (_, Some(Err(e))) => self.stats.record_read_error(e),
+            (Some(Err(e)), _) | (_, Some(Err(e))) => self.stats.record_read_error(&e.message),
             _ => {}
         }
         if !self.is_reading() {
@@ -600,19 +598,26 @@ impl App {
         }
 
         let connection = match (&result.main_data, &result.pinned_data) {
-            (Some(Ok(_)), _) | (_, Some(Ok(_))) => ConnectionStatus::Connected,
-            (Some(Err(e)), _) | (_, Some(Err(e))) => ConnectionStatus::Error(e.clone()),
+            (Some(Ok(_)), _) | (_, Some(Ok(_))) => {
+                self.reconnect = ReconnectState::default();
+                ConnectionStatus::Connected
+            }
+            (Some(Err(e)), _) | (_, Some(Err(e))) => {
+                if e.answered {
+                    self.reconnect = ReconnectState::default();
+                } else {
+                    self.reconnect.link_lost = true;
+                }
+                ConnectionStatus::Error(e.message.clone())
+            }
             _ => self.connection.clone(),
         };
-        if matches!(connection, ConnectionStatus::Connected) {
-            self.reconnect = ReconnectState::default();
-        }
         {
             let params = self.read_mut();
             params.read_duration = Some(result.read_duration);
             params.loading = false;
             match &result.main_data {
-                Some(Err(e)) => params.read_error = Some(e.clone()),
+                Some(Err(e)) => params.read_error = Some(e.message.clone()),
                 Some(Ok(_)) => params.read_error = None,
                 None => {}
             }
@@ -708,6 +713,7 @@ impl App {
                 }
                 log::error!("Read task failed \u{b7} {message}");
                 self.connection = ConnectionStatus::Error(message);
+                self.reconnect.link_lost = true;
             }
             Done::Write(outcome) => {
                 let outcome = outcome.unwrap_or_else(|| WriteOutcome {
@@ -803,7 +809,13 @@ mod tests {
     #[cfg(not(target_arch = "wasm32"))]
     use crate::config::Config;
     use crate::custom::{CustomRepr, CustomRule};
+    #[cfg(not(target_arch = "wasm32"))]
+    use crate::modbus::{
+        DataBits, DeviceConfig, Interface, InterfaceWiredParams, ModbusDevice, Parity, StopBits,
+    };
     use crate::register::{RegisterCell, RegisterType};
+    #[cfg(not(target_arch = "wasm32"))]
+    use crate::state::ConnectionStatus;
     use std::collections::BTreeMap;
     #[cfg(not(target_arch = "wasm32"))]
     use std::time::Duration;
@@ -880,6 +892,99 @@ mod tests {
     fn run_cannot_extend_past_missing_cells() {
         let spans = custom_full_spans(&rules(&[(100, CustomRepr::F64, &[])]));
         assert_eq!(read_run_len(&cells(&[100, 101, 105]), 0, 2, &spans), 2);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn missing_serial_port() -> Interface {
+        Interface::Wired(InterfaceWiredParams {
+            path: "/nonexistent/mtui-test-port".to_string(),
+            baud_rate: 9600,
+            data_bits: DataBits::Eight,
+            parity: Parity::None,
+            stop_bits: StopBits::One,
+        })
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    async fn settle(app: &mut App) {
+        for _ in 0..400 {
+            app.complete_background_task().await;
+            if app.background_task.is_none() {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+        panic!("background task never finished");
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn a_lost_serial_link_is_reconnected_with_backoff() {
+        let mut app = App::boot(Config::default(), String::new()).await;
+        app.config.device.interface = missing_serial_port();
+        app.reconnect.link_lost = true;
+        app.connection = ConnectionStatus::Error("Input/output error".to_string());
+
+        app.tick().await;
+        assert!(
+            matches!(app.background_task, Some(BackgroundTask::Reconnect(_))),
+            "a serial device must be reconnected like a network one"
+        );
+        assert_eq!(app.connection, ConnectionStatus::Reconnecting);
+
+        settle(&mut app).await;
+        assert!(matches!(app.connection, ConnectionStatus::Error(_)));
+        assert!(app.reconnect.link_lost);
+        assert_eq!(app.reconnect.attempts, 1);
+        assert!(app.reconnect.next_at.is_some(), "retry is scheduled");
+
+        app.tick().await;
+        assert!(
+            app.background_task.is_none(),
+            "no new attempt inside the backoff window"
+        );
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn a_silent_device_counts_as_a_lost_link() {
+        let mut app = App::boot(Config::default(), String::new()).await;
+        // Slave 200 does not exist on the mock bus so every read times out
+        let silent = ModbusDevice::new(&DeviceConfig {
+            slave_id: 200,
+            timeout_command_ms: 50,
+            ..DeviceConfig::default()
+        })
+        .await
+        .unwrap();
+        app.device = Some(silent);
+        app.config.device.interface = missing_serial_port();
+
+        app.refresh().await;
+        settle(&mut app).await;
+
+        assert!(matches!(app.connection, ConnectionStatus::Error(_)));
+        assert!(app.reconnect.link_lost);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn a_device_answering_with_an_exception_is_not_reconnected() {
+        let mut app = App::boot(Config::default(), String::new()).await;
+        app.config.device.interface = missing_serial_port();
+        app.read_mut().register_type = RegisterType::Holding;
+        app.read_mut().position = 600;
+
+        app.refresh().await;
+        settle(&mut app).await;
+        assert!(matches!(app.connection, ConnectionStatus::Error(_)));
+        assert!(!app.reconnect.link_lost);
+
+        app.tick().await;
+        assert!(
+            app.background_task.is_none(),
+            "an exception must not trigger a reconnect"
+        );
     }
 
     #[cfg(not(target_arch = "wasm32"))]

@@ -19,6 +19,7 @@ use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU16, AtomicUsize};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::{fmt, fs, io};
+use tokio_modbus::ExceptionCode;
 
 pub type ApiDevice = Arc<Mutex<Option<ModbusDevice>>>;
 pub type BoundPort = Arc<AtomicU16>;
@@ -222,6 +223,7 @@ fn fuzzy_score(query: &str, text: &str) -> Option<i32> {
 struct ReconnectState {
     attempts: u32,
     next_at: Option<Instant>,
+    link_lost: bool,
 }
 
 #[derive(Debug)]
@@ -307,10 +309,25 @@ impl CommStats {
 }
 
 #[derive(Debug)]
+struct ReadError {
+    message: String,
+    answered: bool,
+}
+
+impl From<anyhow::Error> for ReadError {
+    fn from(error: anyhow::Error) -> Self {
+        Self {
+            answered: error.downcast_ref::<ExceptionCode>().is_some(),
+            message: error.to_string(),
+        }
+    }
+}
+
+#[derive(Debug)]
 struct RefreshTaskResult {
     register_type: RegisterType,
-    main_data: Option<Result<Vec<RegisterCellValue>, String>>,
-    pinned_data: Option<Result<Vec<RegisterCellValue>, String>>,
+    main_data: Option<Result<Vec<RegisterCellValue>, ReadError>>,
+    pinned_data: Option<Result<Vec<RegisterCellValue>, ReadError>>,
     read_duration: Duration,
 }
 
