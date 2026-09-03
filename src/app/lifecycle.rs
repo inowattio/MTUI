@@ -315,6 +315,7 @@ impl App {
         if matches!(self.config.device.interface, Interface::Mock) {
             return false;
         }
+
         if !self.reconnect.link_lost {
             return false;
         }
