@@ -13,12 +13,12 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::cell::Cell;
 use std::collections::{BTreeMap, VecDeque};
-use std::fs;
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::atomic::Ordering;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU16, AtomicUsize};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use std::{fmt, fs, io};
 
 pub type ApiDevice = Arc<Mutex<Option<ModbusDevice>>>;
 pub type BoundPort = Arc<AtomicU16>;
@@ -617,21 +617,135 @@ fn create_default_config(path: &str) -> Config {
     config
 }
 
-fn fetch_config_or_exit(path: &str, dump_example_if_missing: bool) -> Config {
+#[derive(Debug)]
+pub enum ConfigError {
+    Read {
+        path: String,
+        source: io::Error,
+    },
+    Parse {
+        path: String,
+        source: serde_json::Error,
+    },
+}
+
+impl ConfigError {
+    pub fn exit_code(&self) -> u8 {
+        match self {
+            ConfigError::Read { .. } => 2,
+            ConfigError::Parse { .. } => 3,
+        }
+    }
+}
+
+impl fmt::Display for ConfigError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ConfigError::Read { path, .. } => write!(f, "Could not read config {path}"),
+            ConfigError::Parse { path, .. } => write!(f, "Could not parse config {path}"),
+        }
+    }
+}
+
+impl std::error::Error for ConfigError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            ConfigError::Read { source, .. } => Some(source),
+            ConfigError::Parse { source, .. } => Some(source),
+        }
+    }
+}
+
+fn load_config(path: &str, create_if_missing: bool) -> Result<Config, ConfigError> {
     let content = match fs::read_to_string(path) {
         Ok(content) => content,
-        Err(e) => {
-            if dump_example_if_missing {
-                return create_default_config(path);
-            }
-            println!("Could not read config {path}: {e}");
-            std::process::exit(2)
+        Err(source) if create_if_missing && source.kind() == io::ErrorKind::NotFound => {
+            return Ok(create_default_config(path));
+        }
+        Err(source) => {
+            return Err(ConfigError::Read {
+                path: path.to_string(),
+                source,
+            });
         }
     };
-    serde_json::from_str(&content).unwrap_or_else(|e| {
-        println!("Could not parse config {path}: {e}");
-        std::process::exit(3)
+    serde_json::from_str(&content).map_err(|source| ConfigError::Parse {
+        path: path.to_string(),
+        source,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ConfigError, load_config};
+    use std::fs;
+    use std::path::PathBuf;
+
+    struct Scratch(PathBuf);
+
+    impl Scratch {
+        fn new(name: &str) -> Self {
+            let dir = std::env::temp_dir().join(format!("mtui-{}-{name}", std::process::id()));
+            let _ = fs::remove_dir_all(&dir);
+            fs::create_dir_all(&dir).expect("scratch dir");
+            Self(dir)
+        }
+
+        fn path(&self, file: &str) -> String {
+            self.0.join(file).to_string_lossy().into_owned()
+        }
+    }
+
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn missing_file_is_a_read_error_unless_creation_is_allowed() {
+        let scratch = Scratch::new("missing");
+        let path = scratch.path("config.json");
+
+        let error = load_config(&path, false).expect_err("nothing to read");
+        assert!(matches!(error, ConfigError::Read { .. }));
+        assert_eq!(error.exit_code(), 2);
+        assert!(error.to_string().starts_with("Could not read config"));
+        assert!(std::error::Error::source(&error).is_some());
+        assert!(!fs::exists(&path).unwrap(), "must not create anything");
+
+        let config = load_config(&path, true).expect("demo config written");
+        assert_eq!(config.name, "demo");
+        let reloaded = load_config(&path, false).expect("the written file parses");
+        assert_eq!(reloaded.name, config.name);
+    }
+
+    #[test]
+    fn garbage_is_a_parse_error() {
+        let scratch = Scratch::new("garbage");
+        let path = scratch.path("config.json");
+        fs::write(&path, "{ not json").unwrap();
+
+        let error = load_config(&path, true).expect_err("unparsable");
+        assert!(matches!(error, ConfigError::Parse { .. }));
+        assert_eq!(error.exit_code(), 3);
+        assert!(error.to_string().starts_with("Could not parse config"));
+        assert_eq!(
+            fs::read_to_string(&path).unwrap(),
+            "{ not json",
+            "a broken file must never be overwritten"
+        );
+    }
+
+    #[test]
+    fn unreadable_existing_path_is_not_replaced() {
+        let scratch = Scratch::new("dir");
+        let path = scratch.path("config.json");
+        fs::create_dir(&path).unwrap();
+
+        let error = load_config(&path, true).expect_err("a directory cannot be read");
+        assert!(matches!(error, ConfigError::Read { .. }));
+    }
 }
 
 mod api;

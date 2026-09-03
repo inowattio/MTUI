@@ -36,7 +36,7 @@ mod native {
             return run_headless(args.config, args.make_config_if_none).await;
         }
 
-        let mut app = App::new(args.config, args.make_config_if_none).await;
+        let mut app = App::new(args.config, args.make_config_if_none).await?;
 
         let writer = io::BufWriter::with_capacity(256 * 1024, io::stderr());
         let backend = CrosstermBackend::new(writer);
@@ -55,7 +55,7 @@ mod native {
 
     async fn run_headless(config: Option<String>, make_config_if_none: bool) -> AppResult<()> {
         logger::enable_echo();
-        let mut app = App::new(config, make_config_if_none).await;
+        let mut app = App::new(config, make_config_if_none).await?;
         app.headless = true;
 
         app.config
@@ -81,8 +81,19 @@ mod native {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn main() -> mtui::app::AppResult<()> {
-    native::run()
+fn main() -> std::process::ExitCode {
+    use mtui::app::ConfigError;
+    use std::process::ExitCode;
+
+    match native::run() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("Error: {error:#}");
+            error
+                .downcast_ref::<ConfigError>()
+                .map_or(ExitCode::FAILURE, |e| ExitCode::from(e.exit_code()))
+        }
+    }
 }
 
 #[cfg(target_arch = "wasm32")]

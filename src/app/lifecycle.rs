@@ -1,7 +1,7 @@
 use super::{
-    App, BackgroundTask, CommStats, ConnectTaskResult, DeviceIdTaskResult, LoadConfigTaskResult,
-    RawTaskResult, ReconnectState, RefreshTaskResult, SlaveScanTaskResult, SweepState,
-    WriteOutcome, default_config_path, fetch_config_or_exit, reconnect_backoff,
+    App, BackgroundTask, CommStats, ConfigError, ConnectTaskResult, DeviceIdTaskResult,
+    LoadConfigTaskResult, RawTaskResult, ReconnectState, RefreshTaskResult, SlaveScanTaskResult,
+    SweepState, WriteOutcome, default_config_path, load_config, reconnect_backoff,
 };
 use crate::compat::{self, Instant, TaskPoll};
 use crate::config::{BatchAnchor, Config};
@@ -20,11 +20,14 @@ use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU16};
 use std::sync::{Arc, Mutex};
 
 impl App {
-    pub async fn new(config_path: Option<String>, make_config_if_none: bool) -> Self {
+    pub async fn new(
+        config_path: Option<String>,
+        make_config_if_none: bool,
+    ) -> Result<Self, ConfigError> {
         let create_if_missing = make_config_if_none || config_path.is_none();
         let config_path = config_path.unwrap_or_else(default_config_path);
-        let config = fetch_config_or_exit(&config_path, create_if_missing);
-        Self::boot(config, config_path).await
+        let config = load_config(&config_path, create_if_missing)?;
+        Ok(Self::boot(config, config_path).await)
     }
 
     pub async fn boot(config: Config, config_path: String) -> Self {
