@@ -590,7 +590,7 @@ fn cycle_field(d: &mut DiscoveryParams, field: DiscoveryField, forward: bool, sh
     } else {
         &[InterfaceKind::Wired, InterfaceKind::Network]
     };
-    const BAUDS: [u32; 6] = [9600, 19200, 38400, 57600, 115200, 230400];
+    const BAUDS: [u32; 9] = [1200, 2400, 4000, 9600, 19200, 38400, 57600, 115200, 230400];
 
     match field {
         DiscoveryField::Interface => {
