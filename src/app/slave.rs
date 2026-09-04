@@ -35,7 +35,6 @@ impl App {
         self.set_slave(id).await;
         if let Some(p) = self.popup_as_mut::<SlaveParams>() {
             p.id = id;
-            p.status = Some(StatusMessage::ok(format!("Slave id set to {id}")));
         }
     }
 

@@ -183,7 +183,7 @@ mod tests {
     use crate::app::App;
     use crate::config::Config;
     use crate::register::RegisterType;
-    use crate::state::{ScanState, SlaveField, SlaveParams, StatusMessage};
+    use crate::state::{ScanState, SlaveField, SlaveParams};
     use std::time::Duration;
 
     async fn drive_scan(app: &mut App) {
@@ -271,7 +271,7 @@ mod tests {
         assert_eq!(app.config.device.slave_id, 5);
         let p = app.popup_as::<SlaveParams>().expect("the popup stays open");
         assert_eq!(p.id, 5, "the Slave id field follows the pick");
-        assert_eq!(p.status, Some(StatusMessage::ok("Slave id set to 5")));
+        assert_eq!(p.status, None, "the list marker is the only confirmation");
     }
 
     #[tokio::test]

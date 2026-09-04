@@ -15,8 +15,7 @@ const DIVIDER_W: u16 = 3;
 const SIDE_W: u16 = 40;
 const LABEL_W: usize = 13;
 const LIST_ROWS: usize = 6;
-
-const PREFIX_W: usize = 7;
+const PREFIX_W: usize = 9;
 
 pub(super) fn draw(
     frame: &mut Frame,
@@ -24,10 +23,13 @@ pub(super) fn draw(
     theme: &Theme,
     kb: &Keybinds,
     params: &SlaveParams,
+    active_id: u8,
 ) {
     let sel = params.current_field();
     let left = form_lines(params, sel, theme);
-    let right = params.scanned().then(|| hit_lines(params, sel, theme));
+    let right = params
+        .scanned()
+        .then(|| hit_lines(params, sel, active_id, theme));
 
     let primary = match sel {
         SlaveField::Id => "Set",
@@ -198,7 +200,12 @@ fn title_line(params: &SlaveParams, theme: &Theme) -> Line<'static> {
     Line::from(spans)
 }
 
-fn hit_lines(params: &SlaveParams, sel: SlaveField, theme: &Theme) -> Vec<Line<'static>> {
+fn hit_lines(
+    params: &SlaveParams,
+    sel: SlaveField,
+    active_id: u8,
+    theme: &Theme,
+) -> Vec<Line<'static>> {
     let visible: Vec<(usize, &SlaveScanHit)> = params.visible_hits().collect();
     let len = visible.len();
     let mut lines = vec![Line::default(), title_line(params, theme)];
@@ -231,34 +238,32 @@ fn hit_lines(params: &SlaveParams, sel: SlaveField, theme: &Theme) -> Vec<Line<'
     let value_width = (SIDE_W as usize).saturating_sub(PREFIX_W);
     for &(i, hit) in visible.iter().take(end).skip(top) {
         let selected = selected_hit == Some(i);
-        let (text, style) = match &hit.result {
-            Ok(values) => {
-                let text = if params.ascii {
-                    format!("'{}'", ascii_words(values))
-                } else {
-                    values
-                        .iter()
-                        .map(u16::to_string)
-                        .collect::<Vec<_>>()
-                        .join(" ")
-                };
-                (text, theme.line_style(selected))
-            }
-            Err(e) => (
-                e.clone(),
-                if selected {
-                    theme.selected_style()
-                } else {
-                    theme.warn_style()
-                },
-            ),
+        let active = hit.slave_id == active_id;
+        let text = match &hit.result {
+            Ok(values) if params.ascii => format!("'{}'", ascii_words(values)),
+            Ok(values) => values
+                .iter()
+                .map(u16::to_string)
+                .collect::<Vec<_>>()
+                .join(" "),
+            Err(e) => e.clone(),
         };
+        let style = if selected {
+            theme.selected_style()
+        } else if active {
+            theme.accent_style()
+        } else if hit.result.is_err() {
+            theme.warn_style()
+        } else {
+            theme.base()
+        };
+        let radio = if active { "\u{25cf}" } else { "\u{25cb}" };
+        let radio_style = if active { style } else { theme.dim_style() };
         let shown: String = text.chars().take(value_width).collect();
         lines.push(Line::from(vec![
-            Span::styled(
-                format!("{}{:>3}  ", marker(selected), hit.slave_id),
-                theme.dim_style(),
-            ),
+            Span::styled(marker(selected), theme.dim_style()),
+            Span::styled(format!("{radio} "), radio_style),
+            Span::styled(format!("{:>3}  ", hit.slave_id), theme.dim_style()),
             Span::styled(shown, style),
         ]));
     }
@@ -277,10 +282,14 @@ mod tests {
     use ratatui::backend::TestBackend;
 
     fn render(params: &SlaveParams) -> Vec<String> {
+        render_with(params, params.id)
+    }
+
+    fn render_with(params: &SlaveParams, active_id: u8) -> Vec<String> {
         let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
         let (theme, kb) = (Theme::default(), Keybinds::default());
         terminal
-            .draw(|frame| draw(frame, frame.area(), &theme, &kb, params))
+            .draw(|frame| draw(frame, frame.area(), &theme, &kb, params, active_id))
             .unwrap();
         let buffer = terminal.backend().buffer();
         (0..buffer.area.height)
@@ -346,7 +355,7 @@ mod tests {
 
         params.selected = 7;
         let rows = render(&params);
-        locate(&rows, ">   1  1");
+        locate(&rows, "> \u{25cb}   1  1");
         locate(&rows, "4 more");
     }
 
@@ -444,6 +453,31 @@ mod tests {
         );
         let (_, y) = locate(&rows, "Exceptions");
         assert!(rows[y].contains("hidden"));
+    }
+
+    #[test]
+    fn the_active_slave_id_is_marked_in_the_list() {
+        let params = SlaveParams {
+            scan: Done,
+            id: 17,
+            hits: vec![
+                hit(1, &[5]),
+                hit(17, &[1, 2, 3]),
+                SlaveScanHit {
+                    slave_id: 9,
+                    result: Err("IllegalDataAddress".into()),
+                },
+            ],
+            ..SlaveParams::default()
+        };
+        let rows = render_with(&params, 17);
+        locate(&rows, "\u{25cf}  17  1 2 3");
+        locate(&rows, "\u{25cb}   1  5");
+        locate(&rows, "\u{25cb}   9  IllegalDataAddress");
+
+        let rows = render_with(&params, 9);
+        locate(&rows, "\u{25cb}  17  1 2 3");
+        locate(&rows, "\u{25cf}   9  IllegalDataAddress");
     }
 
     #[test]
