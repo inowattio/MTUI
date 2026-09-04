@@ -34,18 +34,18 @@ pub(super) fn draw(
         _ if params.active => "Stop scan",
         _ => "Start scan",
     };
-    let nav = [
+    let items = [
         Hint::pair(kb.move_up, kb.move_down, "Field"),
         Hint::key(kb.pause, "Toggle mode"),
+        Hint::key(kb.action, primary),
+        Hint::key(kb.exit, "Close"),
     ];
-    let actions = [Hint::key(kb.action, primary), Hint::key(kb.exit, "Close")];
-    let footer_w = hints::width(&nav).max(hints::width(&actions)) as u16;
+    let footer_w = hints::width(&items) as u16;
 
     let mut tail: Vec<Line> = Vec::new();
     super::push_status(&mut tail, theme, params.status.as_ref());
     tail.push(Line::default());
-    tail.push(hints::footer(theme, nav));
-    tail.push(hints::footer(theme, actions));
+    tail.push(hints::footer(theme, items));
 
     let body_w = LEFT_W + DIVIDER_W + SIDE_W;
     let width = (body_w + 2).max(footer_w);
