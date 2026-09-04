@@ -1,5 +1,6 @@
 use crate::config::Keybinds;
-use crate::state::{ScanState, SlaveField, SlaveParams};
+use crate::interpretator::ascii_words;
+use crate::state::{ScanState, SlaveField, SlaveParams, SlaveScanHit};
 use crate::tui::draw_state::{dim_line, edit_value, field_row, marker};
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
@@ -31,6 +32,10 @@ pub(super) fn draw(
     let primary = match sel {
         SlaveField::Id => "Set",
         SlaveField::Hit(_) => "Use id",
+        SlaveField::Repr if params.ascii => "Values",
+        SlaveField::Repr => "ASCII",
+        SlaveField::Exceptions if params.show_exceptions => "Hide",
+        SlaveField::Exceptions => "Include",
         _ if params.active() => "Stop scan",
         _ => "Start scan",
     };
@@ -38,7 +43,7 @@ pub(super) fn draw(
     let (footer_w, footer) = if right.is_some() {
         let items = [
             Hint::pair(kb.move_up, kb.move_down, "Field"),
-            Hint::key(kb.pause, "Toggle mode"),
+            Hint::key(kb.pause, "Toggle"),
             Hint::key(kb.action, primary),
             Hint::key(kb.exit, "Close"),
         ];
@@ -46,7 +51,7 @@ pub(super) fn draw(
     } else {
         let nav = [
             Hint::pair(kb.move_up, kb.move_down, "Field"),
-            Hint::key(kb.pause, "Toggle mode"),
+            Hint::key(kb.pause, "Toggle"),
         ];
         let actions = [Hint::key(kb.action, primary), Hint::key(kb.exit, "Close")];
         (
@@ -117,6 +122,14 @@ fn form_lines(params: &SlaveParams, sel: SlaveField, theme: &Theme) -> Vec<Line<
         "full range"
     };
     let mode_val = edit_value(mode.to_string(), sel == SlaveField::Mode, true);
+    let repr = if params.ascii { "ASCII" } else { "values" };
+    let repr_val = edit_value(repr.to_string(), sel == SlaveField::Repr, true);
+    let exceptions = if params.show_exceptions {
+        "included"
+    } else {
+        "hidden"
+    };
+    let exceptions_val = edit_value(exceptions.to_string(), sel == SlaveField::Exceptions, true);
 
     let scan_sel = sel == SlaveField::Scan;
     let scan_label = if params.active() {
@@ -148,6 +161,8 @@ fn form_lines(params: &SlaveParams, sel: SlaveField, theme: &Theme) -> Vec<Line<
         field("Scan from", from_val, sel == SlaveField::From),
         field("Scan to", to_val, sel == SlaveField::To),
         field("Mode", mode_val, sel == SlaveField::Mode),
+        field("Show as", repr_val, sel == SlaveField::Repr),
+        field("Exceptions", exceptions_val, sel == SlaveField::Exceptions),
         dim_line(
             theme,
             format!(
@@ -173,7 +188,7 @@ fn title_line(params: &SlaveParams, theme: &Theme) -> Line<'static> {
         ScanState::Failed => ("FAILED".to_string(), theme.err_style()),
     };
     let mut spans = vec![Span::styled(
-        format!(" FOUND ({})", params.hits.len()),
+        format!(" FOUND ({})", params.visible_hits().count()),
         theme.header_style(),
     )];
     if !phase.is_empty() {
@@ -184,7 +199,8 @@ fn title_line(params: &SlaveParams, theme: &Theme) -> Line<'static> {
 }
 
 fn hit_lines(params: &SlaveParams, sel: SlaveField, theme: &Theme) -> Vec<Line<'static>> {
-    let len = params.hits.len();
+    let visible: Vec<(usize, &SlaveScanHit)> = params.visible_hits().collect();
+    let len = visible.len();
     let mut lines = vec![Line::default(), title_line(params, theme)];
 
     if len == 0 {
@@ -202,9 +218,10 @@ fn hit_lines(params: &SlaveParams, sel: SlaveField, theme: &Theme) -> Vec<Line<'
         SlaveField::Hit(i) => Some(i),
         _ => None,
     };
+    let cursor = visible.iter().position(|&(i, _)| Some(i) == selected_hit);
     let max_top = len.saturating_sub(LIST_ROWS);
-    let top = match selected_hit {
-        Some(i) => i.saturating_sub(LIST_ROWS - 1).min(max_top),
+    let top = match cursor {
+        Some(row) => row.saturating_sub(LIST_ROWS - 1).min(max_top),
         None => max_top,
     };
     let end = (top + LIST_ROWS).min(len);
@@ -212,16 +229,20 @@ fn hit_lines(params: &SlaveParams, sel: SlaveField, theme: &Theme) -> Vec<Line<'
         lines.push(hints::more(theme, top, 0));
     }
     let value_width = (SIDE_W as usize).saturating_sub(PREFIX_W);
-    for (i, hit) in params.hits.iter().enumerate().take(end).skip(top) {
+    for &(i, hit) in visible.iter().take(end).skip(top) {
         let selected = selected_hit == Some(i);
         let (text, style) = match &hit.result {
             Ok(values) => {
-                let joined = values
-                    .iter()
-                    .map(u16::to_string)
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                (joined, theme.line_style(selected))
+                let text = if params.ascii {
+                    format!("'{}'", ascii_words(values))
+                } else {
+                    values
+                        .iter()
+                        .map(u16::to_string)
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                };
+                (text, theme.line_style(selected))
             }
             Err(e) => (
                 e.clone(),
@@ -250,7 +271,7 @@ fn hit_lines(params: &SlaveParams, sel: SlaveField, theme: &Theme) -> Vec<Line<'
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::state::{SlaveScanHit, StatusMessage};
+    use crate::state::StatusMessage;
     use ScanState::{Done, Failed, Probing, Stopped};
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
@@ -323,7 +344,7 @@ mod tests {
             "the oldest hit scrolled out"
         );
 
-        params.selected = 5;
+        params.selected = 7;
         let rows = render(&params);
         locate(&rows, ">   1  1");
         locate(&rows, "4 more");
@@ -364,15 +385,65 @@ mod tests {
     fn the_hints_share_a_row_only_in_the_wide_popup() {
         let mut params = SlaveParams::default();
         let narrow = render(&params);
-        let (_, mode_y) = locate(&narrow, "Toggle mode");
+        let (_, mode_y) = locate(&narrow, "Toggle");
         let (_, close_y) = locate(&narrow, "Close");
         assert_eq!(close_y, mode_y + 1, "two hint rows in the narrow popup");
 
         params.scan = Done;
         let wide = render(&params);
-        let (_, mode_y) = locate(&wide, "Toggle mode");
+        let (_, mode_y) = locate(&wide, "Toggle");
         let (_, close_y) = locate(&wide, "Close");
         assert_eq!(close_y, mode_y, "one hint row once the list is shown");
+    }
+
+    #[test]
+    fn hit_data_can_be_shown_as_ascii() {
+        let mut params = SlaveParams {
+            scan: Done,
+            hits: vec![hit(3, &[0x4D54, 0x5549])],
+            ..SlaveParams::default()
+        };
+        let rows = render(&params);
+        locate(&rows, "  3  19796 21833");
+        let (_, y) = locate(&rows, "Show as");
+        assert!(rows[y].contains("values"));
+
+        params.ascii = true;
+        let rows = render(&params);
+        locate(&rows, "  3  'MTUI'");
+        let (_, y) = locate(&rows, "Show as");
+        assert!(rows[y].contains("ASCII"));
+    }
+
+    #[test]
+    fn exception_hits_can_be_hidden_from_the_list() {
+        let mut params = SlaveParams {
+            scan: Done,
+            hits: vec![
+                hit(1, &[5]),
+                SlaveScanHit {
+                    slave_id: 2,
+                    result: Err("IllegalDataAddress".into()),
+                },
+            ],
+            ..SlaveParams::default()
+        };
+        let rows = render(&params);
+        locate(&rows, "FOUND (2)");
+        locate(&rows, "  2  IllegalDataAddress");
+        let (_, y) = locate(&rows, "Exceptions");
+        assert!(rows[y].contains("included"));
+
+        params.show_exceptions = false;
+        let rows = render(&params);
+        locate(&rows, "FOUND (1)");
+        locate(&rows, "  1  5");
+        assert!(
+            !rows.iter().any(|row| row.contains("IllegalDataAddress")),
+            "hidden exceptions are not drawn"
+        );
+        let (_, y) = locate(&rows, "Exceptions");
+        assert!(rows[y].contains("hidden"));
     }
 
     #[test]

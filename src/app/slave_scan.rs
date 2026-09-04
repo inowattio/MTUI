@@ -15,9 +15,14 @@ impl App {
         }
     }
 
-    pub fn slave_scan_toggle(&mut self) {
+    pub fn slave_toggle(&mut self, field: SlaveField) {
         if let Some(p) = self.slave_mut() {
-            p.stop_at_first = !p.stop_at_first;
+            match field {
+                SlaveField::Mode => p.stop_at_first = !p.stop_at_first,
+                SlaveField::Repr => p.ascii = !p.ascii,
+                SlaveField::Exceptions => p.show_exceptions = !p.show_exceptions,
+                _ => {}
+            }
         }
     }
 
@@ -31,7 +36,11 @@ impl App {
                 SlaveField::Id => digit_add(&mut p.id, digit),
                 SlaveField::From => digit_add(&mut p.from, digit),
                 SlaveField::To => digit_add(&mut p.to, digit),
-                SlaveField::Mode | SlaveField::Scan | SlaveField::Hit(_) => {}
+                SlaveField::Mode
+                | SlaveField::Repr
+                | SlaveField::Exceptions
+                | SlaveField::Scan
+                | SlaveField::Hit(_) => {}
             }
         }
     }
@@ -42,7 +51,11 @@ impl App {
                 SlaveField::Id => digit_remove(&mut p.id),
                 SlaveField::From => digit_remove(&mut p.from),
                 SlaveField::To => digit_remove(&mut p.to),
-                SlaveField::Mode | SlaveField::Scan | SlaveField::Hit(_) => {}
+                SlaveField::Mode
+                | SlaveField::Repr
+                | SlaveField::Exceptions
+                | SlaveField::Scan
+                | SlaveField::Hit(_) => {}
             }
         }
     }
