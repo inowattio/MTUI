@@ -500,14 +500,35 @@ pub enum SlaveField {
     From,
     To,
     Mode,
+    Repr,
+    Exceptions,
     Scan,
     Hit(usize),
+}
+
+impl SlaveField {
+    pub fn is_toggle(self) -> bool {
+        matches!(
+            self,
+            SlaveField::Mode | SlaveField::Repr | SlaveField::Exceptions
+        )
+    }
 }
 
 #[derive(Debug, PartialEq)]
 pub struct SlaveScanHit {
     pub slave_id: u8,
     pub result: Result<Vec<u16>, String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ScanState {
+    #[default]
+    Idle,
+    Probing,
+    Done,
+    Stopped,
+    Failed,
 }
 
 #[derive(Debug, PartialEq)]
@@ -517,7 +538,9 @@ pub struct SlaveParams {
     pub from: u8,
     pub to: u8,
     pub stop_at_first: bool,
-    pub active: bool,
+    pub ascii: bool,
+    pub show_exceptions: bool,
+    pub scan: ScanState,
     pub current: u8,
     pub register_type: RegisterType,
     pub address: u16,
@@ -534,7 +557,9 @@ impl Default for SlaveParams {
             from: 1,
             to: 247,
             stop_at_first: false,
-            active: false,
+            ascii: false,
+            show_exceptions: true,
+            scan: ScanState::Idle,
             current: 0,
             register_type: RegisterType::default(),
             address: 0,
@@ -546,23 +571,40 @@ impl Default for SlaveParams {
 }
 
 impl SlaveParams {
-    const FIXED: [SlaveField; 5] = [
+    const FIXED: [SlaveField; 7] = [
         SlaveField::Id,
         SlaveField::From,
         SlaveField::To,
         SlaveField::Mode,
+        SlaveField::Repr,
+        SlaveField::Exceptions,
         SlaveField::Scan,
     ];
 
+    pub fn visible_hits(&self) -> impl Iterator<Item = (usize, &SlaveScanHit)> {
+        self.hits
+            .iter()
+            .enumerate()
+            .filter(|(_, hit)| self.show_exceptions || hit.result.is_ok())
+    }
+
     pub fn fields(&self) -> Vec<SlaveField> {
         let mut fields = Self::FIXED.to_vec();
-        fields.extend((0..self.hits.len()).map(SlaveField::Hit));
+        fields.extend(self.visible_hits().map(|(i, _)| SlaveField::Hit(i)));
         fields
     }
 
     pub fn current_field(&self) -> SlaveField {
         let fields = self.fields();
         fields[(self.selected as usize).min(fields.len() - 1)]
+    }
+
+    pub fn active(&self) -> bool {
+        self.scan == ScanState::Probing
+    }
+
+    pub fn scanned(&self) -> bool {
+        self.scan != ScanState::Idle
     }
 }
 
@@ -1227,6 +1269,36 @@ mod tests {
         assert_eq!(run(50, 45, 20, 4), (3, 0));
         assert_eq!(run(50, 45, 3, 10), (9, 7));
         assert_eq!(run(0, 0, 5, 0), (0, 0));
+    }
+
+    #[test]
+    fn hidden_exception_hits_leave_the_field_list_but_keep_their_index() {
+        use super::{SlaveField, SlaveParams, SlaveScanHit};
+        let hit = |id: u8, result: Result<Vec<u16>, String>| SlaveScanHit {
+            slave_id: id,
+            result,
+        };
+        let mut params = SlaveParams {
+            hits: vec![
+                hit(1, Ok(vec![1])),
+                hit(2, Err("IllegalDataAddress".into())),
+                hit(3, Ok(vec![3])),
+            ],
+            ..SlaveParams::default()
+        };
+        let hits = |p: &SlaveParams| -> Vec<SlaveField> {
+            p.fields()
+                .into_iter()
+                .filter(|f| matches!(f, SlaveField::Hit(_)))
+                .collect()
+        };
+        assert_eq!(
+            hits(&params),
+            vec![SlaveField::Hit(0), SlaveField::Hit(1), SlaveField::Hit(2)]
+        );
+
+        params.show_exceptions = false;
+        assert_eq!(hits(&params), vec![SlaveField::Hit(0), SlaveField::Hit(2)]);
     }
 
     #[test]

@@ -29,20 +29,28 @@ impl App {
             .popup_as::<SlaveParams>()
             .and_then(|p| p.hits.get(index))
             .map(|hit| hit.slave_id);
-        if let Some(id) = id {
-            self.apply_slave(id).await;
+        let Some(id) = id else {
+            return;
+        };
+        self.set_slave(id).await;
+        if let Some(p) = self.popup_as_mut::<SlaveParams>() {
+            p.id = id;
         }
     }
 
     async fn apply_slave(&mut self, id: u8) {
+        self.set_slave(id).await;
+        self.read_mut().popup = None;
+        self.refresh().await;
+    }
+
+    async fn set_slave(&mut self, id: u8) {
         if let Some(device) = &self.device {
             device.set_slave(id).await;
         }
         self.config.device.slave_id = id;
         self.refresh_writes_log_state();
         log::info!("Slave id set to {id}");
-        self.read_mut().popup = None;
-        self.refresh().await;
     }
 
     pub fn open_device_id(&mut self) {

@@ -62,6 +62,15 @@ use tokio_modbus::{ExceptionCode, Request, Response, Slave, SlaveId};
 ///   0          device ready, 1 grid present (brief dropouts),
 ///   2          warning toggle, 3 heartbeat (1 Hz), 7 noise enabled,
 ///   8          fault (clear), rest assorted bits
+///
+/// Faulty addresses, answering with an exception like reserved or broken
+/// registers on a real device (a request touching one fails as a whole):
+///   holdings   16..=19 reserved (IllegalDataAddress),
+///              1102..=1103 diagnostics block (ServerDeviceFailure)
+///   inputs     38..=39 reserved (IllegalDataAddress),
+///              64..=67 faulted sensor block (ServerDeviceFailure)
+///   coils      6..=7 reserved (IllegalDataAddress, reads and writes)
+///   discretes  4..=6 reserved (IllegalDataAddress)
 #[derive(Debug)]
 pub struct MockContext {
     started: Instant,
@@ -78,6 +87,19 @@ const HOLDING_ZONES: [RangeInclusive<u16>; 3] = [0..=499, 1000..=1199, TAIL_ZONE
 const INPUT_ZONES: [RangeInclusive<u16>; 2] = [0..=499, TAIL_ZONE];
 const COIL_ZONE: RangeInclusive<u16> = 0..=255;
 const DISCRETE_ZONE: RangeInclusive<u16> = 0..=255;
+
+/// Addresses inside the mapped zones that answer with an exception.
+type Faults = [(RangeInclusive<u16>, ExceptionCode)];
+const HOLDING_FAULTS: &Faults = &[
+    (16..=19, ExceptionCode::IllegalDataAddress),
+    (1102..=1103, ExceptionCode::ServerDeviceFailure),
+];
+const INPUT_FAULTS: &Faults = &[
+    (38..=39, ExceptionCode::IllegalDataAddress),
+    (64..=67, ExceptionCode::ServerDeviceFailure),
+];
+const COIL_FAULTS: &Faults = &[(6..=7, ExceptionCode::IllegalDataAddress)];
+const DISCRETE_FAULTS: &Faults = &[(4..=6, ExceptionCode::IllegalDataAddress)];
 
 const MODEL_NAME: &[u8; 16] = b"MTUI SIMULATOR  ";
 const VENDOR_NAME: &[u8; 32] = b"      POWER BUS SIMULATOR!      ";
@@ -423,10 +445,107 @@ fn mapped(zones: &[RangeInclusive<u16>], addr: u16, count: u16) -> bool {
     })
 }
 
+/// Rejects a request that leaves the mapped zones or touches a faulty
+/// address, with the exception a real device would answer.
+fn check(
+    zones: &[RangeInclusive<u16>],
+    faults: &Faults,
+    addr: u16,
+    count: u16,
+) -> Result<(), ExceptionCode> {
+    if !mapped(zones, addr, count) {
+        return Err(ExceptionCode::IllegalDataAddress);
+    }
+    let fault = (0..count).find_map(|i| {
+        let a = addr.checked_add(i)?;
+        faults
+            .iter()
+            .find(|(zone, _)| zone.contains(&a))
+            .map(|(_, code)| *code)
+    });
+    fault.map_or(Ok(()), Err)
+}
+
 #[async_trait]
 impl SlaveContext for MockContext {
     fn set_slave(&mut self, slave: Slave) {
         self.slave_id = slave.0
+    }
+}
+
+impl MockContext {
+    fn respond(&mut self, request: Request<'_>, t: f64) -> Result<Response, ExceptionCode> {
+        match request {
+            Request::ReadHoldingRegisters(addr, count) => {
+                check(&HOLDING_ZONES, HOLDING_FAULTS, addr, count)?;
+                let regs = (0..count)
+                    .map(|i| self.holding_value(addr + i, t))
+                    .collect();
+                Ok(Response::ReadHoldingRegisters(regs))
+            }
+
+            Request::ReadInputRegisters(addr, count) => {
+                check(&INPUT_ZONES, INPUT_FAULTS, addr, count)?;
+                let regs = (0..count).map(|i| self.input_value(addr + i, t)).collect();
+                Ok(Response::ReadInputRegisters(regs))
+            }
+
+            Request::ReadCoils(addr, count) => {
+                check(&[COIL_ZONE], COIL_FAULTS, addr, count)?;
+                let coils = (0..count).map(|i| self.coil_value(addr + i)).collect();
+                Ok(Response::ReadCoils(coils))
+            }
+
+            Request::ReadDiscreteInputs(addr, count) => {
+                check(&[DISCRETE_ZONE], DISCRETE_FAULTS, addr, count)?;
+                let inputs = (0..count)
+                    .map(|i| self.discrete_value(addr + i, t))
+                    .collect();
+                Ok(Response::ReadDiscreteInputs(inputs))
+            }
+
+            Request::WriteSingleCoil(addr, value) => {
+                check(&[COIL_ZONE], COIL_FAULTS, addr, 1)?;
+                self.written_coils.insert(addr, value);
+                self.write_count = self.write_count.wrapping_add(1);
+                Ok(Response::WriteSingleCoil(addr, value))
+            }
+
+            Request::WriteMultipleCoils(addr, values) => {
+                let quantity = values.len() as u16;
+                check(&[COIL_ZONE], COIL_FAULTS, addr, quantity)?;
+                for (i, value) in values.iter().enumerate() {
+                    self.written_coils.insert(addr + i as u16, *value);
+                }
+                self.write_count = self.write_count.wrapping_add(1);
+                Ok(Response::WriteMultipleCoils(addr, quantity))
+            }
+
+            Request::WriteSingleRegister(addr, value) => {
+                check(&[WRITABLE], HOLDING_FAULTS, addr, 1)?;
+                self.written.insert(addr, value);
+                self.write_count = self.write_count.wrapping_add(1);
+                Ok(Response::WriteSingleRegister(addr, value))
+            }
+
+            Request::WriteMultipleRegisters(addr, values) => {
+                let quantity = values.len() as u16;
+                check(&[WRITABLE], HOLDING_FAULTS, addr, quantity)?;
+                for (i, value) in values.iter().enumerate() {
+                    self.written.insert(addr + i as u16, *value);
+                }
+                self.write_count = self.write_count.wrapping_add(1);
+                Ok(Response::WriteMultipleRegisters(addr, quantity))
+            }
+
+            Request::ReadDeviceIdentification(read_code, object_id) => {
+                self.device_id_response(read_code, object_id)
+            }
+
+            Request::Custom(code, data) => Ok(Response::Custom(code, data.into_owned().into())),
+
+            _ => Err(ExceptionCode::IllegalFunction),
+        }
     }
 }
 
@@ -440,97 +559,88 @@ impl Client for MockContext {
 
         self.simulate_latency().await;
         let t = self.time();
-
-        match request {
-            Request::ReadHoldingRegisters(addr, count) => {
-                if !mapped(&HOLDING_ZONES, addr, count) {
-                    return Ok(Err(ExceptionCode::IllegalDataAddress));
-                }
-                let regs = (0..count)
-                    .map(|i| self.holding_value(addr + i, t))
-                    .collect();
-                Ok(Ok(Response::ReadHoldingRegisters(regs)))
-            }
-
-            Request::ReadInputRegisters(addr, count) => {
-                if !mapped(&INPUT_ZONES, addr, count) {
-                    return Ok(Err(ExceptionCode::IllegalDataAddress));
-                }
-                let regs = (0..count).map(|i| self.input_value(addr + i, t)).collect();
-                Ok(Ok(Response::ReadInputRegisters(regs)))
-            }
-
-            Request::ReadCoils(addr, count) => {
-                if !mapped(&[COIL_ZONE], addr, count) {
-                    return Ok(Err(ExceptionCode::IllegalDataAddress));
-                }
-                let coils = (0..count).map(|i| self.coil_value(addr + i)).collect();
-                Ok(Ok(Response::ReadCoils(coils)))
-            }
-
-            Request::ReadDiscreteInputs(addr, count) => {
-                if !mapped(&[DISCRETE_ZONE], addr, count) {
-                    return Ok(Err(ExceptionCode::IllegalDataAddress));
-                }
-                let inputs = (0..count)
-                    .map(|i| self.discrete_value(addr + i, t))
-                    .collect();
-                Ok(Ok(Response::ReadDiscreteInputs(inputs)))
-            }
-
-            Request::WriteSingleCoil(addr, value) => {
-                if !COIL_ZONE.contains(&addr) {
-                    return Ok(Err(ExceptionCode::IllegalDataAddress));
-                }
-                self.written_coils.insert(addr, value);
-                self.write_count = self.write_count.wrapping_add(1);
-                Ok(Ok(Response::WriteSingleCoil(addr, value)))
-            }
-
-            Request::WriteMultipleCoils(addr, values) => {
-                let quantity = values.len() as u16;
-                if !mapped(&[COIL_ZONE], addr, quantity) {
-                    return Ok(Err(ExceptionCode::IllegalDataAddress));
-                }
-                for (i, value) in values.iter().enumerate() {
-                    self.written_coils.insert(addr + i as u16, *value);
-                }
-                self.write_count = self.write_count.wrapping_add(1);
-                Ok(Ok(Response::WriteMultipleCoils(addr, quantity)))
-            }
-
-            Request::WriteSingleRegister(addr, value) => {
-                if !WRITABLE.contains(&addr) {
-                    return Ok(Err(ExceptionCode::IllegalDataAddress));
-                }
-                self.written.insert(addr, value);
-                self.write_count = self.write_count.wrapping_add(1);
-                Ok(Ok(Response::WriteSingleRegister(addr, value)))
-            }
-
-            Request::WriteMultipleRegisters(addr, values) => {
-                let quantity = values.len() as u16;
-                if !mapped(&[WRITABLE], addr, quantity) {
-                    return Ok(Err(ExceptionCode::IllegalDataAddress));
-                }
-                for (i, value) in values.iter().enumerate() {
-                    self.written.insert(addr + i as u16, *value);
-                }
-                self.write_count = self.write_count.wrapping_add(1);
-                Ok(Ok(Response::WriteMultipleRegisters(addr, quantity)))
-            }
-
-            Request::ReadDeviceIdentification(read_code, object_id) => {
-                Ok(self.device_id_response(read_code, object_id))
-            }
-
-            Request::Custom(code, data) => Ok(Ok(Response::Custom(code, data.into_owned().into()))),
-
-            _ => Ok(Err(ExceptionCode::IllegalFunction)),
-        }
+        Ok(self.respond(request, t))
     }
 
     async fn disconnect(&mut self) -> std::io::Result<()> {
         Ok(())
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use super::MockContext;
+    use tokio_modbus::ExceptionCode;
+    use tokio_modbus::client::{Reader, Writer};
+
+    const RESERVED: ExceptionCode = ExceptionCode::IllegalDataAddress;
+    const FAULTED: ExceptionCode = ExceptionCode::ServerDeviceFailure;
+
+    #[tokio::test]
+    async fn faulty_addresses_answer_with_their_exception() {
+        let mut mock = MockContext::make();
+        assert_eq!(
+            mock.read_holding_registers(16, 1).await.unwrap(),
+            Err(RESERVED)
+        );
+        assert_eq!(
+            mock.read_holding_registers(1102, 2).await.unwrap(),
+            Err(FAULTED)
+        );
+        assert_eq!(
+            mock.read_input_registers(39, 1).await.unwrap(),
+            Err(RESERVED)
+        );
+        assert_eq!(
+            mock.read_input_registers(64, 4).await.unwrap(),
+            Err(FAULTED)
+        );
+        assert_eq!(mock.read_coils(6, 2).await.unwrap(), Err(RESERVED));
+        assert_eq!(
+            mock.read_discrete_inputs(4, 3).await.unwrap(),
+            Err(RESERVED)
+        );
+    }
+
+    #[tokio::test]
+    async fn a_request_touching_a_fault_fails_as_a_whole() {
+        let mut mock = MockContext::make();
+        assert_eq!(
+            mock.read_holding_registers(10, 10).await.unwrap(),
+            Err(RESERVED)
+        );
+        assert_eq!(
+            mock.read_input_registers(60, 8).await.unwrap(),
+            Err(FAULTED)
+        );
+        assert_eq!(
+            mock.read_discrete_inputs(0, 8).await.unwrap(),
+            Err(RESERVED)
+        );
+        assert_eq!(
+            mock.write_single_coil(7, true).await.unwrap(),
+            Err(RESERVED)
+        );
+        assert_eq!(
+            mock.write_multiple_coils(5, &[true, false]).await.unwrap(),
+            Err(RESERVED)
+        );
+    }
+
+    #[tokio::test]
+    async fn the_neighbours_of_a_fault_still_answer() {
+        let mut mock = MockContext::make();
+        let ok = |result: tokio_modbus::Result<Vec<u16>>, len: usize| {
+            assert_eq!(result.unwrap().map(|values| values.len()), Ok(len));
+        };
+        ok(mock.read_holding_registers(6, 10).await, 10);
+        ok(mock.read_holding_registers(20, 10).await, 10);
+        ok(mock.read_holding_registers(1100, 2).await, 2);
+        ok(mock.read_input_registers(30, 8).await, 8);
+        ok(mock.read_input_registers(40, 24).await, 24);
+        assert!(mock.read_coils(0, 6).await.unwrap().is_ok());
+        assert!(mock.read_coils(8, 8).await.unwrap().is_ok());
+        assert!(mock.read_discrete_inputs(0, 4).await.unwrap().is_ok());
+        assert!(mock.read_discrete_inputs(7, 8).await.unwrap().is_ok());
     }
 }

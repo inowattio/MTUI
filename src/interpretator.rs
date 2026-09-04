@@ -313,6 +313,14 @@ fn glyph(b: u8) -> char {
     if c.is_ascii_graphic() { c } else { '·' }
 }
 
+pub fn ascii_words(words: &[u16]) -> String {
+    words
+        .iter()
+        .flat_map(|v| v.to_be_bytes())
+        .map(glyph)
+        .collect()
+}
+
 fn ascii_cell(a: u16, b: u16, out: &mut String) {
     for n in [a, b] {
         for byte in n.to_be_bytes() {

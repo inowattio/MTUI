@@ -1,7 +1,7 @@
 use super::{App, BackgroundTask, SlaveProbeOutcome, SlaveScanTaskResult};
 use crate::compat;
 use crate::num_ops::{digit_add, digit_remove, wrap_index};
-use crate::state::{SlaveField, SlaveParams, SlaveScanHit, StatusMessage};
+use crate::state::{ScanState, SlaveField, SlaveParams, SlaveScanHit, StatusMessage};
 
 impl App {
     fn slave_mut(&mut self) -> Option<&mut SlaveParams> {
@@ -15,9 +15,14 @@ impl App {
         }
     }
 
-    pub fn slave_scan_toggle(&mut self) {
+    pub fn slave_toggle(&mut self, field: SlaveField) {
         if let Some(p) = self.slave_mut() {
-            p.stop_at_first = !p.stop_at_first;
+            match field {
+                SlaveField::Mode => p.stop_at_first = !p.stop_at_first,
+                SlaveField::Repr => p.ascii = !p.ascii,
+                SlaveField::Exceptions => p.show_exceptions = !p.show_exceptions,
+                _ => {}
+            }
         }
     }
 
@@ -31,7 +36,11 @@ impl App {
                 SlaveField::Id => digit_add(&mut p.id, digit),
                 SlaveField::From => digit_add(&mut p.from, digit),
                 SlaveField::To => digit_add(&mut p.to, digit),
-                SlaveField::Mode | SlaveField::Scan | SlaveField::Hit(_) => {}
+                SlaveField::Mode
+                | SlaveField::Repr
+                | SlaveField::Exceptions
+                | SlaveField::Scan
+                | SlaveField::Hit(_) => {}
             }
         }
     }
@@ -42,7 +51,11 @@ impl App {
                 SlaveField::Id => digit_remove(&mut p.id),
                 SlaveField::From => digit_remove(&mut p.from),
                 SlaveField::To => digit_remove(&mut p.to),
-                SlaveField::Mode | SlaveField::Scan | SlaveField::Hit(_) => {}
+                SlaveField::Mode
+                | SlaveField::Repr
+                | SlaveField::Exceptions
+                | SlaveField::Scan
+                | SlaveField::Hit(_) => {}
             }
         }
     }
@@ -51,10 +64,9 @@ impl App {
         let Some(p) = self.popup_as::<SlaveParams>() else {
             return;
         };
-        if p.active {
+        if p.active() {
             if let Some(p) = self.slave_mut() {
-                p.active = false;
-                p.status = Some(StatusMessage::warn("Scan stopped"));
+                p.scan = ScanState::Stopped;
             }
             log::info!("Slave scan stopped");
             return;
@@ -80,9 +92,9 @@ impl App {
             std::mem::swap(&mut p.from, &mut p.to);
         }
         p.hits.clear();
-        p.active = true;
+        p.scan = ScanState::Probing;
         p.current = p.from;
-        p.status = Some(probing_status(p));
+        p.status = None;
         log::info!(
             "Slave scan started \u{b7} {}..={} \u{b7} {:?} @ {} \u{d7}{}{}",
             p.from,
@@ -127,12 +139,12 @@ impl App {
         let Some(p) = self.slave_mut() else {
             return;
         };
-        if !p.active {
+        if !p.active() {
             return;
         }
         let Some(SlaveScanTaskResult { slave_id, outcome }) = result else {
-            p.active = false;
-            p.status = Some(StatusMessage::err("Scan failed: task stopped unexpectedly"));
+            p.scan = ScanState::Failed;
+            log::error!("Slave scan failed \u{b7} task stopped unexpectedly");
             return;
         };
 
@@ -153,36 +165,16 @@ impl App {
         }
 
         if (p.stop_at_first && responded) || slave_id >= p.to {
-            p.active = false;
+            p.scan = ScanState::Done;
             let ok = p.hits.iter().filter(|h| h.result.is_ok()).count();
             let exceptions = p.hits.len() - ok;
-            p.status = Some(finished_status(ok, exceptions));
             log::info!("Slave scan finished \u{b7} {ok} response(s), {exceptions} exception(s)");
             return;
         }
 
         p.current = slave_id + 1;
-        p.status = Some(probing_status(p));
         let next = p.current;
         self.spawn_slave_probe(next);
-    }
-}
-
-fn probing_status(p: &SlaveParams) -> StatusMessage {
-    let done = (p.current - p.from) as u16;
-    let total = (p.to - p.from) as u16 + 1;
-    StatusMessage::warn(format!(
-        "Probing slave {}\u{2026} ({done}/{total})",
-        p.current
-    ))
-}
-
-fn finished_status(ok: usize, exceptions: usize) -> StatusMessage {
-    match (ok, exceptions) {
-        (0, 0) => StatusMessage::warn("No slaves responded"),
-        (0, e) => StatusMessage::warn(format!("No data responses \u{b7} {e} exception(s)")),
-        (o, 0) => StatusMessage::ok(format!("{o} slave(s) responded")),
-        (o, e) => StatusMessage::ok(format!("{o} slave(s) responded \u{b7} {e} exception(s)")),
     }
 }
 
@@ -190,13 +182,14 @@ fn finished_status(ok: usize, exceptions: usize) -> StatusMessage {
 mod tests {
     use crate::app::App;
     use crate::config::Config;
-    use crate::state::{SlaveField, SlaveParams};
+    use crate::register::RegisterType;
+    use crate::state::{ScanState, SlaveField, SlaveParams};
     use std::time::Duration;
 
     async fn drive_scan(app: &mut App) {
         for _ in 0..500 {
             app.complete_background_task().await;
-            if app.popup_as::<SlaveParams>().is_none_or(|p| !p.active) {
+            if app.popup_as::<SlaveParams>().is_none_or(|p| !p.active()) {
                 return;
             }
             tokio::time::sleep(Duration::from_millis(2)).await;
@@ -223,6 +216,8 @@ mod tests {
         drive_scan(&mut app).await;
 
         let p = app.popup_as::<SlaveParams>().unwrap();
+        assert_eq!(p.scan, ScanState::Done);
+        assert_eq!(p.status, None, "progress is not a status message");
         let ids: Vec<u8> = p.hits.iter().map(|h| h.slave_id).collect();
         assert_eq!(ids, vec![1, 2, 3]);
         assert!(p.hits.iter().all(|h| h.result.is_ok()));
@@ -241,7 +236,7 @@ mod tests {
         drive_scan(&mut app).await;
 
         let p = app.popup_as::<SlaveParams>().unwrap();
-        assert!(!p.active);
+        assert_eq!(p.scan, ScanState::Done);
         let ids: Vec<u8> = p.hits.iter().map(|h| h.slave_id).collect();
         assert_eq!(ids, vec![2]);
     }
@@ -274,6 +269,31 @@ mod tests {
 
         app.commit_slave_hit(1).await;
         assert_eq!(app.config.device.slave_id, 5);
-        assert!(app.popup_as::<SlaveParams>().is_none());
+        let p = app.popup_as::<SlaveParams>().expect("the popup stays open");
+        assert_eq!(p.id, 5, "the Slave id field follows the pick");
+        assert_eq!(p.status, None, "the list marker is the only confirmation");
+    }
+
+    #[tokio::test]
+    async fn an_exception_entry_sets_the_slave_id_too() {
+        let mut app = slave_popup().await;
+        {
+            let p = app.popup_as_mut::<SlaveParams>().unwrap();
+            p.register_type = RegisterType::Input;
+            p.address = 38;
+            p.amount = 1;
+            p.from = 7;
+            p.to = 7;
+        }
+        app.slave_scan_action();
+        drive_scan(&mut app).await;
+
+        let p = app.popup_as::<SlaveParams>().unwrap();
+        assert_eq!(p.hits.len(), 1);
+        assert!(p.hits[0].result.is_err());
+
+        app.commit_slave_hit(0).await;
+        assert_eq!(app.config.device.slave_id, 7);
+        assert_eq!(app.popup_as::<SlaveParams>().unwrap().id, 7);
     }
 }

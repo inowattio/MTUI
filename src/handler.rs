@@ -351,16 +351,15 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
                 c if c == kb.action => match field {
                     SlaveField::Id => app.commit_slave().await,
                     SlaveField::Hit(index) => app.commit_slave_hit(index).await,
+                    SlaveField::Repr | SlaveField::Exceptions => app.slave_toggle(field),
                     SlaveField::From | SlaveField::To | SlaveField::Mode | SlaveField::Scan => {
                         app.slave_scan_action()
                     }
                 },
                 c if c == kb.move_up => app.slave_move(false),
                 c if c == kb.move_down => app.slave_move(true),
-                c if c == kb.pause && field == SlaveField::Mode => app.slave_scan_toggle(),
-                KeyCode::Left | KeyCode::Right if field == SlaveField::Mode => {
-                    app.slave_scan_toggle()
-                }
+                c if c == kb.pause && field.is_toggle() => app.slave_toggle(field),
+                KeyCode::Left | KeyCode::Right if field.is_toggle() => app.slave_toggle(field),
                 KeyCode::Backspace => app.slave_backspace(field),
                 KeyCode::Char(c) if c.is_ascii_digit() => app.slave_digit(field, c),
                 _ => {}
@@ -745,7 +744,7 @@ mod tests {
     use crate::input::{KeyCode, KeyEvent};
     use crate::state::{
         DiscoveryField, DiscoveryParams, InterfaceKind, Popup, PopupKind, SettingsCategory,
-        SettingsField, SettingsFocus, State,
+        SettingsField, SettingsFocus, SlaveField, SlaveParams, State,
     };
 
     async fn app() -> App {
@@ -878,6 +877,111 @@ mod tests {
         app.config.save_position_on_exit = false;
         handle_key_events(KeyEvent::new(KeyCode::Right), &mut app).await;
         assert_eq!(app.config.startup.address, address + 1);
+    }
+
+    #[tokio::test]
+    async fn the_slave_popup_toggles_ascii_hit_data() {
+        let mut app = app().await;
+        app.open_slave();
+        let kb = app.config.keybinds;
+        let index = SlaveParams::default()
+            .fields()
+            .iter()
+            .position(|&f| f == SlaveField::Repr)
+            .unwrap();
+        for _ in 0..index {
+            handle_key_events(KeyEvent::new(kb.move_down), &mut app).await;
+        }
+        fn slave(app: &App) -> &SlaveParams {
+            app.popup_as().unwrap()
+        }
+        assert_eq!(slave(&app).current_field(), SlaveField::Repr);
+
+        handle_key_events(KeyEvent::new(KeyCode::Right), &mut app).await;
+        assert!(slave(&app).ascii, "arrows switch to ASCII");
+        handle_key_events(KeyEvent::new(kb.action), &mut app).await;
+        assert!(!slave(&app).ascii, "enter switches back");
+        assert!(
+            !slave(&app).active(),
+            "enter on this field never starts a scan"
+        );
+
+        handle_key_events(KeyEvent::new(kb.move_down), &mut app).await;
+        assert_eq!(slave(&app).current_field(), SlaveField::Exceptions);
+        assert!(slave(&app).show_exceptions, "listed by default");
+        handle_key_events(KeyEvent::new(kb.pause), &mut app).await;
+        assert!(!slave(&app).show_exceptions, "space hides them");
+        handle_key_events(KeyEvent::new(KeyCode::Left), &mut app).await;
+        assert!(slave(&app).show_exceptions);
+        assert!(!slave(&app).active());
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn screen(app: &mut App) -> String {
+        use ratatui::Terminal;
+        use ratatui::backend::TestBackend;
+        let mut terminal = Terminal::new(TestBackend::new(120, 40)).unwrap();
+        terminal
+            .draw(|frame| crate::tui::render(app, frame))
+            .unwrap();
+        let buffer = terminal.backend().buffer();
+        (0..buffer.area.height)
+            .map(|y| {
+                (0..buffer.area.width)
+                    .map(|x| buffer.cell((x, y)).map_or(" ", |c| c.symbol()))
+                    .chain(std::iter::once("\n"))
+                    .collect::<String>()
+            })
+            .collect()
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn hiding_exceptions_applies_to_the_list_at_once() {
+        use crate::register::RegisterType;
+        let mut app = app().await;
+        app.open_slave();
+        {
+            let p = app.popup_as_mut::<SlaveParams>().unwrap();
+            p.register_type = RegisterType::Input;
+            p.address = 38;
+            p.amount = 1;
+            p.from = 1;
+            p.to = 3;
+        }
+        app.slave_scan_action();
+        for _ in 0..500 {
+            app.complete_background_task().await;
+            if !app.popup_as::<SlaveParams>().unwrap().active() {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(2)).await;
+        }
+        assert_eq!(app.popup_as::<SlaveParams>().unwrap().hits.len(), 3);
+
+        let before = screen(&mut app);
+        assert!(before.contains("FOUND (3)"), "{before}");
+        assert_eq!(before.matches("Illegal").count(), 3);
+
+        let kb = app.config.keybinds;
+        let index = SlaveParams::default()
+            .fields()
+            .iter()
+            .position(|&f| f == SlaveField::Exceptions)
+            .unwrap();
+        for _ in 0..index {
+            handle_key_events(KeyEvent::new(kb.move_down), &mut app).await;
+        }
+        handle_key_events(KeyEvent::new(KeyCode::Right), &mut app).await;
+        let hidden = screen(&mut app);
+        assert!(hidden.contains("FOUND (0)"), "{hidden}");
+        assert!(!hidden.contains("Illegal"), "exceptions vanish at once");
+        assert!(hidden.contains("(no hits)"));
+
+        handle_key_events(KeyEvent::new(KeyCode::Left), &mut app).await;
+        let shown = screen(&mut app);
+        assert!(shown.contains("FOUND (3)"), "{shown}");
+        assert_eq!(shown.matches("Illegal").count(), 3);
     }
 
     fn ctrl(c: char) -> KeyEvent {
