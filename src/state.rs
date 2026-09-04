@@ -510,6 +510,16 @@ pub struct SlaveScanHit {
     pub result: Result<Vec<u16>, String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ScanState {
+    #[default]
+    Idle,
+    Probing,
+    Done,
+    Stopped,
+    Failed,
+}
+
 #[derive(Debug, PartialEq)]
 pub struct SlaveParams {
     pub id: u8,
@@ -517,7 +527,7 @@ pub struct SlaveParams {
     pub from: u8,
     pub to: u8,
     pub stop_at_first: bool,
-    pub active: bool,
+    pub scan: ScanState,
     pub current: u8,
     pub register_type: RegisterType,
     pub address: u16,
@@ -534,7 +544,7 @@ impl Default for SlaveParams {
             from: 1,
             to: 247,
             stop_at_first: false,
-            active: false,
+            scan: ScanState::Idle,
             current: 0,
             register_type: RegisterType::default(),
             address: 0,
@@ -563,6 +573,14 @@ impl SlaveParams {
     pub fn current_field(&self) -> SlaveField {
         let fields = self.fields();
         fields[(self.selected as usize).min(fields.len() - 1)]
+    }
+
+    pub fn active(&self) -> bool {
+        self.scan == ScanState::Probing
+    }
+
+    pub fn scanned(&self) -> bool {
+        self.scan != ScanState::Idle
     }
 }
 
