@@ -649,6 +649,7 @@ field_enum! {
         LogWrites,
         ApiPort,
         ApiSlaveOverride,
+        SavePositionOnExit,
         StartupPanel,
         StartupType,
         StartupAddress,
@@ -719,6 +720,7 @@ impl SettingsField {
                 | SettingsField::GraphTimeAxis
                 | SettingsField::StartupPanel
                 | SettingsField::StartupType
+                | SettingsField::SavePositionOnExit
                 | SettingsField::IgnoreDirty
                 | SettingsField::ShowMock
                 | SettingsField::CycleHoldings
@@ -726,6 +728,15 @@ impl SettingsField {
                 | SettingsField::CycleCoils
                 | SettingsField::CycleDiscretes
                 | SettingsField::ThemePreset
+        )
+    }
+
+    pub fn is_startup(self) -> bool {
+        matches!(
+            self,
+            SettingsField::StartupPanel
+                | SettingsField::StartupType
+                | SettingsField::StartupAddress
         )
     }
 
@@ -799,6 +810,7 @@ impl SettingsCategory {
         match self {
             SettingsCategory::General => &[
                 Name,
+                SavePositionOnExit,
                 StartupPanel,
                 StartupType,
                 StartupAddress,
@@ -1193,7 +1205,7 @@ pub enum State {
 
 #[cfg(test)]
 mod tests {
-    use super::scroll_window;
+    use super::{SettingsCategory, SettingsField, scroll_window};
 
     fn run(cursor: u16, top: u16, rows: u16, len: u16) -> (u16, u16) {
         let (mut cursor, mut top) = (cursor, top);
@@ -1215,5 +1227,15 @@ mod tests {
         assert_eq!(run(50, 45, 20, 4), (3, 0));
         assert_eq!(run(50, 45, 3, 10), (9, 7));
         assert_eq!(run(0, 0, 5, 0), (0, 0));
+    }
+
+    #[test]
+    fn the_save_position_toggle_sits_above_the_startup_fields() {
+        let fields = SettingsCategory::General.fields();
+        let position = |field| fields.iter().position(|&f| f == field).unwrap();
+        assert!(
+            position(SettingsField::SavePositionOnExit) < position(SettingsField::StartupPanel)
+        );
+        assert_eq!(fields.iter().filter(|f| f.is_startup()).count(), 3);
     }
 }

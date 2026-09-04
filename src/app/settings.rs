@@ -112,9 +112,19 @@ impl App {
         }
     }
 
+    pub fn settings_field_disabled(&self, field: SettingsField) -> bool {
+        field.is_startup() && self.config.save_position_on_exit
+    }
+
     pub fn settings_adjust(&mut self, field: SettingsField, delta: i64) {
+        if self.settings_field_disabled(field) {
+            return;
+        }
         match field {
             SettingsField::IgnoreDirty => self.config.ignore_dirty = !self.config.ignore_dirty,
+            SettingsField::SavePositionOnExit => {
+                self.config.save_position_on_exit = !self.config.save_position_on_exit
+            }
             SettingsField::ShowMock => self.config.show_mock = !self.config.show_mock,
             SettingsField::ReadOnly => self.config.read_only = !self.config.read_only,
             SettingsField::BatchAnchor => {
@@ -201,6 +211,9 @@ impl App {
     }
 
     pub fn settings_digit(&mut self, field: SettingsField, digit: u8) {
+        if self.settings_field_disabled(field) {
+            return;
+        }
         if field.is_theme_color() {
             if let Some(slot) = theme_field(&mut self.config.theme, field) {
                 let current = match *slot {
@@ -241,6 +254,9 @@ impl App {
     }
 
     pub fn settings_backspace(&mut self, field: SettingsField) {
+        if self.settings_field_disabled(field) {
+            return;
+        }
         if field == SettingsField::LoadConfig {
             if let Some(s) = self.settings_mut() {
                 s.load_path.pop();

@@ -239,7 +239,7 @@ impl App {
         if self.dirty && !self.config.ignore_dirty {
             self.read_mut().popup = Some(Popup::Quit);
         } else {
-            self.running = false;
+            self.quit();
         }
     }
 
@@ -249,7 +249,7 @@ impl App {
             State::Read(p) if p.popup == Some(Popup::Quit)
         );
         if prompting || !self.dirty || self.config.ignore_dirty {
-            self.running = false;
+            self.quit();
             return;
         }
 
@@ -391,6 +391,9 @@ impl App {
     }
 
     pub fn quit(&mut self) {
+        if self.config.save_position_on_exit {
+            self.persist_startup_position();
+        }
         self.running = false;
     }
 
@@ -822,7 +825,7 @@ mod tests {
     };
     use crate::register::{RegisterCell, RegisterType};
     #[cfg(not(target_arch = "wasm32"))]
-    use crate::state::ConnectionStatus;
+    use crate::state::{ConnectionStatus, ReadPanel};
     use std::collections::BTreeMap;
     #[cfg(not(target_arch = "wasm32"))]
     use std::time::Duration;
@@ -899,6 +902,93 @@ mod tests {
     fn run_cannot_extend_past_missing_cells() {
         let spans = custom_full_spans(&rules(&[(100, CustomRepr::F64, &[])]));
         assert_eq!(read_run_len(&cells(&[100, 101, 105]), 0, 2, &spans), 2);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    struct ScratchConfig(std::path::PathBuf);
+
+    #[cfg(not(target_arch = "wasm32"))]
+    impl ScratchConfig {
+        fn new(name: &str) -> Self {
+            let dir = std::env::temp_dir().join(format!("mtui-{}-{name}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).expect("scratch dir");
+            Self(dir)
+        }
+
+        fn path(&self) -> String {
+            self.0.join("config.json").to_string_lossy().into_owned()
+        }
+
+        fn saved(&self) -> Config {
+            let content = std::fs::read_to_string(self.path()).expect("config written on exit");
+            serde_json::from_str(&content).expect("valid config")
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    impl Drop for ScratchConfig {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn quitting_saves_the_position_as_startup_when_enabled() {
+        let scratch = ScratchConfig::new("save-position");
+        let mut app = App::boot(Config::default(), scratch.path()).await;
+        app.config.save_position_on_exit = true;
+        app.config.name = "unsaved".to_string();
+        {
+            let read = app.read_mut();
+            read.position = 42;
+            read.register_type = RegisterType::Holding;
+            read.panel = ReadPanel::Pinned;
+        }
+
+        app.quit();
+        assert!(!app.running);
+
+        let saved = scratch.saved();
+        assert_eq!(saved.startup.address, 42);
+        assert_eq!(saved.startup.register_type, RegisterType::Holding);
+        assert_eq!(saved.startup.panel, ReadPanel::Pinned);
+        assert_eq!(
+            saved.name, "demo",
+            "only the position is written, unsaved changes stay unsaved"
+        );
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn quitting_leaves_the_config_alone_when_disabled() {
+        let scratch = ScratchConfig::new("keep-position");
+        let mut app = App::boot(Config::default(), scratch.path()).await;
+        assert!(!app.config.save_position_on_exit, "off by default");
+        app.read_mut().position = 42;
+
+        app.quit();
+        assert!(!app.running);
+        assert!(!std::path::Path::new(&scratch.path()).exists());
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn a_clean_quit_request_also_saves_the_position() {
+        let scratch = ScratchConfig::new("request-quit-position");
+        let mut app = App::boot(Config::default(), scratch.path()).await;
+        app.config.save_position_on_exit = true;
+        app.mark_config_saved();
+        app.read_mut().position = 7;
+
+        app.request_quit();
+        assert!(!app.running);
+        assert_eq!(scratch.saved().startup.address, 7);
+        assert!(
+            scratch.saved().save_position_on_exit,
+            "a saved toggle is kept in the file"
+        );
     }
 
     #[cfg(not(target_arch = "wasm32"))]

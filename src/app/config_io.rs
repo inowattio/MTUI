@@ -130,6 +130,42 @@ impl App {
         result
     }
 
+    fn current_position(&self) -> Option<Startup> {
+        let p = match &self.state {
+            State::Read(p) => p,
+            State::Settings(s) => &s.previous,
+            State::Logs(_) => return None,
+        };
+        Some(Startup {
+            address: p.position,
+            register_type: p.register_type,
+            panel: p.panel,
+        })
+    }
+
+    pub(super) fn persist_startup_position(&self) {
+        let Some(startup) = self.current_position() else {
+            return;
+        };
+        let mut config: Config = match serde_json::from_str(&self.saved_config) {
+            Ok(config) => config,
+            Err(error) => {
+                log::error!("Startup position not saved \u{b7} {error}");
+                return;
+            }
+        };
+        config.startup = startup;
+        match save_config(&self.config_path, &config) {
+            Ok(()) => log::info!(
+                "Startup position saved \u{b7} {} {} on {}",
+                startup.register_type.name(),
+                startup.address,
+                startup.panel.name()
+            ),
+            Err(error) => log::error!("Startup position not saved \u{b7} {error}"),
+        }
+    }
+
     pub fn config_path(&self) -> &str {
         &self.config_path
     }

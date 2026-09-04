@@ -743,7 +743,10 @@ mod tests {
     use crate::app::App;
     use crate::config::Config;
     use crate::input::{KeyCode, KeyEvent};
-    use crate::state::{DiscoveryField, DiscoveryParams, InterfaceKind, Popup, PopupKind, State};
+    use crate::state::{
+        DiscoveryField, DiscoveryParams, InterfaceKind, Popup, PopupKind, SettingsCategory,
+        SettingsField, SettingsFocus, State,
+    };
 
     async fn app() -> App {
         App::boot(Config::default(), String::new()).await
@@ -845,6 +848,36 @@ mod tests {
             handle_key_events(KeyEvent::new(KeyCode::Right), &mut app).await;
             assert_eq!(kind(&app), expected);
         }
+    }
+
+    #[tokio::test]
+    async fn startup_fields_are_locked_while_the_position_is_saved_on_exit() {
+        let mut app = app().await;
+        app.open_settings();
+        let index = SettingsCategory::General
+            .fields()
+            .iter()
+            .position(|&f| f == SettingsField::StartupAddress)
+            .unwrap() as u16;
+        {
+            let s = app.settings_mut().unwrap();
+            s.focus = SettingsFocus::Fields;
+            s.field = index;
+        }
+        let address = app.config.startup.address;
+
+        app.config.save_position_on_exit = true;
+        handle_key_events(KeyEvent::new(KeyCode::Right), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Char('7')), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Backspace), &mut app).await;
+        assert_eq!(
+            app.config.startup.address, address,
+            "locked fields ignore edits"
+        );
+
+        app.config.save_position_on_exit = false;
+        handle_key_events(KeyEvent::new(KeyCode::Right), &mut app).await;
+        assert_eq!(app.config.startup.address, address + 1);
     }
 
     fn ctrl(c: char) -> KeyEvent {

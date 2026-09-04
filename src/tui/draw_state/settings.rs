@@ -135,6 +135,10 @@ fn render_field(
 ) -> Line<'static> {
     let (name, value, color) = field_view(app, params, field);
 
+    if app.settings_field_disabled(field) {
+        return disabled_row(theme, name, value, selected);
+    }
+
     let value_text = if selected && field.is_action() {
         format!("{value}  \u{2190} enter")
     } else {
@@ -145,6 +149,13 @@ fn render_field(
         Some(color) => color_row(theme, name, value_text, color, selected),
         None => field_row(theme, name, 24, value_text, selected),
     }
+}
+
+fn disabled_row(theme: &Theme, label: &str, value: String, selected: bool) -> Line<'static> {
+    Line::from(Span::styled(
+        format!("{}{label:<24} {value}", marker(selected)),
+        theme.dim_style(),
+    ))
 }
 
 fn color_row(
@@ -246,6 +257,11 @@ fn field_view(
         SettingsField::StartupAddress => {
             ("Startup address", device.startup.address.to_string(), None)
         }
+        SettingsField::SavePositionOnExit => (
+            "Save position on exit",
+            on_off(device.save_position_on_exit),
+            None,
+        ),
         SettingsField::CycleHoldings => {
             ("Cycle holdings", on_off(device.cycle_types.holdings), None)
         }
