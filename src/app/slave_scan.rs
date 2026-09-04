@@ -182,7 +182,8 @@ impl App {
 mod tests {
     use crate::app::App;
     use crate::config::Config;
-    use crate::state::{ScanState, SlaveField, SlaveParams};
+    use crate::register::RegisterType;
+    use crate::state::{ScanState, SlaveField, SlaveParams, StatusMessage};
     use std::time::Duration;
 
     async fn drive_scan(app: &mut App) {
@@ -268,6 +269,31 @@ mod tests {
 
         app.commit_slave_hit(1).await;
         assert_eq!(app.config.device.slave_id, 5);
-        assert!(app.popup_as::<SlaveParams>().is_none());
+        let p = app.popup_as::<SlaveParams>().expect("the popup stays open");
+        assert_eq!(p.id, 5, "the Slave id field follows the pick");
+        assert_eq!(p.status, Some(StatusMessage::ok("Slave id set to 5")));
+    }
+
+    #[tokio::test]
+    async fn an_exception_entry_sets_the_slave_id_too() {
+        let mut app = slave_popup().await;
+        {
+            let p = app.popup_as_mut::<SlaveParams>().unwrap();
+            p.register_type = RegisterType::Input;
+            p.address = 38;
+            p.amount = 1;
+            p.from = 7;
+            p.to = 7;
+        }
+        app.slave_scan_action();
+        drive_scan(&mut app).await;
+
+        let p = app.popup_as::<SlaveParams>().unwrap();
+        assert_eq!(p.hits.len(), 1);
+        assert!(p.hits[0].result.is_err());
+
+        app.commit_slave_hit(0).await;
+        assert_eq!(app.config.device.slave_id, 7);
+        assert_eq!(app.popup_as::<SlaveParams>().unwrap().id, 7);
     }
 }
