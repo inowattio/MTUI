@@ -32,14 +32,13 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, sear
     ];
 
     if search.matches.is_empty() {
-        lines.push(Line::from(Span::styled(
+        for hint in [
             " Type an address (x6F for hex) or a label.",
-            theme.dim_style(),
-        )));
-        lines.push(Line::from(Span::styled(
-            " Prefix with h/i/c/d to pick the register type.",
-            theme.dim_style(),
-        )));
+            " +N / -N moves relative to the cursor.",
+            " h/i/c/d prefix picks the register type.",
+        ] {
+            lines.push(Line::from(Span::styled(hint, theme.dim_style())));
+        }
     } else {
         for i in top..end {
             let (cell, text) = &search.matches[i];

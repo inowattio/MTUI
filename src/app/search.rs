@@ -102,7 +102,10 @@ impl App {
         let Some(query) = self.popup_as::<SearchParams>().map(|s| s.query.clone()) else {
             return;
         };
-        let current_type = self.read().register_type;
+        let (current_type, current_position) = {
+            let p = self.read();
+            (p.register_type, p.position)
+        };
 
         let (register_type, has_explicit_type) = match query.chars().next() {
             Some('h' | 'H') => (RegisterType::Holding, true),
@@ -120,8 +123,8 @@ impl App {
             query.as_str()
         };
 
-        if let Some(address) = parse_address(numeric_query) {
-            matches.push(((register_type, address), "jump to this address".to_string()));
+        if let Some((address, text)) = parse_target(numeric_query, current_position) {
+            matches.push(((register_type, address), text));
         }
 
         let mut scored: Vec<(i32, RegisterCell, String)> = self
@@ -175,6 +178,21 @@ impl App {
     }
 }
 
+fn parse_target(input: &str, current: u16) -> Option<(u16, String)> {
+    let input = input.trim();
+    let (sign, rest) = if let Some(rest) = input.strip_prefix('+') {
+        (1, rest)
+    } else if let Some(rest) = input.strip_prefix('-') {
+        (-1, rest)
+    } else {
+        return parse_address(input).map(|address| (address, "jump to this address".to_string()));
+    };
+    let offset = parse_address(rest)?;
+    let address = (i32::from(current) + sign * i32::from(offset)).clamp(0, i32::from(u16::MAX));
+    let symbol = if sign > 0 { '+' } else { '-' };
+    Some((address as u16, format!("move by {symbol}{offset}")))
+}
+
 fn parse_address(input: &str) -> Option<u16> {
     let input = input.trim();
     let (digits, radix) = match input.strip_prefix(['x', 'X']) {
@@ -193,7 +211,7 @@ fn parse_address(input: &str) -> Option<u16> {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_address;
+    use super::{parse_address, parse_target};
 
     #[test]
     fn parses_decimal_addresses() {
@@ -209,6 +227,46 @@ mod tests {
         assert_eq!(parse_address("0x6F"), Some(0x6F));
         assert_eq!(parse_address("xFFFF"), Some(u16::MAX));
         assert_eq!(parse_address("x10000"), Some(u16::MAX));
+    }
+
+    #[test]
+    fn relative_targets_move_from_the_cursor() {
+        assert_eq!(
+            parse_target("+69", 100),
+            Some((169, "move by +69".to_string()))
+        );
+        assert_eq!(
+            parse_target("-100", 250),
+            Some((150, "move by -100".to_string()))
+        );
+        assert_eq!(
+            parse_target("+x10", 0),
+            Some((16, "move by +16".to_string()))
+        );
+        assert_eq!(
+            parse_target(" - 5 ", 10),
+            Some((5, "move by -5".to_string()))
+        );
+    }
+
+    #[test]
+    fn relative_targets_clamp_to_the_address_range() {
+        assert_eq!(parse_target("-100", 50).map(|t| t.0), Some(0));
+        assert_eq!(parse_target("+100", 65500).map(|t| t.0), Some(u16::MAX));
+    }
+
+    #[test]
+    fn absolute_targets_keep_the_jump_text() {
+        assert_eq!(
+            parse_target("111", 0),
+            Some((111, "jump to this address".to_string()))
+        );
+        assert_eq!(
+            parse_target("x6F", 0),
+            Some((0x6F, "jump to this address".to_string()))
+        );
+        assert_eq!(parse_target("+", 10), None);
+        assert_eq!(parse_target("-", 10), None);
     }
 
     #[test]
