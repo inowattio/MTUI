@@ -33,7 +33,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, sear
 
     if search.matches.is_empty() {
         lines.push(Line::from(Span::styled(
-            " Type an address or a label.",
+            " Type an address (x6F for hex) or a label.",
             theme.dim_style(),
         )));
         lines.push(Line::from(Span::styled(

@@ -120,13 +120,7 @@ impl App {
             query.as_str()
         };
 
-        if let Ok(parsed_address) = numeric_query.trim().parse::<u32>() {
-            let address = if parsed_address > u16::MAX as u32 {
-                u16::MAX
-            } else {
-                parsed_address as u16
-            };
-
+        if let Some(address) = parse_address(numeric_query) {
             matches.push(((register_type, address), "jump to this address".to_string()));
         }
 
@@ -178,5 +172,51 @@ impl App {
         self.refresh_dirty();
 
         self.read_mut().popup = None;
+    }
+}
+
+fn parse_address(input: &str) -> Option<u16> {
+    let input = input.trim();
+    let (digits, radix) = match input.strip_prefix(['x', 'X']) {
+        Some(hex) => (hex, 16),
+        None => match input
+            .strip_prefix("0x")
+            .or_else(|| input.strip_prefix("0X"))
+        {
+            Some(hex) => (hex, 16),
+            None => (input, 10),
+        },
+    };
+    let value = u32::from_str_radix(digits, radix).ok()?;
+    Some(value.min(u16::MAX as u32) as u16)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_address;
+
+    #[test]
+    fn parses_decimal_addresses() {
+        assert_eq!(parse_address("111"), Some(111));
+        assert_eq!(parse_address(" 42 "), Some(42));
+        assert_eq!(parse_address("70000"), Some(u16::MAX));
+    }
+
+    #[test]
+    fn parses_hex_addresses_with_x_prefix() {
+        assert_eq!(parse_address("x6F"), Some(0x6F));
+        assert_eq!(parse_address("X6f"), Some(0x6F));
+        assert_eq!(parse_address("0x6F"), Some(0x6F));
+        assert_eq!(parse_address("xFFFF"), Some(u16::MAX));
+        assert_eq!(parse_address("x10000"), Some(u16::MAX));
+    }
+
+    #[test]
+    fn rejects_non_numeric_input() {
+        assert_eq!(parse_address(""), None);
+        assert_eq!(parse_address("x"), None);
+        assert_eq!(parse_address("xG1"), None);
+        assert_eq!(parse_address("temp"), None);
+        assert_eq!(parse_address("-5"), None);
     }
 }
