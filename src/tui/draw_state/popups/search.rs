@@ -1,12 +1,11 @@
 use crate::app::App;
 use crate::constants::SEARCH_POPUP_MAX_HEIGHT_PERCENT;
-use crate::register::RegisterCell;
-use crate::state::SearchParams;
+use crate::state::{SearchMatch, SearchParams};
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use ratatui::style::Style;
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 
 const LABEL_W: usize = 24;
@@ -41,11 +40,9 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, sear
         }
     } else {
         for i in top..end {
-            let (cell, text) = &search.matches[i];
             lines.push(row(
                 theme,
-                *cell,
-                text,
+                &search.matches[i],
                 &search.query,
                 i as u16 == search.selected,
             ));
@@ -64,15 +61,9 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, sear
     super::render(frame, area, theme, "Go to", width, lines);
 }
 
-fn row(
-    theme: &Theme,
-    cell: RegisterCell,
-    text: &str,
-    query: &str,
-    selected: bool,
-) -> Line<'static> {
+fn row(theme: &Theme, m: &SearchMatch, query: &str, selected: bool) -> Line<'static> {
     let style = |s: Style| if selected { theme.selected_style() } else { s };
-    let (kind, address) = cell;
+    let (kind, address) = m.cell;
 
     let mut spans = vec![
         Span::styled(format!(" {address:>5}  "), style(theme.accent_style())),
@@ -81,6 +72,22 @@ fn row(
             style(theme.dim_style()),
         ),
     ];
+
+    if m.labeled {
+        spans.extend(label_spans(theme, &m.text, query, selected));
+    } else {
+        spans.push(Span::styled(
+            m.text.clone(),
+            style(theme.dim_style()).add_modifier(Modifier::ITALIC),
+        ));
+    }
+
+    Line::from(spans)
+}
+
+fn label_spans(theme: &Theme, text: &str, query: &str, selected: bool) -> Vec<Span<'static>> {
+    let style = |s: Style| if selected { theme.selected_style() } else { s };
+    let mut spans = Vec::new();
 
     let chars: Vec<char> = text.chars().collect();
     let truncated = chars.len() > LABEL_W;
@@ -115,7 +122,7 @@ fn row(
         spans.push(Span::styled("\u{2026}", style(theme.dim_style())));
     }
 
-    Line::from(spans)
+    spans
 }
 
 fn label_span(theme: &Theme, text: String, hit: bool, selected: bool) -> Span<'static> {

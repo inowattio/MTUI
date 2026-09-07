@@ -1,6 +1,6 @@
 use super::{App, fuzzy_score};
 use crate::register::{RegisterCell, RegisterType};
-use crate::state::{LabelParams, Popup, ReadPanel, SearchParams};
+use crate::state::{LabelParams, Popup, ReadPanel, SearchMatch, SearchParams};
 
 impl App {
     fn search_mut(&mut self) -> Option<&mut SearchParams> {
@@ -55,7 +55,7 @@ impl App {
     pub fn search_commit(&mut self) {
         let target = self
             .popup_as::<SearchParams>()
-            .and_then(|s| s.matches.get(s.selected as usize).map(|(cell, _)| *cell));
+            .and_then(|s| s.matches.get(s.selected as usize).map(|m| m.cell));
         let Some((register_type, position)) = target else {
             return;
         };
@@ -115,7 +115,7 @@ impl App {
             _ => (current_type, false),
         };
 
-        let mut matches: Vec<(RegisterCell, String)> = Vec::new();
+        let mut matches: Vec<SearchMatch> = Vec::new();
 
         let numeric_query = if has_explicit_type {
             &query[1..]
@@ -123,19 +123,29 @@ impl App {
             query.as_str()
         };
 
-        if let Some((address, text)) = parse_target(numeric_query, current_position) {
-            matches.push(((register_type, address), text));
+        if let Some((address, hint)) = parse_target(numeric_query, current_position) {
+            let cell = (register_type, address);
+            matches.push(match self.labels.get(&cell) {
+                Some(label) => SearchMatch::label(cell, label.clone()),
+                None => SearchMatch::hint(cell, hint),
+            });
         }
+        let target = matches.first().map(|m| m.cell);
 
         let mut scored: Vec<(i32, RegisterCell, String)> = self
             .labels
             .iter()
+            .filter(|&(&cell, _)| Some(cell) != target)
             .filter_map(|(&cell, text)| {
                 fuzzy_score(&query, text).map(|score| (score, cell, text.clone()))
             })
             .collect();
         scored.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
-        matches.extend(scored.into_iter().map(|(_, cell, text)| (cell, text)));
+        matches.extend(
+            scored
+                .into_iter()
+                .map(|(_, cell, text)| SearchMatch::label(cell, text)),
+        );
 
         let rows = self.search_rows.get();
         if let Some(s) = self.search_mut() {

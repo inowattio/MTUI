@@ -608,10 +608,35 @@ impl SlaveParams {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct SearchMatch {
+    pub cell: RegisterCell,
+    pub text: String,
+    pub labeled: bool,
+}
+
+impl SearchMatch {
+    pub fn label(cell: RegisterCell, text: String) -> Self {
+        Self {
+            cell,
+            text,
+            labeled: true,
+        }
+    }
+
+    pub fn hint(cell: RegisterCell, text: String) -> Self {
+        Self {
+            cell,
+            text,
+            labeled: false,
+        }
+    }
+}
+
 #[derive(Debug, Default, PartialEq)]
 pub struct SearchParams {
     pub query: String,
-    pub matches: Vec<(RegisterCell, String)>,
+    pub matches: Vec<SearchMatch>,
     pub selected: u16,
     pub top: u16,
 }
