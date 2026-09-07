@@ -101,17 +101,24 @@ fn draw_fields(params: &SettingsParams, app: &App, frame: &mut Frame, area: Rect
         }
     }
 
-    let hint = matches!(params.current_category(), SettingsCategory::Theme).then(|| {
-        hints::footer(
+    let mut footer_lines = Vec::new();
+    if let Some(field) = params.current_field().filter(|_| focused) {
+        footer_lines.push(Line::from(Span::styled(
+            format!("  {}", description(field)),
+            theme.dim_style(),
+        )));
+    }
+    if matches!(params.current_category(), SettingsCategory::Theme) {
+        footer_lines.push(hints::footer(
             theme,
             [
                 Hint::pair(KeyCode::Left, KeyCode::Right, "Cycle"),
                 Hint::pair(KeyCode::Char('0'), KeyCode::Char('9'), "256-color index"),
                 Hint::key(KeyCode::Backspace, "Delete / reset"),
             ],
-        )
-    });
-    let (mut list, footer) = hint_split(area, hint.is_some());
+        ));
+    }
+    let (mut list, footer) = footer_split(area, footer_lines.len() as u16);
     let more_row = more_row(&mut list, footer.is_some(), lines.len());
 
     let height = list.height as usize;
@@ -122,20 +129,20 @@ fn draw_fields(params: &SettingsParams, app: &App, frame: &mut Frame, area: Rect
         let below = field_lines.iter().filter(|&&l| l >= top + height).count();
         frame.render_widget(Paragraph::new(hints::more(theme, above, below)), row);
     }
-    render_hint(frame, footer, hint);
+    render_footer(frame, footer, footer_lines);
 }
 
-fn hint_split(area: Rect, has_hint: bool) -> (Rect, Option<Rect>) {
-    if !has_hint || area.height < 3 {
+fn footer_split(area: Rect, rows: u16) -> (Rect, Option<Rect>) {
+    if rows == 0 || area.height < rows + 2 {
         return (area, None);
     }
     let list = Rect {
-        height: area.height - 2,
+        height: area.height - rows - 1,
         ..area
     };
     let footer = Rect {
-        y: area.y + area.height - 1,
-        height: 1,
+        y: area.y + area.height - rows,
+        height: rows,
         ..area
     };
     (list, Some(footer))
@@ -158,9 +165,93 @@ fn more_row(list: &mut Rect, has_hint: bool, len: usize) -> Option<Rect> {
     })
 }
 
-fn render_hint(frame: &mut Frame, footer: Option<Rect>, hint: Option<Line<'static>>) {
-    if let (Some(footer), Some(hint)) = (footer, hint) {
-        frame.render_widget(Paragraph::new(hint), footer);
+fn render_footer(frame: &mut Frame, footer: Option<Rect>, lines: Vec<Line<'static>>) {
+    if let Some(footer) = footer {
+        frame.render_widget(Paragraph::new(lines), footer);
+    }
+}
+
+fn description(field: SettingsField) -> &'static str {
+    match field {
+        SettingsField::Name => "Name shown in the title bar for this configuration",
+        SettingsField::RegistersBatch => {
+            "How many registers each read request fetches around the cursor"
+        }
+        SettingsField::BatchAnchor => {
+            "Where the cursor sits inside the read batch: start, middle or end"
+        }
+        SettingsField::ReadFullCustoms => {
+            "Also read every register a custom rule spans, even outside the batch"
+        }
+        SettingsField::CustomBatchBySize => {
+            "In the Custom panel, size the batch by registers instead of rules"
+        }
+        SettingsField::AutoUpdate => "Delay between automatic reads, 0 turns auto-refresh off",
+        SettingsField::ReconnectOnTimeout => "Reconnect to the device after a read times out",
+        SettingsField::HistoryCap => "Samples kept per register for the value graph",
+        SettingsField::MatrixCols => "Registers per row in the Matrix panel",
+        SettingsField::ReadOnly => "Refuse all writes from the UI and the API",
+        SettingsField::LogWrites => "Append every write to a log file",
+        SettingsField::ApiPort => "Port for the HTTP API, 0 picks any free port, off disables it",
+        SettingsField::ApiSlaveOverride => {
+            "Let API requests target a slave id other than the configured one"
+        }
+        SettingsField::SavePositionOnExit => {
+            "Store the cursor position as the startup position when quitting"
+        }
+        SettingsField::StartupPanel => "Panel opened on start",
+        SettingsField::StartupType => "Register type selected on start",
+        SettingsField::StartupAddress => "Address the cursor starts on",
+        SettingsField::CycleHoldings => "Include holding registers when cycling register types",
+        SettingsField::CycleInputs => "Include input registers when cycling register types",
+        SettingsField::CycleCoils => "Include coils when cycling register types",
+        SettingsField::CycleDiscretes => "Include discrete inputs when cycling register types",
+        SettingsField::CyclePinned => "Include the Pinned panel when cycling panels",
+        SettingsField::CycleLabeled => "Include the Labeled panel when cycling panels",
+        SettingsField::CycleCustom => "Include the Custom panel when cycling panels",
+        SettingsField::CycleMatrix => "Include the Matrix panel when cycling panels",
+        SettingsField::IgnoreDirty => {
+            "Quit or switch configuration without asking about unsaved changes"
+        }
+        SettingsField::ShowMock => "Offer the built-in mock device in Discovery",
+        SettingsField::ClearPins => "Remove every pinned register",
+        SettingsField::ClearLabels => "Remove every label",
+        SettingsField::ClearCustom => "Remove every custom rule",
+        SettingsField::ShowContinuation => {
+            "Mark registers that belong to a multi-register custom rule"
+        }
+        SettingsField::ShowClock => "Show the current time in the bottom bar",
+        SettingsField::ShowFrameTime => "Show how long each frame takes to render",
+        SettingsField::ShowRam => "Show the memory used by the application",
+        SettingsField::ShowAscii => "Show the read registers decoded as an ASCII string",
+        SettingsField::ShowInactiveTabs => {
+            "Show every panel and register type tab, not just the active one"
+        }
+        SettingsField::ShowReadWindow => {
+            "Highlight the address range covered by the current read batch"
+        }
+        SettingsField::GraphTimeAxis => "Plot the graph against time instead of sample count",
+        SettingsField::ChangedExpiry => {
+            "How long a changed value stays highlighted, 0 never clears it"
+        }
+        SettingsField::PaddingHorizontal => "Empty columns kept on both sides of the interface",
+        SettingsField::PaddingVertical => "Empty rows kept above and below the interface",
+        SettingsField::ThemePreset => "Switch between the built-in color schemes",
+        SettingsField::ThemeBg => "Background color",
+        SettingsField::ThemeBorder => "Color of the frame borders",
+        SettingsField::ThemeAccent => "Color for titles, keys and highlights",
+        SettingsField::ThemeText => "Main text color",
+        SettingsField::ThemeDim => "Color for secondary and muted text",
+        SettingsField::ThemeChanged => "Color for values that changed recently",
+        SettingsField::ThemeZebra => "Background of alternating table rows",
+        SettingsField::ThemeOk => "Color for success and connected states",
+        SettingsField::ThemeWarn => "Color for warnings",
+        SettingsField::ThemeErr => "Color for errors",
+        SettingsField::ThemeSelectedFg => "Text color of the selected row",
+        SettingsField::ThemeSelectedBg => "Background color of the selected row",
+        SettingsField::Save => "Write the current settings to the configuration file",
+        SettingsField::LoadConfig => "Path of a configuration file to load now",
+        SettingsField::NextConfig => "Configuration file loaded by the cycle config key",
     }
 }
 
@@ -437,7 +528,7 @@ fn draw_keybinds(params: &SettingsParams, app: &App, frame: &mut Frame, area: Re
     )));
     lines.push(Line::default());
 
-    let (list, footer) = hint_split(area, true);
+    let (list, footer) = footer_split(area, 1);
     let visible = list.height.saturating_sub(3).max(1);
     let top = scroll_offset(
         params.kb_selected as usize,
@@ -499,7 +590,7 @@ fn draw_keybinds(params: &SettingsParams, app: &App, frame: &mut Frame, area: Re
         let more = hints::more(theme, top as usize, (count - end) as usize);
         frame.render_widget(Paragraph::new(more), row);
     }
-    render_hint(frame, footer, Some(hint));
+    render_footer(frame, footer, vec![hint]);
 }
 
 #[cfg(test)]
