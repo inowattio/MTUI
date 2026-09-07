@@ -84,8 +84,14 @@ fn draw_fields(params: &SettingsParams, app: &App, frame: &mut Frame, area: Rect
     )));
     lines.push(Line::default());
 
+    let mut selected_line = None;
+    let mut field_lines = Vec::new();
     for (i, &field) in params.current_fields().iter().enumerate() {
         let selected = focused && i as u16 == params.field;
+        if selected {
+            selected_line = Some(lines.len());
+        }
+        field_lines.push(lines.len());
         lines.push(render_field(app, params, field, selected, theme));
         if field == SettingsField::LogWrites {
             lines.push(Line::from(Span::styled(
@@ -95,19 +101,74 @@ fn draw_fields(params: &SettingsParams, app: &App, frame: &mut Frame, area: Rect
         }
     }
 
-    if matches!(params.current_category(), SettingsCategory::Theme) {
-        lines.push(Line::default());
-        lines.push(hints::footer(
+    let hint = matches!(params.current_category(), SettingsCategory::Theme).then(|| {
+        hints::footer(
             theme,
             [
                 Hint::pair(KeyCode::Left, KeyCode::Right, "Cycle"),
                 Hint::pair(KeyCode::Char('0'), KeyCode::Char('9'), "256-color index"),
                 Hint::key(KeyCode::Backspace, "Delete / reset"),
             ],
-        ));
-    }
+        )
+    });
+    let (mut list, footer) = hint_split(area, hint.is_some());
+    let more_row = more_row(&mut list, footer.is_some(), lines.len());
 
-    frame.render_widget(Paragraph::new(lines), area);
+    let height = list.height as usize;
+    let top = scroll_offset(selected_line.unwrap_or(0), lines.len(), height);
+    frame.render_widget(Paragraph::new(lines).scroll((top as u16, 0)), list);
+    if let Some(row) = more_row {
+        let above = field_lines.iter().filter(|&&l| l < top).count();
+        let below = field_lines.iter().filter(|&&l| l >= top + height).count();
+        frame.render_widget(Paragraph::new(hints::more(theme, above, below)), row);
+    }
+    render_hint(frame, footer, hint);
+}
+
+fn hint_split(area: Rect, has_hint: bool) -> (Rect, Option<Rect>) {
+    if !has_hint || area.height < 3 {
+        return (area, None);
+    }
+    let list = Rect {
+        height: area.height - 2,
+        ..area
+    };
+    let footer = Rect {
+        y: area.y + area.height - 1,
+        height: 1,
+        ..area
+    };
+    (list, Some(footer))
+}
+
+fn more_row(list: &mut Rect, has_hint: bool, len: usize) -> Option<Rect> {
+    if len <= list.height as usize {
+        return None;
+    }
+    if !has_hint {
+        if list.height < 2 {
+            return None;
+        }
+        list.height -= 1;
+    }
+    Some(Rect {
+        y: list.y + list.height,
+        height: 1,
+        ..*list
+    })
+}
+
+fn render_hint(frame: &mut Frame, footer: Option<Rect>, hint: Option<Line<'static>>) {
+    if let (Some(footer), Some(hint)) = (footer, hint) {
+        frame.render_widget(Paragraph::new(hint), footer);
+    }
+}
+
+fn scroll_offset(selected: usize, len: usize, height: usize) -> usize {
+    let height = height.max(1);
+    selected
+        .saturating_sub(height / 2)
+        .min(len.saturating_sub(height))
 }
 
 fn draw_footer(params: &SettingsParams, app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
@@ -376,8 +437,14 @@ fn draw_keybinds(params: &SettingsParams, app: &App, frame: &mut Frame, area: Re
     )));
     lines.push(Line::default());
 
-    let top = params.kb_top;
-    let end = (top + SettingsParams::KB_VISIBLE).min(count);
+    let (list, footer) = hint_split(area, true);
+    let visible = list.height.saturating_sub(3).max(1);
+    let top = scroll_offset(
+        params.kb_selected as usize,
+        count as usize,
+        visible as usize,
+    ) as u16;
+    let end = (top + visible).min(count);
     for idx in top..end {
         let action = actions[idx as usize];
         let key = kb.get(action);
@@ -409,7 +476,6 @@ fn draw_keybinds(params: &SettingsParams, app: &App, frame: &mut Frame, area: Re
         lines.push(Line::from(spans));
     }
 
-    lines.push(Line::default());
     let hint = if params.kb_capturing {
         hints::footer(theme, [Hint::key(KeyCode::Esc, "Cancel")])
     } else {
@@ -422,7 +488,50 @@ fn draw_keybinds(params: &SettingsParams, app: &App, frame: &mut Frame, area: Re
             ],
         )
     };
-    lines.push(hint);
 
-    frame.render_widget(Paragraph::new(lines), area);
+    frame.render_widget(Paragraph::new(lines), list);
+    if footer.is_some() && (top > 0 || end < count) {
+        let row = Rect {
+            y: list.y + list.height,
+            height: 1,
+            ..list
+        };
+        let more = hints::more(theme, top as usize, (count - end) as usize);
+        frame.render_widget(Paragraph::new(more), row);
+    }
+    render_hint(frame, footer, Some(hint));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::scroll_offset;
+
+    #[test]
+    fn selection_is_centered_once_the_list_overflows() {
+        assert_eq!(scroll_offset(3, 30, 10), 0);
+        assert_eq!(scroll_offset(5, 30, 10), 0);
+        assert_eq!(scroll_offset(12, 30, 10), 7);
+        assert_eq!(scroll_offset(24, 30, 10), 19);
+    }
+
+    #[test]
+    fn offset_never_scrolls_past_the_end_or_below_zero() {
+        assert_eq!(scroll_offset(29, 30, 10), 20);
+        assert_eq!(scroll_offset(0, 30, 10), 0);
+        assert_eq!(scroll_offset(2, 5, 10), 0);
+        assert_eq!(scroll_offset(7, 30, 0), 7);
+    }
+
+    #[test]
+    fn selection_stays_inside_the_window() {
+        for height in 1..12usize {
+            for selected in 0..40usize {
+                let top = scroll_offset(selected, 40, height);
+                assert!(
+                    top <= selected && selected < top + height,
+                    "{selected} {height}"
+                );
+            }
+        }
+    }
 }

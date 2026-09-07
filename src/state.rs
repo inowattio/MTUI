@@ -1038,12 +1038,11 @@ pub struct SettingsParams {
     pub load_path: String,
     pub previous: ReadParams,
     pub kb_selected: u16,
-    pub kb_top: u16,
     pub kb_capturing: bool,
 }
 
 impl SettingsParams {
-    pub const KB_VISIBLE: u16 = 14;
+    pub const KB_PAGE: u16 = 10;
 
     pub fn current_category(&self) -> SettingsCategory {
         SettingsCategory::ALL[self.category as usize]
@@ -1062,7 +1061,6 @@ impl SettingsParams {
         self.field = 0;
         if self.current_category().is_keybinds() {
             self.kb_selected = 0;
-            self.kb_top = 0;
             self.kb_capturing = false;
         }
     }
@@ -1072,7 +1070,6 @@ impl SettingsParams {
             return;
         }
         self.kb_selected = wrap_index(self.kb_selected, count, !up);
-        self.kb_scroll_into_view(count);
     }
 
     pub fn kb_page(&mut self, up: bool, count: u16) {
@@ -1080,20 +1077,12 @@ impl SettingsParams {
             return;
         }
         self.kb_selected = if up {
-            self.kb_selected.saturating_sub(Self::KB_VISIBLE)
+            self.kb_selected.saturating_sub(Self::KB_PAGE)
         } else {
-            (self.kb_selected + Self::KB_VISIBLE).min(count - 1)
+            self.kb_selected
+                .saturating_add(Self::KB_PAGE)
+                .min(count - 1)
         };
-        self.kb_scroll_into_view(count);
-    }
-
-    fn kb_scroll_into_view(&mut self, count: u16) {
-        scroll_window(
-            &mut self.kb_selected,
-            &mut self.kb_top,
-            Self::KB_VISIBLE,
-            count,
-        );
     }
 }
 
