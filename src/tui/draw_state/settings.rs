@@ -272,6 +272,10 @@ fn field_view(
             on_off(device.cycle_types.discretes),
             None,
         ),
+        SettingsField::CyclePinned => ("Cycle pinned", on_off(device.cycle_panels.pinned), None),
+        SettingsField::CycleLabeled => ("Cycle labeled", on_off(device.cycle_panels.labeled), None),
+        SettingsField::CycleCustom => ("Cycle custom", on_off(device.cycle_panels.custom), None),
+        SettingsField::CycleMatrix => ("Cycle matrix", on_off(device.cycle_panels.matrix), None),
         SettingsField::ClearPins => (
             "Clear pinned registers",
             format!("{} pinned", app.pinned_registers.len()),

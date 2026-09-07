@@ -1,6 +1,6 @@
 use super::popups::draw_popup;
 use crate::app::App;
-use crate::config::Column;
+use crate::config::{Column, Config};
 use crate::constants::{NO_VALUE, UNINTERPRETABLE};
 use crate::interpretator::fmt_num;
 use crate::register::{RegisterCell, RegisterType};
@@ -17,12 +17,16 @@ use ratatui::widgets::{
     Axis, Block, Cell, Chart, Dataset, GraphType, LegendPosition, Paragraph, Row, Table,
 };
 
-fn panel_block(theme: &Theme, active: ReadPanel, show_inactive: bool) -> Block<'static> {
-    if !show_inactive {
+fn panel_block(theme: &Theme, active: ReadPanel, config: &Config) -> Block<'static> {
+    if !config.show_inactive_tabs {
         return theme.tabbed_panel(&[active.name()], 0);
     }
-    let names = ReadPanel::ALL.map(ReadPanel::name);
-    let index = ReadPanel::ALL.iter().position(|&p| p == active);
+    let panels: Vec<ReadPanel> = ReadPanel::ALL
+        .into_iter()
+        .filter(|&p| config.cycle_panels.enabled(p) || p == active)
+        .collect();
+    let names: Vec<&'static str> = panels.iter().map(|&p| p.name()).collect();
+    let index = panels.iter().position(|&p| p == active);
     theme.tabbed_panel(&names, index.unwrap_or(0))
 }
 
@@ -145,7 +149,7 @@ impl TableCtx<'_> {
             }
         }
 
-        let mut block = panel_block(theme, ReadPanel::Main, app.config.show_inactive_tabs);
+        let mut block = panel_block(theme, ReadPanel::Main, &app.config);
         if let Some(error) = &params.read_error {
             block = block.title_bottom(
                 Line::styled(format!("\u{26a0} {error}"), theme.err_style()).left_aligned(),
@@ -216,7 +220,7 @@ impl TableCtx<'_> {
             rows.push((text, style));
         }
 
-        let mut block = panel_block(theme, params.panel, app.config.show_inactive_tabs);
+        let mut block = panel_block(theme, params.panel, &app.config);
         if let Some(ascii) = ascii {
             block = block.title_top(ascii_title(ascii, theme));
         }
@@ -278,7 +282,7 @@ impl TableCtx<'_> {
             table_rows,
             Cell::from(header),
             theme,
-            panel_block(theme, ReadPanel::Matrix, app.config.show_inactive_tabs),
+            panel_block(theme, ReadPanel::Matrix, &app.config),
         )
     }
 }
@@ -445,11 +449,7 @@ pub fn draw(
             if len == 0 {
                 let t = Table::new(Vec::<Row>::new(), [Constraint::Percentage(100)])
                     .header(Row::new([Cell::from(header)]).style(theme.header_style()))
-                    .block(panel_block(
-                        theme,
-                        params.panel,
-                        app.config.show_inactive_tabs,
-                    ));
+                    .block(panel_block(theme, params.panel, &app.config));
                 frame.render_widget(t, rows[1]);
 
                 let kb = &app.config.keybinds;

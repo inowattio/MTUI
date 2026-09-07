@@ -817,7 +817,7 @@ mod tests {
     use super::{App, BackgroundTask};
     use super::{custom_full_spans, read_run_len};
     #[cfg(not(target_arch = "wasm32"))]
-    use crate::config::Config;
+    use crate::config::{Config, CyclePanels};
     use crate::custom::{CustomRepr, CustomRule};
     #[cfg(not(target_arch = "wasm32"))]
     use crate::modbus::{
@@ -1210,5 +1210,41 @@ mod tests {
             !device.is_poisoned(),
             "nothing was interrupted, no reconnect needed"
         );
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn panel_cycle_skips_disabled_panels() {
+        let mut app = App::boot(Config::default(), String::new()).await;
+        app.config.cycle_panels.pinned = false;
+        app.config.cycle_panels.custom = false;
+        app.read_mut().panel = ReadPanel::Main;
+
+        app.toggle_panel(true);
+        assert_eq!(app.read_mut().panel, ReadPanel::Labeled);
+        app.toggle_panel(true);
+        assert_eq!(app.read_mut().panel, ReadPanel::Matrix);
+        app.toggle_panel(true);
+        assert_eq!(app.read_mut().panel, ReadPanel::Main);
+        app.toggle_panel(false);
+        assert_eq!(app.read_mut().panel, ReadPanel::Matrix);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn panel_cycle_stays_on_main_when_every_panel_is_disabled() {
+        let mut app = App::boot(Config::default(), String::new()).await;
+        app.config.cycle_panels = CyclePanels {
+            pinned: false,
+            labeled: false,
+            custom: false,
+            matrix: false,
+        };
+        app.read_mut().panel = ReadPanel::Main;
+
+        app.toggle_panel(true);
+        assert_eq!(app.read_mut().panel, ReadPanel::Main);
+        app.toggle_panel(false);
+        assert_eq!(app.read_mut().panel, ReadPanel::Main);
     }
 }

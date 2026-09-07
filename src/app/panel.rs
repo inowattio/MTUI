@@ -140,6 +140,18 @@ impl App {
             .max(1)
     }
 
+    pub fn toggle_panel(&mut self, forward: bool) {
+        let enabled = self.config.cycle_panels;
+        let mut next = self.read().panel;
+        for _ in 0..ReadPanel::ALL.len() {
+            next = cycle(&ReadPanel::ALL, next, forward);
+            if enabled.enabled(next) {
+                break;
+            }
+        }
+        self.read_mut().panel = next;
+    }
+
     pub fn cursor_cell(&self) -> RegisterCell {
         let (panel, register_type, position, index) = {
             let p = self.read();

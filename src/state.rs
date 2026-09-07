@@ -6,7 +6,7 @@ use crate::modbus::{
     DataBits, DeviceConfig, DeviceIdAccess, Interface, InterfaceNetworkParams,
     InterfaceWiredParams, Parity, StopBits, WordOrder,
 };
-use crate::num_ops::{cycle, wrap_index};
+use crate::num_ops::wrap_index;
 use crate::register::{RegisterCell, RegisterType};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
@@ -724,6 +724,10 @@ field_enum! {
         CycleInputs,
         CycleCoils,
         CycleDiscretes,
+        CyclePinned,
+        CycleLabeled,
+        CycleCustom,
+        CycleMatrix,
         IgnoreDirty,
         ShowMock,
         ClearPins,
@@ -794,6 +798,10 @@ impl SettingsField {
                 | SettingsField::CycleInputs
                 | SettingsField::CycleCoils
                 | SettingsField::CycleDiscretes
+                | SettingsField::CyclePinned
+                | SettingsField::CycleLabeled
+                | SettingsField::CycleCustom
+                | SettingsField::CycleMatrix
                 | SettingsField::ThemePreset
         )
     }
@@ -813,6 +821,16 @@ impl SettingsField {
             SettingsField::CycleInputs => RegisterType::Input,
             SettingsField::CycleCoils => RegisterType::Coil,
             SettingsField::CycleDiscretes => RegisterType::Discrete,
+            _ => return None,
+        })
+    }
+
+    pub fn cycle_panel(self) -> Option<ReadPanel> {
+        Some(match self {
+            SettingsField::CyclePinned => ReadPanel::Pinned,
+            SettingsField::CycleLabeled => ReadPanel::Labeled,
+            SettingsField::CycleCustom => ReadPanel::Custom,
+            SettingsField::CycleMatrix => ReadPanel::Matrix,
             _ => return None,
         })
     }
@@ -898,6 +916,10 @@ impl SettingsCategory {
                 CycleInputs,
                 CycleCoils,
                 CycleDiscretes,
+                CyclePinned,
+                CycleLabeled,
+                CycleCustom,
+                CycleMatrix,
             ],
             SettingsCategory::Api => &[ApiPort, ApiSlaveOverride, LogWrites],
             SettingsCategory::Display => &[
@@ -1207,10 +1229,6 @@ impl ReadParams {
         }
         let max_start = u16::MAX - (rows - 1);
         self.window_start = self.position.saturating_sub(rows / 2).min(max_start);
-    }
-
-    pub fn toggle_panel(&mut self, forward: bool) {
-        self.panel = cycle(&ReadPanel::ALL, self.panel, forward);
     }
 
     pub fn scroll_pinned(&mut self, rows: u16, len: u16) {

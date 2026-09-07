@@ -181,6 +181,13 @@ impl App {
                 let rt = field.cycle_register_type().expect("cycle field");
                 self.config.cycle_types.toggle(rt);
             }
+            SettingsField::CyclePinned
+            | SettingsField::CycleLabeled
+            | SettingsField::CycleCustom
+            | SettingsField::CycleMatrix => {
+                let panel = field.cycle_panel().expect("cycle field");
+                self.config.cycle_panels.toggle(panel);
+            }
             SettingsField::ThemePreset => {
                 let presets = Theme::PRESETS;
                 let index = match presets.iter().position(|&(_, t)| t == self.config.theme) {

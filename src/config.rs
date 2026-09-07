@@ -39,6 +39,7 @@ pub struct Config {
     pub padding_horizontal: u16,
     pub padding_vertical: u16,
     pub cycle_types: CycleTypes,
+    pub cycle_panels: CyclePanels,
     pub port: Option<u16>,
     pub allow_api_slave_id: bool,
     pub pinned_registers: PinnedRegisters,
@@ -247,6 +248,48 @@ impl CycleTypes {
     }
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[serde(default)]
+pub struct CyclePanels {
+    pub pinned: bool,
+    pub labeled: bool,
+    pub custom: bool,
+    pub matrix: bool,
+}
+
+impl Default for CyclePanels {
+    fn default() -> Self {
+        Self {
+            pinned: true,
+            labeled: true,
+            custom: true,
+            matrix: true,
+        }
+    }
+}
+
+impl CyclePanels {
+    pub fn enabled(&self, panel: ReadPanel) -> bool {
+        match panel {
+            ReadPanel::Main => true,
+            ReadPanel::Pinned => self.pinned,
+            ReadPanel::Labeled => self.labeled,
+            ReadPanel::Custom => self.custom,
+            ReadPanel::Matrix => self.matrix,
+        }
+    }
+
+    pub fn toggle(&mut self, panel: ReadPanel) {
+        match panel {
+            ReadPanel::Main => {}
+            ReadPanel::Pinned => self.pinned = !self.pinned,
+            ReadPanel::Labeled => self.labeled = !self.labeled,
+            ReadPanel::Custom => self.custom = !self.custom,
+            ReadPanel::Matrix => self.matrix = !self.matrix,
+        }
+    }
+}
+
 impl Config {
     pub fn display_device(&self) -> String {
         match &self.device.interface {
@@ -452,6 +495,7 @@ impl Default for Config {
             padding_horizontal: 0,
             padding_vertical: 0,
             cycle_types: CycleTypes::default(),
+            cycle_panels: CyclePanels::default(),
             port: None,
             allow_api_slave_id: false,
             pinned_registers: Default::default(),

@@ -161,7 +161,7 @@ async fn run_action(app: &mut App, action: KeybindAction) {
         NextConfig => app.cycle_config(),
         SwitchView | SwitchViewBack => {
             let rows = app.visible_rows.get();
-            app.read_mut().toggle_panel(action == SwitchView);
+            app.toggle_panel(action == SwitchView);
             let len = app.panel_len();
             let cols = app.config.matrix_cols;
             let scroll_rows = app.panel_scroll_rows();
