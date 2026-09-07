@@ -40,7 +40,7 @@ pub fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup
             &format!("Dump {} read register(s) to a file?", app.read_count()),
             &d.result,
         ),
-        Popup::Search(s) => search::draw(frame, area, theme, kb, s),
+        Popup::Search(s) => search::draw(frame, area, theme, app, s),
         Popup::Label(l) => label::draw(frame, area, theme, kb, l),
         Popup::Custom(c) => custom::draw(frame, area, theme, app, c),
         Popup::Columns(params) => columns::draw(frame, area, theme, app, params),

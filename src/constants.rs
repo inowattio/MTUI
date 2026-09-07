@@ -8,7 +8,7 @@ pub const UNINTERPRETABLE: &str = "\u{2205}";
 
 pub const EVENT_HANDLER_TICKRATE: Duration = Duration::from_millis(100);
 
-pub const SEARCH_POPUP_ROWS: u16 = 10;
+pub const SEARCH_POPUP_MAX_HEIGHT_PERCENT: u16 = 80;
 
 pub mod keybind {
     use crate::input::KeyCode;

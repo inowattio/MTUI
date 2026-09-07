@@ -377,6 +377,7 @@ pub struct App {
     reconnect: ReconnectState,
     pub visible_rows: Cell<u16>,
     pub h_max_offset: Cell<u16>,
+    pub search_rows: Cell<u16>,
     previous_position: Option<RegisterCell>,
     background_task: Option<BackgroundTask>,
     network_scan: Option<ScanProgress>,

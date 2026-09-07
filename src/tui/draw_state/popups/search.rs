@@ -1,5 +1,5 @@
-use crate::config::Keybinds;
-use crate::constants::SEARCH_POPUP_ROWS;
+use crate::app::App;
+use crate::constants::SEARCH_POPUP_MAX_HEIGHT_PERCENT;
 use crate::register::RegisterCell;
 use crate::state::SearchParams;
 use crate::tui::hints::{self, Hint};
@@ -11,15 +11,20 @@ use ratatui::text::{Line, Span};
 
 const LABEL_W: usize = 24;
 
-pub(super) fn draw(
-    frame: &mut Frame,
-    area: Rect,
-    theme: &Theme,
-    kb: &Keybinds,
-    search: &SearchParams,
-) {
+const CHROME_ROWS: u16 = 7;
+
+fn max_rows(area: Rect) -> u16 {
+    let budget = u32::from(area.height) * u32::from(SEARCH_POPUP_MAX_HEIGHT_PERCENT) / 100;
+    (budget as u16).saturating_sub(CHROME_ROWS).max(1)
+}
+
+pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, search: &SearchParams) {
+    let kb = &app.config.keybinds;
+    let rows = max_rows(area);
+    app.search_rows.set(rows);
+
     let len = search.matches.len();
-    let (top, end) = super::window(search.top as usize, SEARCH_POPUP_ROWS as usize, len);
+    let (top, end) = super::window(search.top as usize, rows as usize, len);
 
     let mut lines = vec![
         super::query_line(theme, &search.query, len),

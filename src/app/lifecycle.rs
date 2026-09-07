@@ -62,6 +62,7 @@ impl App {
             reconnect: ReconnectState::default(),
             visible_rows: Cell::new(1),
             h_max_offset: Cell::new(0),
+            search_rows: Cell::new(1),
             previous_position: None,
             background_task: None,
             network_scan: None,
