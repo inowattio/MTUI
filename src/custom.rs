@@ -353,7 +353,7 @@ mod tests {
     }
 
     #[test]
-    fn qword_needs_four_words() {
+    fn dword_needs_four_words() {
         let r = rule(CustomRepr::U64);
         assert_eq!(r.evaluate(&[0, 1, 0], WordOrder::ABCD), "");
         assert_eq!(r.evaluate(&[0, 1, 0, 0], WordOrder::ABCD), "4294967296");

@@ -113,7 +113,7 @@ fn word(value: u32, index: u16) -> u16 {
     }
 }
 
-fn qword(value: u64, index: u16) -> u16 {
+fn dword(value: u64, index: u16) -> u16 {
     (value >> (48 - 16 * index)) as u16
 }
 
@@ -281,7 +281,7 @@ impl MockContext {
                 word(var as u32, addr - 14)
             }
             16 | 17 => m10k(self.energy_wh(t) as u32, addr - 16),
-            20..=23 => qword((self.energy_wh(t) / 1000.0).to_bits(), addr - 20),
+            20..=23 => dword((self.energy_wh(t) / 1000.0).to_bits(), addr - 20),
             30 => t as u16,
             31 => ((t * 100.0) as u16) % 1000,
             32 => ((t / 5.0) as u64 % 2) as u16,
