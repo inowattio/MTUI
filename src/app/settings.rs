@@ -316,16 +316,7 @@ impl App {
         let Some(path) = self.settings().map(|s| s.load_path.trim().to_string()) else {
             return;
         };
-        if !self.free_background_slot() {
-            self.set_settings_status(StatusMessage::info("Device is busy."));
-            return;
-        }
-        match self.start_config_load(path) {
-            Ok(()) => self.set_settings_status(StatusMessage::info("Loading\u{2026}")),
-            Err(error) => {
-                log::error!("{error}");
-                self.set_settings_status(StatusMessage::err(error));
-            }
-        }
+        let status = self.load_config_from(path);
+        self.set_settings_status(status);
     }
 }

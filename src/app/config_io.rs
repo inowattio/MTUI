@@ -170,14 +170,30 @@ impl App {
         &self.config_path
     }
 
-    pub(super) fn start_config_load(&mut self, path: String) -> Result<(), String> {
+    fn read_config_file(path: &str) -> Result<Config, String> {
         if path.is_empty() {
             return Err("Load failed: enter a file name".to_string());
         }
-        let content = fs::read_to_string(&path).map_err(|e| format!("Load failed: {e}"))?;
-        let config: Config =
-            serde_json::from_str(&content).map_err(|e| format!("Load failed: {e}"))?;
+        let content = fs::read_to_string(path).map_err(|e| format!("Load failed: {e}"))?;
+        serde_json::from_str(&content).map_err(|e| format!("Load failed: {e}"))
+    }
 
+    pub(super) fn load_config_from(&mut self, path: String) -> StatusMessage {
+        let config = match Self::read_config_file(&path) {
+            Ok(config) => config,
+            Err(error) => {
+                log::error!("{error}");
+                return StatusMessage::err(error);
+            }
+        };
+        if !self.free_background_slot() {
+            return StatusMessage::info("Device is busy.");
+        }
+        self.spawn_config_load(path, config);
+        StatusMessage::info("Loading\u{2026}")
+    }
+
+    fn spawn_config_load(&mut self, path: String, config: Config) {
         let previous = self.take_device();
         let device_config = config.device.clone();
         self.background_task = Some(BackgroundTask::LoadConfig(compat::spawn(async move {
@@ -190,7 +206,6 @@ impl App {
                 result,
             }
         })));
-        Ok(())
     }
 
     pub(super) fn apply_load_config_result(&mut self, result: Option<LoadConfigTaskResult>) {
@@ -270,18 +285,8 @@ impl App {
     }
 
     fn load_config_target(&mut self, target: String) {
-        if !self.free_background_slot() {
-            self.set_read_status(StatusMessage::info("Device is busy."));
-            return;
-        }
-
-        match self.start_config_load(target) {
-            Ok(()) => self.set_read_status(StatusMessage::info("Loading\u{2026}")),
-            Err(error) => {
-                log::error!("{error}");
-                self.set_read_status(StatusMessage::err(error));
-            }
-        }
+        let status = self.load_config_from(target);
+        self.set_read_status(status);
     }
 
     pub fn commit_dump(&mut self) {
@@ -289,5 +294,67 @@ impl App {
         if let Some(d) = self.popup_as_mut::<DumpParams>() {
             d.result = Some(result);
         }
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use super::{App, BackgroundTask};
+    use crate::config::Config;
+    use crate::state::MessageKind;
+
+    async fn app_with_refresh_in_flight() -> App {
+        let mut app = App::boot(Config::default(), String::new()).await;
+        app.refresh().await;
+        assert!(matches!(
+            app.background_task,
+            Some(BackgroundTask::Refresh(_))
+        ));
+        app.open_settings();
+        app
+    }
+
+    fn settings_status(app: &App) -> MessageKind {
+        app.settings()
+            .and_then(|s| s.status.as_ref())
+            .map(|s| s.kind)
+            .expect("a status is shown")
+    }
+
+    #[tokio::test]
+    async fn an_unreadable_path_leaves_the_pending_read_and_device_alone() {
+        let mut app = app_with_refresh_in_flight().await;
+        let device = app.device.clone().expect("mock device");
+
+        for path in ["", "/nonexistent/mtui-config.json"] {
+            app.settings_mut().unwrap().load_path = path.to_string();
+            app.settings_load();
+            assert_eq!(settings_status(&app), MessageKind::Err);
+        }
+
+        assert!(matches!(
+            app.background_task,
+            Some(BackgroundTask::Refresh(_))
+        ));
+        assert!(!device.is_poisoned());
+    }
+
+    #[tokio::test]
+    async fn a_valid_path_frees_the_slot_and_starts_loading() {
+        let dir = std::env::temp_dir().join(format!("mtui-{}-load", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.json");
+        std::fs::write(&path, serde_json::to_string(&Config::default()).unwrap()).unwrap();
+
+        let mut app = app_with_refresh_in_flight().await;
+        app.settings_mut().unwrap().load_path = path.to_string_lossy().into_owned();
+        app.settings_load();
+
+        assert_eq!(settings_status(&app), MessageKind::Info);
+        assert!(matches!(
+            app.background_task,
+            Some(BackgroundTask::LoadConfig(_))
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
