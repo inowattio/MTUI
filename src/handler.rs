@@ -853,13 +853,18 @@ mod tests {
     async fn startup_fields_are_locked_while_the_position_is_saved_on_exit() {
         let mut app = app().await;
         app.open_settings();
-        let index = SettingsCategory::General
+        let category = SettingsCategory::ALL
+            .iter()
+            .position(|&c| c == SettingsCategory::Config)
+            .unwrap() as u16;
+        let index = SettingsCategory::Config
             .fields()
             .iter()
             .position(|&f| f == SettingsField::StartupAddress)
             .unwrap() as u16;
         {
             let s = app.settings_mut().unwrap();
+            s.category = category;
             s.focus = SettingsFocus::Fields;
             s.field = index;
         }

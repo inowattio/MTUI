@@ -867,7 +867,6 @@ impl SettingsField {
 field_enum! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub enum SettingsCategory {
-        General,
         Data,
         Api,
         Display,
@@ -880,7 +879,6 @@ field_enum! {
 impl SettingsCategory {
     pub fn label(self) -> &'static str {
         match self {
-            SettingsCategory::General => "General",
             SettingsCategory::Data => "Data",
             SettingsCategory::Api => "API",
             SettingsCategory::Display => "Display",
@@ -893,15 +891,6 @@ impl SettingsCategory {
     pub fn fields(self) -> &'static [SettingsField] {
         use SettingsField::*;
         match self {
-            SettingsCategory::General => &[
-                Name,
-                SavePositionOnExit,
-                StartupPanel,
-                StartupType,
-                StartupAddress,
-                IgnoreDirty,
-                ShowMock,
-            ],
             SettingsCategory::Data => &[
                 RegistersBatch,
                 BatchAnchor,
@@ -916,6 +905,11 @@ impl SettingsCategory {
                 CycleInputs,
                 CycleCoils,
                 CycleDiscretes,
+                ShowMock,
+                SavePositionOnExit,
+                StartupPanel,
+                StartupType,
+                StartupAddress,
             ],
             SettingsCategory::Api => &[ApiPort, ApiSlaveOverride, LogWrites],
             SettingsCategory::Display => &[
@@ -952,6 +946,8 @@ impl SettingsCategory {
             ],
             SettingsCategory::Keybinds => &[],
             SettingsCategory::Config => &[
+                Name,
+                IgnoreDirty,
                 ClearPins,
                 ClearLabels,
                 ClearCustom,
@@ -1335,7 +1331,7 @@ mod tests {
 
     #[test]
     fn the_save_position_toggle_sits_above_the_startup_fields() {
-        let fields = SettingsCategory::General.fields();
+        let fields = SettingsCategory::Config.fields();
         let position = |field| fields.iter().position(|&f| f == field).unwrap();
         assert!(
             position(SettingsField::SavePositionOnExit) < position(SettingsField::StartupPanel)
