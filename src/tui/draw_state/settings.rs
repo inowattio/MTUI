@@ -86,18 +86,25 @@ fn draw_fields(params: &SettingsParams, app: &App, frame: &mut Frame, area: Rect
 
     let mut selected_line = None;
     let mut field_lines = Vec::new();
-    for (i, &field) in params.current_fields().iter().enumerate() {
-        let selected = focused && i as u16 == params.field;
-        if selected {
-            selected_line = Some(lines.len());
+    let mut index = 0u16;
+    for (g, group) in params.current_category().groups().iter().enumerate() {
+        if g > 0 {
+            lines.push(Line::default());
         }
-        field_lines.push(lines.len());
-        lines.push(render_field(app, params, field, selected, theme));
-        if field == SettingsField::LogWrites {
-            lines.push(Line::from(Span::styled(
-                format!("  {:<24} {}", "", app.writes_log_path_string()),
-                theme.dim_style(),
-            )));
+        for &field in group.iter() {
+            let selected = focused && index == params.field;
+            if selected {
+                selected_line = Some(lines.len());
+            }
+            field_lines.push(lines.len());
+            lines.push(render_field(app, params, field, selected, theme));
+            if field == SettingsField::LogWrites {
+                lines.push(Line::from(Span::styled(
+                    format!("  {:<24} {}", "", app.writes_log_path_string()),
+                    theme.dim_style(),
+                )));
+            }
+            index += 1;
         }
     }
 

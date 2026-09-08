@@ -888,74 +888,76 @@ impl SettingsCategory {
         }
     }
 
-    pub fn fields(self) -> &'static [SettingsField] {
+    pub fn groups(self) -> &'static [&'static [SettingsField]] {
         use SettingsField::*;
         match self {
             SettingsCategory::Data => &[
-                RegistersBatch,
-                BatchAnchor,
-                ReadFullCustoms,
-                CustomBatchBySize,
-                AutoUpdate,
-                ReconnectOnTimeout,
-                ReadOnly,
-                HistoryCap,
-                MatrixCols,
-                CycleHoldings,
-                CycleInputs,
-                CycleCoils,
-                CycleDiscretes,
-                ShowMock,
-                SavePositionOnExit,
-                StartupPanel,
-                StartupType,
-                StartupAddress,
+                &[
+                    RegistersBatch,
+                    BatchAnchor,
+                    ReadFullCustoms,
+                    CustomBatchBySize,
+                ],
+                &[AutoUpdate, ReconnectOnTimeout, ReadOnly],
+                &[HistoryCap, MatrixCols],
+                &[CycleHoldings, CycleInputs, CycleCoils, CycleDiscretes],
+                &[
+                    ShowMock,
+                    SavePositionOnExit,
+                    StartupPanel,
+                    StartupType,
+                    StartupAddress,
+                ],
             ],
-            SettingsCategory::Api => &[ApiPort, ApiSlaveOverride, LogWrites],
+            SettingsCategory::Api => &[&[LogWrites], &[ApiPort, ApiSlaveOverride]],
             SettingsCategory::Display => &[
-                ShowClock,
-                ShowFrameTime,
-                ShowRam,
-                ShowAscii,
-                ShowInactiveTabs,
-                CyclePinned,
-                CycleLabeled,
-                CycleCustom,
-                CycleMatrix,
-                ShowReadWindow,
-                GraphTimeAxis,
-                ChangedExpiry,
-                ShowContinuation,
-                PaddingHorizontal,
-                PaddingVertical,
+                &[
+                    ShowClock,
+                    ShowFrameTime,
+                    ShowRam,
+                    ShowAscii,
+                    ShowInactiveTabs,
+                ],
+                &[CyclePinned, CycleLabeled, CycleCustom, CycleMatrix],
+                &[
+                    ShowReadWindow,
+                    GraphTimeAxis,
+                    ChangedExpiry,
+                    ShowContinuation,
+                ],
+                &[PaddingHorizontal, PaddingVertical],
             ],
             SettingsCategory::Theme => &[
-                ThemePreset,
-                ThemeBorder,
-                ThemeAccent,
-                ThemeText,
-                ThemeBg,
-                ThemeDim,
-                ThemeChanged,
-                ThemeZebra,
-                ThemeOk,
-                ThemeWarn,
-                ThemeErr,
-                ThemeSelectedFg,
-                ThemeSelectedBg,
+                &[ThemePreset],
+                &[
+                    ThemeBorder,
+                    ThemeAccent,
+                    ThemeText,
+                    ThemeBg,
+                    ThemeDim,
+                    ThemeChanged,
+                    ThemeZebra,
+                    ThemeOk,
+                    ThemeWarn,
+                    ThemeErr,
+                    ThemeSelectedFg,
+                    ThemeSelectedBg,
+                ],
             ],
             SettingsCategory::Keybinds => &[],
             SettingsCategory::Config => &[
-                Name,
-                IgnoreDirty,
-                ClearPins,
-                ClearLabels,
-                ClearCustom,
-                Save,
-                LoadConfig,
-                NextConfig,
+                &[Name, IgnoreDirty],
+                &[ClearPins, ClearLabels, ClearCustom],
+                &[Save, LoadConfig, NextConfig],
             ],
         }
+    }
+
+    pub fn fields(self) -> Vec<SettingsField> {
+        self.groups()
+            .iter()
+            .flat_map(|g| g.iter().copied())
+            .collect()
     }
 
     pub fn is_keybinds(self) -> bool {
@@ -1044,7 +1046,7 @@ impl SettingsParams {
         SettingsCategory::ALL[self.category as usize]
     }
 
-    pub fn current_fields(&self) -> &'static [SettingsField] {
+    pub fn current_fields(&self) -> Vec<SettingsField> {
         self.current_category().fields()
     }
 
@@ -1331,7 +1333,7 @@ mod tests {
 
     #[test]
     fn the_save_position_toggle_sits_above_the_startup_fields() {
-        let fields = SettingsCategory::Config.fields();
+        let fields = SettingsCategory::Data.fields();
         let position = |field| fields.iter().position(|&f| f == field).unwrap();
         assert!(
             position(SettingsField::SavePositionOnExit) < position(SettingsField::StartupPanel)

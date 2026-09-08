@@ -855,9 +855,9 @@ mod tests {
         app.open_settings();
         let category = SettingsCategory::ALL
             .iter()
-            .position(|&c| c == SettingsCategory::Config)
+            .position(|&c| c == SettingsCategory::Data)
             .unwrap() as u16;
-        let index = SettingsCategory::Config
+        let index = SettingsCategory::Data
             .fields()
             .iter()
             .position(|&f| f == SettingsField::StartupAddress)
