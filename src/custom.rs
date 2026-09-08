@@ -249,11 +249,32 @@ impl CustomRule {
         } else {
             match self.decimals {
                 Some(d) => format!("{value:.*}", d as usize),
-                None => format!("{value}"),
+                None => compact(value),
             }
         };
 
         format!("{}{}{}", self.prefix, number, self.suffix)
+    }
+}
+
+fn compact(value: f64) -> String {
+    let mag = value.abs();
+    if mag == 0.0 {
+        return "0".to_string();
+    }
+    if (1e-3..1e10).contains(&mag) {
+        return trim_fraction(&format!("{value:.3}")).to_string();
+    }
+    let scientific = format!("{value:.3e}");
+    let (mantissa, exponent) = scientific.split_once('e').unwrap_or((&scientific, ""));
+    format!("{}e{exponent}", trim_fraction(mantissa))
+}
+
+fn trim_fraction(text: &str) -> &str {
+    if text.contains('.') {
+        text.trim_end_matches('0').trim_end_matches('.')
+    } else {
+        text
     }
 }
 
@@ -544,6 +565,33 @@ mod tests {
             r.evaluate(&[0x7FC0, 0x0000], WordOrder::ABCD),
             UNINTERPRETABLE
         );
+    }
+
+    #[test]
+    fn extreme_floats_use_exponent_notation_without_decimals() {
+        let r = rule(CustomRepr::F64);
+        assert_eq!(r.evaluate(&[0, 0, 0, 1], WordOrder::ABCD), "4.941e-324");
+        assert_eq!(
+            r.evaluate(&[0x7E37, 0xE43C, 0x8800, 0x759C], WordOrder::ABCD),
+            "1e300"
+        );
+        assert_eq!(r.evaluate(&[0x3FF0, 0, 0, 0], WordOrder::ABCD), "1");
+        assert_eq!(r.evaluate(&[0, 0, 0, 0], WordOrder::ABCD), "0");
+
+        let mut r = rule(CustomRepr::F64);
+        r.decimals = Some(2);
+        assert_eq!(r.evaluate(&[0, 0, 0, 1], WordOrder::ABCD), "0.00");
+
+        let mut r = rule(CustomRepr::U16);
+        r.ops = vec![CustomOp {
+            op: OpKind::Div,
+            v: 1e11,
+        }];
+        assert_eq!(r.evaluate(&[1432], WordOrder::ABCD), "1.432e-8");
+        r.ops[0].v = 3.0;
+        assert_eq!(r.evaluate(&[1000], WordOrder::ABCD), "333.333");
+        r.ops[0].v = 10.0;
+        assert_eq!(r.evaluate(&[2285], WordOrder::ABCD), "228.5");
     }
 
     #[test]
