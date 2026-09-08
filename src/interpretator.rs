@@ -35,13 +35,12 @@ struct RowCtx {
 
 impl RowCtx {
     fn new(order: WordOrder, value: u16, next: [Option<u16>; 3], custom: Option<&str>) -> Self {
-        let word = order.make_word(value, next[0].unwrap_or_default());
-        let second = order.make_word(next[1].unwrap_or_default(), next[2].unwrap_or_default());
+        let [b, c, d] = next.map(Option::unwrap_or_default);
         Self {
             value,
             next,
-            word,
-            dword: order.make_dword(word, second),
+            word: order.make_word(value, b),
+            dword: order.make_dword([value, b, c, d]),
             custom: custom.unwrap_or(NO_VALUE).to_string(),
         }
     }

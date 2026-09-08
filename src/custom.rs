@@ -372,7 +372,20 @@ mod tests {
     fn f64_with_word_order() {
         let r = rule(CustomRepr::F64);
         assert_eq!(r.evaluate(&[0x3FF0, 0, 0, 0], WordOrder::ABCD), "1");
+        assert_eq!(r.evaluate(&[0xF03F, 0, 0, 0], WordOrder::BADC), "1");
         assert_eq!(r.evaluate(&[0, 0, 0, 0x3FF0], WordOrder::CDAB), "1");
+        assert_eq!(r.evaluate(&[0, 0, 0, 0xF03F], WordOrder::DCBA), "1");
+    }
+
+    #[test]
+    fn i64_with_word_order() {
+        let r = rule(CustomRepr::I64);
+        let regs = [0xFFFF, 0xFFFF, 0xFFFF, 0xFFFE];
+        let signed = |order| r.raw(&regs, order).map(|raw| raw as i64);
+        assert_eq!(signed(WordOrder::ABCD), Some(-2));
+        assert_eq!(signed(WordOrder::BADC), Some(-257));
+        assert_eq!(signed(WordOrder::CDAB), Some(-281_474_976_710_657));
+        assert_eq!(signed(WordOrder::DCBA), Some(-72_057_594_037_927_937));
     }
 
     #[test]

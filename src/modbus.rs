@@ -131,7 +131,7 @@ impl WordOrder {
         }
     }
 
-    fn ordered<T: num_traits::PrimInt>(self, a: T, b: T) -> (T, T) {
+    fn ordered(self, a: u16, b: u16) -> (u16, u16) {
         let (byte_swap, word_swap) = self.swaps();
         let (mut high, mut low) = if word_swap { (b, a) } else { (a, b) };
         if byte_swap {
@@ -143,12 +143,18 @@ impl WordOrder {
 
     pub fn make_word(self, a: u16, b: u16) -> u32 {
         let (high, low) = self.ordered(a, b);
-        ((high as u32) << 16) | (low as u32)
+        (u32::from(high) << 16) | u32::from(low)
     }
 
-    pub fn make_dword(self, a: u32, b: u32) -> u64 {
-        let (high, low) = self.ordered(a, b);
-        ((high as u64) << 32) | (low as u64)
+    pub fn make_dword(self, mut words: [u16; 4]) -> u64 {
+        let (byte_swap, word_swap) = self.swaps();
+        if word_swap {
+            words.reverse();
+        }
+        words.into_iter().fold(0u64, |acc, word| {
+            let word = if byte_swap { word.swap_bytes() } else { word };
+            (acc << 16) | u64::from(word)
+        })
     }
 
     pub fn split_word(self, data: u32) -> [u16; 2] {
@@ -159,10 +165,7 @@ impl WordOrder {
         Some(match words.len() {
             1 => u64::from(*words.first()?),
             2 => u64::from(self.make_word(*words.first()?, *words.get(1)?)),
-            _ => self.make_dword(
-                self.make_word(*words.first()?, *words.get(1)?),
-                self.make_word(*words.get(2)?, *words.get(3)?),
-            ),
+            _ => self.make_dword(words.get(..4)?.try_into().ok()?),
         })
     }
 }
@@ -189,11 +192,25 @@ mod tests {
 
     #[test]
     fn make_dword_orders_bytes() {
-        let (a, b) = (0x0102_0304, 0x0506_0708);
-        assert_eq!(WordOrder::ABCD.make_dword(a, b), 0x0102_0304_0506_0708);
-        assert_eq!(WordOrder::BADC.make_dword(a, b), 0x0403_0201_0807_0605);
-        assert_eq!(WordOrder::CDAB.make_dword(a, b), 0x0506_0708_0102_0304);
-        assert_eq!(WordOrder::DCBA.make_dword(a, b), 0x0807_0605_0403_0201);
+        let regs = [0x0102, 0x0304, 0x0506, 0x0708];
+        assert_eq!(WordOrder::ABCD.make_dword(regs), 0x0102_0304_0506_0708);
+        assert_eq!(WordOrder::BADC.make_dword(regs), 0x0201_0403_0605_0807);
+        assert_eq!(WordOrder::CDAB.make_dword(regs), 0x0708_0506_0304_0102);
+        assert_eq!(WordOrder::DCBA.make_dword(regs), 0x0807_0605_0403_0201);
+    }
+
+    #[test]
+    fn assemble_matches_the_word_builders() {
+        let regs = [0x0102, 0x0304, 0x0506, 0x0708];
+        for order in WordOrder::ALL {
+            assert_eq!(order.assemble(&regs[..1]), Some(0x0102));
+            assert_eq!(
+                order.assemble(&regs[..2]),
+                Some(u64::from(order.make_word(0x0102, 0x0304)))
+            );
+            assert_eq!(order.assemble(&regs[..3]), None);
+            assert_eq!(order.assemble(&regs), Some(order.make_dword(regs)));
+        }
     }
 
     #[test]
