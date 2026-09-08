@@ -455,12 +455,15 @@ impl App {
 
     pub fn read_window(&self) -> (u16, u16) {
         let sweeping = self.sweep.active;
+        let position = self.read().position;
         let amount = if sweeping && self.sweep.errored {
             1
+        } else if sweeping {
+            let remaining = self.sweep.to.saturating_sub(position).saturating_add(1);
+            self.config.registers_batch.clamp(1, remaining)
         } else {
             self.config.registers_batch.max(1)
         };
-        let position = self.read().position;
         let max_read_start = u16::MAX - (amount - 1);
         let start = if sweeping {
             position
