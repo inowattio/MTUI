@@ -71,6 +71,9 @@ impl App {
         };
         params.access = cycle(&DeviceIdAccess::ALL, params.access, forward);
         params.h_offset = 0;
+        if matches!(self.background_task, Some(BackgroundTask::DeviceId(_))) {
+            return;
+        }
         self.device_id_refresh();
     }
 
@@ -118,6 +121,13 @@ impl App {
 
     pub(super) fn apply_device_id_result(&mut self, result: Option<DeviceIdTaskResult>) {
         // The popup may have been closed while the read was in flight.
+        let Some(current) = self.popup_as::<DeviceIdParams>().map(|p| p.access) else {
+            return;
+        };
+        if result.as_ref().is_some_and(|r| r.access != current) {
+            self.device_id_refresh();
+            return;
+        }
         let Some(params) = self.device_id_mut() else {
             return;
         };
@@ -281,5 +291,72 @@ impl App {
                 p.status = Some(StatusMessage::err(format!("Failed: {e}")));
             }
         }
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use crate::app::{App, BackgroundTask};
+    use crate::config::Config;
+    use crate::modbus::DeviceIdAccess;
+    use crate::state::DeviceIdParams;
+    use std::time::Duration;
+
+    fn device_id(app: &App) -> &DeviceIdParams {
+        app.popup_as().expect("device id popup")
+    }
+
+    async fn settle(app: &mut App) {
+        for _ in 0..400 {
+            app.complete_background_task().await;
+            if app.background_task.is_none() && !device_id(app).loading {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(2)).await;
+        }
+        panic!("device id read never finished");
+    }
+
+    #[tokio::test]
+    async fn cycling_during_a_read_shows_the_new_access_level_objects() {
+        let mut app = App::boot(Config::default(), String::new()).await;
+        app.open_device_id();
+        assert!(matches!(
+            app.background_task,
+            Some(BackgroundTask::DeviceId(_))
+        ));
+
+        app.device_id_cycle(true);
+        assert_eq!(device_id(&app).access, DeviceIdAccess::Regular);
+        assert!(device_id(&app).loading, "the pending read keeps loading");
+
+        settle(&mut app).await;
+
+        let device = app.device.clone().expect("mock device");
+        let expected = device
+            .device_identity(DeviceIdAccess::Regular)
+            .await
+            .expect("mock answers");
+        let basic = device
+            .device_identity(DeviceIdAccess::Basic)
+            .await
+            .expect("mock answers");
+        assert_ne!(expected, basic, "the test needs distinguishable results");
+        assert_eq!(device_id(&app).objects, expected);
+        assert_eq!(device_id(&app).access, DeviceIdAccess::Regular);
+    }
+
+    #[tokio::test]
+    async fn a_result_for_the_selected_access_level_is_applied() {
+        let mut app = App::boot(Config::default(), String::new()).await;
+        app.open_device_id();
+        settle(&mut app).await;
+
+        let device = app.device.clone().expect("mock device");
+        let expected = device
+            .device_identity(DeviceIdAccess::Basic)
+            .await
+            .expect("mock answers");
+        assert_eq!(device_id(&app).objects, expected);
     }
 }
