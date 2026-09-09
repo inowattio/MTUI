@@ -255,6 +255,7 @@ fn side_lines(
                 on,
                 None,
             ));
+            lines.push(Line::default());
             let on = selected(DiscoveryField::ScanMethod);
             lines.push(row(
                 theme,
@@ -264,7 +265,6 @@ fn side_lines(
                 on,
                 None,
             ));
-            lines.push(Line::default());
 
             let suffix = if let Some((done, total)) = app.scan_progress() {
                 Some(Span::styled(
