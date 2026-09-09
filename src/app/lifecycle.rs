@@ -475,7 +475,14 @@ impl App {
             }
         }
         .min(max_read_start);
-        (start, amount)
+        let main = matches!(self.read().panel, ReadPanel::Main | ReadPanel::Matrix);
+        if sweeping || !main || !self.config.read_full_customs {
+            return (start, amount);
+        }
+        let register_type = self.read().register_type;
+        let runs = custom_runs(&self.custom_rules, register_type);
+        let (start, end) = cover_runs(start, start + (amount - 1), &runs);
+        (start, end - start + 1)
     }
 
     pub async fn refresh(&mut self) {
@@ -765,6 +772,42 @@ impl App {
     }
 }
 
+fn custom_runs(rules: &BTreeMap<RegisterCell, CustomRule>, kind: RegisterType) -> Vec<(u16, u16)> {
+    let mut runs = Vec::new();
+    for (&(rule_kind, _), rule) in rules {
+        if rule_kind != kind {
+            continue;
+        }
+        let words = rule.word_addresses();
+        let mut run_start = 0usize;
+        for i in 1..=words.len() {
+            if i < words.len() && words[i - 1].checked_add(1) == Some(words[i]) {
+                continue;
+            }
+            if i - run_start > 1 {
+                runs.push((words[run_start], words[i - 1]));
+            }
+            run_start = i;
+        }
+    }
+    runs
+}
+
+fn cover_runs(mut start: u16, mut end: u16, runs: &[(u16, u16)]) -> (u16, u16) {
+    loop {
+        let before = (start, end);
+        for &(run_start, run_end) in runs {
+            if run_start <= end && run_end >= start {
+                start = start.min(run_start);
+                end = end.max(run_end);
+            }
+        }
+        if (start, end) == before {
+            return before;
+        }
+    }
+}
+
 fn custom_full_spans(rules: &BTreeMap<RegisterCell, CustomRule>) -> BTreeMap<RegisterCell, u16> {
     let mut spans = BTreeMap::new();
     for (&(kind, _), rule) in rules {
@@ -818,7 +861,7 @@ fn read_run_len(
 mod tests {
     #[cfg(not(target_arch = "wasm32"))]
     use super::{App, BackgroundTask};
-    use super::{custom_full_spans, read_run_len};
+    use super::{cover_runs, custom_full_spans, custom_runs, read_run_len};
     #[cfg(not(target_arch = "wasm32"))]
     use crate::config::{Config, CyclePanels};
     use crate::custom::{CustomRepr, CustomRule};
@@ -875,6 +918,83 @@ mod tests {
         for addr in 524..=526 {
             assert_eq!(spans.get(&(H, addr)), Some(&526));
         }
+    }
+
+    #[test]
+    fn runs_list_contiguous_words_of_the_requested_kind() {
+        let mut rules = rules(&[
+            (7, CustomRepr::U16, &[]),
+            (100, CustomRepr::F64, &[]),
+            (520, CustomRepr::F64, &[524]),
+        ]);
+        rules.insert(
+            (RegisterType::Input, 3),
+            CustomRule {
+                address: 3,
+                repr: CustomRepr::U32,
+                ..Default::default()
+            },
+        );
+        assert_eq!(custom_runs(&rules, H), vec![(100, 103), (524, 526)]);
+        assert_eq!(custom_runs(&rules, RegisterType::Input), vec![(3, 4)]);
+    }
+
+    #[test]
+    fn covering_grows_the_window_over_touched_runs_only() {
+        let runs = [(100, 103), (104, 105), (200, 201)];
+        assert_eq!(cover_runs(101, 101, &runs), (100, 103));
+        assert_eq!(cover_runs(103, 103, &runs), (100, 103));
+        assert_eq!(cover_runs(103, 104, &runs), (100, 105));
+        assert_eq!(cover_runs(50, 60, &runs), (50, 60));
+        assert_eq!(cover_runs(99, 200, &runs), (99, 201));
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn the_main_read_covers_the_custom_under_the_cursor_when_enabled() {
+        let mut app = App::boot(Config::default(), String::new()).await;
+        app.config.registers_batch = 1;
+        app.config.batch_anchor = crate::config::BatchAnchor::Start;
+        app.read_mut().register_type = H;
+        app.custom_rules = rules(&[(100, CustomRepr::F32, &[]), (520, CustomRepr::F64, &[524])]);
+
+        app.read_mut().position = 101;
+        assert_eq!(app.read_window(), (101, 1), "off by default");
+
+        app.config.read_full_customs = true;
+        assert_eq!(
+            app.read_window(),
+            (100, 2),
+            "second half pulls in the first"
+        );
+        app.read_mut().position = 100;
+        assert_eq!(app.read_window(), (100, 2));
+        app.read_mut().position = 102;
+        assert_eq!(app.read_window(), (102, 1), "neighbours are left alone");
+        app.read_mut().position = 520;
+        assert_eq!(app.read_window(), (520, 1), "a jump is not bridged");
+        app.read_mut().position = 525;
+        assert_eq!(
+            app.read_window(),
+            (524, 3),
+            "the contiguous tail is covered"
+        );
+
+        app.read_mut().panel = ReadPanel::Pinned;
+        assert_eq!(
+            app.read_window(),
+            (525, 1),
+            "list panels keep the plain batch"
+        );
+        app.read_mut().panel = ReadPanel::Main;
+
+        app.read_mut().register_type = RegisterType::Input;
+        app.read_mut().position = 101;
+        assert_eq!(
+            app.read_window(),
+            (101, 1),
+            "other register types are unaffected"
+        );
     }
 
     #[test]
