@@ -761,6 +761,7 @@ field_enum! {
         ClearLabels,
         ClearCustom,
         CopyData,
+        CopyConfig,
         ShowContinuation,
         ShowClock,
         ShowFrameTime,
@@ -888,6 +889,7 @@ impl SettingsField {
                 | SettingsField::ClearLabels
                 | SettingsField::ClearCustom
                 | SettingsField::CopyData
+                | SettingsField::CopyConfig
                 | SettingsField::Save
         )
     }
@@ -977,7 +979,7 @@ impl SettingsCategory {
             SettingsCategory::Config => &[
                 &[Name, IgnoreDirty],
                 &[ClearPins, ClearLabels, ClearCustom, CopyData],
-                &[Save, LoadConfig, NextConfig],
+                &[CopyConfig, Save, LoadConfig, NextConfig],
             ],
         }
     }

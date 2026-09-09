@@ -108,6 +108,25 @@ impl App {
         self.set_settings_status(message);
     }
 
+    fn config_json(&self) -> String {
+        let mut config = self.effective_config();
+        if let Some(startup) = self.current_position() {
+            config.startup = startup;
+        }
+        serde_json::to_string_pretty(&config).unwrap_or_default()
+    }
+
+    pub fn copy_config_to_clipboard(&mut self) {
+        let json = self.config_json();
+        let message = if self.set_clipboard(json) {
+            log::info!("Copied the configuration to clipboard");
+            StatusMessage::ok("Copied the configuration to clipboard")
+        } else {
+            StatusMessage::err("Clipboard unavailable")
+        };
+        self.set_settings_status(message);
+    }
+
     fn effective_config(&self) -> Config {
         let mut config = self.config.clone();
         config.labels = (&self.labels).into();
@@ -344,6 +363,22 @@ mod tests {
             .and_then(|s| s.status.as_ref())
             .map(|s| s.kind)
             .expect("a status is shown")
+    }
+
+    #[tokio::test]
+    async fn the_copied_configuration_is_a_loadable_config_with_the_current_position() {
+        let mut app = App::boot(Config::demo(), String::new()).await;
+        app.config.name = "copied".to_string();
+        app.read_mut().position = 77;
+        app.open_settings();
+
+        let parsed: Config = serde_json::from_str(&app.config_json()).expect("valid config json");
+        assert_eq!(parsed.name, "copied");
+        assert_eq!(parsed.startup.address, 77);
+        assert_eq!(
+            parsed.labels.inputs.len(),
+            Config::demo().labels.inputs.len()
+        );
     }
 
     #[tokio::test]

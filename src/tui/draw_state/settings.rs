@@ -227,6 +227,7 @@ fn description(field: SettingsField) -> &'static str {
         SettingsField::CopyData => {
             "Copy pins, labels and custom rules as JSON, paste into another MTUI to import"
         }
+        SettingsField::CopyConfig => "Copy the whole configuration as JSON, as Save would write it",
         SettingsField::ShowContinuation => {
             "Mark registers that belong to a multi-register custom rule"
         }
@@ -456,6 +457,7 @@ fn field_view(
             None,
         ),
         SettingsField::CopyData => ("Copy all", String::new(), None),
+        SettingsField::CopyConfig => ("Copy configuration", String::new(), None),
         SettingsField::ShowContinuation => (
             "Show \"part of\" marker",
             on_off(device.custom_rules.show_continuation),

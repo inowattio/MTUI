@@ -670,6 +670,7 @@ async fn handle_settings_field_key(key_event: KeyEvent, app: &mut App) {
             SettingsField::ClearLabels => app.clear_labels(),
             SettingsField::ClearCustom => app.clear_custom(),
             SettingsField::CopyData => app.copy_data_to_clipboard(),
+            SettingsField::CopyConfig => app.copy_config_to_clipboard(),
             f if f.is_toggle() || f.is_theme_color() => app.settings_adjust(f, 1),
             SettingsField::Save => app.settings_save(),
             SettingsField::LoadConfig => app.settings_load(),
