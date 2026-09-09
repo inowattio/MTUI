@@ -78,11 +78,6 @@ fn draw_categories(params: &SettingsParams, frame: &mut Frame, area: Rect, theme
 fn draw_fields(params: &SettingsParams, app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
     let focused = params.focus == SettingsFocus::Fields;
     let mut lines: Vec<Line> = vec![Line::default()];
-    lines.push(Line::from(Span::styled(
-        format!("  {}", params.current_category().label().to_uppercase()),
-        theme.accent_style(),
-    )));
-    lines.push(Line::default());
 
     let mut selected_line = None;
     let mut field_lines = Vec::new();
@@ -537,14 +532,9 @@ fn draw_keybinds(params: &SettingsParams, app: &App, frame: &mut Frame, area: Re
     let count = actions.len() as u16;
 
     let mut lines: Vec<Line> = vec![Line::default()];
-    lines.push(Line::from(Span::styled(
-        format!("  KEYBINDS  ({}/{})", params.kb_selected + 1, count),
-        theme.accent_style(),
-    )));
-    lines.push(Line::default());
 
     let (list, footer) = footer_split(area, 1);
-    let visible = list.height.saturating_sub(3).max(1);
+    let visible = list.height.saturating_sub(1).max(1);
     let top = scroll_offset(
         params.kb_selected as usize,
         count as usize,
