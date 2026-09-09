@@ -50,6 +50,7 @@ impl App {
         }
         self.config.device.slave_id = id;
         self.refresh_writes_log_state();
+        self.refresh_dirty();
         log::info!("Slave id set to {id}");
     }
 
@@ -299,7 +300,7 @@ mod tests {
     use crate::app::{App, BackgroundTask};
     use crate::config::Config;
     use crate::modbus::DeviceIdAccess;
-    use crate::state::DeviceIdParams;
+    use crate::state::{DeviceIdParams, SlaveParams};
     use std::time::Duration;
 
     fn device_id(app: &App) -> &DeviceIdParams {
@@ -344,6 +345,24 @@ mod tests {
         assert_ne!(expected, basic, "the test needs distinguishable results");
         assert_eq!(device_id(&app).objects, expected);
         assert_eq!(device_id(&app).access, DeviceIdAccess::Regular);
+    }
+
+    #[tokio::test]
+    async fn changing_the_slave_id_marks_the_config_dirty() {
+        let mut app = App::boot(Config::default(), String::new()).await;
+        assert!(!app.dirty);
+        let original = app.config.device.slave_id;
+
+        app.open_slave();
+        app.popup_as_mut::<SlaveParams>().unwrap().id = original.wrapping_add(1);
+        app.commit_slave().await;
+        assert_eq!(app.config.device.slave_id, original.wrapping_add(1));
+        assert!(app.dirty, "a new slave id is an unsaved change");
+
+        app.open_slave();
+        app.popup_as_mut::<SlaveParams>().unwrap().id = original;
+        app.commit_slave().await;
+        assert!(!app.dirty, "restoring the saved id is clean again");
     }
 
     #[tokio::test]
