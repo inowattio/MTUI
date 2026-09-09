@@ -1,4 +1,6 @@
 # MTUI - Modbus Terminal User Interface
+**Note**: Until `1.0.0` release, expect possible config breaking changes and ui/ux alterations.
+
 A very extensive Modbus client available in pretty much any terminal.  
 Made in pure safe Rust, based on [tokio-modbus](https://crates.io/crates/tokio-modbus) and [ratatui](https://crates.io/crates/ratatui) (with [ratzilla](https://crates.io/crates/ratzilla) for the web demo).
 
