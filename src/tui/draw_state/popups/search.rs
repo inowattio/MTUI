@@ -1,5 +1,5 @@
 use crate::app::App;
-use crate::constants::SEARCH_POPUP_MAX_HEIGHT_PERCENT;
+use crate::constants::{SEARCH_POPUP_MAX_HEIGHT_PERCENT, SEARCH_POPUP_MAX_WIDTH_PERCENT};
 use crate::state::{SearchMatch, SearchParams};
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
@@ -8,8 +8,8 @@ use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 
-const LABEL_W: usize = 24;
-
+const PREFIX_W: usize = 18;
+const MIN_WIDTH: u16 = 44;
 const CHROME_ROWS: u16 = 7;
 
 fn max_rows(area: Rect) -> u16 {
@@ -30,6 +30,18 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, sear
         Line::default(),
     ];
 
+    let footer = [
+        Hint::pair(kb.move_up, kb.move_down, "Select"),
+        Hint::key(kb.action, "Go"),
+        Hint::key(kb.exit, "Close"),
+    ];
+    let longest = search.matches[top..end]
+        .iter()
+        .map(|m| m.text.chars().count())
+        .max()
+        .unwrap_or(0);
+    let (width, label_w) = fit(hints::min_width(MIN_WIDTH, &footer), area.width, longest);
+
     if search.matches.is_empty() {
         for hint in [
             " Type an address (x6F for hex) or a label.",
@@ -44,24 +56,40 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, sear
                 theme,
                 &search.matches[i],
                 &search.query,
+                label_w,
                 i as u16 == search.selected,
             ));
         }
     }
 
-    let footer = [
-        Hint::pair(kb.move_up, kb.move_down, "Select"),
-        Hint::key(kb.action, "Go"),
-        Hint::key(kb.exit, "Close"),
-    ];
     lines.push(hints::more(theme, top, len.saturating_sub(end)));
-    let width = hints::min_width(44, &footer);
     super::push_footer(&mut lines, theme, footer);
 
     super::render(frame, area, theme, "Go to", width, lines);
 }
 
-fn row(theme: &Theme, m: &SearchMatch, query: &str, selected: bool) -> Line<'static> {
+fn fit(min_width: u16, area_width: u16, longest: usize) -> (u16, usize) {
+    let needed = (PREFIX_W + longest + 2).min(u16::MAX as usize) as u16;
+    let cap = (u32::from(area_width) * u32::from(SEARCH_POPUP_MAX_WIDTH_PERCENT) / 100) as u16;
+    let width = min_width.max(needed.min(cap)).min(area_width);
+    (width, (width as usize).saturating_sub(PREFIX_W + 2))
+}
+
+fn clipped(text: &str, width: usize) -> (Vec<char>, bool) {
+    let chars: Vec<char> = text.chars().collect();
+    if chars.len() <= width {
+        return (chars, false);
+    }
+    (chars[..width.saturating_sub(1)].to_vec(), true)
+}
+
+fn row(
+    theme: &Theme,
+    m: &SearchMatch,
+    query: &str,
+    label_w: usize,
+    selected: bool,
+) -> Line<'static> {
     let style = |s: Style| if selected { theme.selected_style() } else { s };
     let (kind, address) = m.cell;
 
@@ -74,10 +102,15 @@ fn row(theme: &Theme, m: &SearchMatch, query: &str, selected: bool) -> Line<'sta
     ];
 
     if m.labeled {
-        spans.extend(label_spans(theme, &m.text, query, selected));
+        spans.extend(label_spans(theme, &m.text, query, label_w, selected));
     } else {
+        let (shown, truncated) = clipped(&m.text, label_w);
+        let mut text: String = shown.into_iter().collect();
+        if truncated {
+            text.push('\u{2026}');
+        }
         spans.push(Span::styled(
-            m.text.clone(),
+            text,
             style(theme.dim_style()).add_modifier(Modifier::ITALIC),
         ));
     }
@@ -85,17 +118,17 @@ fn row(theme: &Theme, m: &SearchMatch, query: &str, selected: bool) -> Line<'sta
     Line::from(spans)
 }
 
-fn label_spans(theme: &Theme, text: &str, query: &str, selected: bool) -> Vec<Span<'static>> {
+fn label_spans(
+    theme: &Theme,
+    text: &str,
+    query: &str,
+    label_w: usize,
+    selected: bool,
+) -> Vec<Span<'static>> {
     let style = |s: Style| if selected { theme.selected_style() } else { s };
     let mut spans = Vec::new();
 
-    let chars: Vec<char> = text.chars().collect();
-    let truncated = chars.len() > LABEL_W;
-    let shown = if truncated {
-        &chars[..LABEL_W - 1]
-    } else {
-        &chars[..]
-    };
+    let (shown, truncated) = clipped(text, label_w);
 
     // Split the label into runs of matched/unmatched characters so the part
     // that matched the query lights up.
@@ -160,5 +193,54 @@ fn match_positions(query: &str, text: &str) -> Vec<usize> {
         Vec::new()
     } else {
         positions
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{MIN_WIDTH, PREFIX_W, clipped, fit};
+
+    #[test]
+    fn short_labels_keep_the_minimum_width() {
+        let (width, label_w) = fit(MIN_WIDTH, 120, 10);
+        assert_eq!(width, MIN_WIDTH);
+        assert_eq!(label_w, MIN_WIDTH as usize - PREFIX_W - 2);
+    }
+
+    #[test]
+    fn long_labels_widen_the_popup_up_to_half_the_screen() {
+        let (width, label_w) = fit(MIN_WIDTH, 200, 60);
+        assert_eq!(width as usize, PREFIX_W + 60 + 2);
+        assert_eq!(label_w, 60);
+
+        let (width, label_w) = fit(MIN_WIDTH, 120, 60);
+        assert_eq!(width, 60);
+        assert_eq!(label_w, 60 - PREFIX_W - 2);
+
+        let (width, label_w) = fit(MIN_WIDTH, 200, 5000);
+        assert_eq!(width, 100);
+        assert_eq!(label_w, 100 - PREFIX_W - 2);
+    }
+
+    #[test]
+    fn the_minimum_width_wins_over_the_cap_on_narrow_screens() {
+        let (width, label_w) = fit(MIN_WIDTH, 50, 60);
+        assert_eq!(width, MIN_WIDTH);
+        assert_eq!(label_w, MIN_WIDTH as usize - PREFIX_W - 2);
+    }
+
+    #[test]
+    fn a_tiny_screen_leaves_no_room_for_labels_without_panicking() {
+        let (width, label_w) = fit(MIN_WIDTH, 10, 60);
+        assert_eq!(width, 10);
+        assert_eq!(label_w, 0);
+        assert_eq!(clipped("abc", 0), (Vec::new(), true));
+    }
+
+    #[test]
+    fn clipping_leaves_room_for_the_ellipsis() {
+        assert_eq!(clipped("abc", 3), ("abc".chars().collect(), false));
+        assert_eq!(clipped("abcd", 3), ("ab".chars().collect(), true));
+        assert_eq!(clipped("ș-ț-â", 4), ("ș-ț".chars().collect(), true));
     }
 }
