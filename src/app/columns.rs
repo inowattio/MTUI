@@ -105,25 +105,29 @@ impl App {
     }
 
     pub fn copy_address(&mut self) {
-        #[cfg(not(target_arch = "wasm32"))]
-        let message = {
-            let (_, address) = self.cursor_cell();
-
-            if self.clipboard.is_none() {
-                self.clipboard = arboard::Clipboard::new().ok().map(super::ClipboardHandle);
-            }
-            match self
-                .clipboard
-                .as_mut()
-                .map(|c| c.0.set_text(address.to_string()))
-            {
-                Some(Ok(())) => StatusMessage::ok(format!("Copied address {address} to clipboard")),
-                _ => StatusMessage::err("Clipboard unavailable"),
-            }
+        let (_, address) = self.cursor_cell();
+        let message = if self.set_clipboard(address.to_string()) {
+            StatusMessage::ok(format!("Copied address {address} to clipboard"))
+        } else {
+            StatusMessage::err("Clipboard unavailable")
         };
-        #[cfg(target_arch = "wasm32")]
-        let message = StatusMessage::err("Clipboard unavailable");
         self.set_read_status(message);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(super) fn set_clipboard(&mut self, text: String) -> bool {
+        if self.clipboard.is_none() {
+            self.clipboard = arboard::Clipboard::new().ok().map(super::ClipboardHandle);
+        }
+        matches!(
+            self.clipboard.as_mut().map(|c| c.0.set_text(text)),
+            Some(Ok(()))
+        )
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(super) fn set_clipboard(&mut self, _text: String) -> bool {
+        false
     }
 
     fn graphable_columns(&self) -> Vec<Column> {

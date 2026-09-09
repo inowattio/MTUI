@@ -760,6 +760,7 @@ field_enum! {
         ClearPins,
         ClearLabels,
         ClearCustom,
+        CopyData,
         ShowContinuation,
         ShowClock,
         ShowFrameTime,
@@ -886,6 +887,7 @@ impl SettingsField {
             SettingsField::ClearPins
                 | SettingsField::ClearLabels
                 | SettingsField::ClearCustom
+                | SettingsField::CopyData
                 | SettingsField::Save
         )
     }
@@ -974,7 +976,7 @@ impl SettingsCategory {
             SettingsCategory::Keybinds => &[],
             SettingsCategory::Config => &[
                 &[Name, IgnoreDirty],
-                &[ClearPins, ClearLabels, ClearCustom],
+                &[ClearPins, ClearLabels, ClearCustom, CopyData],
                 &[Save, LoadConfig, NextConfig],
             ],
         }

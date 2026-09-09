@@ -1,4 +1,4 @@
-use super::{App, BackgroundTask, ImportPayload, LoadConfigTaskResult, save_config};
+use super::{App, BackgroundTask, ExportPayload, ImportPayload, LoadConfigTaskResult, save_config};
 use crate::compat;
 use crate::config::{Config, CustomRules, Startup};
 use crate::custom::CustomRule;
@@ -81,6 +81,31 @@ impl App {
         self.set_read_status(StatusMessage::ok(format!(
             "Imported {pins} pin(s), {labels} label(s), {rules} rule(s)"
         )));
+    }
+
+    fn export_payload_json(&self) -> String {
+        let payload = ExportPayload {
+            pinned_registers: self.pinned_registers.as_slice().into(),
+            labels: (&self.labels).into(),
+            custom_rules: (&self.custom_rules).into(),
+        };
+        serde_json::to_string_pretty(&payload).unwrap_or_default()
+    }
+
+    pub fn copy_data_to_clipboard(&mut self) {
+        let pins = self.pinned_registers.len();
+        let labels = self.labels.len();
+        let rules = self.custom_rules.len();
+        let json = self.export_payload_json();
+        let message = if self.set_clipboard(json) {
+            log::info!("Copied {pins} pin(s), {labels} label(s), {rules} rule(s) to clipboard");
+            StatusMessage::ok(format!(
+                "Copied {pins} pin(s), {labels} label(s), {rules} rule(s) to clipboard"
+            ))
+        } else {
+            StatusMessage::err("Clipboard unavailable")
+        };
+        self.set_settings_status(message);
     }
 
     fn effective_config(&self) -> Config {
@@ -319,6 +344,28 @@ mod tests {
             .and_then(|s| s.status.as_ref())
             .map(|s| s.kind)
             .expect("a status is shown")
+    }
+
+    #[tokio::test]
+    async fn the_exported_data_imports_back_unchanged() {
+        let mut app = App::boot(Config::demo(), String::new()).await;
+        app.pinned_registers = vec![
+            (crate::register::RegisterType::Holding, 9),
+            (crate::register::RegisterType::Coil, 2),
+        ];
+        let json = app.export_payload_json();
+
+        let payload = App::parse_import(&json).expect("export is importable");
+        assert_eq!(payload.pins(), 2);
+        assert_eq!(payload.labels(), app.labels.len());
+        assert_eq!(payload.rules(), app.custom_rules.len());
+
+        let mut other = App::boot(Config::default(), String::new()).await;
+        other.paste_import(&json);
+        other.apply_import();
+        assert_eq!(other.pinned_registers, app.pinned_registers);
+        assert_eq!(other.labels, app.labels);
+        assert_eq!(other.custom_rules, app.custom_rules);
     }
 
     #[tokio::test]

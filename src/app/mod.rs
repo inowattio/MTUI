@@ -460,6 +460,13 @@ struct ImportPayload {
     custom_rules: Option<CustomRules>,
 }
 
+#[derive(Serialize)]
+struct ExportPayload {
+    pinned_registers: PinnedRegisters,
+    labels: Labels,
+    custom_rules: CustomRules,
+}
+
 fn section_count<T>(section: &[T], rest: [&[T]; 3]) -> usize {
     section.len() + rest.iter().map(|s| s.len()).sum::<usize>()
 }

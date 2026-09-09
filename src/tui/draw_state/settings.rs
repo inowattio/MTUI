@@ -224,6 +224,9 @@ fn description(field: SettingsField) -> &'static str {
         SettingsField::ClearPins => "Remove every pinned register",
         SettingsField::ClearLabels => "Remove every label",
         SettingsField::ClearCustom => "Remove every custom rule",
+        SettingsField::CopyData => {
+            "Copy pins, labels and custom rules as JSON, paste into another MTUI to import"
+        }
         SettingsField::ShowContinuation => {
             "Mark registers that belong to a multi-register custom rule"
         }
@@ -298,7 +301,9 @@ fn render_field(
         return disabled_row(theme, name, value, selected);
     }
 
-    let value_text = if selected && field.is_action() {
+    let value_text = if selected && field.is_action() && value.is_empty() {
+        "\u{2190} enter".to_string()
+    } else if selected && field.is_action() {
         format!("{value}  \u{2190} enter")
     } else {
         edit_value(value, selected, field.is_toggle() || field.is_theme_color())
@@ -450,6 +455,7 @@ fn field_view(
             format!("{} rules", app.custom_count()),
             None,
         ),
+        SettingsField::CopyData => ("Copy all", String::new(), None),
         SettingsField::ShowContinuation => (
             "Show \"part of\" marker",
             on_off(device.custom_rules.show_continuation),
