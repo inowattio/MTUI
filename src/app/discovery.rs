@@ -186,11 +186,14 @@ impl App {
         if !d.interface.uses_tcp() {
             return;
         }
-        let Some(prefix) = subnet_prefix_from(&d.ip).or_else(local_subnet_prefix) else {
-            self.set_discovery_status(StatusMessage::err("Couldn't determine a subnet to scan"));
+        let Some(prefix) = subnet_prefix_from(&d.ip) else {
+            self.set_discovery_status(StatusMessage::err(
+                "Enter an IPv4 address to pick the subnet to scan",
+            ));
             return;
         };
         let port = d.net_port;
+        let method = d.scan_method;
         let per_host = Duration::from_millis(d.connect_timeout_ms.clamp(100, 2_000));
         let total = 254;
         let done = Arc::new(AtomicUsize::new(0));
@@ -201,10 +204,13 @@ impl App {
         if let Some(d) = self.discovery_mut() {
             d.set_found(Vec::new());
             d.status = Some(StatusMessage::warn(format!(
-                "Scanning {prefix}0/24\u{2026}"
+                "Scanning {prefix}0/24 by {}\u{2026}",
+                method.label()
             )));
         }
-        self.network_scan_task = Some(compat::spawn(scan_subnet(prefix, port, per_host, done)));
+        self.network_scan_task = Some(compat::spawn(scan_subnet(
+            prefix, port, method, per_host, done,
+        )));
     }
 
     #[cfg(target_arch = "wasm32")]
@@ -221,15 +227,25 @@ impl App {
         };
         match handle.poll_result() {
             TaskPoll::Pending => {}
-            TaskPoll::Finished(found) => self.finish_network_scan(found),
-            TaskPoll::Gone => self.finish_network_scan(Vec::new()),
+            TaskPoll::Finished(result) => self.finish_network_scan(result),
+            TaskPoll::Gone => {
+                self.finish_network_scan(Err("scan task stopped unexpectedly".to_string()))
+            }
         }
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn finish_network_scan(&mut self, found: Vec<String>) {
+    fn finish_network_scan(&mut self, result: Result<Vec<String>, String>) {
         self.network_scan_task = None;
         self.network_scan = None;
+        let found = match result {
+            Ok(found) => found,
+            Err(error) => {
+                log::error!("Network scan failed \u{b7} {error}");
+                self.set_discovery_status(StatusMessage::err(format!("Scan failed: {error}")));
+                return;
+            }
+        };
         let count = found.len();
         if let Some(d) = self.discovery_mut() {
             d.set_found(found);
@@ -292,7 +308,10 @@ mod tests {
 
         d.set_found(vec!["10.0.0.5".to_string()]);
         d.set_interface(InterfaceKind::Network);
-        assert_eq!(d.side_fields(), vec![Ip, NetPort, ScanNetwork, Found(0)]);
+        assert_eq!(
+            d.side_fields(),
+            vec![Ip, NetPort, ScanMethod, ScanNetwork, Found(0)]
+        );
     }
 
     #[test]
@@ -422,6 +441,7 @@ mod tests {
             vec![
                 DiscoveryField::Ip,
                 DiscoveryField::NetPort,
+                DiscoveryField::ScanMethod,
                 DiscoveryField::ScanNetwork
             ]
         );
@@ -456,7 +476,7 @@ mod tests {
         d.set_interface(InterfaceKind::Network);
         d.set_found(vec!["10.0.0.1".to_string(), "10.0.0.2".to_string()]);
         d.toggle_column();
-        d.side_selected = 4; // Found(1)
+        d.side_selected = 5; // Found(1)
         assert_eq!(d.current_field(), DiscoveryField::Found(1));
         d.set_found(Vec::new());
         assert_eq!(d.current_field(), DiscoveryField::ScanNetwork);

@@ -7,6 +7,8 @@ use crate::custom::CustomRule;
 use crate::interpretator::Interpretor;
 use crate::modbus::{DeviceConfig, DeviceIdAccess, ModbusDevice};
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::state::ScanMethod;
 use crate::state::{ConnectionStatus, CustomParams, State};
 use crate::writes_log::SharedWritesLog;
 use chrono::{DateTime, Utc};
@@ -144,26 +146,33 @@ fn subnet_prefix_from(ip: &str) -> Option<String> {
 async fn scan_subnet(
     prefix: String,
     port: u16,
+    method: ScanMethod,
     per_host: Duration,
     done: Arc<AtomicUsize>,
-) -> Vec<String> {
+) -> Result<Vec<String>, String> {
     use futures::stream::{self, StreamExt};
+
+    let pinger = match method {
+        ScanMethod::Ping => Some(
+            surge_ping::Client::new(&surge_ping::Config::default())
+                .map_err(|error| format!("ICMP unavailable: {error}"))?,
+        ),
+        ScanMethod::Port => None,
+    };
+    let ident = surge_ping::PingIdentifier(std::process::id() as u16);
 
     let mut found: Vec<(u16, String)> = stream::iter(1u16..=254)
         .map(|host| {
             let ip = format!("{prefix}{host}");
             let done = done.clone();
+            let pinger = pinger.clone();
             async move {
-                let connected = matches!(
-                    compat::timeout(
-                        per_host,
-                        tokio::net::TcpStream::connect((ip.as_str(), port))
-                    )
-                    .await,
-                    Ok(Ok(_))
-                );
+                let alive = match &pinger {
+                    Some(client) => ping_host(client, &ip, ident, host, per_host).await,
+                    None => probe_port(&ip, port, per_host).await,
+                };
                 done.fetch_add(1, Ordering::Relaxed);
-                connected.then_some((host, ip))
+                alive.then_some((host, ip))
             }
         })
         .buffer_unordered(256)
@@ -172,7 +181,34 @@ async fn scan_subnet(
         .await;
 
     found.sort_by_key(|(host, _)| *host);
-    found.into_iter().map(|(_, ip)| ip).collect()
+    Ok(found.into_iter().map(|(_, ip)| ip).collect())
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+async fn ping_host(
+    client: &surge_ping::Client,
+    ip: &str,
+    ident: surge_ping::PingIdentifier,
+    seq: u16,
+    per_host: Duration,
+) -> bool {
+    let Ok(address) = ip.parse::<std::net::IpAddr>() else {
+        return false;
+    };
+    let mut pinger = client.pinger(address, ident).await;
+    pinger.timeout(per_host);
+    pinger
+        .ping(surge_ping::PingSequence(seq), &[0u8; 8])
+        .await
+        .is_ok()
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+async fn probe_port(ip: &str, port: u16, per_host: Duration) -> bool {
+    matches!(
+        compat::timeout(per_host, tokio::net::TcpStream::connect((ip, port))).await,
+        Ok(Ok(_))
+    )
 }
 
 const RECONNECT_BASE_MS: u64 = 1_000;
@@ -382,7 +418,7 @@ pub struct App {
     background_task: Option<BackgroundTask>,
     network_scan: Option<ScanProgress>,
     #[cfg(not(target_arch = "wasm32"))]
-    network_scan_task: Option<TaskHandle<Vec<String>>>,
+    network_scan_task: Option<TaskHandle<Result<Vec<String>, String>>>,
     changed: BTreeMap<RegisterCell, DateTime<Utc>>,
     read_log: BTreeMap<RegisterCell, (u16, DateTime<Utc>)>,
     value_history: BTreeMap<RegisterCell, VecDeque<(u16, DateTime<Utc>)>>,

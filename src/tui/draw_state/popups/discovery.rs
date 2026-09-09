@@ -28,6 +28,7 @@ pub fn draw(params: &DiscoveryParams, app: &App, frame: &mut Frame, area: Rect, 
 
     let action = match field {
         DiscoveryField::ScanNetwork => "Scan",
+        DiscoveryField::ScanMethod => "Toggle",
         DiscoveryField::Port(_) => "Use port",
         DiscoveryField::Found(_) => "Use address",
         _ => "Connect",
@@ -251,6 +252,15 @@ fn side_lines(
                 "Port",
                 SIDE_LABEL,
                 edit_value(p.net_port.to_string(), on, false),
+                on,
+                None,
+            ));
+            let on = selected(DiscoveryField::ScanMethod);
+            lines.push(row(
+                theme,
+                "Scan by",
+                SIDE_LABEL,
+                edit_value(p.scan_method.label().to_string(), on, true),
                 on,
                 None,
             ));

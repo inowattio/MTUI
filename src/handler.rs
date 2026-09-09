@@ -485,6 +485,11 @@ async fn handle_discovery_key(key_event: KeyEvent, app: &mut App) {
         c if c == kb.exit => app.close_popup(),
         c if c == kb.action => match field {
             DiscoveryField::ScanNetwork => app.start_network_scan(),
+            DiscoveryField::ScanMethod => {
+                if let Some(d) = app.discovery_mut() {
+                    d.cycle_scan_method(true);
+                }
+            }
             DiscoveryField::Port(index) => app.choose_port(index),
             DiscoveryField::Found(index) => app.use_found_ip(index),
             _ => app.discovery_connect(),
@@ -565,6 +570,7 @@ fn cycle_field(d: &mut DiscoveryParams, field: DiscoveryField, forward: bool, sh
     match field {
         DiscoveryField::Interface => d.set_interface(cycle(&kinds, d.interface, forward)),
         DiscoveryField::Baud => d.cycle_baud(forward),
+        DiscoveryField::ScanMethod => d.cycle_scan_method(forward),
         DiscoveryField::DataBits => d.data_bits = cycle(&DataBits::ALL, d.data_bits, forward),
         DiscoveryField::Parity => d.parity = cycle(&Parity::ALL, d.parity, forward),
         DiscoveryField::StopBits => d.stop_bits = cycle(&StopBits::ALL, d.stop_bits, forward),

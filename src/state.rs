@@ -80,6 +80,24 @@ field_enum! {
     }
 }
 
+field_enum! {
+    #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+    pub enum ScanMethod {
+        #[default]
+        Ping,
+        Port,
+    }
+}
+
+impl ScanMethod {
+    pub fn label(self) -> &'static str {
+        match self {
+            ScanMethod::Ping => "ICMP ping",
+            ScanMethod::Port => "TCP port",
+        }
+    }
+}
+
 impl InterfaceKind {
     pub fn label(self) -> &'static str {
         match self {
@@ -112,6 +130,7 @@ pub enum DiscoveryField {
     StopBits,
     Ip,
     NetPort,
+    ScanMethod,
     ScanNetwork,
     Found(usize),
 }
@@ -138,6 +157,7 @@ pub struct DiscoveryParams {
     pub stop_bits: StopBits,
     pub ip: String,
     pub net_port: u16,
+    pub scan_method: ScanMethod,
     pub slave_id: u8,
     pub connect_timeout_ms: u64,
     pub command_timeout_ms: u64,
@@ -163,6 +183,7 @@ impl Default for DiscoveryParams {
             stop_bits: StopBits::One,
             ip: "127.0.0.1".to_string(),
             net_port: 502,
+            scan_method: ScanMethod::default(),
             slave_id: 1,
             connect_timeout_ms: 1000,
             command_timeout_ms: 2000,
@@ -193,10 +214,12 @@ impl DiscoveryParams {
                 .map(Port)
                 .chain([CustomPath, Baud, DataBits, Parity, StopBits])
                 .collect(),
-            InterfaceKind::Network | InterfaceKind::RtuOverTcp => [Ip, NetPort, ScanNetwork]
-                .into_iter()
-                .chain((0..self.found.len()).map(Found))
-                .collect(),
+            InterfaceKind::Network | InterfaceKind::RtuOverTcp => {
+                [Ip, NetPort, ScanMethod, ScanNetwork]
+                    .into_iter()
+                    .chain((0..self.found.len()).map(Found))
+                    .collect()
+            }
         }
     }
 
@@ -210,6 +233,10 @@ impl DiscoveryParams {
 
     pub fn is_preset_baud(&self) -> bool {
         Self::BAUD_PRESETS.contains(&self.baud_rate)
+    }
+
+    pub fn cycle_scan_method(&mut self, forward: bool) {
+        self.scan_method = crate::num_ops::cycle(&ScanMethod::ALL, self.scan_method, forward);
     }
 
     pub fn cycle_baud(&mut self, forward: bool) {
