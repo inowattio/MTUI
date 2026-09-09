@@ -223,7 +223,7 @@ def capture(debug):
     # ---- Scene 7: settings, toggle Display -> "Show frame render time" ----
     key('s', 0.5)
     watch(0.7)
-    for _ in range(3):
+    for _ in range(2):
         key(DOWN, 0.25)      # -> Display
     key(ENTER, 0.4)
     watch(0.5)
