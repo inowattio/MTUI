@@ -24,7 +24,7 @@ pub(super) fn draw(
         Hint::key(kb.switch_view, "Access"),
         Hint::pair(KeyCode::Left, KeyCode::Right, "Scroll"),
         Hint::key(kb.refresh, "Reread"),
-        Hint::key(kb.exit, "Close"),
+        Hint::key(KeyCode::Esc, "Close"),
     ];
 
     let value_max = params

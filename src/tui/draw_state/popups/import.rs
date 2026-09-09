@@ -42,7 +42,7 @@ pub(super) fn draw(
         theme,
         [
             Hint::key(kb.action, "Import"),
-            Hint::pair(KeyCode::Backspace, kb.exit, "Cancel"),
+            Hint::pair(KeyCode::Backspace, KeyCode::Esc, "Cancel"),
         ],
     ));
 

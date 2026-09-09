@@ -1,4 +1,5 @@
 use crate::app::App;
+use crate::input::KeyCode;
 use crate::state::{DiscoveryColumn, DiscoveryField, DiscoveryParams, InterfaceKind};
 use crate::tui::draw_state::{cyclable, dim_line, edit_value, field_row, marker};
 use crate::tui::hints::{self, Hint};
@@ -38,14 +39,14 @@ pub fn draw(params: &DiscoveryParams, app: &App, frame: &mut Frame, area: Rect, 
             Hint::pair(kb.move_up, kb.move_down, "Move"),
             Hint::key(kb.switch_view, "Section"),
             Hint::key(kb.action, action),
-            Hint::key(kb.exit, "Back"),
+            Hint::key(KeyCode::Esc, "Back"),
         ];
         (hints::width(&items) as u16, hints::footer(theme, items))
     } else {
         let items = [
             Hint::pair(kb.move_up, kb.move_down, "Move"),
             Hint::key(kb.action, action),
-            Hint::key(kb.exit, "Back"),
+            Hint::key(KeyCode::Esc, "Back"),
         ];
         (hints::width(&items) as u16, hints::footer(theme, items))
     };

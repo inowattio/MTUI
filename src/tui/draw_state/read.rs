@@ -2,6 +2,7 @@ use super::popups::draw_popup;
 use crate::app::App;
 use crate::config::{Column, Config};
 use crate::constants::{NO_VALUE, UNINTERPRETABLE};
+use crate::input::KeyCode;
 use crate::interpretator::fmt_num;
 use crate::register::{RegisterCell, RegisterType};
 use crate::state::{ReadPanel, ReadParams};
@@ -674,7 +675,7 @@ fn draw_graph(
                 [
                     Hint::pair(kb.action, kb.refresh, "Read"),
                     Hint::key(kb.pause, "Pause"),
-                    Hint::pair(kb.exit, kb.graph, "Close"),
+                    Hint::pair(KeyCode::Esc, kb.graph, "Close"),
                 ],
             )
             .spans,

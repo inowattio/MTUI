@@ -1,4 +1,5 @@
 use crate::config::Keybinds;
+use crate::input::KeyCode;
 use crate::state::{SweepConfigParams, SweepField};
 use crate::tui::draw_state::{edit_value, field_row, marker};
 use crate::tui::hints::{self, Hint};
@@ -63,7 +64,7 @@ pub(super) fn draw(
             theme,
             [
                 Hint::key(kb.action, "Start/Stop"),
-                Hint::key(kb.exit, "Close"),
+                Hint::key(KeyCode::Esc, "Close"),
             ],
         ),
     ];

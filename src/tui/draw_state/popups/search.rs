@@ -1,5 +1,6 @@
 use crate::app::App;
 use crate::constants::{SEARCH_POPUP_MAX_HEIGHT_PERCENT, SEARCH_POPUP_MAX_WIDTH_PERCENT};
+use crate::input::KeyCode;
 use crate::state::{SearchMatch, SearchParams};
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
@@ -33,7 +34,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, sear
     let footer = [
         Hint::pair(kb.move_up, kb.move_down, "Select"),
         Hint::key(kb.action, "Go"),
-        Hint::key(kb.exit, "Close"),
+        Hint::key(KeyCode::Esc, "Close"),
     ];
     let longest = search.matches[top..end]
         .iter()

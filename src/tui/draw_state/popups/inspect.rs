@@ -37,7 +37,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, mode
             Hint::pair(KeyCode::Left, KeyCode::Right, "Mode"),
             Hint::key(kb.refresh, "Refresh"),
             Hint::key(kb.word_order, "Cycle order"),
-            Hint::key(kb.exit, "Close"),
+            Hint::key(KeyCode::Esc, "Close"),
         ],
     );
 

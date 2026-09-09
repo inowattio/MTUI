@@ -53,6 +53,7 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) {
     }
 
     match key_event.code {
+        KeyCode::Esc => app.request_quit(),
         KeyCode::Left | KeyCode::Right if app.read().panel == ReadPanel::Matrix => {
             let cols = app.config.matrix_cols;
             let p = app.read_mut();
@@ -124,7 +125,6 @@ fn move_read_cursor(app: &mut App, code: KeyCode) {
 async fn run_action(app: &mut App, action: KeybindAction) {
     use KeybindAction::*;
     match action {
-        Exit => app.request_quit(),
         Pin => app.pin(),
         Dump => app.open_dump(),
         Help => app.open_help(),
@@ -182,7 +182,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
         PopupKind::Discovery => handle_discovery_key(key_event, app).await,
 
         PopupKind::Help => match key_event.code {
-            c if c == kb.exit => app.close_popup(),
+            KeyCode::Esc => app.close_popup(),
             c if c == kb.action => {
                 if let Some(action) = app.help_commit() {
                     run_action(app, action).await;
@@ -196,17 +196,17 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
         },
 
         PopupKind::About => match key_event.code {
-            c if c == kb.exit || c == kb.about => app.close_popup(),
+            c if c == KeyCode::Esc || c == kb.about => app.close_popup(),
             _ => {}
         },
 
         PopupKind::Stats => match key_event.code {
-            c if c == kb.exit || c == kb.stats => app.close_popup(),
+            c if c == KeyCode::Esc || c == kb.stats => app.close_popup(),
             _ => {}
         },
 
         PopupKind::Inspect => match key_event.code {
-            c if c == kb.exit || c == kb.inspect => app.close_popup(),
+            c if c == KeyCode::Esc || c == kb.inspect => app.close_popup(),
             c if c == kb.refresh || c == kb.action => app.refresh().await,
             c if c == kb.word_order => app.toggle_word_order(),
             KeyCode::Left => app.inspect_cycle(false),
@@ -218,7 +218,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
         },
 
         PopupKind::DeviceId => match key_event.code {
-            c if c == kb.exit || c == kb.device_id => app.close_popup(),
+            c if c == KeyCode::Esc || c == kb.device_id => app.close_popup(),
             c if c == kb.refresh || c == kb.action => app.device_id_refresh(),
             c if c == kb.switch_view => app.device_id_cycle(true),
             c if c == kb.switch_view_back => app.device_id_cycle(false),
@@ -228,7 +228,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
         },
 
         PopupKind::Raw => match key_event.code {
-            c if c == kb.exit => app.close_popup(),
+            KeyCode::Esc => app.close_popup(),
             c if c == kb.action => app.raw_send(),
             c if c == kb.move_up => app.raw_move(false),
             c if c == kb.move_down => app.raw_move(true),
@@ -239,12 +239,12 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
 
         PopupKind::Dump => match key_event.code {
             c if c == kb.action => app.commit_dump(),
-            c if c == kb.exit || c == kb.dump => app.close_popup(),
+            c if c == KeyCode::Esc || c == kb.dump => app.close_popup(),
             _ => {}
         },
 
         PopupKind::Columns => match key_event.code {
-            c if c == kb.exit => app.close_popup(),
+            KeyCode::Esc => app.close_popup(),
             c if c == kb.action => app.columns_toggle_selected(),
             c if c == kb.move_up => app.columns_move(false),
             c if c == kb.move_down => app.columns_move(true),
@@ -256,7 +256,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
         },
 
         PopupKind::Write => match key_event.code {
-            c if c == kb.exit => app.close_popup(),
+            KeyCode::Esc => app.close_popup(),
             c if c == kb.action => app.commit_write(),
             c if c == kb.write => app.write_toggle_type(),
             c if c == kb.move_up => {
@@ -301,7 +301,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
         },
 
         PopupKind::Search => match key_event.code {
-            c if c == kb.exit => app.close_popup(),
+            KeyCode::Esc => app.close_popup(),
             c if c == kb.action => app.search_commit(),
             c if c == kb.move_up => app.search_move(false),
             c if c == kb.move_down => app.search_move(true),
@@ -311,7 +311,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
         },
 
         PopupKind::Label => match key_event.code {
-            c if c == kb.exit => app.close_popup(),
+            KeyCode::Esc => app.close_popup(),
             c if c == kb.action => app.commit_label(),
             KeyCode::Backspace => app.label_backspace(),
             KeyCode::Char(c) => app.label_input(c),
@@ -326,7 +326,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
                 return;
             };
             match key_event.code {
-                c if c == kb.exit => app.close_popup(),
+                KeyCode::Esc => app.close_popup(),
                 c if c == kb.move_up => app.custom_move(false),
                 c if c == kb.move_down => app.custom_move(true),
                 KeyCode::Left => app.custom_cycle(field, false),
@@ -347,7 +347,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
                 return;
             };
             match key_event.code {
-                c if c == kb.exit || c == kb.slave => app.close_popup(),
+                c if c == KeyCode::Esc || c == kb.slave => app.close_popup(),
                 c if c == kb.action => match field {
                     SlaveField::Id => app.commit_slave().await,
                     SlaveField::Hit(index) => app.commit_slave_hit(index).await,
@@ -367,7 +367,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
         }
 
         PopupKind::Logs => match key_event.code {
-            c if c == kb.exit || c == kb.logs => app.close_popup(),
+            c if c == KeyCode::Esc || c == kb.logs => app.close_popup(),
             c if c == kb.move_up => app.logs_scroll(-1),
             c if c == kb.move_down => app.logs_scroll(1),
             c if c == kb.page_up => app.logs_scroll(-(LogsParams::VISIBLE as i32)),
@@ -383,7 +383,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
                 return;
             };
             match key_event.code {
-                c if c == kb.exit || c == kb.sweep => app.close_popup(),
+                c if c == KeyCode::Esc || c == kb.sweep => app.close_popup(),
                 c if c == kb.action => app.sweep_action(),
                 c if c == kb.move_up => app.sweep_config_move(false),
                 c if c == kb.move_down => app.sweep_config_move(true),
@@ -406,7 +406,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
             };
             match key_event.code {
                 c if c == kb.action => confirm(app),
-                c if c == kb.exit || c == KeyCode::Backspace => cancel(app),
+                c if c == KeyCode::Esc || c == KeyCode::Backspace => cancel(app),
                 _ => {}
             }
         }
@@ -482,7 +482,7 @@ async fn handle_discovery_key(key_event: KeyEvent, app: &mut App) {
     };
 
     match key_event.code {
-        c if c == kb.exit => app.close_popup(),
+        KeyCode::Esc => app.close_popup(),
         c if c == kb.action => match field {
             DiscoveryField::ScanNetwork => app.start_network_scan(),
             DiscoveryField::ScanMethod => {
@@ -582,7 +582,7 @@ fn cycle_field(d: &mut DiscoveryParams, field: DiscoveryField, forward: bool, sh
 fn handle_logs_view_key(key_event: KeyEvent, app: &mut App) {
     let kb = app.config.keybinds;
     match key_event.code {
-        c if c == kb.exit || c == kb.app_logs => app.close_log_view(),
+        c if c == KeyCode::Esc || c == kb.app_logs => app.close_log_view(),
         c if c == kb.move_up => app.log_view_scroll(-1),
         c if c == kb.move_down => app.log_view_scroll(1),
         c if c == kb.page_up => app.log_view_scroll(-(app.visible_rows.get() as i32)),
@@ -616,7 +616,7 @@ fn handle_settings_category_key(key_event: KeyEvent, app: &mut App) {
     let count = SettingsCategory::ALL.len() as u16;
 
     match key_event.code {
-        c if c == kb.exit || c == kb.settings => app.close_settings(),
+        c if c == KeyCode::Esc || c == kb.settings => app.close_settings(),
         c if c == kb.move_up => {
             if let Some(s) = app.settings_mut() {
                 s.category = wrap_index(s.category, count, false);
@@ -646,7 +646,7 @@ async fn handle_settings_field_key(key_event: KeyEvent, app: &mut App) {
     };
 
     match key_event.code {
-        c if c == kb.exit => {
+        KeyCode::Esc => {
             if let Some(s) = app.settings_mut() {
                 s.focus = SettingsFocus::Categories;
             }

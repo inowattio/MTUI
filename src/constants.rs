@@ -14,7 +14,6 @@ pub const SEARCH_POPUP_MAX_WIDTH_PERCENT: u16 = 50;
 pub mod keybind {
     use crate::input::KeyCode;
 
-    pub const EXIT: KeyCode = KeyCode::Esc;
     pub const PIN: KeyCode = KeyCode::Char('p');
     pub const DUMP: KeyCode = KeyCode::Char('d');
     pub const HELP: KeyCode = KeyCode::Char('h');

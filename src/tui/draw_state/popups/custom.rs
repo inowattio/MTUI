@@ -44,7 +44,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &
         Hint::pair(KeyCode::Left, KeyCode::Right, "Change"),
         Hint::key(kb.action, "Save"),
         Hint::key(KeyCode::Delete, "Remove"),
-        Hint::key(kb.exit, "Close"),
+        Hint::key(KeyCode::Esc, "Close"),
     ];
     let width = hints::min_width(56, &footer);
     let inner = width.saturating_sub(2) as usize;

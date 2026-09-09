@@ -1,4 +1,5 @@
 use crate::config::Keybinds;
+use crate::input::KeyCode;
 use crate::state::LogsParams;
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
@@ -29,7 +30,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, kb: &Keybinds, 
         [
             Hint::pair(kb.move_up, kb.move_down, "Scroll"),
             Hint::pair(kb.page_up, kb.page_down, "Page"),
-            Hint::key(kb.exit, "Close"),
+            Hint::key(KeyCode::Esc, "Close"),
         ],
     ));
 

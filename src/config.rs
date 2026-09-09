@@ -116,7 +116,6 @@ macro_rules! keybinds {
 }
 
 keybinds! {
-    Exit => exit : "Quit" = EXIT,
     Pin => pin : "Add/remove pin" = PIN,
     Dump => dump : "Dump read data" = DUMP,
     Help => help : "Help" = HELP,

@@ -1,4 +1,5 @@
 use crate::config::Keybinds;
+use crate::input::KeyCode;
 use crate::state::{RawField, RawParams};
 use crate::tui::hints::Hint;
 use crate::tui::theme::Theme;
@@ -52,7 +53,7 @@ pub(super) fn draw(
         [
             Hint::pair(kb.move_up, kb.move_down, "Field"),
             Hint::key(kb.action, "Send"),
-            Hint::key(kb.exit, "Close"),
+            Hint::key(KeyCode::Esc, "Close"),
         ],
     );
 

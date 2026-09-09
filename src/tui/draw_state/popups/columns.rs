@@ -52,7 +52,7 @@ pub(super) fn draw(
     let footer = [
         Hint::pair(kb.move_down, KeyCode::Right, "Move"),
         Hint::key(kb.action, "Toggle"),
-        Hint::key(kb.exit, "Close"),
+        Hint::key(KeyCode::Esc, "Close"),
     ];
     let width = hints::min_width((CELL as u16 + 6) * 2 + 3, &footer);
     lines.push(hints::footer(theme, footer));

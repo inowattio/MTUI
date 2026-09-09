@@ -1,5 +1,6 @@
 use crate::app::App;
 use crate::config::{KeybindAction, Keybinds};
+use crate::input::KeyCode;
 use crate::state::HelpParams;
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
@@ -83,7 +84,7 @@ pub(super) fn draw(
     let footer = [
         Hint::pair(kb.move_up, kb.move_down, "Select"),
         Hint::key(kb.action, "Run"),
-        Hint::key(kb.exit, "Close"),
+        Hint::key(KeyCode::Esc, "Close"),
     ];
     let grid_w = 2 + col_key_w.iter().map(|&kw| cell_w(kw)).sum::<usize>();
     let width = grid_w.max(hints::width(&footer)) as u16;

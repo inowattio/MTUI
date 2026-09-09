@@ -1,4 +1,5 @@
 use crate::config::Keybinds;
+use crate::input::KeyCode;
 use crate::state::LabelParams;
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
@@ -32,7 +33,10 @@ pub(super) fn draw(
         ]),
         hints::footer(
             theme,
-            [Hint::key(kb.action, "Set"), Hint::key(kb.exit, "Cancel")],
+            [
+                Hint::key(kb.action, "Set"),
+                Hint::key(KeyCode::Esc, "Cancel"),
+            ],
         ),
     ];
 

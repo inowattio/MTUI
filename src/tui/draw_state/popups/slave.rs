@@ -1,4 +1,5 @@
 use crate::config::Keybinds;
+use crate::input::KeyCode;
 use crate::interpretator::ascii_words;
 use crate::state::{ScanState, SlaveField, SlaveParams, SlaveScanHit};
 use crate::tui::draw_state::{dim_line, edit_value, field_row, marker};
@@ -47,7 +48,7 @@ pub(super) fn draw(
             Hint::pair(kb.move_up, kb.move_down, "Field"),
             Hint::key(kb.pause, "Toggle"),
             Hint::key(kb.action, primary),
-            Hint::key(kb.exit, "Close"),
+            Hint::key(KeyCode::Esc, "Close"),
         ];
         (hints::width(&items), vec![hints::footer(theme, items)])
     } else {
@@ -55,7 +56,10 @@ pub(super) fn draw(
             Hint::pair(kb.move_up, kb.move_down, "Field"),
             Hint::key(kb.pause, "Toggle"),
         ];
-        let actions = [Hint::key(kb.action, primary), Hint::key(kb.exit, "Close")];
+        let actions = [
+            Hint::key(kb.action, primary),
+            Hint::key(KeyCode::Esc, "Close"),
+        ];
         (
             hints::width(&nav).max(hints::width(&actions)),
             vec![hints::footer(theme, nav), hints::footer(theme, actions)],

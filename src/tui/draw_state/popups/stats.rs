@@ -1,6 +1,6 @@
 use crate::app::App;
-use crate::config::Keybinds;
 use crate::constants::NO_VALUE;
+use crate::input::KeyCode;
 use crate::interpretator::format_ago;
 use crate::tui::hints::Hint;
 use crate::tui::theme::Theme;
@@ -12,7 +12,7 @@ use std::fmt::Write as _;
 
 const ERROR_W: usize = 48;
 
-pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, kb: &Keybinds, app: &App) {
+pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App) {
     const LABEL_W: usize = 8;
     let s = &app.stats;
 
@@ -64,7 +64,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, kb: &Keybinds, 
         lines.push(field("Error", format!("{short} \u{b7} {ago}")));
     }
 
-    super::push_footer(&mut lines, theme, [Hint::key(kb.exit, "Close")]);
+    super::push_footer(&mut lines, theme, [Hint::key(KeyCode::Esc, "Close")]);
 
     let content_w = lines.iter().map(Line::width).max().unwrap_or(0) as u16;
     // borders (2) + a column of right padding

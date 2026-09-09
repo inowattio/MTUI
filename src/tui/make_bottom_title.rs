@@ -56,7 +56,7 @@ pub fn make_bottom_title(theme: &Theme, app: &App) -> Line<'static> {
             } else {
                 Hint::key(kb.action, "Apply")
             };
-            hints::footer(theme, [primary, Hint::key(kb.exit, "Back")])
+            hints::footer(theme, [primary, Hint::key(KeyCode::Esc, "Back")])
         }
         State::Logs(l) => hints::footer(
             theme,
@@ -64,7 +64,7 @@ pub fn make_bottom_title(theme: &Theme, app: &App) -> Line<'static> {
                 Hint::pair(kb.move_up, kb.move_down, "Scroll"),
                 Hint::pair(KeyCode::Left, KeyCode::Right, "Pan"),
                 Hint::key(kb.write, if l.wrap { "Unwrap" } else { "Wrap" }),
-                Hint::key(kb.exit, "Back"),
+                Hint::key(KeyCode::Esc, "Back"),
             ],
         ),
     }
