@@ -229,6 +229,9 @@ fn description(field: SettingsField) -> &'static str {
         SettingsField::ShowClock => "Show the current time in the bottom bar",
         SettingsField::ShowFrameTime => "Show how long each frame takes to render",
         SettingsField::ShowRam => "Show the memory used by the application",
+        SettingsField::ShowStatusLabel => {
+            "Show the connection state as a word next to the refresh countdown"
+        }
         SettingsField::ShowAscii => "Show the read registers decoded as an ASCII string",
         SettingsField::ShowInactiveTabs => {
             "Show every panel and register type tab, not just the active one"
@@ -462,6 +465,11 @@ fn field_view(
             None,
         ),
         SettingsField::ShowRam => ("Show RAM usage", on_off(device.show_ram), None),
+        SettingsField::ShowStatusLabel => (
+            "Show connection label",
+            on_off(device.show_status_label),
+            None,
+        ),
         SettingsField::ShowAscii => ("Show ASCII of all data", on_off(device.show_ascii), None),
         SettingsField::ShowInactiveTabs => (
             "Show inactive tabs",

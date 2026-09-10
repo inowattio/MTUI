@@ -153,6 +153,9 @@ impl App {
                 self.config.show_frame_time = !self.config.show_frame_time
             }
             SettingsField::ShowRam => self.config.show_ram = !self.config.show_ram,
+            SettingsField::ShowStatusLabel => {
+                self.config.show_status_label = !self.config.show_status_label
+            }
             SettingsField::ShowAscii => self.config.show_ascii = !self.config.show_ascii,
             SettingsField::ShowInactiveTabs => {
                 self.config.show_inactive_tabs = !self.config.show_inactive_tabs

@@ -5,10 +5,11 @@ use crate::constants::{NO_VALUE, UNINTERPRETABLE};
 use crate::input::KeyCode;
 use crate::interpretator::fmt_num;
 use crate::register::{RegisterCell, RegisterType};
+use crate::state::ConnectionStatus;
 use crate::state::{ReadPanel, ReadParams};
 use crate::tui::hints::{self, Hint};
 use crate::tui::rows_table::{RowsTable, TableRow};
-use crate::tui::theme::{Theme, spinner_frame};
+use crate::tui::theme::{Theme, spinner_frame, status_parts};
 use chrono::{DateTime, Utc};
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
@@ -476,19 +477,39 @@ pub fn draw(
 pub fn live_status(app: &App, params: &ReadParams, theme: &Theme) -> Vec<Span<'static>> {
     let mut fields: Vec<Vec<Span<'static>>> = Vec::new();
 
-    if app.paused {
-        fields.push(vec![Span::styled("|| paused", theme.warn_style())]);
-    } else if let Some(interval) = app.config.update_interval_ms.filter(|_| !app.sweep.active) {
-        let remaining = if params.loading {
-            0
-        } else {
-            (interval as u128).saturating_sub(params.refresh_timer.elapsed().as_millis())
-        };
-        fields.push(vec![Span::styled(
-            format!(" {:>4.1}s", remaining as f64 / 1000.0),
-            theme.ok_style(),
-        )]);
+    let (symbol, label, style) = status_parts(&app.connection, theme);
+    let settled = matches!(
+        app.connection,
+        ConnectionStatus::Connected | ConnectionStatus::Error(_)
+    );
+    let interval = app.config.update_interval_ms.filter(|_| !app.sweep.active);
+    let seconds = |s: f64| format!("{s:>3.1}s");
+    let text = match interval {
+        _ if params.loading => Some(seconds(params.read_started.elapsed().as_secs_f64())),
+        _ if settled && app.paused => None,
+        Some(interval) if settled => {
+            let remaining =
+                (interval as u128).saturating_sub(params.refresh_timer.elapsed().as_millis());
+            Some(seconds(remaining as f64 / 1000.0))
+        }
+        Some(_) if matches!(app.connection, ConnectionStatus::Unknown) => Some("_._s".to_string()),
+        _ => None,
+    };
+    let mut field = vec![Span::styled(format!("{symbol} "), style)];
+    match text {
+        Some(text) => {
+            field.push(Span::styled(text, style));
+            if app.config.show_status_label {
+                field.push(Span::styled(format!(" {label}"), theme.dim_style()));
+            }
+        }
+        None if settled && app.paused => {
+            field.push(Span::styled("paused".to_string(), theme.warn_style()));
+        }
+        None => field.push(Span::styled(label.to_string(), style)),
     }
+    fields.push(field);
+
     if app.sweep.active {
         let mode = if app.sweep.continuous { " loop" } else { "" };
         let span = app.sweep.to.saturating_sub(app.sweep.from);
@@ -512,9 +533,7 @@ pub fn live_status(app: &App, params: &ReadParams, theme: &Theme) -> Vec<Span<'s
     }
 
     let mut spans = theme.join_dotted(fields);
-    if !spans.is_empty() {
-        spans.push(Span::raw("  "));
-    }
+    spans.push(Span::raw(" "));
     spans
 }
 

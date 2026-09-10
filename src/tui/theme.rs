@@ -235,7 +235,10 @@ pub fn spinner_frame(frame: u64) -> &'static str {
     SPINNER_FRAMES[(frame as usize) % SPINNER_FRAMES.len()]
 }
 
-pub fn status_span(status: &ConnectionStatus, theme: &Theme) -> Span<'static> {
+pub fn status_parts(
+    status: &ConnectionStatus,
+    theme: &Theme,
+) -> (&'static str, &'static str, Style) {
     let (symbol, label, color) = match status {
         ConnectionStatus::Unknown => ("o", "no data", theme.dim),
         ConnectionStatus::Reading => (":", "reading", theme.warn),
@@ -243,8 +246,14 @@ pub fn status_span(status: &ConnectionStatus, theme: &Theme) -> Span<'static> {
         ConnectionStatus::Reconnecting => ("~", "reconnecting", theme.warn),
         ConnectionStatus::Error(_) => ("!", "error", theme.err),
     };
-    Span::styled(
-        format!("{symbol} {label:<9} "),
+    (
+        symbol,
+        label,
         Style::default().fg(color).add_modifier(Modifier::BOLD),
     )
+}
+
+pub fn status_span(status: &ConnectionStatus, theme: &Theme) -> Span<'static> {
+    let (symbol, label, style) = status_parts(status, theme);
+    Span::styled(format!("{symbol} {label} "), style)
 }

@@ -766,6 +766,7 @@ field_enum! {
         ShowClock,
         ShowFrameTime,
         ShowRam,
+        ShowStatusLabel,
         ShowAscii,
         ShowInactiveTabs,
         ShowReadWindow,
@@ -814,6 +815,7 @@ impl SettingsField {
                 | SettingsField::ShowClock
                 | SettingsField::ShowFrameTime
                 | SettingsField::ShowRam
+                | SettingsField::ShowStatusLabel
                 | SettingsField::ShowAscii
                 | SettingsField::ShowInactiveTabs
                 | SettingsField::ShowReadWindow
@@ -946,6 +948,7 @@ impl SettingsCategory {
                     ShowClock,
                     ShowFrameTime,
                     ShowRam,
+                    ShowStatusLabel,
                     ShowAscii,
                     ShowInactiveTabs,
                 ],
@@ -1196,6 +1199,7 @@ pub struct ReadParams {
     pub register_type: RegisterType,
     pub read_duration: Option<Duration>,
     pub loading: bool,
+    pub read_started: Instant,
     pub read_error: Option<String>,
     pub status: Option<StatusMessage>,
     pub status_at: Instant,
@@ -1220,6 +1224,7 @@ impl Default for ReadParams {
             register_type: Default::default(),
             read_duration: None,
             loading: false,
+            read_started: Instant::now(),
             read_error: None,
             status: None,
             status_at: Instant::now(),

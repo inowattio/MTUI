@@ -39,13 +39,10 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     }
     let clock_line = Line::from(clock_spans);
 
-    let live = match &app.state {
+    let left_top = match &app.state {
         State::Read(p) => draw_state::read::live_status(app, p, &theme),
-        _ => Vec::new(),
+        _ => vec![status_span(&app.connection, &theme)],
     };
-
-    let mut left_top = vec![status_span(&app.connection, &theme)];
-    left_top.extend(live);
 
     let mut mode_spans = Vec::new();
     if let State::Logs(l) = &app.state {

@@ -504,6 +504,7 @@ impl App {
         let (panel, register_type) = {
             let p = self.read_mut();
             p.loading = true;
+            p.read_started = Instant::now();
             p.scroll_to_cursor(visible, cols);
             (p.panel, p.register_type)
         };
