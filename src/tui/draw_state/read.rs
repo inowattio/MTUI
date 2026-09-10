@@ -9,7 +9,7 @@ use crate::state::{ReadPanel, ReadParams};
 use crate::tui::hints::{self, Hint};
 use crate::tui::rows_table::{RowsTable, TableRow};
 use crate::tui::theme::{Theme, spinner_frame};
-use chrono::{DateTime, Local, Utc};
+use chrono::{DateTime, Utc};
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
@@ -83,7 +83,7 @@ impl TableCtx<'_> {
 
     fn main_table(&self, visible: u16, header: &str, ascii: Option<&str>) -> RowsTable {
         let (params, app, theme) = (self.params, self.app, self.theme);
-        let now = Local::now();
+        let now = Utc::now();
         let mut rows: Vec<(String, Style)> = Vec::with_capacity(visible as usize);
 
         let show_window = app.config.show_read_window;
@@ -99,13 +99,11 @@ impl TableCtx<'_> {
 
             let (text, base_style) = match app.cell_row((params.register_type, addr), now) {
                 Some((text, changed)) => (text, theme.row_style(zebra, changed)),
-                None => {
-                    let label = app.label_text(params.register_type, addr);
-                    (
-                        app.interpreter.placeholder(addr, label.as_deref()),
-                        theme.dim_style(),
-                    )
-                }
+                None => (
+                    app.interpreter
+                        .placeholder(addr, app.label((params.register_type, addr))),
+                    theme.dim_style(),
+                ),
             };
             let style = if selected {
                 theme.selected_style()
@@ -143,7 +141,7 @@ impl TableCtx<'_> {
 
     fn list_table(&self, cells: &[RegisterCell], top: usize, ascii: Option<&str>) -> RowsTable {
         let (params, app, theme) = (self.params, self.app, self.theme);
-        let now = Local::now();
+        let now = Utc::now();
         let show_window = app.config.show_read_window;
         let read_cells = show_window.then(|| app.panel_read_cells());
         let mut header = format!("{:<2}{}", "T", app.interpreter.header());
@@ -161,13 +159,11 @@ impl TableCtx<'_> {
 
             let (text, changed) = match app.cell_row((kind, address), now) {
                 Some(row) => row,
-                None => {
-                    let label = app.label_text(kind, address);
-                    (
-                        app.interpreter.placeholder(address, label.as_deref()),
-                        false,
-                    )
-                }
+                None => (
+                    app.interpreter
+                        .placeholder(address, app.label((kind, address))),
+                    false,
+                ),
             };
 
             let text = match &read_cells {

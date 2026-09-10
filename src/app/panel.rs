@@ -113,7 +113,7 @@ impl App {
         for &(kind, addr) in window {
             cells.insert((kind, addr));
             if let Some(rule) = self.custom_rules.get(&(kind, addr)) {
-                for word_address in rule.word_addresses().into_iter().skip(1) {
+                for word_address in rule.word_addresses().skip(1) {
                     cells.insert((kind, word_address));
                 }
             }
@@ -166,16 +166,20 @@ impl App {
     }
 
     pub fn cell_value(&self, cell: RegisterCell) -> Option<u16> {
-        self.read_log.get(&cell).map(|&(value, _)| value)
+        self.read_log.get(&cell).map(|entry| entry.value)
     }
 
     pub fn cell_changed(&self, cell: RegisterCell) -> bool {
+        self.changed_since(cell, Utc::now())
+    }
+
+    fn changed_since(&self, cell: RegisterCell, now: DateTime<Utc>) -> bool {
         let Some(&at) = self.changed.get(&cell) else {
             return false;
         };
         match self.config.changed_expiry_ms {
             None => true,
-            Some(ms) => Utc::now().signed_duration_since(at).num_milliseconds() < ms as i64,
+            Some(ms) => now.signed_duration_since(at).num_milliseconds() < ms as i64,
         }
     }
 
@@ -185,10 +189,11 @@ impl App {
             return self.inspect_aggregates(cell, mode);
         }
         let (kind, addr) = cell;
-        let Some(&(value, time)) = self.read_log.get(&cell) else {
+        let Some(entry) = self.read_log.get(&cell) else {
             return Vec::new();
         };
-        let at = |address: u16| self.read_log.get(&(kind, address)).map(|&(v, _)| v);
+        let (value, time) = (entry.value, entry.at);
+        let at = |address: u16| self.read_log.get(&(kind, address)).map(|e| e.value);
         let custom = self.custom_value(cell, value, self.config.device.word_order, &at);
         let label = self.labels.get(&cell).map(String::as_str);
         let mut lines = vec![
@@ -263,28 +268,28 @@ impl App {
             let Some(rule) = self.custom_rule(cell) else {
                 return Vec::new();
             };
-            return self.combined_history(cell.0, &rule.word_addresses(), |regs| {
+            return self.combined_history(cell.0, rule.word_addresses(), |regs| {
                 rule.numeric(regs, order)
             });
         }
         let Some(width) = column.graph_width() else {
             return Vec::new();
         };
-        let addresses: Vec<u16> = (0..width as u16).map(|o| cell.1.wrapping_add(o)).collect();
-        self.combined_history(cell.0, &addresses, |regs| graph_value(column, order, regs))
+        let addresses = (0..width as u16).map(|o| cell.1.wrapping_add(o));
+        self.combined_history(cell.0, addresses, |regs| graph_value(column, order, regs))
     }
 
     fn combined_history<F>(
         &self,
         kind: RegisterType,
-        addresses: &[u16],
+        addresses: impl Iterator<Item = u16>,
         mut value: F,
     ) -> Vec<(DateTime<Utc>, f64)>
     where
         F: FnMut(&[u16]) -> Option<f64>,
     {
-        let mut histories = Vec::with_capacity(addresses.len());
-        for &address in addresses {
+        let mut histories = Vec::new();
+        for address in addresses {
             match self.value_history((kind, address)) {
                 Some(history) => histories.push(history),
                 None => return Vec::new(),
@@ -292,7 +297,7 @@ impl App {
         }
 
         let len = histories.iter().map(|h| h.len()).min().unwrap_or(0);
-        let mut regs = vec![0u16; addresses.len()];
+        let mut regs = vec![0u16; histories.len()];
         let mut values = Vec::with_capacity(len);
         for i in 0..len {
             for (k, history) in histories.iter().enumerate() {
@@ -325,33 +330,37 @@ impl App {
         self.labels.len()
     }
 
-    pub fn cell_row(&self, cell: RegisterCell, now: DateTime<Local>) -> Option<(String, bool)> {
+    pub fn cell_row(&self, cell: RegisterCell, now: DateTime<Utc>) -> Option<(String, bool)> {
         let (kind, addr) = cell;
-        let &(value, time) = self.read_log.get(&cell)?;
-        let at = |address: u16| self.read_log.get(&(kind, address)).map(|&(v, _)| v);
+        let entry = self.read_log.get(&cell)?;
+        let value = entry.value;
+        let at = |address: u16| self.read_log.get(&(kind, address)).map(|e| e.value);
         let custom = self.custom_value(cell, value, self.config.device.word_order, &at);
-        let label = self.labels.get(&cell).map(String::as_str);
         let row = self.interpreter.format_row(
             addr,
             value,
             [1, 2, 3].map(|offset| at(addr.saturating_add(offset))),
-            time.with_timezone(&Local),
-            now,
+            &entry.time_text,
+            now.signed_duration_since(entry.at),
             custom.as_deref(),
-            label,
+            self.label(cell),
         );
-        Some((row, self.cell_changed(cell)))
+        Some((row, self.changed_since(cell, now)))
     }
 
     pub fn ascii_string_for(&self, cells: impl Iterator<Item = RegisterCell>) -> String {
         let values: Vec<RegisterCellValue> = cells
-            .filter_map(|cell| self.read_log.get(&cell).map(|&(value, _)| (cell, value)))
+            .filter_map(|cell| self.read_log.get(&cell).map(|e| (cell, e.value)))
             .collect();
         self.interpreter.ascii_string(&values)
     }
 
     pub fn label_text(&self, register_type: RegisterType, address: u16) -> Option<String> {
-        self.labels.get(&(register_type, address)).cloned()
+        self.label((register_type, address)).map(str::to_string)
+    }
+
+    pub fn label(&self, cell: RegisterCell) -> Option<&str> {
+        self.labels.get(&cell).map(String::as_str)
     }
 }
 

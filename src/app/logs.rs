@@ -3,7 +3,7 @@ use crate::modbus::Interface;
 use crate::num_ops::step_hscroll;
 use crate::state::{LogViewParams, LogsParams, Popup, ReadPanel, State, StatusMessage};
 use crate::writes_log::{SharedWritesLog, WriteKind};
-use chrono::Local;
+use chrono::{Local, Utc};
 use std::fs;
 
 impl App {
@@ -171,6 +171,7 @@ impl App {
         }
 
         let now = Local::now();
+        let read_now = Utc::now();
         let filename = format!("dump_{}.txt", now.format("%Y%m%d_%H%M%S"));
 
         let mut out = String::new();
@@ -183,7 +184,7 @@ impl App {
                 out.push_str(&format!("{:?}\n{}\n", cell.0, self.interpreter.header()));
                 last_kind = Some(cell.0);
             }
-            if let Some((row, _)) = self.cell_row(cell, now) {
+            if let Some((row, _)) = self.cell_row(cell, read_now) {
                 out.push_str(row.trim_end());
                 out.push('\n');
             }

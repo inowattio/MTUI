@@ -165,18 +165,19 @@ pub struct CustomRule {
 }
 
 impl CustomRule {
-    pub fn word_addresses(&self) -> Vec<u16> {
-        let mut addresses = Vec::with_capacity(self.repr.register_count());
-        addresses.push(self.address);
-        for i in 1..self.repr.register_count() {
-            let address = self
-                .next
-                .get(i - 1)
-                .copied()
-                .unwrap_or_else(|| addresses[i - 1].wrapping_add(1));
-            addresses.push(address);
-        }
-        addresses
+    pub fn word_addresses(&self) -> impl Iterator<Item = u16> + '_ {
+        (0..self.repr.register_count()).scan(self.address, |previous, i| {
+            let address = if i == 0 {
+                self.address
+            } else {
+                self.next
+                    .get(i - 1)
+                    .copied()
+                    .unwrap_or_else(|| previous.wrapping_add(1))
+            };
+            *previous = address;
+            Some(address)
+        })
     }
 
     pub fn raw(&self, words: &[u16], order: WordOrder) -> Option<u64> {
@@ -476,7 +477,10 @@ mod tests {
     fn word_addresses_default_contiguous() {
         let mut r = rule(CustomRepr::F64);
         r.address = 100;
-        assert_eq!(r.word_addresses(), vec![100, 101, 102, 103]);
+        assert_eq!(
+            r.word_addresses().collect::<Vec<_>>(),
+            vec![100, 101, 102, 103]
+        );
     }
 
     #[test]
@@ -484,15 +488,21 @@ mod tests {
         let mut r = rule(CustomRepr::U32);
         r.address = 520;
         r.next = vec![524];
-        assert_eq!(r.word_addresses(), vec![520, 524]);
+        assert_eq!(r.word_addresses().collect::<Vec<_>>(), vec![520, 524]);
 
         let mut r = rule(CustomRepr::F64);
         r.address = 520;
         r.next = vec![524];
-        assert_eq!(r.word_addresses(), vec![520, 524, 525, 526]);
+        assert_eq!(
+            r.word_addresses().collect::<Vec<_>>(),
+            vec![520, 524, 525, 526]
+        );
 
         r.next = vec![524, 530];
-        assert_eq!(r.word_addresses(), vec![520, 524, 530, 531]);
+        assert_eq!(
+            r.word_addresses().collect::<Vec<_>>(),
+            vec![520, 524, 530, 531]
+        );
     }
 
     #[test]
@@ -500,7 +510,7 @@ mod tests {
         let mut r = rule(CustomRepr::U16);
         r.address = 7;
         r.next = vec![99];
-        assert_eq!(r.word_addresses(), vec![7]);
+        assert_eq!(r.word_addresses().collect::<Vec<_>>(), vec![7]);
     }
 
     #[test]

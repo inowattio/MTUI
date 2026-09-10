@@ -159,7 +159,7 @@ impl App {
                 regs.push((kind, address));
             } else if column == Some(Column::Custom) {
                 if let Some(rule) = self.custom_rule((kind, address)) {
-                    regs.extend(rule.word_addresses().into_iter().map(|a| (kind, a)));
+                    regs.extend(rule.word_addresses().map(|a| (kind, a)));
                 }
             } else {
                 let width = column.and_then(Column::graph_width).unwrap_or(1) as u16;
@@ -189,7 +189,7 @@ impl App {
             match self.active_graph_column() {
                 Some(Column::Custom) => self
                     .custom_rule((kind, address))
-                    .map_or_else(|| vec![address], |rule| rule.word_addresses()),
+                    .map_or_else(|| vec![address], |rule| rule.word_addresses().collect()),
                 Some(column) => {
                     let width = column.graph_width().unwrap_or(1) as u16;
                     (0..width).map(|o| address.wrapping_add(o)).collect()

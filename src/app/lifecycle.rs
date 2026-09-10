@@ -1,8 +1,8 @@
 use super::{
     App, BackgroundTask, CommStats, ConfigError, ConnectTaskResult, DeviceIdTaskResult,
-    LoadConfigTaskResult, RawTaskResult, ReadError, ReadFailure, ReconnectState, RefreshTaskResult,
-    SlaveScanTaskResult, SweepState, WriteOutcome, default_config_path, load_config,
-    reconnect_backoff,
+    LoadConfigTaskResult, RawTaskResult, ReadEntry, ReadError, ReadFailure, ReconnectState,
+    RefreshTaskResult, SlaveScanTaskResult, SweepState, WriteOutcome, default_config_path,
+    load_config, reconnect_backoff,
 };
 use crate::compat::{self, Instant, TaskPoll};
 use crate::config::{BatchAnchor, Config};
@@ -14,7 +14,7 @@ use crate::state::{
     ConnectionStatus, Popup, PopupKind, PopupPayload, ReadPanel, ReadParams, State, StatusMessage,
 };
 use crate::writes_log::WritesLogState;
-use chrono::Utc;
+use chrono::{Local, Utc};
 use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU16};
@@ -595,6 +595,11 @@ impl App {
         }
 
         let read_at = Utc::now();
+        let time_text: Arc<str> = read_at
+            .with_timezone(&Local)
+            .format("%H:%M:%S.%3f")
+            .to_string()
+            .into();
         let history_cap = (self.config.graph_history_cap as usize).max(1);
 
         for data in [result.main_data.as_ref(), result.pinned_data.as_ref()]
@@ -603,8 +608,13 @@ impl App {
             .flatten()
         {
             for &(cell, value) in data {
-                let previous = self.read_log.insert(cell, (value, read_at));
-                if previous.is_some_and(|(prev, _)| prev != value) {
+                let entry = ReadEntry {
+                    value,
+                    at: read_at,
+                    time_text: Arc::clone(&time_text),
+                };
+                let previous = self.read_log.insert(cell, entry);
+                if previous.is_some_and(|prev| prev.value != value) {
                     self.changed.insert(cell, read_at);
                 }
 
@@ -782,7 +792,7 @@ fn custom_runs(rules: &BTreeMap<RegisterCell, CustomRule>, kind: RegisterType) -
         if rule_kind != kind {
             continue;
         }
-        let words = rule.word_addresses();
+        let words: Vec<u16> = rule.word_addresses().collect();
         let mut run_start = 0usize;
         for i in 1..=words.len() {
             if i < words.len() && words[i - 1].checked_add(1) == Some(words[i]) {
@@ -815,7 +825,7 @@ fn cover_runs(mut start: u16, mut end: u16, runs: &[(u16, u16)]) -> (u16, u16) {
 fn custom_full_spans(rules: &BTreeMap<RegisterCell, CustomRule>) -> BTreeMap<RegisterCell, u16> {
     let mut spans = BTreeMap::new();
     for (&(kind, _), rule) in rules {
-        let words = rule.word_addresses();
+        let words: Vec<u16> = rule.word_addresses().collect();
         let mut run_start = 0usize;
         for i in 1..=words.len() {
             if i < words.len() && words[i - 1].checked_add(1) == Some(words[i]) {

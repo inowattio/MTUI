@@ -113,7 +113,7 @@ impl App {
             if address == w.position.wrapping_add(1) && second.is_some() {
                 return second;
             }
-            self.read_log.get(&(kind, address)).map(|&(v, _)| v)
+            self.read_log.get(&(kind, address)).map(|e| e.value)
         };
         self.custom_value(cell, value, order, &at)
     }

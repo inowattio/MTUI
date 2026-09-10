@@ -243,11 +243,7 @@ impl App {
                 .custom_rules
                 .range((kind, 0)..=(kind, u16::MAX))
                 .find_map(|(&(_, owner), r)| {
-                    let position = r
-                        .word_addresses()
-                        .into_iter()
-                        .skip(1)
-                        .position(|a| a == address)? as u16;
+                    let position = r.word_addresses().skip(1).position(|a| a == address)? as u16;
                     Some(if address == owner.wrapping_add(position + 1) {
                         "part of ^".to_string()
                     } else {
@@ -256,7 +252,7 @@ impl App {
                 });
         };
         let mut words = vec![value];
-        for word_address in rule.word_addresses().into_iter().skip(1) {
+        for word_address in rule.word_addresses().skip(1) {
             match at(word_address) {
                 Some(n) => words.push(n),
                 None => break,
@@ -272,9 +268,9 @@ impl App {
         let mut sources = Vec::with_capacity(rule.repr.register_count());
         for word_address in rule.word_addresses() {
             match self.read_log.get(&(cell.0, word_address)) {
-                Some(&(n, _)) => {
-                    words.push(n);
-                    sources.push(format!("{word_address}:{n}"));
+                Some(entry) => {
+                    words.push(entry.value);
+                    sources.push(format!("{word_address}:{}", entry.value));
                 }
                 None => return Err(format!("waiting for register {word_address}")),
             }

@@ -3,7 +3,6 @@ use crate::constants::{NO_VALUE, UNINTERPRETABLE};
 use crate::custom::CustomRepr;
 use crate::modbus::WordOrder;
 use crate::register::RegisterCellValue;
-use chrono::{DateTime, Local};
 use std::fmt::Write as _;
 
 #[derive(Debug, Clone)]
@@ -25,23 +24,23 @@ struct ColumnSpec {
     render: fn(&RowCtx, usize, &mut String),
 }
 
-struct RowCtx {
+struct RowCtx<'a> {
     value: u16,
     next: [Option<u16>; 3],
     word: u32,
     dword: u64,
-    custom: String,
+    custom: &'a str,
 }
 
-impl RowCtx {
-    fn new(order: WordOrder, value: u16, next: [Option<u16>; 3], custom: Option<&str>) -> Self {
+impl<'a> RowCtx<'a> {
+    fn new(order: WordOrder, value: u16, next: [Option<u16>; 3], custom: Option<&'a str>) -> Self {
         let [b, c, d] = next.map(Option::unwrap_or_default);
         Self {
             value,
             next,
             word: order.make_word(value, b),
             dword: order.make_dword([value, b, c, d]),
-            custom: custom.unwrap_or(NO_VALUE).to_string(),
+            custom: custom.unwrap_or(NO_VALUE),
         }
     }
 
@@ -75,7 +74,7 @@ const COLUMNS: &[ColumnSpec] = &[
     ColumnSpec { name: "f64",     width: 12, enabled: |c| c.f64,      render: |c, w, o| if c.four() { float_cell(f64::from_bits(c.dword), w, o) } else { o.push_str(UNINTERPRETABLE); } },
     ColumnSpec { name: "ascii",   width: 5,  enabled: |c| c.ascii,    render: |c, _, o| ascii_cell(c.value, c.next[0].unwrap_or_default(), o) },
     ColumnSpec { name: "bits",    width: 19, enabled: |c| c.bits,     render: |c, _, o| bits_cell(c.value, o) },
-    ColumnSpec { name: "custom",  width: 18, enabled: |c| c.custom,   render: |c, _, o| o.push_str(&c.custom) },
+    ColumnSpec { name: "custom",  width: 18, enabled: |c| c.custom,   render: |c, _, o| o.push_str(c.custom) },
 ];
 
 impl Column {
@@ -168,19 +167,20 @@ impl Interpretor {
         &self,
         out: &mut String,
         address: u16,
-        read: Option<(DateTime<Local>, DateTime<Local>)>,
+        read: Option<(&str, chrono::Duration)>,
     ) {
-        let time = read
-            .filter(|_| self.config.time)
-            .map(|(read_at, _)| read_at.format("%H:%M:%S.%3f").to_string());
-        let ago = read
-            .filter(|_| self.config.ago)
-            .map(|(read_at, now)| format_ago(now.signed_duration_since(read_at)));
-        self.write_prefix(
-            out,
-            time.as_deref().unwrap_or(NO_VALUE),
-            ago.as_deref().unwrap_or(NO_VALUE),
-        );
+        if self.config.time {
+            let time = read.map_or(NO_VALUE, |(time, _)| time);
+            let _ = write!(out, "{time:<w$} ", w = TIME_W);
+        }
+        if self.config.ago {
+            let mark = out.len();
+            match read {
+                Some((_, elapsed)) => write_ago(out, elapsed),
+                None => out.push_str(NO_VALUE),
+            }
+            pad_to(out, mark, AGO_W);
+        }
         self.write_address(out, address);
     }
 
@@ -227,11 +227,13 @@ impl Interpretor {
     }
 
     pub fn placeholder(&self, address: u16, label: Option<&str>) -> String {
-        let mut row = String::new();
+        let mut row = String::with_capacity(self.header.len() + 32);
         self.write_row_prefix(&mut row, address, None);
 
         for col in self.enabled_columns() {
-            let _ = write!(row, "{NO_VALUE:<w$} ", w = col.width);
+            let mark = row.len();
+            row.push_str(NO_VALUE);
+            pad_to(&mut row, mark, col.width);
         }
 
         if self.config.label
@@ -249,23 +251,19 @@ impl Interpretor {
         address: u16,
         value: u16,
         next: [Option<u16>; 3],
-        read_at: DateTime<Local>,
-        now: DateTime<Local>,
+        time_text: &str,
+        elapsed: chrono::Duration,
         custom: Option<&str>,
         label: Option<&str>,
     ) -> String {
-        let mut row = String::new();
-        self.write_row_prefix(&mut row, address, Some((read_at, now)));
+        let mut row = String::with_capacity(self.header.len() + 32);
+        self.write_row_prefix(&mut row, address, Some((time_text, elapsed)));
 
         let ctx = RowCtx::new(self.word_order, value, next, custom);
         for col in self.enabled_columns() {
             let mark = row.len();
             (col.render)(&ctx, col.width, &mut row);
-            let written = row[mark..].chars().count();
-            for _ in written..col.width {
-                row.push(' ');
-            }
-            row.push(' ');
+            pad_to(&mut row, mark, col.width);
         }
 
         if self.config.label
@@ -355,16 +353,30 @@ pub(crate) fn fmt_num(v: f64, is_float: bool) -> String {
 }
 
 pub(crate) fn format_ago(elapsed: chrono::Duration) -> String {
+    let mut out = String::new();
+    write_ago(&mut out, elapsed);
+    out
+}
+
+fn write_ago(out: &mut String, elapsed: chrono::Duration) {
     let secs = elapsed.num_seconds();
     if secs <= 0 {
-        "now".to_string()
+        out.push_str("now");
     } else if secs < 60 {
-        format!("{secs}s ago")
+        let _ = write!(out, "{secs}s ago");
     } else if secs < 3600 {
-        format!("{}m ago", secs / 60)
+        let _ = write!(out, "{}m ago", secs / 60);
     } else {
-        ">1h ago".to_string()
+        out.push_str(">1h ago");
     }
+}
+
+fn pad_to(out: &mut String, mark: usize, width: usize) {
+    let written = out[mark..].chars().count();
+    for _ in written..width {
+        out.push(' ');
+    }
+    out.push(' ');
 }
 
 fn bcd_to_decimal<T: num_traits::PrimInt>(value: T) -> Option<T> {
@@ -414,4 +426,55 @@ pub(crate) fn f16_to_f32(bits: u16) -> f32 {
     };
 
     sign * magnitude
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn interpretor() -> Interpretor {
+        let config = InterpretorConfig {
+            time: true,
+            ago: true,
+            address_hex: false,
+            ..InterpretorConfig::default()
+        };
+        Interpretor::new(config, WordOrder::ABCD)
+    }
+
+    #[test]
+    fn row_prefix_pads_time_ago_and_address() {
+        let row = interpretor().format_row(
+            5,
+            1,
+            [None; 3],
+            "12:34:56.789",
+            chrono::Duration::seconds(3),
+            None,
+            None,
+        );
+        assert!(
+            row.starts_with("12:34:56.789 3s ago          5: "),
+            "{row:?}"
+        );
+    }
+
+    #[test]
+    fn placeholder_prefix_matches_row_prefix_width() {
+        let i = interpretor();
+        let placeholder = i.placeholder(5, None);
+        assert!(
+            placeholder.starts_with("-            -               5: "),
+            "{placeholder:?}"
+        );
+        assert_eq!(placeholder.find("5: "), Some(i.prefix_width() as usize - 3));
+    }
+
+    #[test]
+    fn ago_text() {
+        assert_eq!(format_ago(chrono::Duration::seconds(0)), "now");
+        assert_eq!(format_ago(chrono::Duration::seconds(59)), "59s ago");
+        assert_eq!(format_ago(chrono::Duration::seconds(125)), "2m ago");
+        assert_eq!(format_ago(chrono::Duration::seconds(3600)), ">1h ago");
+    }
 }

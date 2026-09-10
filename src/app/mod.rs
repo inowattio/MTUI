@@ -391,6 +391,13 @@ impl std::fmt::Debug for ClipboardHandle {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct ReadEntry {
+    pub value: u16,
+    pub at: DateTime<Utc>,
+    pub time_text: Arc<str>,
+}
+
 #[derive(Debug)]
 pub struct App {
     pub config: Config,
@@ -421,7 +428,7 @@ pub struct App {
     #[cfg(not(target_arch = "wasm32"))]
     network_scan_task: Option<TaskHandle<Result<Vec<String>, String>>>,
     changed: BTreeMap<RegisterCell, DateTime<Utc>>,
-    read_log: BTreeMap<RegisterCell, (u16, DateTime<Utc>)>,
+    read_log: BTreeMap<RegisterCell, ReadEntry>,
     value_history: BTreeMap<RegisterCell, VecDeque<(u16, DateTime<Utc>)>>,
     labels: BTreeMap<RegisterCell, String>,
     custom_rules: BTreeMap<RegisterCell, CustomRule>,
