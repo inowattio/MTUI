@@ -489,7 +489,7 @@ pub fn live_status(app: &App, params: &ReadParams, theme: &Theme) -> Vec<Span<'s
         let remaining =
             (interval as u128).saturating_sub(params.refresh_timer.elapsed().as_millis());
         fields.push(vec![Span::styled(
-            format!(" ~ {:>4.1}s", remaining as f64 / 1000.0),
+            format!(" {:>4.1}s", remaining as f64 / 1000.0),
             theme.ok_style(),
         )]);
     }
