@@ -82,7 +82,7 @@ pub(super) fn draw(
     }
 
     let footer = [
-        Hint::pair(kb.move_up, kb.move_down, "Select"),
+        Hint::pair(KeyCode::Up, KeyCode::Down, "Select"),
         Hint::key(kb.action, "Run"),
         Hint::key(KeyCode::Esc, "Close"),
     ];

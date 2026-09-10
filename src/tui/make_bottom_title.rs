@@ -27,7 +27,7 @@ pub fn make_bottom_title(theme: &Theme, app: &App) -> Line<'static> {
                 hints::footer(
                     theme,
                     [
-                        Hint::pair(kb.move_down, KeyCode::Right, "Move"),
+                        Hint::pair(KeyCode::Down, KeyCode::Right, "Move"),
                         kind,
                         panel,
                         read,
@@ -47,7 +47,7 @@ pub fn make_bottom_title(theme: &Theme, app: &App) -> Line<'static> {
         State::Logs(l) => hints::footer(
             theme,
             [
-                Hint::pair(kb.move_down, KeyCode::Right, "Scroll"),
+                Hint::pair(KeyCode::Down, KeyCode::Right, "Scroll"),
                 Hint::key(kb.write, if l.wrap { "Unwrap" } else { "Wrap" }),
                 Hint::key(KeyCode::Esc, "Back"),
             ],

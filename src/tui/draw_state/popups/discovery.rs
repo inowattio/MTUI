@@ -36,7 +36,7 @@ pub fn draw(params: &DiscoveryParams, app: &App, frame: &mut Frame, area: Rect, 
     };
     let (footer_w, footer) = if has_side {
         let items = [
-            Hint::pair(kb.move_up, kb.move_down, "Move"),
+            Hint::pair(KeyCode::Up, KeyCode::Down, "Move"),
             Hint::key(kb.switch_view, "Section"),
             Hint::key(kb.action, action),
             Hint::key(KeyCode::Esc, "Back"),
@@ -44,7 +44,7 @@ pub fn draw(params: &DiscoveryParams, app: &App, frame: &mut Frame, area: Rect, 
         (hints::width(&items) as u16, hints::footer(theme, items))
     } else {
         let items = [
-            Hint::pair(kb.move_up, kb.move_down, "Move"),
+            Hint::pair(KeyCode::Up, KeyCode::Down, "Move"),
             Hint::key(kb.action, action),
             Hint::key(KeyCode::Esc, "Back"),
         ];

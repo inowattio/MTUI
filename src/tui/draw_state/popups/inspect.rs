@@ -33,7 +33,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, mode
         &mut lines,
         theme,
         [
-            Hint::pair(kb.move_up, kb.move_down, "Move"),
+            Hint::pair(KeyCode::Up, KeyCode::Down, "Move"),
             Hint::pair(KeyCode::Left, KeyCode::Right, "Mode"),
             Hint::key(kb.refresh, "Refresh"),
             Hint::key(kb.word_order, "Cycle order"),

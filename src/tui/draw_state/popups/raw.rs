@@ -51,7 +51,7 @@ pub(super) fn draw(
         &mut lines,
         theme,
         [
-            Hint::pair(kb.move_up, kb.move_down, "Field"),
+            Hint::pair(KeyCode::Up, KeyCode::Down, "Field"),
             Hint::key(kb.action, "Send"),
             Hint::key(KeyCode::Esc, "Close"),
         ],

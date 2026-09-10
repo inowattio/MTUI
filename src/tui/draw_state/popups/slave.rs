@@ -45,7 +45,7 @@ pub(super) fn draw(
 
     let (footer_w, footer) = if right.is_some() {
         let items = [
-            Hint::pair(kb.move_up, kb.move_down, "Field"),
+            Hint::pair(KeyCode::Up, KeyCode::Down, "Field"),
             Hint::key(kb.pause, "Toggle"),
             Hint::key(kb.action, primary),
             Hint::key(KeyCode::Esc, "Close"),
@@ -53,7 +53,7 @@ pub(super) fn draw(
         (hints::width(&items), vec![hints::footer(theme, items)])
     } else {
         let nav = [
-            Hint::pair(kb.move_up, kb.move_down, "Field"),
+            Hint::pair(KeyCode::Up, KeyCode::Down, "Field"),
             Hint::key(kb.pause, "Toggle"),
         ];
         let actions = [

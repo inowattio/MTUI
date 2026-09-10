@@ -50,7 +50,7 @@ pub(super) fn draw(
     lines.push(Line::default());
     let kb = &app.config.keybinds;
     let footer = [
-        Hint::pair(kb.move_down, KeyCode::Right, "Move"),
+        Hint::pair(KeyCode::Down, KeyCode::Right, "Move"),
         Hint::key(kb.action, "Toggle"),
         Hint::key(KeyCode::Esc, "Close"),
     ];

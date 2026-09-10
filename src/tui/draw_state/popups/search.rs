@@ -32,7 +32,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, sear
     ];
 
     let footer = [
-        Hint::pair(kb.move_up, kb.move_down, "Select"),
+        Hint::pair(KeyCode::Up, KeyCode::Down, "Select"),
         Hint::key(kb.action, "Go"),
         Hint::key(KeyCode::Esc, "Close"),
     ];

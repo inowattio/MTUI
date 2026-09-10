@@ -147,8 +147,6 @@ keybinds! {
     SwitchView => switch_view : "Cycle panel" = SWITCH_VIEW,
     SwitchViewBack => switch_view_back : "Cycle panel back" = SWITCH_VIEW_BACK,
     Action => action : "Read / confirm" = ACTION,
-    MoveUp => move_up : "Move up" = MOVE_UP,
-    MoveDown => move_down : "Move down" = MOVE_DOWN,
     PageUp => page_up : "Page up" = PAGE_UP,
     PageDown => page_down : "Page down" = PAGE_DOWN,
     BatchDecrease => batch_decrease : "Decrease registers batch" = BATCH_DECREASE,

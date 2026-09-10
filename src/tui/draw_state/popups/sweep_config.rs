@@ -56,7 +56,7 @@ pub(super) fn draw(
         hints::footer(
             theme,
             [
-                Hint::pair(kb.move_up, kb.move_down, "Field"),
+                Hint::pair(KeyCode::Up, KeyCode::Down, "Field"),
                 Hint::key(kb.pause, "Toggle mode"),
             ],
         ),

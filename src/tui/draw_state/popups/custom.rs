@@ -40,7 +40,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &
 
     let kb = &app.config.keybinds;
     let footer = [
-        Hint::pair(kb.move_up, kb.move_down, "Field"),
+        Hint::pair(KeyCode::Up, KeyCode::Down, "Field"),
         Hint::pair(KeyCode::Left, KeyCode::Right, "Change"),
         Hint::key(kb.action, "Save"),
         Hint::key(KeyCode::Delete, "Remove"),
