@@ -10,7 +10,7 @@ impl App {
     pub fn open_write(&mut self) {
         if self.config.read_only {
             self.set_read_status(StatusMessage::warn(
-                "Read-only mode is on \u{2014} writes are disabled (toggle in settings)",
+                "Read-only mode is on (toggle in settings)",
             ));
             return;
         }
