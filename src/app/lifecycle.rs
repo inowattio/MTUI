@@ -53,6 +53,7 @@ impl App {
             connection: ConnectionStatus::Unknown,
             frame: 0,
             last_frame: std::time::Duration::ZERO,
+            ram_bytes: None,
             paused: false,
             headless: false,
             dirty: false,
@@ -261,6 +262,9 @@ impl App {
 
     pub async fn tick(&mut self) {
         self.frame = self.frame.wrapping_add(1);
+        if self.config.show_ram && (self.ram_bytes.is_none() || self.frame.is_multiple_of(10)) {
+            self.ram_bytes = crate::compat::ram_bytes();
+        }
         self.sync_api_status();
         #[cfg(not(target_arch = "wasm32"))]
         self.reconcile_api_server();

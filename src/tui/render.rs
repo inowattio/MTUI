@@ -24,7 +24,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         clock_spans.push(Span::styled(format!("{clock} "), theme.accent_style()));
     }
     if app.config.show_ram
-        && let Some(bytes) = crate::compat::ram_bytes()
+        && let Some(bytes) = app.ram_bytes
     {
         clock_spans.push(Span::styled(
             format!("{:.1}MiB ", bytes as f64 / (1024. * 1024.)),

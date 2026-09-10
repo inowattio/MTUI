@@ -404,6 +404,7 @@ pub struct App {
     pub connection: ConnectionStatus,
     pub frame: u64,
     pub last_frame: Duration,
+    pub ram_bytes: Option<usize>,
     pub paused: bool,
     pub headless: bool,
     pub dirty: bool,
