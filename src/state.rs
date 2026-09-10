@@ -1097,6 +1097,13 @@ impl SettingsParams {
         }
     }
 
+    pub fn cycle_category(&mut self, forward: bool) {
+        self.category = wrap_index(self.category, SettingsCategory::ALL.len() as u16, forward);
+        self.field = 0;
+        self.kb_selected = 0;
+        self.kb_capturing = false;
+    }
+
     pub fn kb_move(&mut self, up: bool, count: u16) {
         if count == 0 {
             return;
@@ -1380,5 +1387,28 @@ mod tests {
             position(SettingsField::SavePositionOnExit) < position(SettingsField::StartupPanel)
         );
         assert_eq!(fields.iter().filter(|f| f.is_startup()).count(), 3);
+    }
+}
+
+#[cfg(test)]
+mod settings_params_tests {
+    use super::{SettingsCategory, SettingsFocus, SettingsParams};
+
+    #[test]
+    fn cycling_categories_wraps_and_keeps_focus() {
+        let last = SettingsCategory::ALL.len() as u16 - 1;
+        let mut s = SettingsParams {
+            category: last,
+            field: 3,
+            focus: SettingsFocus::Fields,
+            ..SettingsParams::default()
+        };
+        s.cycle_category(true);
+        assert_eq!(
+            (s.category, s.field, s.focus),
+            (0, 0, SettingsFocus::Fields)
+        );
+        s.cycle_category(false);
+        assert_eq!(s.category, last);
     }
 }

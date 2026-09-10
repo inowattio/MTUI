@@ -601,6 +601,14 @@ fn handle_logs_view_key(key_event: KeyEvent, app: &mut App) {
 }
 
 async fn handle_settings_key(key_event: KeyEvent, app: &mut App) {
+    let kb = app.config.keybinds;
+    let capturing = app.settings().is_some_and(|s| s.kb_capturing);
+    if !capturing && (key_event.code == kb.switch_view || key_event.code == kb.switch_view_back) {
+        if let Some(s) = app.settings_mut() {
+            s.cycle_category(key_event.code == kb.switch_view);
+        }
+        return;
+    }
     match app
         .settings()
         .map_or(SettingsFocus::Categories, |s| s.focus)
