@@ -71,6 +71,11 @@ use tokio_modbus::{ExceptionCode, Request, Response, Slave, SlaveId};
 ///              64..=67 faulted sensor block (ServerDeviceFailure)
 ///   coils      6..=7 reserved (IllegalDataAddress, reads and writes)
 ///   discretes  4..=6 reserved (IllegalDataAddress)
+///
+/// Silent addresses, never answered like a device that hangs on a request
+/// (a read touching one stalls until the command times out):
+///   holdings   1104..=1105 watchdog block
+///   inputs     68..=69 stalled sensor block
 #[derive(Debug)]
 pub struct MockContext {
     started: Instant,
@@ -100,6 +105,9 @@ const INPUT_FAULTS: &Faults = &[
 ];
 const COIL_FAULTS: &Faults = &[(6..=7, ExceptionCode::IllegalDataAddress)];
 const DISCRETE_FAULTS: &Faults = &[(4..=6, ExceptionCode::IllegalDataAddress)];
+
+const HOLDING_SILENT: RangeInclusive<u16> = 1104..=1105;
+const INPUT_SILENT: RangeInclusive<u16> = 68..=69;
 
 const MODEL_NAME: &[u8; 16] = b"MTUI SIMULATOR  ";
 const VENDOR_NAME: &[u8; 32] = b"      POWER BUS SIMULATOR!      ";
@@ -445,6 +453,18 @@ fn mapped(zones: &[RangeInclusive<u16>], addr: u16, count: u16) -> bool {
     })
 }
 
+fn touches(zone: &RangeInclusive<u16>, addr: u16, count: u16) -> bool {
+    (0..count).any(|i| addr.checked_add(i).is_some_and(|a| zone.contains(&a)))
+}
+
+fn stalls(request: &Request<'_>) -> bool {
+    match request {
+        Request::ReadHoldingRegisters(addr, count) => touches(&HOLDING_SILENT, *addr, *count),
+        Request::ReadInputRegisters(addr, count) => touches(&INPUT_SILENT, *addr, *count),
+        _ => false,
+    }
+}
+
 /// Rejects a request that leaves the mapped zones or touches a faulty
 /// address, with the exception a real device would answer.
 fn check(
@@ -552,7 +572,7 @@ impl MockContext {
 #[async_trait]
 impl Client for MockContext {
     async fn call(&mut self, request: Request<'_>) -> tokio_modbus::Result<Response> {
-        if !KNOWN_SLAVES.contains(&self.slave_id) {
+        if !KNOWN_SLAVES.contains(&self.slave_id) || stalls(&request) {
             std::future::pending::<()>().await;
             unreachable!();
         }
@@ -570,6 +590,7 @@ impl Client for MockContext {
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use super::MockContext;
+    use std::time::Duration;
     use tokio_modbus::ExceptionCode;
     use tokio_modbus::client::{Reader, Writer};
 
@@ -624,6 +645,38 @@ mod tests {
         assert_eq!(
             mock.write_multiple_coils(5, &[true, false]).await.unwrap(),
             Err(RESERVED)
+        );
+    }
+
+    #[tokio::test]
+    async fn silent_addresses_never_answer() {
+        use crate::compat::timeout;
+        const WAIT: Duration = Duration::from_millis(50);
+        let mut mock = MockContext::make();
+        assert!(
+            timeout(WAIT, mock.read_holding_registers(1104, 1))
+                .await
+                .is_err()
+        );
+        assert!(
+            timeout(WAIT, mock.read_holding_registers(1100, 6))
+                .await
+                .is_err()
+        );
+        assert!(
+            timeout(WAIT, mock.read_input_registers(60, 10))
+                .await
+                .is_err()
+        );
+        assert!(
+            timeout(WAIT, mock.read_holding_registers(1106, 2))
+                .await
+                .is_ok_and(|r| r.unwrap().is_ok())
+        );
+        assert!(
+            timeout(WAIT, mock.read_input_registers(70, 4))
+                .await
+                .is_ok_and(|r| r.unwrap().is_ok())
         );
     }
 
