@@ -36,8 +36,8 @@ fn glyph(kc: KeyCode) -> String {
     match kc {
         KeyCode::Up => "^".to_string(),
         KeyCode::Down => "v".to_string(),
-        KeyCode::Left => "<-".to_string(),
-        KeyCode::Right => "->".to_string(),
+        KeyCode::Left => "<".to_string(),
+        KeyCode::Right => ">".to_string(),
         KeyCode::PageUp => "PgUp".to_string(),
         KeyCode::PageDown => "PgDn".to_string(),
         KeyCode::Delete => "Del".to_string(),
