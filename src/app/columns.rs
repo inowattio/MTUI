@@ -94,12 +94,12 @@ impl App {
         let p = self.read_mut();
         let message = if let Some(i) = p.graph_series.iter().position(|&c| c == cell) {
             p.graph_series.remove(i);
-            StatusMessage::ok(format!("Released \u{201c}{name}\u{201d} from the graph"))
+            StatusMessage::ok(format!("Released \"{name}\" from the graph"))
         } else if p.graph_series.len() >= MAX_HELD {
             StatusMessage::warn(format!("Up to {MAX_HELD} held series"))
         } else {
             p.graph_series.push(cell);
-            StatusMessage::ok(format!("Holding \u{201c}{name}\u{201d} on the graph"))
+            StatusMessage::ok(format!("Holding \"{name}\" on the graph"))
         };
         self.set_read_status(message);
     }

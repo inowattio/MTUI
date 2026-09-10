@@ -8,7 +8,7 @@ pub(crate) fn marker(selected: bool) -> &'static str {
 }
 
 pub(crate) fn cyclable(value: &str) -> String {
-    format!("\u{2039} {value} \u{203a}")
+    format!("< {value} >")
 }
 
 pub(crate) fn edit_value(value: String, selected: bool, cyclable_field: bool) -> String {

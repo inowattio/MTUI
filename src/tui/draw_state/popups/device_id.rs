@@ -47,10 +47,7 @@ pub(super) fn draw(
     let mut tabs = vec![Span::raw(" ")];
     tabs.extend(theme.tab_spans(DeviceIdAccess::ALL.map(DeviceIdAccess::label), access_index));
     if offset > 0 {
-        tabs.push(Span::styled(
-            format!("   \u{25c2} +{offset}"),
-            theme.dim_style(),
-        ));
+        tabs.push(Span::styled(format!("   < +{offset}"), theme.dim_style()));
     }
 
     let mut lines: Vec<Line> = vec![Line::from(tabs)];

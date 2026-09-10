@@ -560,7 +560,7 @@ macro_rules! timeout_as {
             let mut hold = $this.context.lock().await;
 
             if $this.closed.load(Ordering::Relaxed) {
-                log::warn!("{} \u{b7} device closed", $desc);
+                log::warn!("{} | device closed", $desc);
                 anyhow::bail!("device closed");
             }
 
@@ -591,22 +591,22 @@ macro_rules! timeout_as {
             match outcome {
                 Ok(Ok(Ok(value))) => {
                     match format!("{value:?}").as_str() {
-                        "()" => log::info!("{desc} \u{b7} ok"),
-                        shown => log::info!("{desc} \u{b7} ok \u{b7} {shown}"),
+                        "()" => log::info!("{desc} | ok"),
+                        shown => log::info!("{desc} | ok | {shown}"),
                     }
                     Ok(value)
                 }
                 Ok(Ok(Err(error))) => {
-                    log::warn!("{desc} \u{b7} {error}");
+                    log::warn!("{desc} | {error}");
                     Err(anyhow::Error::from(error))
                 }
                 Ok(Err(error)) => {
-                    log::warn!("{desc} \u{b7} {error}");
+                    log::warn!("{desc} | {error}");
                     Err(anyhow::Error::from(error))
                 }
                 Err(error) => {
                     $this.poisoned.store(true, Ordering::Relaxed);
-                    log::warn!("{desc} \u{b7} timed out");
+                    log::warn!("{desc} | timed out");
                     Err(error)
                 }
             }
@@ -703,7 +703,7 @@ impl ModbusDevice {
         self.closed.store(true, Ordering::Relaxed);
         let mut hold = self.context.lock().await;
         if let Err(error) = hold.disconnect().await {
-            log::debug!("Disconnect \u{b7} {error}");
+            log::debug!("Disconnect | {error}");
         }
     }
 

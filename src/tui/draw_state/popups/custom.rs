@@ -67,11 +67,11 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &
                 } else {
                     theme.base()
                 };
-                let sep = if i == 0 { " " } else { " \u{2192} " };
+                let sep = if i == 0 { " " } else { " -> " };
                 let needed = sep.chars().count() + text.chars().count();
                 if i > 0 && used + needed > inner {
                     lines.push(Line::from(std::mem::take(&mut spans)));
-                    let indent = "  \u{2192} ";
+                    let indent = "  -> ";
                     used = indent.chars().count() + text.chars().count();
                     spans.push(Span::styled(indent, theme.dim_style()));
                 } else {
@@ -114,7 +114,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &
             theme.dim_style(),
         )));
         lines.push(Line::from(Span::styled(
-            "    (enter adds \u{b7} empty enter saves \u{b7} backspace removes)",
+            "    (enter adds | empty enter saves | backspace removes)",
             theme.dim_style(),
         )));
     };
@@ -173,7 +173,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &
                 let items = c
                     .enum_map
                     .iter()
-                    .map(|e| format!("{}\u{2192}{}", e.value, e.text))
+                    .map(|e| format!("{}->{}", e.value, e.text))
                     .collect();
                 list_rows(&mut lines, "Enum", items, "(none)", selected);
                 if selected {
@@ -184,7 +184,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &
                 let items = c
                     .bits
                     .iter()
-                    .map(|e| format!("{}\u{2192}{}", e.bit, e.name))
+                    .map(|e| format!("{}->{}", e.bit, e.name))
                     .collect();
                 list_rows(&mut lines, "Bits", items, "(none)", selected);
                 if selected {
@@ -228,6 +228,6 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &
 
     super::push_footer(&mut lines, theme, footer);
 
-    let title = format!("Custom rule \u{b7} {:?} @ {}", c.register_type, c.address);
+    let title = format!("Custom rule | {:?} @ {}", c.register_type, c.address);
     super::render(frame, area, theme, &title, width, lines);
 }

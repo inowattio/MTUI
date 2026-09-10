@@ -1,5 +1,5 @@
 use crate::app::App;
-use crate::constants::{SEARCH_POPUP_MAX_HEIGHT_PERCENT, SEARCH_POPUP_MAX_WIDTH_PERCENT};
+use crate::constants::{ELLIPSIS, SEARCH_POPUP_MAX_HEIGHT_PERCENT, SEARCH_POPUP_MAX_WIDTH_PERCENT};
 use crate::input::KeyCode;
 use crate::state::{SearchMatch, SearchParams};
 use crate::tui::hints::{self, Hint};
@@ -81,7 +81,7 @@ fn clipped(text: &str, width: usize) -> (Vec<char>, bool) {
     if chars.len() <= width {
         return (chars, false);
     }
-    (chars[..width.saturating_sub(1)].to_vec(), true)
+    (chars[..width.saturating_sub(ELLIPSIS.len())].to_vec(), true)
 }
 
 fn row(
@@ -108,7 +108,7 @@ fn row(
         let (shown, truncated) = clipped(&m.text, label_w);
         let mut text: String = shown.into_iter().collect();
         if truncated {
-            text.push('\u{2026}');
+            text.push_str(ELLIPSIS);
         }
         spans.push(Span::styled(
             text,
@@ -153,7 +153,7 @@ fn label_spans(
         spans.push(label_span(theme, run, run_hit, selected));
     }
     if truncated {
-        spans.push(Span::styled("\u{2026}", style(theme.dim_style())));
+        spans.push(Span::styled(ELLIPSIS, style(theme.dim_style())));
     }
 
     spans
@@ -241,7 +241,7 @@ mod tests {
     #[test]
     fn clipping_leaves_room_for_the_ellipsis() {
         assert_eq!(clipped("abc", 3), ("abc".chars().collect(), false));
-        assert_eq!(clipped("abcd", 3), ("ab".chars().collect(), true));
-        assert_eq!(clipped("ș-ț-â", 4), ("ș-ț".chars().collect(), true));
+        assert_eq!(clipped("abcdef", 5), ("ab".chars().collect(), true));
+        assert_eq!(clipped("ș-ț-â-x", 6), ("ș-ț".chars().collect(), true));
     }
 }

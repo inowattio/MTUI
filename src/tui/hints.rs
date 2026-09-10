@@ -34,10 +34,10 @@ impl Hint {
 
 fn glyph(kc: KeyCode) -> String {
     match kc {
-        KeyCode::Up => "\u{2191}".to_string(),
-        KeyCode::Down => "\u{2193}".to_string(),
-        KeyCode::Left => "\u{2190}".to_string(),
-        KeyCode::Right => "\u{2192}".to_string(),
+        KeyCode::Up => "^".to_string(),
+        KeyCode::Down => "v".to_string(),
+        KeyCode::Left => "<-".to_string(),
+        KeyCode::Right => "->".to_string(),
         KeyCode::PageUp => "PgUp".to_string(),
         KeyCode::PageDown => "PgDn".to_string(),
         KeyCode::Delete => "Del".to_string(),
@@ -79,8 +79,8 @@ pub fn hscroll(theme: &Theme, offset: u16, max_offset: u16) -> Option<Line<'stat
     if max_offset == 0 {
         return None;
     }
-    let left = if offset > 0 { '\u{25c2}' } else { ' ' };
-    let right = if offset < max_offset { '\u{25b8}' } else { ' ' };
+    let left = if offset > 0 { '<' } else { ' ' };
+    let right = if offset < max_offset { '>' } else { ' ' };
     Some(Line::styled(
         format!(" {left} cols {right} "),
         theme.dim_style(),
@@ -91,13 +91,13 @@ pub fn more(theme: &Theme, above: usize, below: usize) -> Line<'static> {
     let dim = theme.dim_style();
     let mut spans: Vec<Span<'static>> = Vec::new();
     if above > 0 {
-        spans.push(Span::styled(format!(" \u{2191} {above} more"), dim));
+        spans.push(Span::styled(format!(" ^ {above} more"), dim));
     }
     if above > 0 && below > 0 {
         spans.push(Span::styled(SEP, dim));
     }
     if below > 0 {
-        spans.push(Span::styled(format!("\u{2193} {below} more"), dim));
+        spans.push(Span::styled(format!("v {below} more"), dim));
     }
     Line::from(spans)
 }

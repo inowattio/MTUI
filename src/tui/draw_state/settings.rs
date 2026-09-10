@@ -276,8 +276,7 @@ fn draw_footer(params: &SettingsParams, app: &App, frame: &mut Frame, area: Rect
     if app.dirty {
         frame.render_widget(
             Paragraph::new(
-                Line::from(Span::styled("\u{25cf} unsaved changes", theme.warn_style()))
-                    .right_aligned(),
+                Line::from(Span::styled("* unsaved changes", theme.warn_style())).right_aligned(),
             ),
             footer,
         );
@@ -298,9 +297,9 @@ fn render_field(
     }
 
     let value_text = if selected && field.is_action() && value.is_empty() {
-        "\u{2190} enter".to_string()
+        "<- enter".to_string()
     } else if selected && field.is_action() {
-        format!("{value}  \u{2190} enter")
+        format!("{value}  <- enter")
     } else {
         edit_value(value, selected, field.is_toggle() || field.is_theme_color())
     };
@@ -326,10 +325,8 @@ fn color_row(
     selected: bool,
 ) -> Line<'static> {
     let mut line = field_row(theme, label, 24, format!("{value:<18}"), selected);
-    line.spans.push(Span::styled(
-        "\u{2588}\u{2588}\u{2588}",
-        Style::default().fg(color),
-    ));
+    line.spans
+        .push(Span::styled("###", Style::default().fg(color)));
     line
 }
 
@@ -551,7 +548,7 @@ fn draw_keybinds(params: &SettingsParams, app: &App, frame: &mut Frame, area: Re
         let style = theme.line_style(selected);
 
         let value = if capturing {
-            "press a key\u{2026}".to_string()
+            "press a key...".to_string()
         } else {
             key.to_string()
         };
@@ -566,7 +563,7 @@ fn draw_keybinds(params: &SettingsParams, app: &App, frame: &mut Frame, area: Re
 
         let duplicate = actions.iter().filter(|&&a| kb.get(a) == key).count() > 1;
         if duplicate && !capturing {
-            spans.push(Span::styled(" \u{b7} duplicate", theme.warn_style()));
+            spans.push(Span::styled(" | duplicate", theme.warn_style()));
         }
 
         lines.push(Line::from(spans));

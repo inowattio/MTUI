@@ -63,7 +63,7 @@ impl App {
                 content.lines().map(str::to_string).collect()
             }
             Ok(_) => vec!["(no writes logged yet)".to_string()],
-            Err(_) => vec!["(log file not found — enable \"Log writes\" in settings)".to_string()],
+            Err(_) => vec!["(log file not found - enable \"Log writes\" in settings)".to_string()],
         };
         let mut params = LogsParams {
             path: path.display().to_string(),

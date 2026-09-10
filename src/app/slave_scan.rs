@@ -96,7 +96,7 @@ impl App {
         p.current = p.from;
         p.status = None;
         log::info!(
-            "Slave scan started \u{b7} {}..={} \u{b7} {:?} @ {} \u{d7}{}{}",
+            "Slave scan started | {}..={} | {:?} @ {} x{}{}",
             p.from,
             p.to,
             p.register_type,
@@ -144,14 +144,14 @@ impl App {
         }
         let Some(SlaveScanTaskResult { slave_id, outcome }) = result else {
             p.scan = ScanState::Failed;
-            log::error!("Slave scan failed \u{b7} task stopped unexpectedly");
+            log::error!("Slave scan failed | task stopped unexpectedly");
             return;
         };
 
         let responded = matches!(outcome, SlaveProbeOutcome::Response(_));
         match outcome {
             SlaveProbeOutcome::Response(values) => {
-                log::info!("Slave scan \u{b7} slave {slave_id} responded \u{b7} {values:?}");
+                log::info!("Slave scan | slave {slave_id} responded | {values:?}");
                 p.hits.push(SlaveScanHit {
                     slave_id,
                     result: Ok(values),
@@ -168,7 +168,7 @@ impl App {
             p.scan = ScanState::Done;
             let ok = p.hits.iter().filter(|h| h.result.is_ok()).count();
             let exceptions = p.hits.len() - ok;
-            log::info!("Slave scan finished \u{b7} {ok} response(s), {exceptions} exception(s)");
+            log::info!("Slave scan finished | {ok} response(s), {exceptions} exception(s)");
             return;
         }
 

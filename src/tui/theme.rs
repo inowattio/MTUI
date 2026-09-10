@@ -4,7 +4,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders};
 use serde::{Deserialize, Serialize};
 
-const SPINNER_FRAMES: [&str; 8] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧"];
+const SPINNER_FRAMES: [&str; 4] = ["|", "/", "-", "\\"];
 
 pub const PALETTE: &[Color] = &[
     Color::Reset,
@@ -181,7 +181,7 @@ impl Theme {
         &self,
         groups: impl IntoIterator<Item = Vec<Span<'static>>>,
     ) -> Vec<Span<'static>> {
-        let separator = Span::styled(" \u{b7} ", self.dim_style());
+        let separator = Span::styled(" | ", self.dim_style());
         let mut spans: Vec<Span<'static>> = Vec::new();
         for (i, group) in groups.into_iter().enumerate() {
             if i > 0 {
@@ -208,7 +208,7 @@ impl Theme {
         let mut spans = Vec::new();
         for (i, name) in names.into_iter().enumerate() {
             if i > 0 {
-                spans.push(Span::styled(" \u{2502} ", self.dim_style()));
+                spans.push(Span::styled(" | ", self.dim_style()));
             }
             let style = if i == active {
                 self.accent_style()
@@ -237,11 +237,11 @@ pub fn spinner_frame(frame: u64) -> &'static str {
 
 pub fn status_span(status: &ConnectionStatus, theme: &Theme) -> Span<'static> {
     let (symbol, label, color) = match status {
-        ConnectionStatus::Unknown => ("○", "no data", theme.dim),
-        ConnectionStatus::Reading => ("◍", "reading", theme.warn),
-        ConnectionStatus::Connected => ("●", "connected", theme.ok),
-        ConnectionStatus::Reconnecting => ("↻", "reconnecting", theme.warn),
-        ConnectionStatus::Error(_) => ("●", "error", theme.err),
+        ConnectionStatus::Unknown => ("o", "no data", theme.dim),
+        ConnectionStatus::Reading => (":", "reading", theme.warn),
+        ConnectionStatus::Connected => ("*", "connected", theme.ok),
+        ConnectionStatus::Reconnecting => ("~", "reconnecting", theme.warn),
+        ConnectionStatus::Error(_) => ("!", "error", theme.err),
     };
     Span::styled(
         format!("{symbol} {label:<9} "),

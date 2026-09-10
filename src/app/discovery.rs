@@ -99,7 +99,7 @@ impl App {
             return;
         };
 
-        self.set_discovery_status(StatusMessage::warn("Connecting\u{2026}"));
+        self.set_discovery_status(StatusMessage::warn("Connecting..."));
 
         let previous = self.take_device();
         self.background_task = Some(BackgroundTask::Connect(compat::spawn(async move {
@@ -134,13 +134,13 @@ impl App {
                 self.logged_connection = ConnectionStatus::Unknown;
                 self.reconnect = ReconnectState::default();
                 let device = self.config.display_device();
-                log::info!("Switched device \u{b7} {device}");
+                log::info!("Switched device | {device}");
                 if self.discovery().is_some() {
                     self.close_popup();
                 }
             }
             Err(e) => {
-                log::error!("Connect failed \u{b7} {e}");
+                log::error!("Connect failed | {e}");
                 self.set_discovery_status(StatusMessage::err(format!("Connection failed: {e}")));
                 if self.device.is_none() {
                     self.connection = ConnectionStatus::Error(e);
@@ -204,7 +204,7 @@ impl App {
         if let Some(d) = self.discovery_mut() {
             d.set_found(Vec::new());
             d.status = Some(StatusMessage::warn(format!(
-                "Scanning {prefix}0/24 by {}\u{2026}",
+                "Scanning {prefix}0/24 by {}...",
                 method.label()
             )));
         }
@@ -241,7 +241,7 @@ impl App {
         let found = match result {
             Ok(found) => found,
             Err(error) => {
-                log::error!("Network scan failed \u{b7} {error}");
+                log::error!("Network scan failed | {error}");
                 self.set_discovery_status(StatusMessage::err(format!("Scan failed: {error}")));
                 return;
             }

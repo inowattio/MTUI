@@ -144,7 +144,7 @@ fn form_lines(params: &SlaveParams, sel: SlaveField, theme: &Theme) -> Vec<Line<
         "Start scan"
     };
     let scan_text = if scan_sel {
-        format!("{scan_label}  \u{2190} enter")
+        format!("{scan_label}  <- enter")
     } else {
         scan_label.to_string()
     };
@@ -172,7 +172,7 @@ fn form_lines(params: &SlaveParams, sel: SlaveField, theme: &Theme) -> Vec<Line<
         dim_line(
             theme,
             format!(
-                "   Request      {} @ {} \u{d7}{}",
+                "   Request      {} @ {} x{}",
                 params.register_type.name(),
                 params.address,
                 params.amount
@@ -185,10 +185,7 @@ fn form_lines(params: &SlaveParams, sel: SlaveField, theme: &Theme) -> Vec<Line<
 fn title_line(params: &SlaveParams, theme: &Theme) -> Line<'static> {
     let (phase, style) = match params.scan {
         ScanState::Idle => (String::new(), theme.dim_style()),
-        ScanState::Probing => (
-            format!("PROBING {}\u{2026}", params.current),
-            theme.warn_style(),
-        ),
+        ScanState::Probing => (format!("PROBING {}...", params.current), theme.warn_style()),
         ScanState::Done => ("DONE".to_string(), theme.ok_style()),
         ScanState::Stopped => ("STOPPED".to_string(), theme.warn_style()),
         ScanState::Failed => ("FAILED".to_string(), theme.err_style()),
@@ -198,7 +195,7 @@ fn title_line(params: &SlaveParams, theme: &Theme) -> Line<'static> {
         theme.header_style(),
     )];
     if !phase.is_empty() {
-        spans.push(Span::styled(" \u{b7} ", theme.dim_style()));
+        spans.push(Span::styled(" | ", theme.dim_style()));
         spans.push(Span::styled(phase, style.add_modifier(Modifier::BOLD)));
     }
     Line::from(spans)
@@ -216,7 +213,7 @@ fn hit_lines(
 
     if len == 0 {
         let text = if params.active() {
-            "   scanning\u{2026}"
+            "   scanning..."
         } else {
             "   (no hits)"
         };
@@ -261,7 +258,7 @@ fn hit_lines(
         } else {
             theme.base()
         };
-        let radio = if active { "\u{25cf}" } else { "\u{25cb}" };
+        let radio = if active { "*" } else { "o" };
         let radio_style = if active { style } else { theme.dim_style() };
         let shown: String = text.chars().take(value_width).collect();
         lines.push(Line::from(vec![
@@ -359,7 +356,7 @@ mod tests {
 
         params.selected = 7;
         let rows = render(&params);
-        locate(&rows, "> \u{25cb}   1  1");
+        locate(&rows, "> o   1  1");
         locate(&rows, "4 more");
     }
 
@@ -382,8 +379,8 @@ mod tests {
         params.scan = Probing;
         params.current = 17;
         let scanning = render(&params);
-        locate(&scanning, "FOUND (0) \u{b7} PROBING 17\u{2026}");
-        locate(&scanning, "scanning\u{2026}");
+        locate(&scanning, "FOUND (0) | PROBING 17...");
+        locate(&scanning, "scanning...");
         assert_eq!(
             popup_width(&scanning) - popup_width(&before),
             (DIVIDER_W + SIDE_W) as usize,
@@ -475,13 +472,13 @@ mod tests {
             ..SlaveParams::default()
         };
         let rows = render_with(&params, 17);
-        locate(&rows, "\u{25cf}  17  1 2 3");
-        locate(&rows, "\u{25cb}   1  5");
-        locate(&rows, "\u{25cb}   9  IllegalDataAddress");
+        locate(&rows, "*  17  1 2 3");
+        locate(&rows, "o   1  5");
+        locate(&rows, "o   9  IllegalDataAddress");
 
         let rows = render_with(&params, 9);
-        locate(&rows, "\u{25cb}  17  1 2 3");
-        locate(&rows, "\u{25cf}   9  IllegalDataAddress");
+        locate(&rows, "o  17  1 2 3");
+        locate(&rows, "*   9  IllegalDataAddress");
     }
 
     #[test]
@@ -493,13 +490,13 @@ mod tests {
             ..SlaveParams::default()
         };
         let rows = render(&params);
-        let (_, title_y) = locate(&rows, "FOUND (1) \u{b7} PROBING 17\u{2026}");
+        let (_, title_y) = locate(&rows, "FOUND (1) | PROBING 17...");
         let (_, id_y) = locate(&rows, "Slave id");
         assert_eq!(title_y, id_y, "the title heads the list column");
 
         for (scan, phase) in [(Done, "DONE"), (Stopped, "STOPPED"), (Failed, "FAILED")] {
             params.scan = scan;
-            locate(&render(&params), &format!("FOUND (1) \u{b7} {phase}"));
+            locate(&render(&params), &format!("FOUND (1) | {phase}"));
         }
     }
 

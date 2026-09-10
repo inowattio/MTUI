@@ -1,5 +1,5 @@
 use crate::app::App;
-use crate::constants::NO_VALUE;
+use crate::constants::{ELLIPSIS, NO_VALUE};
 use crate::input::KeyCode;
 use crate::interpretator::format_ago;
 use crate::tui::hints::Hint;
@@ -23,7 +23,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App) {
         ])
     };
 
-    let mut reads = format!("{} ok \u{b7} {} errors", s.reads_ok, s.read_errors);
+    let mut reads = format!("{} ok | {} errors", s.reads_ok, s.read_errors);
     if s.read_errors > 0 {
         let total = s.reads_ok + s.read_errors;
         let _ = write!(
@@ -35,7 +35,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App) {
 
     let latency = match s.latency() {
         Some((min, avg, max)) => {
-            format!("{min:.2?} min \u{b7} {avg:.2?} avg \u{b7} {max:.2?} max")
+            format!("{min:.2?} min | {avg:.2?} avg | {max:.2?} max")
         }
         None => NO_VALUE.to_string(),
     };
@@ -49,7 +49,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App) {
         field("Reads", reads),
         field(
             "Writes",
-            format!("{} ok \u{b7} {} errors", s.writes_ok, s.write_errors),
+            format!("{} ok | {} errors", s.writes_ok, s.write_errors),
         ),
         field("Latency", latency),
     ];
@@ -57,11 +57,12 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App) {
     if let Some((message, at)) = s.last_error() {
         let mut short: String = message.chars().take(ERROR_W).collect();
         if short.len() < message.len() {
-            short.push('\u{2026}');
+            short.truncate(ERROR_W.saturating_sub(ELLIPSIS.len()));
+            short.push_str(ELLIPSIS);
         }
         let ago = format_ago(Utc::now().signed_duration_since(at));
         lines.push(Line::default());
-        lines.push(field("Error", format!("{short} \u{b7} {ago}")));
+        lines.push(field("Error", format!("{short} | {ago}")));
     }
 
     super::push_footer(&mut lines, theme, [Hint::key(KeyCode::Esc, "Close")]);

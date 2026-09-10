@@ -96,7 +96,7 @@ impl App {
         let access = match self.device_id_mut() {
             Some(params) => {
                 params.loading = true;
-                params.status = Some(StatusMessage::info("Reading\u{2026}"));
+                params.status = Some(StatusMessage::info("Reading..."));
                 params.access
             }
             None => return,
@@ -140,7 +140,7 @@ impl App {
         match result {
             Ok(objects) => {
                 log::info!(
-                    "Device identification ({}) \u{b7} {} object(s)",
+                    "Device identification ({}) | {} object(s)",
                     access.label(),
                     objects.len()
                 );
@@ -152,7 +152,7 @@ impl App {
                 params.objects = objects;
             }
             Err(e) => {
-                log::error!("Device identification failed \u{b7} {e}");
+                log::error!("Device identification failed | {e}");
                 params.objects.clear();
                 params.status = Some(StatusMessage::err(format!("Read failed: {e}")));
             }
@@ -201,7 +201,7 @@ impl App {
         if self.config.read_only {
             if let Some(p) = self.raw_mut() {
                 p.status = Some(StatusMessage::warn(
-                    "Read-only mode is on \u{2014} custom calls may write and are disabled",
+                    "Read-only mode is on - custom calls may write and are disabled",
                 ));
             }
             return;
@@ -216,7 +216,7 @@ impl App {
             Ok(value) if value <= u8::MAX as u16 => value as u8,
             _ => {
                 if let Some(p) = self.raw_mut() {
-                    p.status = Some(StatusMessage::err("Function code must be 0\u{2013}255"));
+                    p.status = Some(StatusMessage::err("Function code must be 0-255"));
                 }
                 return;
             }
@@ -247,7 +247,7 @@ impl App {
         }
 
         if let Some(p) = self.raw_mut() {
-            p.status = Some(StatusMessage::info("Sending\u{2026}"));
+            p.status = Some(StatusMessage::info("Sending..."));
         }
 
         let sent = data.len();
@@ -269,7 +269,7 @@ impl App {
         match result {
             Ok(bytes) => {
                 log::info!(
-                    "Raw function {code:#04X} \u{b7} {sent} byte(s) in, {} byte(s) out",
+                    "Raw function {code:#04X} | {sent} byte(s) in, {} byte(s) out",
                     bytes.len()
                 );
                 p.response = Some(if bytes.is_empty() {
@@ -287,7 +287,7 @@ impl App {
                 )));
             }
             Err(e) => {
-                log::error!("Raw function {code:#04X} failed \u{b7} {e}");
+                log::error!("Raw function {code:#04X} failed | {e}");
                 p.response = None;
                 p.status = Some(StatusMessage::err(format!("Failed: {e}")));
             }

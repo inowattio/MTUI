@@ -158,7 +158,7 @@ impl App {
                 next(self);
             }
             Err(error) => {
-                log::error!("Save failed \u{b7} {error}");
+                log::error!("Save failed | {error}");
                 self.close_popup();
                 self.set_read_status(StatusMessage::err(error));
             }
@@ -216,19 +216,19 @@ impl App {
         let mut config: Config = match serde_json::from_str(&self.saved_config) {
             Ok(config) => config,
             Err(error) => {
-                log::error!("Startup position not saved \u{b7} {error}");
+                log::error!("Startup position not saved | {error}");
                 return;
             }
         };
         config.startup = startup;
         match save_config(&self.config_path, &config) {
             Ok(()) => log::info!(
-                "Startup position saved \u{b7} {} {} on {}",
+                "Startup position saved | {} {} on {}",
                 startup.register_type.name(),
                 startup.address,
                 startup.panel.name()
             ),
-            Err(error) => log::error!("Startup position not saved \u{b7} {error}"),
+            Err(error) => log::error!("Startup position not saved | {error}"),
         }
     }
 
@@ -256,7 +256,7 @@ impl App {
             return StatusMessage::info("Device is busy.");
         }
         self.spawn_config_load(path, config);
-        StatusMessage::info("Loading\u{2026}")
+        StatusMessage::info("Loading...")
     }
 
     fn spawn_config_load(&mut self, path: String, config: Config) {
