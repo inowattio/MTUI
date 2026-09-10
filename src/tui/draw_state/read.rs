@@ -325,7 +325,7 @@ pub fn draw(
         identity.push(vec![Span::styled("READ-ONLY", theme.err_style())]);
     }
     identity.push(vec![
-        Span::styled("Device: ", theme.dim_style()),
+        Span::styled("device: ", theme.dim_style()),
         Span::styled(device.to_string(), theme.base()),
     ]);
     identity.push(vec![
