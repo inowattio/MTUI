@@ -29,7 +29,7 @@ pub(super) fn draw(
     let action_sel = sel == SweepField::Action;
     let action_label = if running { "Stop sweep" } else { "Start sweep" };
     let action_text = if action_sel {
-        format!("{action_label}  \u{2190} enter")
+        format!("{action_label}  <- enter")
     } else {
         action_label.to_string()
     };

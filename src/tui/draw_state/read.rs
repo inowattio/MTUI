@@ -127,9 +127,8 @@ impl TableCtx<'_> {
 
         let mut block = panel_block(theme, ReadPanel::Main, &app.config);
         if let Some(error) = &params.read_error {
-            block = block.title_bottom(
-                Line::styled(format!("\u{26a0} {error}"), theme.err_style()).left_aligned(),
-            );
+            block = block
+                .title_bottom(Line::styled(format!("! {error}"), theme.err_style()).left_aligned());
         } else if let Some(ascii) = ascii {
             block = block.title_top(ascii_title(ascii, theme));
         }
@@ -430,15 +429,15 @@ pub fn draw(
                 let kb = &app.config.keybinds;
                 let (message, hint) = match params.panel {
                     ReadPanel::Labeled => (
-                        "no labeled registers yet \u{2014}",
+                        "no labeled registers yet -",
                         Hint::key(kb.label, "label the selected register"),
                     ),
                     ReadPanel::Custom => (
-                        "no custom rules yet \u{2014}",
+                        "no custom rules yet -",
                         Hint::key(kb.custom, "add a rule for the selected register"),
                     ),
                     _ => (
-                        "nothing pinned yet \u{2014}",
+                        "nothing pinned yet -",
                         Hint::key(kb.pin, "pin the selected register"),
                     ),
                 };
@@ -485,12 +484,12 @@ pub fn live_status(app: &App, params: &ReadParams, theme: &Theme) -> Vec<Span<'s
     let mut fields: Vec<Vec<Span<'static>>> = Vec::new();
 
     if app.paused {
-        fields.push(vec![Span::styled("\u{23f8} paused", theme.warn_style())]);
+        fields.push(vec![Span::styled("|| paused", theme.warn_style())]);
     } else if let Some(interval) = app.config.update_interval_ms.filter(|_| !app.sweep.active) {
         let remaining =
             (interval as u128).saturating_sub(params.refresh_timer.elapsed().as_millis());
         fields.push(vec![Span::styled(
-            format!(" \u{27f3} {:>4.1}s", remaining as f64 / 1000.0),
+            format!(" ~ {:>4.1}s", remaining as f64 / 1000.0),
             theme.ok_style(),
         )]);
     }
@@ -505,7 +504,7 @@ pub fn live_status(app: &App, params: &ReadParams, theme: &Theme) -> Vec<Span<'s
         };
         fields.push(vec![Span::styled(
             format!(
-                " {}{} {}\u{2192}{} ({:>2}%)",
+                " {}{} {}->{} ({:>2}%)",
                 spinner_frame(app.frame),
                 mode,
                 app.sweep.from,
@@ -611,7 +610,7 @@ fn draw_graph(
     };
     let label = app.label_text(kind, address);
     let title = match &label {
-        Some(l) => format!("Graph [{mode}] \u{201c}{l}\u{201d}"),
+        Some(l) => format!("Graph [{mode}] \"{l}\""),
         None => format!("Graph [{mode}]"),
     };
 
@@ -621,7 +620,7 @@ fn draw_graph(
 
     if !bit_plot && column.is_none() {
         let hint = Paragraph::new(Line::from(Span::styled(
-            "Enable a numeric column (u16, i16, f32, \u{2026}) to graph.",
+            "Enable a numeric column (u16, i16, f32, ...) to graph.",
             theme.dim_style(),
         )));
         frame.render_widget(hint, inner);
@@ -640,7 +639,7 @@ fn draw_graph(
     if primary.len() < 2 {
         let kb = &app.config.keybinds;
         let mut spans = vec![Span::styled(
-            "Collecting samples\u{2026} read this register a few times  ",
+            "Collecting samples... read this register a few times  ",
             theme.dim_style(),
         )];
         spans.extend(
@@ -841,8 +840,8 @@ fn draw_graph(
 
     let width = chunks[1].width as usize;
     let mut axis_line = " ".repeat(y_gutter.min(width));
-    axis_line.push('\u{2514}');
-    axis_line.push_str(&"\u{2500}".repeat(width.saturating_sub(y_gutter + 1)));
+    axis_line.push('+');
+    axis_line.push_str(&"-".repeat(width.saturating_sub(y_gutter + 1)));
     frame.render_widget(
         Paragraph::new(Line::from(Span::styled(axis_line, theme.dim_style()))),
         chunks[1],
@@ -910,7 +909,7 @@ fn draw_graph(
         spans.extend([
             Span::styled("cur ", theme.dim_style()),
             Span::styled(fmt_num(last, is_float), theme.accent_style()),
-            Span::styled(format!("  \u{0394}{delta_str}   "), delta_style),
+            Span::styled(format!("  delta {delta_str}   "), delta_style),
         ]);
     }
     spans.extend([

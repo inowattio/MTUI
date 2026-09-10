@@ -1,4 +1,5 @@
 use crate::app::App;
+use crate::constants::ELLIPSIS;
 use crate::input::KeyCode;
 use crate::state::{DiscoveryColumn, DiscoveryField, DiscoveryParams, InterfaceKind};
 use crate::tui::draw_state::{cyclable, dim_line, edit_value, field_row, marker};
@@ -121,8 +122,8 @@ fn common_lines(
         let selected = focused && field == current;
         if field == DiscoveryField::Connect {
             lines.push(Line::default());
-            let reason = blocked
-                .map(|reason| Span::styled(format!("   \u{2717} {reason}"), theme.err_style()));
+            let reason =
+                blocked.map(|reason| Span::styled(format!("   x {reason}"), theme.err_style()));
             lines.push(button_line(
                 theme,
                 "Connect",
@@ -323,8 +324,8 @@ fn push_list(
         let selected = cursor == Some(i);
         let mark = match (radio, chosen) {
             (false, _) => "",
-            (true, Some(c)) if c == i => "\u{25cf} ",
-            (true, _) => "\u{25cb} ",
+            (true, Some(c)) if c == i => "* ",
+            (true, _) => "o ",
         };
         let room = (SIDE_W as usize).saturating_sub(2 + mark.chars().count() + 1);
         let style = if selected {
@@ -365,7 +366,7 @@ fn custom_path_row(p: &DiscoveryParams, selected: bool, theme: &Theme) -> Line<'
     };
     Line::from(vec![
         Span::styled(marker(selected), theme.dim_style()),
-        Span::styled(if active { "\u{25cf} " } else { "\u{25cb} " }, mark_style),
+        Span::styled(if active { "* " } else { "o " }, mark_style),
         Span::styled(LABEL, theme.dim_style()),
         Span::styled(value, style),
     ])
@@ -376,17 +377,20 @@ fn truncate_start(text: &str, room: usize) -> String {
     if count <= room {
         return text.to_string();
     }
-    let keep = room.saturating_sub(1);
+    let keep = room.saturating_sub(ELLIPSIS.len());
     let tail: String = text.chars().skip(count - keep).collect();
-    format!("\u{2026}{tail}")
+    format!("{ELLIPSIS}{tail}")
 }
 
 fn truncate(text: &str, room: usize) -> String {
     if text.chars().count() <= room {
         return text.to_string();
     }
-    let mut shown: String = text.chars().take(room.saturating_sub(1)).collect();
-    shown.push('\u{2026}');
+    let mut shown: String = text
+        .chars()
+        .take(room.saturating_sub(ELLIPSIS.len()))
+        .collect();
+    shown.push_str(ELLIPSIS);
     shown
 }
 

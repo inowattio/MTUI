@@ -249,7 +249,7 @@ impl App {
                         .skip(1)
                         .position(|a| a == address)? as u16;
                     Some(if address == owner.wrapping_add(position + 1) {
-                        "part of \u{2191}".to_string()
+                        "part of ^".to_string()
                     } else {
                         format!("part of {owner}")
                     })

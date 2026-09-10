@@ -99,7 +99,7 @@ impl App {
             return;
         };
 
-        self.set_discovery_status(StatusMessage::warn("Connecting\u{2026}"));
+        self.set_discovery_status(StatusMessage::warn("Connecting..."));
 
         let previous = self.take_device();
         self.background_task = Some(BackgroundTask::Connect(compat::spawn(async move {
@@ -204,7 +204,7 @@ impl App {
         if let Some(d) = self.discovery_mut() {
             d.set_found(Vec::new());
             d.status = Some(StatusMessage::warn(format!(
-                "Scanning {prefix}0/24 by {}\u{2026}",
+                "Scanning {prefix}0/24 by {}...",
                 method.label()
             )));
         }

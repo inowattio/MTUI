@@ -256,7 +256,7 @@ impl App {
             return StatusMessage::info("Device is busy.");
         }
         self.spawn_config_load(path, config);
-        StatusMessage::info("Loading\u{2026}")
+        StatusMessage::info("Loading...")
     }
 
     fn spawn_config_load(&mut self, path: String, config: Config) {

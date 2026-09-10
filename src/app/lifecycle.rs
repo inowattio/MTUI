@@ -337,7 +337,7 @@ impl App {
         self.connection = ConnectionStatus::Reconnecting;
         self.reconnect.next_at = None;
         if self.reconnect.attempts == 0 {
-            log::warn!("Connection lost | reconnecting\u{2026}");
+            log::warn!("Connection lost | reconnecting...");
         }
         let config = self.config.device.clone();
         let previous = self.take_device();

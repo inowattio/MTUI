@@ -6,6 +6,8 @@ pub const NO_VALUE: &str = "-";
 
 pub const UNINTERPRETABLE: &str = "?";
 
+pub const ELLIPSIS: &str = "...";
+
 pub const EVENT_HANDLER_TICKRATE: Duration = Duration::from_millis(100);
 
 pub const SEARCH_POPUP_MAX_HEIGHT_PERCENT: u16 = 80;

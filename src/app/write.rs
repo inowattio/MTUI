@@ -24,7 +24,7 @@ impl App {
                 _ => "These registers",
             };
             self.set_read_status(StatusMessage::warn(format!(
-                "{what} are read-only \u{2014} cannot write"
+                "{what} are read-only - cannot write"
             )));
             return;
         }
@@ -268,7 +268,7 @@ impl App {
         let jump = self.config.keybinds.jump;
         let settings = self.config.keybinds.settings;
         self.set_read_status(StatusMessage::warn(format!(
-            "No other register type to cycle to \u{2014} jump to one with [{jump}] or change in settings [{settings}]"
+            "No other register type to cycle to - jump to one with [{jump}] or change in settings [{settings}]"
         )));
     }
 

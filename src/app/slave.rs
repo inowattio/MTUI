@@ -96,7 +96,7 @@ impl App {
         let access = match self.device_id_mut() {
             Some(params) => {
                 params.loading = true;
-                params.status = Some(StatusMessage::info("Reading\u{2026}"));
+                params.status = Some(StatusMessage::info("Reading..."));
                 params.access
             }
             None => return,
@@ -201,7 +201,7 @@ impl App {
         if self.config.read_only {
             if let Some(p) = self.raw_mut() {
                 p.status = Some(StatusMessage::warn(
-                    "Read-only mode is on \u{2014} custom calls may write and are disabled",
+                    "Read-only mode is on - custom calls may write and are disabled",
                 ));
             }
             return;
@@ -216,7 +216,7 @@ impl App {
             Ok(value) if value <= u8::MAX as u16 => value as u8,
             _ => {
                 if let Some(p) = self.raw_mut() {
-                    p.status = Some(StatusMessage::err("Function code must be 0\u{2013}255"));
+                    p.status = Some(StatusMessage::err("Function code must be 0-255"));
                 }
                 return;
             }
@@ -247,7 +247,7 @@ impl App {
         }
 
         if let Some(p) = self.raw_mut() {
-            p.status = Some(StatusMessage::info("Sending\u{2026}"));
+            p.status = Some(StatusMessage::info("Sending..."));
         }
 
         let sent = data.len();

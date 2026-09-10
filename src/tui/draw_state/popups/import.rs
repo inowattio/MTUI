@@ -27,7 +27,7 @@ pub(super) fn draw(
         if count > 0 {
             let plural = if count == 1 { "" } else { "s" };
             lines.push(Line::from(Span::styled(
-                format!("  \u{2022} {count} {noun}{plural}"),
+                format!("  - {count} {noun}{plural}"),
                 theme.base(),
             )));
         }

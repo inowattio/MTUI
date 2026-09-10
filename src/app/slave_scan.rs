@@ -96,7 +96,7 @@ impl App {
         p.current = p.from;
         p.status = None;
         log::info!(
-            "Slave scan started | {}..={} | {:?} @ {} \u{d7}{}{}",
+            "Slave scan started | {}..={} | {:?} @ {} x{}{}",
             p.from,
             p.to,
             p.register_type,

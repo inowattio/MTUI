@@ -98,7 +98,7 @@ mod web {
     }
 
     /// The WebGL2 backend (beamterm) renders the grid on the GPU from a
-    /// glyph atlas — the cheapest option per frame by far. The DOM backend
+    /// glyph atlas - the cheapest option per frame by far. The DOM backend
     /// turned every cell into a styled `<span>`, and full-area updates (the
     /// graph view, held cursor movement) forced the browser through style
     /// recalc and layout over tens of thousands of nodes. It survives as the
@@ -166,7 +166,7 @@ mod web {
     }
 
     /// Browsers drop WebGL contexts under GPU pressure, driver resets and
-    /// suspend/resume — and GL calls on a lost context silently no-op, so
+    /// suspend/resume - and GL calls on a lost context silently no-op, so
     /// beamterm keeps "drawing" a canvas that stays black. The event on the
     /// canvas is the only reliable signal; it flags the render loop to
     /// rebuild the backend from scratch.

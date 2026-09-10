@@ -90,7 +90,7 @@ pub(super) fn draw(
     let caret_line = if caret + 2 + bit_label.len() <= width as usize - 2 {
         Line::from(vec![
             Span::raw(" ".repeat(caret)),
-            Span::styled("\u{25b4}", theme.accent_style()),
+            Span::styled("^", theme.accent_style()),
             Span::styled(format!(" {bit_label}"), theme.dim_style()),
         ])
     } else {
@@ -98,7 +98,7 @@ pub(super) fn draw(
             Span::raw(" ".repeat(caret - bit_label.len() - 1)),
             Span::styled(bit_label, theme.dim_style()),
             Span::raw(" "),
-            Span::styled("\u{25b4}", theme.accent_style()),
+            Span::styled("^", theme.accent_style()),
         ])
     };
 
@@ -196,9 +196,9 @@ fn draw_coil(
 ) {
     let on = write.value.unwrap_or(0) != 0;
     let (state, state_style) = if on {
-        ("\u{25c9} ON", theme.ok_style())
+        ("* ON", theme.ok_style())
     } else {
-        ("\u{25cb} OFF", theme.dim_style())
+        ("o OFF", theme.dim_style())
     };
 
     let mut lines = vec![
