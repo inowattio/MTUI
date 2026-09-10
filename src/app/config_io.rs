@@ -151,6 +151,28 @@ impl App {
         self.dirty = false;
     }
 
+    fn save_then(&mut self, next: fn(&mut Self)) {
+        match self.persist_config() {
+            Ok(_) => {
+                log::info!("Configuration saved");
+                next(self);
+            }
+            Err(error) => {
+                log::error!("Save failed \u{b7} {error}");
+                self.close_popup();
+                self.set_read_status(StatusMessage::err(error));
+            }
+        }
+    }
+
+    pub fn save_and_quit(&mut self) {
+        self.save_then(Self::quit);
+    }
+
+    pub fn save_and_cycle_config(&mut self) {
+        self.save_then(Self::confirm_cycle_config);
+    }
+
     pub(super) fn refresh_dirty(&mut self) {
         self.dirty = Self::serialize_config(&self.effective_config()) != self.saved_config;
     }

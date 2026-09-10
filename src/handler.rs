@@ -406,6 +406,10 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
             };
             match key_event.code {
                 c if c == kb.action => confirm(app),
+                KeyCode::Char('s') if kind == PopupKind::Quit => app.save_and_quit(),
+                KeyCode::Char('s') if kind == PopupKind::CycleConfig => {
+                    app.save_and_cycle_config();
+                }
                 c if c == KeyCode::Esc || c == KeyCode::Backspace => cancel(app),
                 _ => {}
             }
@@ -751,8 +755,8 @@ mod tests {
     use crate::config::Config;
     use crate::input::{KeyCode, KeyEvent};
     use crate::state::{
-        DiscoveryField, DiscoveryParams, InterfaceKind, Popup, PopupKind, SettingsCategory,
-        SettingsField, SettingsFocus, SlaveField, SlaveParams, State,
+        DiscoveryField, DiscoveryParams, InterfaceKind, MessageKind, Popup, PopupKind,
+        SettingsCategory, SettingsField, SettingsFocus, SlaveField, SlaveParams, State,
     };
 
     async fn app() -> App {
@@ -1028,6 +1032,47 @@ mod tests {
         handle_key_events(ctrl('c'), &mut app).await;
         assert!(app.running);
         assert!(matches!(&app.state, State::Read(p) if p.popup == Some(Popup::Quit)));
+    }
+
+    #[tokio::test]
+    async fn s_in_the_quit_prompt_saves_and_quits() {
+        let dir = std::env::temp_dir().join(format!("mtui-quit-{}", std::process::id()));
+        let path = dir.join("config.json").to_string_lossy().to_string();
+        let mut app = App::boot(Config::default(), path.clone()).await;
+        app.pin();
+        assert!(app.dirty);
+
+        handle_key_events(KeyEvent::new(KeyCode::Esc), &mut app).await;
+        assert_eq!(app.popup_kind(), Some(PopupKind::Quit));
+
+        handle_key_events(KeyEvent::new(KeyCode::Char('s')), &mut app).await;
+        assert!(!app.running);
+        assert!(!app.dirty);
+        let saved: Config = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(
+            saved.pinned_registers.inputs,
+            app.pinned_registers.iter().map(|c| c.1).collect::<Vec<_>>()
+        );
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[tokio::test]
+    async fn a_failed_save_keeps_the_session_and_reports_it() {
+        let mut app = App::boot(
+            Config::default(),
+            "/nonexistent-dir/mtui/config.json".to_string(),
+        )
+        .await;
+        app.pin();
+        handle_key_events(KeyEvent::new(KeyCode::Esc), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Char('s')), &mut app).await;
+        assert!(app.running);
+        assert!(app.dirty);
+        assert_eq!(app.popup_kind(), None);
+        assert_eq!(
+            app.read().status.as_ref().map(|s| s.kind),
+            Some(MessageKind::Err)
+        );
     }
 
     #[tokio::test]

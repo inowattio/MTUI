@@ -14,6 +14,7 @@ mod search;
 mod slave;
 mod stats;
 mod sweep_config;
+mod unsaved;
 mod write;
 
 use crate::app::App;
@@ -66,12 +67,7 @@ pub fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup
         Popup::Raw(params) => raw::draw(frame, area, theme, kb, params),
         Popup::Import(params) => import::draw(frame, area, theme, kb, params),
         Popup::CycleConfig | Popup::Quit => {
-            let prompt = if matches!(popup, Popup::Quit) {
-                " Quit anyway?"
-            } else {
-                " Load next configuration anyway?"
-            };
-            confirm::draw(frame, area, theme, kb, "Unsaved changes", prompt, &None);
+            unsaved::draw(frame, area, theme, kb, matches!(popup, Popup::Quit))
         }
     }
 }
