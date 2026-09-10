@@ -1228,6 +1228,11 @@ impl Default for ReadParams {
 }
 
 impl ReadParams {
+    pub fn finish_read(&mut self) {
+        self.loading = false;
+        self.refresh_timer = Instant::now();
+    }
+
     pub fn active_status(&self) -> Option<&StatusMessage> {
         self.status
             .as_ref()

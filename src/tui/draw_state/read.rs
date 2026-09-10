@@ -479,8 +479,11 @@ pub fn live_status(app: &App, params: &ReadParams, theme: &Theme) -> Vec<Span<'s
     if app.paused {
         fields.push(vec![Span::styled("|| paused", theme.warn_style())]);
     } else if let Some(interval) = app.config.update_interval_ms.filter(|_| !app.sweep.active) {
-        let remaining =
-            (interval as u128).saturating_sub(params.refresh_timer.elapsed().as_millis());
+        let remaining = if params.loading {
+            0
+        } else {
+            (interval as u128).saturating_sub(params.refresh_timer.elapsed().as_millis())
+        };
         fields.push(vec![Span::styled(
             format!(" {:>4.1}s", remaining as f64 / 1000.0),
             theme.ok_style(),

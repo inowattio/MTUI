@@ -503,7 +503,6 @@ impl App {
         let cols = self.config.matrix_cols;
         let (panel, register_type) = {
             let p = self.read_mut();
-            p.refresh_timer = Instant::now();
             p.loading = true;
             p.scroll_to_cursor(visible, cols);
             (p.panel, p.register_type)
@@ -590,7 +589,7 @@ impl App {
                 State::Read(params) if params.register_type == result.register_type
             )
         {
-            self.read_mut().loading = false;
+            self.read_mut().finish_read();
             return;
         }
 
@@ -649,7 +648,7 @@ impl App {
         {
             let params = self.read_mut();
             params.read_duration = Some(result.read_duration);
-            params.loading = false;
+            params.finish_read();
             match &result.main_data {
                 Some(Err(e)) => params.read_error = Some(e.message.clone()),
                 Some(Ok(_)) => params.read_error = None,
@@ -683,7 +682,7 @@ impl App {
                 }
                 self.background_task = None;
                 if self.is_reading() {
-                    self.read_mut().loading = false;
+                    self.read_mut().finish_read();
                 }
                 true
             }
@@ -743,7 +742,7 @@ impl App {
                 if self.is_reading() {
                     let params = self.read_mut();
                     params.read_error = Some(message.clone());
-                    params.loading = false;
+                    params.finish_read();
                 }
                 log::error!("Read task failed | {message}");
                 self.connection = ConnectionStatus::Error(message);
