@@ -1,6 +1,6 @@
 use crate::app::App;
 use crate::input::KeyCode;
-use crate::state::{ReadPanel, SettingsFocus, State};
+use crate::state::{SettingsFocus, State};
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
 use ratatui::text::Line;
@@ -24,30 +24,16 @@ pub fn make_bottom_title(theme: &Theme, app: &App) -> Line<'static> {
                 }
             } else {
                 let kind = Hint::key(kb.toggle, "Type");
-                if p.panel == ReadPanel::Matrix {
-                    hints::footer(
-                        theme,
-                        [
-                            Hint::pair(kb.move_up, kb.move_down, "Row"),
-                            Hint::pair(KeyCode::Left, KeyCode::Right, "Col"),
-                            kind,
-                            panel,
-                            read,
-                            help,
-                        ],
-                    )
-                } else {
-                    hints::footer(
-                        theme,
-                        [
-                            Hint::pair(kb.move_up, kb.move_down, "Move"),
-                            kind,
-                            panel,
-                            read,
-                            help,
-                        ],
-                    )
-                }
+                hints::footer(
+                    theme,
+                    [
+                        Hint::pair(kb.move_down, KeyCode::Right, "Move"),
+                        kind,
+                        panel,
+                        read,
+                        help,
+                    ],
+                )
             }
         }
         State::Settings(s) => {
@@ -61,8 +47,7 @@ pub fn make_bottom_title(theme: &Theme, app: &App) -> Line<'static> {
         State::Logs(l) => hints::footer(
             theme,
             [
-                Hint::pair(kb.move_up, kb.move_down, "Scroll"),
-                Hint::pair(KeyCode::Left, KeyCode::Right, "Pan"),
+                Hint::pair(kb.move_down, KeyCode::Right, "Scroll"),
                 Hint::key(kb.write, if l.wrap { "Unwrap" } else { "Wrap" }),
                 Hint::key(KeyCode::Esc, "Back"),
             ],
