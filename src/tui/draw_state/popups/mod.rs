@@ -128,7 +128,9 @@ pub(super) fn push_status(
 ) {
     if let Some(status) = status {
         lines.push(Line::default());
-        lines.push(theme.status_line(status));
+        let mut line = theme.status_line(status);
+        line.spans.insert(0, Span::raw(" "));
+        lines.push(line);
     }
 }
 
