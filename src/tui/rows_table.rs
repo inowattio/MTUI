@@ -101,7 +101,10 @@ fn write_row(
     prefix: u16,
     h_off: u16,
 ) {
-    buf.set_style(Rect::new(inner.x, y, inner.width, 1), style);
+    let filled = style.bg.is_some();
+    if filled {
+        buf.set_style(Rect::new(inner.x, y, inner.width, 1), style);
+    }
     let right = inner.right();
     let hidden = prefix as usize..(prefix as usize + h_off as usize);
     let mut x = inner.x;
@@ -110,8 +113,9 @@ fn write_row(
         if x >= right {
             break;
         }
+        let cell_style = style.patch(span.style);
+        let restyle = !filled || span.style != Style::default();
         if is_plain(&span.content) {
-            let styled = span.style != Style::default();
             for ch in span.content.chars() {
                 let skip = hidden.contains(&index);
                 index += 1;
@@ -123,8 +127,8 @@ fn write_row(
                 }
                 let cell = &mut buf[(x, y)];
                 cell.set_char(ch);
-                if styled {
-                    cell.set_style(span.style);
+                if restyle {
+                    cell.set_style(cell_style);
                 }
                 x += 1;
             }
@@ -139,7 +143,7 @@ fn write_row(
                 })
                 .collect();
             x = buf
-                .set_stringn(x, y, visible, (right - x) as usize, span.style)
+                .set_stringn(x, y, visible, (right - x) as usize, cell_style)
                 .0;
         }
     }
@@ -228,6 +232,20 @@ mod tests {
         assert!(!is_plain("a\tb"));
         assert!(!is_plain("caf\u{e9}"));
         assert!(!is_plain("\u{4e2d}"));
+    }
+
+    #[test]
+    fn rows_without_background_leave_trailing_cells_untouched() {
+        let red = Style::default().fg(Color::Red);
+        let rows = vec![TableRow::plain("ab".into(), red)];
+        let buf = render(
+            RowsTable::new(Block::default(), String::new(), Style::default(), rows),
+            4,
+            2,
+        );
+        assert_eq!(buf[(1, 1)].fg, Color::Red);
+        assert_eq!(buf[(2, 1)].fg, Color::Reset);
+        assert_eq!(buf[(2, 1)].symbol(), " ");
     }
 
     #[test]

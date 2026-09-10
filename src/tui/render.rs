@@ -8,7 +8,7 @@ use crate::tui::theme::status_span;
 use chrono::Local;
 use ratatui::Frame;
 use ratatui::layout::Margin;
-use ratatui::style::Style;
+use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders};
 
@@ -61,9 +61,12 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         .title_top(Line::from(mode_spans).right_aligned())
         .title_bottom(clock_line)
         .title_bottom(key_hints.right_aligned())
-        .style(Style::default().fg(theme.border).bg(theme.bg))
+        .border_style(Style::default().fg(theme.border))
         .borders(Borders::TOP | Borders::BOTTOM)
         .border_type(BorderType::Rounded);
+    if theme.bg != Color::Reset {
+        outer = outer.style(Style::default().bg(theme.bg));
+    }
 
     // h_max_offset is written during the table draw below, so this reads the
     // previous frame's value; it settles on the next redraw.

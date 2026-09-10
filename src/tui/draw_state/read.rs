@@ -352,14 +352,11 @@ pub fn draw(
         .constraints([Constraint::Length(1), Constraint::Length(1)])
         .split(rows[0]);
 
-    frame.render_widget(Paragraph::new(Line::from(left_line)), info_rows[0]);
-    frame.render_widget(
-        Paragraph::new(Line::from(right_line)).alignment(Alignment::Right),
-        info_rows[0],
-    );
+    frame.render_widget(Line::from(left_line), info_rows[0]);
+    frame.render_widget(Line::from(right_line).right_aligned(), info_rows[0]);
 
     if let Some(status) = params.active_status() {
-        frame.render_widget(Paragraph::new(theme.status_line(status)), info_rows[1]);
+        frame.render_widget(theme.status_line(status), info_rows[1]);
     }
 
     let header = app.interpreter.header();
