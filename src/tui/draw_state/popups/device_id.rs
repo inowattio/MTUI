@@ -53,16 +53,15 @@ pub(super) fn draw(
         ));
     }
 
-    let mut lines: Vec<Line> = vec![Line::from(tabs), Line::default()];
+    let mut lines: Vec<Line> = vec![Line::from(tabs)];
 
     if params.objects.is_empty() {
-        let text = if params.loading {
-            " reading\u{2026}"
-        } else {
-            " no objects"
-        };
-        lines.push(dim_line(theme, text));
+        if !params.loading {
+            lines.push(Line::default());
+            lines.push(dim_line(theme, " no objects"));
+        }
     } else {
+        lines.push(Line::default());
         for &(id, ref value) in &params.objects {
             let shown: String = value.chars().skip(offset).collect();
             lines.push(Line::from(vec![
