@@ -3,6 +3,7 @@ mod hints;
 mod make_bottom_title;
 mod make_top_title;
 mod render;
+mod rows_table;
 #[cfg(not(target_arch = "wasm32"))]
 mod terminal;
 pub mod theme;

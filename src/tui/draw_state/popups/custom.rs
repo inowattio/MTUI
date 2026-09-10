@@ -114,7 +114,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &
             theme.dim_style(),
         )));
         lines.push(Line::from(Span::styled(
-            "    (enter adds \u{b7} empty enter saves \u{b7} backspace removes)",
+            "    (enter adds | empty enter saves | backspace removes)",
             theme.dim_style(),
         )));
     };
@@ -228,6 +228,6 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &
 
     super::push_footer(&mut lines, theme, footer);
 
-    let title = format!("Custom rule \u{b7} {:?} @ {}", c.register_type, c.address);
+    let title = format!("Custom rule | {:?} @ {}", c.register_type, c.address);
     super::render(frame, area, theme, &title, width, lines);
 }

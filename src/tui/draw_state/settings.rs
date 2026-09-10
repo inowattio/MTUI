@@ -566,7 +566,7 @@ fn draw_keybinds(params: &SettingsParams, app: &App, frame: &mut Frame, area: Re
 
         let duplicate = actions.iter().filter(|&&a| kb.get(a) == key).count() > 1;
         if duplicate && !capturing {
-            spans.push(Span::styled(" \u{b7} duplicate", theme.warn_style()));
+            spans.push(Span::styled(" | duplicate", theme.warn_style()));
         }
 
         lines.push(Line::from(spans));

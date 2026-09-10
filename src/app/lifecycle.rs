@@ -102,7 +102,7 @@ impl App {
 
         if app.device.is_some() {
             app.state = State::Read(app.startup_read_params());
-            log::info!("Started \u{b7} {}", app.config.display_device());
+            log::info!("Started | {}", app.config.display_device());
             if app.config.cycle_types.enabled_count() == 0 {
                 app.notify_no_cycle_types();
             }
@@ -110,7 +110,7 @@ impl App {
             let mut read = app.startup_read_params();
             read.popup = Some(Popup::Discovery(Self::discovery_params(&app.config)));
             app.state = State::Read(read);
-            log::warn!("Started \u{b7} no device, opened Discovery");
+            log::warn!("Started | no device, opened Discovery");
         }
 
         #[cfg(not(target_arch = "wasm32"))]
@@ -337,7 +337,7 @@ impl App {
         self.connection = ConnectionStatus::Reconnecting;
         self.reconnect.next_at = None;
         if self.reconnect.attempts == 0 {
-            log::warn!("Connection lost \u{b7} reconnecting\u{2026}");
+            log::warn!("Connection lost | reconnecting\u{2026}");
         }
         let config = self.config.device.clone();
         let previous = self.take_device();
@@ -356,7 +356,7 @@ impl App {
                 self.reconnect = ReconnectState::default();
                 self.connection = ConnectionStatus::Unknown;
                 self.logged_connection = ConnectionStatus::Unknown;
-                log::info!("Reconnected \u{b7} {}", self.config.display_device());
+                log::info!("Reconnected | {}", self.config.display_device());
             }
             other => {
                 let error = match other {
@@ -367,7 +367,7 @@ impl App {
                 let delay = reconnect_backoff(self.reconnect.attempts);
                 self.reconnect.next_at = Some(Instant::now() + delay);
                 log::warn!(
-                    "Reconnect attempt {} failed \u{b7} {error}; retrying in {}s",
+                    "Reconnect attempt {} failed | {error}; retrying in {}s",
                     self.reconnect.attempts,
                     delay.as_secs()
                 );
@@ -650,7 +650,7 @@ impl App {
         if connection != self.logged_connection {
             match &connection {
                 ConnectionStatus::Connected => log::info!("Connected"),
-                ConnectionStatus::Error(e) => log::error!("Read error \u{b7} {e}"),
+                ConnectionStatus::Error(e) => log::error!("Read error | {e}"),
                 _ => {}
             }
             self.logged_connection = connection.clone();
@@ -735,7 +735,7 @@ impl App {
                     params.read_error = Some(message.clone());
                     params.loading = false;
                 }
-                log::error!("Read task failed \u{b7} {message}");
+                log::error!("Read task failed | {message}");
                 self.connection = ConnectionStatus::Error(message);
                 self.reconnect.link_lost = true;
             }
@@ -758,7 +758,7 @@ impl App {
                         self.log_write();
                         log::info!("Write {detail}");
                     } else {
-                        log::error!("Write failed \u{b7} {detail} \u{b7} {}", outcome.message);
+                        log::error!("Write failed | {detail} | {}", outcome.message);
                     }
                 }
                 self.pending_write = None;

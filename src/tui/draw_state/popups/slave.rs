@@ -198,7 +198,7 @@ fn title_line(params: &SlaveParams, theme: &Theme) -> Line<'static> {
         theme.header_style(),
     )];
     if !phase.is_empty() {
-        spans.push(Span::styled(" \u{b7} ", theme.dim_style()));
+        spans.push(Span::styled(" | ", theme.dim_style()));
         spans.push(Span::styled(phase, style.add_modifier(Modifier::BOLD)));
     }
     Line::from(spans)
@@ -382,7 +382,7 @@ mod tests {
         params.scan = Probing;
         params.current = 17;
         let scanning = render(&params);
-        locate(&scanning, "FOUND (0) \u{b7} PROBING 17\u{2026}");
+        locate(&scanning, "FOUND (0) | PROBING 17\u{2026}");
         locate(&scanning, "scanning\u{2026}");
         assert_eq!(
             popup_width(&scanning) - popup_width(&before),
@@ -493,13 +493,13 @@ mod tests {
             ..SlaveParams::default()
         };
         let rows = render(&params);
-        let (_, title_y) = locate(&rows, "FOUND (1) \u{b7} PROBING 17\u{2026}");
+        let (_, title_y) = locate(&rows, "FOUND (1) | PROBING 17\u{2026}");
         let (_, id_y) = locate(&rows, "Slave id");
         assert_eq!(title_y, id_y, "the title heads the list column");
 
         for (scan, phase) in [(Done, "DONE"), (Stopped, "STOPPED"), (Failed, "FAILED")] {
             params.scan = scan;
-            locate(&render(&params), &format!("FOUND (1) \u{b7} {phase}"));
+            locate(&render(&params), &format!("FOUND (1) | {phase}"));
         }
     }
 

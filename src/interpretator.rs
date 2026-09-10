@@ -309,7 +309,7 @@ fn float_cell<T: std::fmt::Display + std::fmt::LowerExp>(x: T, width: usize, out
 
 fn glyph(b: u8) -> char {
     let c = b as char;
-    if c.is_ascii_graphic() { c } else { '·' }
+    if c.is_ascii_graphic() { c } else { '.' }
 }
 
 pub fn ascii_words(words: &[u16]) -> String {

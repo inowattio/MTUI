@@ -131,7 +131,7 @@ pub(super) fn draw(
             };
             let mut text = hex;
             if let Some(alt) = alt {
-                text.push_str(&format!(" \u{b7} {alt}"));
+                text.push_str(&format!(" | {alt}"));
             }
             Span::styled(text, theme.dim_style())
         }

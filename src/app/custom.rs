@@ -203,7 +203,7 @@ impl App {
                 self.custom_rules.insert(cell, rule);
                 self.refresh_dirty();
                 self.read_mut().popup = None;
-                log::info!("Custom rule set \u{b7} {:?}@{}", cell.0, cell.1);
+                log::info!("Custom rule set | {:?}@{}", cell.0, cell.1);
             }
             Err(e) => self.with_custom(|c| c.error = Some(e)),
         }
@@ -218,7 +218,7 @@ impl App {
         };
         if self.custom_rules.remove(&cell).is_some() {
             self.refresh_dirty();
-            log::info!("Custom rule removed \u{b7} {:?}@{}", cell.0, cell.1);
+            log::info!("Custom rule removed | {:?}@{}", cell.0, cell.1);
         }
         self.read_mut().popup = None;
     }

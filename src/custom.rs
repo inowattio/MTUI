@@ -198,7 +198,7 @@ impl CustomRule {
         if names.is_empty() {
             "(none)".to_string()
         } else {
-            names.join("\u{b7}")
+            names.join("|")
         }
     }
 
@@ -414,7 +414,7 @@ mod tests {
     fn bits_name_set_bits() {
         let mut r = rule(CustomRepr::U16);
         r.bits = vec![bit(0, "run"), bit(1, "grid"), bit(15, "beat")];
-        assert_eq!(r.evaluate(&[0b11], WordOrder::ABCD), "run\u{b7}grid");
+        assert_eq!(r.evaluate(&[0b11], WordOrder::ABCD), "run|grid");
         assert_eq!(r.evaluate(&[0b10], WordOrder::ABCD), "grid");
         assert_eq!(r.evaluate(&[0x8000], WordOrder::ABCD), "beat");
         assert_eq!(r.evaluate(&[0b100], WordOrder::ABCD), "(none)");

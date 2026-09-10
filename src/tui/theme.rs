@@ -181,7 +181,7 @@ impl Theme {
         &self,
         groups: impl IntoIterator<Item = Vec<Span<'static>>>,
     ) -> Vec<Span<'static>> {
-        let separator = Span::styled(" \u{b7} ", self.dim_style());
+        let separator = Span::styled(" | ", self.dim_style());
         let mut spans: Vec<Span<'static>> = Vec::new();
         for (i, group) in groups.into_iter().enumerate() {
             if i > 0 {

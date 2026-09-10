@@ -46,7 +46,7 @@ impl App {
                 p.scroll_to_cursor(rows, cols);
             }
             log::info!(
-                "Sweep started \u{b7} {from}..{to}{}",
+                "Sweep started | {from}..{to}{}",
                 if continuous { " (loop)" } else { "" }
             );
         }

@@ -7,6 +7,7 @@ use crate::interpretator::fmt_num;
 use crate::register::{RegisterCell, RegisterType};
 use crate::state::{ReadPanel, ReadParams};
 use crate::tui::hints::{self, Hint};
+use crate::tui::rows_table::{RowsTable, TableRow};
 use crate::tui::theme::{Theme, spinner_frame};
 use chrono::{DateTime, Local, Utc};
 use ratatui::Frame;
@@ -14,9 +15,7 @@ use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::symbols;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{
-    Axis, Block, Cell, Chart, Dataset, GraphType, LegendPosition, Paragraph, Row, Table,
-};
+use ratatui::widgets::{Axis, Block, Chart, Dataset, GraphType, LegendPosition, Paragraph};
 
 fn panel_block(theme: &Theme, active: ReadPanel, config: &Config) -> Block<'static> {
     if !config.show_inactive_tabs {
@@ -35,25 +34,13 @@ fn ascii_title(ascii: &str, theme: &Theme) -> Line<'static> {
     Line::from(Span::styled(format!(" '{ascii}'"), theme.base())).right_aligned()
 }
 
-fn hscroll(text: &str, prefix: u16, offset: u16) -> String {
-    if offset == 0 {
-        return text.to_string();
-    }
-    let prefix = prefix as usize;
-    let mut out: String = text.chars().take(prefix).collect();
-    out.extend(text.chars().skip(prefix + offset as usize));
-    out
-}
-
-fn full_width_table(
-    rows: Vec<Row<'static>>,
-    header_cell: Cell<'static>,
+fn rows_table(
+    rows: Vec<TableRow>,
+    header: String,
     theme: &Theme,
     block: Block<'static>,
-) -> Table<'static> {
-    Table::new(rows, [Constraint::Percentage(100)])
-        .header(Row::new([header_cell]).style(theme.header_style()))
-        .block(block)
+) -> RowsTable {
+    RowsTable::new(block, header, theme.header_style(), rows)
 }
 
 struct TableCtx<'a> {
@@ -85,28 +72,16 @@ impl TableCtx<'_> {
         header: &str,
         prefix: u16,
         block: Block<'static>,
-    ) -> Table<'static> {
+    ) -> RowsTable {
         let h_off = self.horizontal_offset(&rows, header, prefix);
-        let table_rows: Vec<Row> = rows
+        let table_rows = rows
             .into_iter()
-            .map(|(text, style)| {
-                let cell = if h_off == 0 {
-                    text
-                } else {
-                    hscroll(&text, prefix, h_off)
-                };
-                Row::new([Cell::from(cell)]).style(style)
-            })
+            .map(|(text, style)| TableRow::plain(text, style))
             .collect();
-        full_width_table(
-            table_rows,
-            Cell::from(hscroll(header, prefix, h_off)),
-            self.theme,
-            block,
-        )
+        rows_table(table_rows, header.to_string(), self.theme, block).hscroll(prefix, h_off)
     }
 
-    fn main_table(&self, visible: u16, header: &str, ascii: Option<&str>) -> Table<'static> {
+    fn main_table(&self, visible: u16, header: &str, ascii: Option<&str>) -> RowsTable {
         let (params, app, theme) = (self.params, self.app, self.theme);
         let now = Local::now();
         let mut rows: Vec<(String, Style)> = Vec::with_capacity(visible as usize);
@@ -140,7 +115,7 @@ impl TableCtx<'_> {
 
             if show_window {
                 let marker = if (read_start..=read_end).contains(&addr) {
-                    "\u{258e}"
+                    "|"
                 } else {
                     " "
                 };
@@ -167,12 +142,7 @@ impl TableCtx<'_> {
         }
     }
 
-    fn list_table(
-        &self,
-        cells: &[RegisterCell],
-        top: usize,
-        ascii: Option<&str>,
-    ) -> Table<'static> {
+    fn list_table(&self, cells: &[RegisterCell], top: usize, ascii: Option<&str>) -> RowsTable {
         let (params, app, theme) = (self.params, self.app, self.theme);
         let now = Local::now();
         let show_window = app.config.show_read_window;
@@ -204,7 +174,7 @@ impl TableCtx<'_> {
             let text = match &read_cells {
                 Some(read_cells) => {
                     let marker = if read_cells.contains(&(kind, address)) {
-                        "\u{258e}"
+                        "|"
                     } else {
                         " "
                     };
@@ -231,7 +201,7 @@ impl TableCtx<'_> {
         self.scrollable_table(rows, &header, prefix, block)
     }
 
-    fn matrix_table(&self, visible: u16) -> Table<'static> {
+    fn matrix_table(&self, visible: u16) -> RowsTable {
         let (params, app, theme) = (self.params, self.app, self.theme);
         let cols = app.config.matrix_cols.max(1);
         let base = params.window_start - (params.window_start % cols);
@@ -245,7 +215,7 @@ impl TableCtx<'_> {
             header.push_str(&format!("{: >5} ", format!("+{c}")));
         }
 
-        let mut table_rows: Vec<Row> = Vec::with_capacity(visible as usize);
+        let mut table_rows: Vec<TableRow> = Vec::with_capacity(visible as usize);
         for r in 0..visible {
             let row_base = (base as u32) + (r as u32) * (cols as u32);
             if row_base > u16::MAX as u32 {
@@ -276,12 +246,15 @@ impl TableCtx<'_> {
                 spans.push(Span::styled(text, style));
                 spans.push(Span::raw(" "));
             }
-            table_rows.push(Row::new([Cell::from(Line::from(spans))]));
+            table_rows.push(TableRow {
+                spans,
+                style: Style::default(),
+            });
         }
 
-        full_width_table(
+        rows_table(
             table_rows,
-            Cell::from(header),
+            header,
             theme,
             panel_block(theme, ReadPanel::Matrix, &app.config),
         )
@@ -446,9 +419,12 @@ pub fn draw(
         _ => {
             let len = app.panel_len() as usize;
             if len == 0 {
-                let t = Table::new(Vec::<Row>::new(), [Constraint::Percentage(100)])
-                    .header(Row::new([Cell::from(header)]).style(theme.header_style()))
-                    .block(panel_block(theme, params.panel, &app.config));
+                let t = rows_table(
+                    Vec::new(),
+                    header.to_string(),
+                    theme,
+                    panel_block(theme, params.panel, &app.config),
+                );
                 frame.render_widget(t, rows[1]);
 
                 let kb = &app.config.keybinds;

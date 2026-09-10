@@ -307,7 +307,7 @@ impl App {
         let result = self.persist_config();
         match &result {
             Ok(_) => log::info!("Configuration saved"),
-            Err(error) => log::error!("Save failed \u{b7} {error}"),
+            Err(error) => log::error!("Save failed | {error}"),
         }
         self.set_settings_status(result.into());
     }

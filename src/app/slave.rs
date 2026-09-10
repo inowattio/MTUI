@@ -140,7 +140,7 @@ impl App {
         match result {
             Ok(objects) => {
                 log::info!(
-                    "Device identification ({}) \u{b7} {} object(s)",
+                    "Device identification ({}) | {} object(s)",
                     access.label(),
                     objects.len()
                 );
@@ -152,7 +152,7 @@ impl App {
                 params.objects = objects;
             }
             Err(e) => {
-                log::error!("Device identification failed \u{b7} {e}");
+                log::error!("Device identification failed | {e}");
                 params.objects.clear();
                 params.status = Some(StatusMessage::err(format!("Read failed: {e}")));
             }
@@ -269,7 +269,7 @@ impl App {
         match result {
             Ok(bytes) => {
                 log::info!(
-                    "Raw function {code:#04X} \u{b7} {sent} byte(s) in, {} byte(s) out",
+                    "Raw function {code:#04X} | {sent} byte(s) in, {} byte(s) out",
                     bytes.len()
                 );
                 p.response = Some(if bytes.is_empty() {
@@ -287,7 +287,7 @@ impl App {
                 )));
             }
             Err(e) => {
-                log::error!("Raw function {code:#04X} failed \u{b7} {e}");
+                log::error!("Raw function {code:#04X} failed | {e}");
                 p.response = None;
                 p.status = Some(StatusMessage::err(format!("Failed: {e}")));
             }

@@ -50,7 +50,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     let mut mode_spans = Vec::new();
     if let State::Logs(l) = &app.state {
         mode_spans.push(Span::styled(
-            format!(" {} \u{b7}", draw_state::logs::counter(l, app)),
+            format!(" {} |", draw_state::logs::counter(l, app)),
             theme.dim_style(),
         ));
     }
