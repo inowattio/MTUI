@@ -308,10 +308,12 @@ pub fn draw(
         .constraints([Constraint::Length(2), Constraint::Min(0)])
         .split(area);
 
-    let access_style = if info_type.is_writable() {
-        theme.ok_style()
+    let read_only = if app.config.read_only {
+        Some(theme.err_style())
+    } else if info_type.is_writable() {
+        None
     } else {
-        theme.warn_style()
+        Some(theme.warn_style())
     };
 
     let mut identity: Vec<Vec<Span>> = Vec::new();
@@ -321,9 +323,6 @@ pub fn draw(
             theme.accent_style(),
         )]);
     }
-    if app.config.read_only {
-        identity.push(vec![Span::styled("READ-ONLY", theme.err_style())]);
-    }
     identity.push(vec![
         Span::styled("device: ", theme.dim_style()),
         Span::styled(device.to_string(), theme.base()),
@@ -332,10 +331,9 @@ pub fn draw(
         Span::styled("slave ", theme.dim_style()),
         Span::styled(app.config.device.slave_id.to_string(), theme.base()),
     ]);
-    identity.push(vec![Span::styled(
-        info_type.access().to_string(),
-        access_style,
-    )]);
+    if let Some(style) = read_only {
+        identity.push(vec![Span::styled("RO", style)]);
+    }
     identity.push(vec![
         Span::styled("order ", theme.dim_style()),
         Span::styled(format!("{:?}", app.config.device.word_order), theme.base()),
