@@ -90,6 +90,11 @@ impl TableCtx<'_> {
         let show_window = app.config.show_read_window;
         let (read_start, read_amount) = app.read_window();
         let read_end = read_start.saturating_add(read_amount - 1);
+        let extra = if show_window {
+            app.main_extra_cells()
+        } else {
+            Vec::new()
+        };
 
         for i in 0..visible {
             let Some(addr) = params.window_start.checked_add(i) else {
@@ -113,7 +118,9 @@ impl TableCtx<'_> {
             };
 
             if show_window {
-                let marker = if (read_start..=read_end).contains(&addr) {
+                let marker = if (read_start..=read_end).contains(&addr)
+                    || extra.contains(&(params.register_type, addr))
+                {
                     "|"
                 } else {
                     " "
@@ -205,6 +212,11 @@ impl TableCtx<'_> {
         let show_window = app.config.show_read_window;
         let (read_start, read_amount) = app.read_window();
         let read_end = read_start.saturating_add(read_amount - 1);
+        let extra = if show_window {
+            app.main_extra_cells()
+        } else {
+            Vec::new()
+        };
 
         let mut header = format!("{: >5}  ", "");
         for c in 0..cols {
@@ -236,7 +248,10 @@ impl TableCtx<'_> {
                 if addr == params.position {
                     style = theme.selected_style();
                 }
-                if show_window && (read_start..=read_end).contains(&addr) {
+                if show_window
+                    && ((read_start..=read_end).contains(&addr)
+                        || extra.contains(&(params.register_type, addr)))
+                {
                     style = style.add_modifier(Modifier::UNDERLINED);
                 }
                 spans.push(Span::styled(text, style));

@@ -489,6 +489,15 @@ impl App {
         (start, end - start + 1)
     }
 
+    pub fn main_extra_cells(&self) -> Vec<RegisterCell> {
+        if self.sweep.active || !self.config.read_full_customs {
+            return Vec::new();
+        }
+        let (start, amount) = self.read_window();
+        let end = start.saturating_add(amount - 1);
+        custom_words_outside(&self.custom_rules, self.read().register_type, start..=end)
+    }
+
     pub async fn refresh(&mut self) {
         if self.background_task.is_some() || !self.is_reading() {
             return;
@@ -515,13 +524,7 @@ impl App {
         let mut graph_registers = self.graph_extra_registers();
         if read_main {
             let read_end = read_start.saturating_add(amount - 1);
-            if !sweeping && self.config.read_full_customs {
-                graph_registers.extend(custom_words_outside(
-                    &self.custom_rules,
-                    register_type,
-                    read_start..=read_end,
-                ));
-            }
+            graph_registers.extend(self.main_extra_cells());
             graph_registers.retain(|&(kind, address)| {
                 kind != register_type || !(read_start..=read_end).contains(&address)
             });
