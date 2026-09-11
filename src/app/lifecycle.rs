@@ -515,9 +515,18 @@ impl App {
         let mut graph_registers = self.graph_extra_registers();
         if read_main {
             let read_end = read_start.saturating_add(amount - 1);
+            if !sweeping && self.config.read_full_customs {
+                graph_registers.extend(custom_words_outside(
+                    &self.custom_rules,
+                    register_type,
+                    read_start..=read_end,
+                ));
+            }
             graph_registers.retain(|&(kind, address)| {
                 kind != register_type || !(read_start..=read_end).contains(&address)
             });
+            graph_registers.sort_unstable();
+            graph_registers.dedup();
         }
 
         let panel_registers = if read_main {
@@ -807,6 +816,20 @@ fn custom_runs(rules: &BTreeMap<RegisterCell, CustomRule>, kind: RegisterType) -
     runs
 }
 
+fn custom_words_outside(
+    rules: &BTreeMap<RegisterCell, CustomRule>,
+    kind: RegisterType,
+    window: std::ops::RangeInclusive<u16>,
+) -> Vec<RegisterCell> {
+    rules
+        .range((kind, 0)..=(kind, u16::MAX))
+        .filter(|(_, rule)| rule.word_addresses().any(|a| window.contains(&a)))
+        .flat_map(|(_, rule)| rule.word_addresses())
+        .filter(|a| !window.contains(a))
+        .map(|a| (kind, a))
+        .collect()
+}
+
 fn cover_runs(mut start: u16, mut end: u16, runs: &[(u16, u16)]) -> (u16, u16) {
     loop {
         let before = (start, end);
@@ -875,7 +898,7 @@ fn read_run_len(
 mod tests {
     #[cfg(not(target_arch = "wasm32"))]
     use super::{App, BackgroundTask};
-    use super::{cover_runs, custom_full_spans, custom_runs, read_run_len};
+    use super::{cover_runs, custom_full_spans, custom_runs, custom_words_outside, read_run_len};
     #[cfg(not(target_arch = "wasm32"))]
     use crate::config::{Config, CyclePanels};
     use crate::custom::{CustomRepr, CustomRule};
@@ -951,6 +974,23 @@ mod tests {
         );
         assert_eq!(custom_runs(&rules, H), vec![(100, 103), (524, 526)]);
         assert_eq!(custom_runs(&rules, RegisterType::Input), vec![(3, 4)]);
+    }
+
+    #[test]
+    fn jumped_words_of_touched_rules_are_read_separately() {
+        let rules = rules(&[
+            (17, CustomRepr::U32, &[30]),
+            (40, CustomRepr::U64, &[41, 60, 61]),
+            (80, CustomRepr::U32, &[]),
+        ]);
+        assert_eq!(custom_words_outside(&rules, H, 10..=20), cells(&[30]));
+        assert_eq!(custom_words_outside(&rules, H, 30..=30), cells(&[17]));
+        assert_eq!(custom_words_outside(&rules, H, 40..=42), cells(&[60, 61]));
+        assert_eq!(custom_words_outside(&rules, H, 70..=90), Vec::new());
+        assert_eq!(
+            custom_words_outside(&rules, RegisterType::Input, 10..=20),
+            Vec::new()
+        );
     }
 
     #[test]
