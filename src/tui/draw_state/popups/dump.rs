@@ -18,7 +18,7 @@ pub(super) fn draw(
     let mut lines = vec![
         Line::default(),
         Line::from(Span::styled(
-            format!(" Dump {read_count} read register(s) to a file?"),
+            format!(" Export {read_count} read register(s) to a file?"),
             theme.base(),
         )),
         Line::from(Span::styled(
