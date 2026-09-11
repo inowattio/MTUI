@@ -1,9 +1,9 @@
 mod about;
 mod columns;
-mod confirm;
 mod custom;
 mod device_id;
 mod discovery;
+mod dump;
 mod help;
 mod import;
 mod inspect;
@@ -32,15 +32,7 @@ pub fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup
     match popup {
         Popup::Discovery(d) => discovery::draw(d, app, frame, area, theme),
         Popup::Help(h) => help::draw(frame, area, theme, kb, app, h),
-        Popup::Dump(d) => confirm::draw(
-            frame,
-            area,
-            theme,
-            kb,
-            "Dump",
-            &format!("Dump {} read register(s) to a file?", app.read_count()),
-            &d.result,
-        ),
+        Popup::Dump(d) => dump::draw(frame, area, theme, kb, app.read_count(), &d.result),
         Popup::Search(s) => search::draw(frame, area, theme, app, s),
         Popup::Label(l) => label::draw(frame, area, theme, kb, l),
         Popup::Custom(c) => custom::draw(frame, area, theme, app, c),

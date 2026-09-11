@@ -4,17 +4,11 @@ use crate::config::{Config, CustomRules, Startup};
 use crate::custom::CustomRule;
 use crate::modbus::ModbusDevice;
 use crate::register::RegisterCell;
-use crate::state::{
-    ConnectionStatus, DumpParams, ImportParams, Outcome, Popup, State, StatusMessage,
-};
+use crate::state::{ConnectionStatus, ImportParams, Outcome, Popup, State, StatusMessage};
 use std::collections::BTreeMap;
 use std::fs;
 
 impl App {
-    pub fn open_dump(&mut self) {
-        self.read_mut().popup = Some(Popup::Dump(DumpParams::default()));
-    }
-
     fn parse_import(data: &str) -> Option<ImportPayload> {
         let payload: ImportPayload = serde_json::from_str(data.trim()).ok()?;
         (payload.total() > 0).then_some(payload)
@@ -353,13 +347,6 @@ impl App {
     fn load_config_target(&mut self, target: String) {
         let status = self.load_config_from(target);
         self.set_read_status(status);
-    }
-
-    pub fn commit_dump(&mut self) {
-        let result = self.dump_read_log();
-        if let Some(d) = self.popup_as_mut::<DumpParams>() {
-            d.result = Some(result);
-        }
     }
 }
 

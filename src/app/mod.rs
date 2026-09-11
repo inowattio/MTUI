@@ -862,6 +862,7 @@ mod columns;
 mod config_io;
 mod custom;
 mod discovery;
+mod dump;
 mod help;
 mod lifecycle;
 mod logs;
