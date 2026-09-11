@@ -182,9 +182,8 @@ def capture(debug):
     checkpoint('help')
     key(ESC, 0.4)
 
-    # ---- Scene 4: graph on input 0 "voltage L1" ----
-    for _ in range(10):
-        key(UP, 0.10)
+    # ---- Scene 4: graph on input 6 "frequency" ----
+    key(DOWN, 0.22)
     watch(0.4)
     key('g', 0.4)
     watch(3.0)
