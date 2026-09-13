@@ -39,15 +39,16 @@ WORK = REPO / 'target' / 'gifwork'
 FRAMES = WORK / 'frames.json.gz'
 OUT = REPO / '.github' / 'resources' / 'demo.gif'
 
-COLS, ROWS = 110, 30
-FONT = 16
-CW = FONT * 1233 / 2048          # DejaVu Sans Mono glyph advance at 16px
-LH = 20                          # line height
+COLS, ROWS = 106, 28
+FONT = 18
+CW = FONT * 1233 / 2048          # DejaVu Sans Mono glyph advance
+LH = 22                          # line height
 PAD = 8                          # frame padding
 FW = round(2 * PAD + COLS * CW)  # frame pixel size
 FH = 2 * PAD + ROWS * LH
 BATCH = 20                       # frames per chromium screenshot (height cap)
-LAST_HOLD = 1.6                  # seconds to hold the final frame
+LAST_HOLD = 3.0                  # seconds to hold the final frame
+DWELL = 2.5                      # seconds to hold each scene checkpoint
 
 # xterm-256 colors as resolved by pyte -> the gif's palette
 PALETTE = {
@@ -63,6 +64,16 @@ PALETTE = {
     'ff0000': '#ef5b5b',   # red
     '5c5cff': '#5f9bff',   # bright blue
 }
+
+POLICY = """<policymap>
+  <policy domain="resource" name="memory" value="8GiB"/>
+  <policy domain="resource" name="map" value="12GiB"/>
+  <policy domain="resource" name="disk" value="10GiB"/>
+  <policy domain="resource" name="area" value="1GP"/>
+  <policy domain="resource" name="width" value="16KP"/>
+  <policy domain="resource" name="height" value="64KP"/>
+</policymap>
+"""
 
 UP, DOWN, LEFT, RIGHT = '\x1b[A', '\x1b[B', '\x1b[D', '\x1b[C'
 ESC, ENTER = '\x1b', '\r'
@@ -145,19 +156,20 @@ def capture(debug):
                          for c in (row[x] for x in range(COLS))])
         frames.append({'t': round(time.time() - start, 3), 'grid': grid})
 
-    def watch(dur, interval=0.34):
+    def watch(dur, interval=0.1):
         """Let the app run for `dur` seconds, snapping every `interval`."""
         n = max(1, round(dur / interval))
         for _ in range(n):
             pump(dur / n)
             snap()
 
-    def key(s, settle=0.30):
+    def key(s, settle=0.35):
         os.write(master, s.encode())
         pump(settle)
         snap()
 
-    def checkpoint(name):
+    def checkpoint(name, dwell=DWELL):
+        watch(dwell)
         print(f'scene: {name} (t={time.time() - start:.1f}s)')
         if debug:
             for line in screen.display:
@@ -165,38 +177,40 @@ def capture(debug):
         sys.stdout.flush()
 
     # ---- Scene 1: startup ----
-    watch(2.2)
-    checkpoint('startup')
+    watch(1.0)
+    checkpoint('startup', 0.6)
 
     # ---- Scene 2: read a few registers ----
     for _ in range(5):
-        key(DOWN, 0.22)
-    watch(1.4)
-    checkpoint('live values')
+        key(DOWN, 0.25)
+    watch(0.6)
+    checkpoint('live values', 0.4)
 
     # ---- Scene 3: help popup (brief) ----
     key('h', 0.4)
     watch(1.0)
-    key(DOWN, 0.30)
+    key(DOWN, 0.35)
     watch(0.5)
-    checkpoint('help')
+    checkpoint('help', 0.5)
     key(ESC, 0.4)
 
-    # ---- Scene 4: graph on input 6 "frequency" ----
-    key(DOWN, 0.22)
+    # ---- Scene 4: graph on input 6 "frequency" (cursor starts at 5) ----
+    for _ in range(4):
+        key(UP, 0.25)
     watch(0.4)
     key('g', 0.4)
-    watch(3.0)
-    checkpoint('graph')
+    watch(4.0)
+    checkpoint('graph', 1.0)
     key('g', 0.4)
     watch(0.4)
 
     # ---- Scene 5: jump to the "seconds" register by label ----
     key('j', 0.45)
-    for c in 'sec':
-        key(c, 0.15)
     watch(0.8)
-    checkpoint('jump')
+    for c in 'sec':
+        key(c, 0.18)
+    watch(0.8)
+    checkpoint('jump', 0.7)
     key(ENTER, 0.45)
     watch(1.2)
 
@@ -205,7 +219,7 @@ def capture(debug):
     watch(0.9)
     key(DOWN, 0.25)          # -> Operations
     for c in '/60':
-        key(c, 0.14)
+        key(c, 0.18)
     key(ENTER, 0.45)         # add op
     for _ in range(3):
         key(DOWN, 0.25)      # -> Decimals
@@ -213,11 +227,12 @@ def capture(debug):
     for _ in range(2):
         key(DOWN, 0.25)      # -> Suffix
     for c in ' min':
-        key(c, 0.14)
-    watch(0.7)
-    checkpoint('custom rule')
+        key(c, 0.18)
+    watch(0.5)
+    checkpoint('custom rule', 1.0)
     key(ENTER, 0.45)         # save & close
-    watch(1.6)
+    watch(1.2)
+    checkpoint('custom rule applied', 0.3)
 
     # ---- Scene 7: settings, toggle Display -> "Show frame render time" ----
     key('s', 0.5)
@@ -226,18 +241,18 @@ def capture(debug):
         key(DOWN, 0.25)      # -> Display
     key(ENTER, 0.4)
     watch(0.5)
-    key(DOWN, 0.3)           # -> Show frame render time
+    key(DOWN, 0.35)          # -> Show frame render time
     key(RIGHT, 0.5)          # toggle on
-    watch(0.7)
-    checkpoint('settings toggle')
+    watch(0.4)
+    checkpoint('settings toggle', 0.8)
     key(ESC, 0.35)
     key(ESC, 0.45)
     watch(2.0)
 
     # ---- Scene 8: about popup as closing shot ----
     key('a', 0.45)
-    watch(2.0)
-    checkpoint('about finale')
+    watch(1.0)
+    checkpoint('about finale', 0.5)
 
     FRAMES.write_bytes(gzip.compress(json.dumps(frames).encode()))
     print(f'captured {len(frames)} snapshots'
@@ -336,6 +351,11 @@ def render():
 
     frames = json.loads(gzip.decompress(FRAMES.read_bytes()))
 
+    (WORK / 'policy.xml').write_text(POLICY)
+    magick_env = {**os.environ,
+                  'MAGICK_CONFIGURE_PATH': str(WORK),
+                  'MAGICK_TEMPORARY_DIR': str(WORK)}
+
     # durations from capture timestamps; merge consecutive identical screens
     seq = []
     for i, fr in enumerate(frames):
@@ -383,7 +403,7 @@ body {{ background:{PALETTE['default_bg']}; }}
             sys.exit(f'chromium failed: {r.stderr[-2000:]}')
         subprocess.run(['convert', str(shot), '-crop', f'{FW}x{FH}',
                         '+repage', str(png_dir / f'b{bi}_%02d.png')],
-                       check=True)
+                       check=True, env=magick_env)
         print(f'batch {bi + 1}/{len(batches)} rendered')
 
     args = ['convert', '-loop', '0']
@@ -392,7 +412,7 @@ body {{ background:{PALETTE['default_bg']}; }}
             args += ['-delay', str(max(3, round(fr['dur'] * 100))),
                      str(png_dir / f'b{bi}_{j:02d}.png')]
     args += ['-layers', 'Optimize', str(OUT)]
-    subprocess.run(args, check=True)
+    subprocess.run(args, check=True, env=magick_env)
     print(f'{OUT}  {OUT.stat().st_size / 1e6:.2f} MB, {len(seq)} frames')
 
 
