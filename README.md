@@ -28,3 +28,7 @@ Multiple options are available:
 * download a binary from [releases](https://github.com/inowattio/mtui/releases)
 * with cargo via `cargo install mtui`
 * clone the repository and then `cargo run`
+
+## LLM usage disclosure
+LLM-based tools have been used to develop the project.  
+If LLM(s) are used upon creating PRs/issues, please keep in mind to always check the generated content to be as concise (and short) as possible.
