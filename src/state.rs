@@ -626,6 +626,15 @@ impl SlaveParams {
         fields[(self.selected as usize).min(fields.len() - 1)]
     }
 
+    pub fn switch_column(&mut self) {
+        let first_hit = Self::FIXED.len() as u16;
+        if matches!(self.current_field(), SlaveField::Hit(_)) {
+            self.selected = 0;
+        } else if self.fields().len() as u16 > first_hit {
+            self.selected = first_hit;
+        }
+    }
+
     pub fn active(&self) -> bool {
         self.scan == ScanState::Probing
     }
@@ -1377,6 +1386,30 @@ mod tests {
 
         params.show_exceptions = false;
         assert_eq!(hits(&params), vec![SlaveField::Hit(0), SlaveField::Hit(2)]);
+    }
+
+    #[test]
+    fn tab_jumps_between_the_form_and_the_hit_list() {
+        use super::{SlaveField, SlaveParams, SlaveScanHit};
+        let mut params = SlaveParams {
+            selected: 3,
+            ..SlaveParams::default()
+        };
+        params.switch_column();
+        assert_eq!(
+            params.current_field(),
+            SlaveField::Mode,
+            "no hits, stay put"
+        );
+
+        params.hits.push(SlaveScanHit {
+            slave_id: 5,
+            result: Ok(vec![1]),
+        });
+        params.switch_column();
+        assert_eq!(params.current_field(), SlaveField::Hit(0));
+        params.switch_column();
+        assert_eq!(params.current_field(), SlaveField::Id);
     }
 
     #[test]

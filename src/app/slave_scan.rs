@@ -15,6 +15,12 @@ impl App {
         }
     }
 
+    pub fn slave_switch_column(&mut self) {
+        if let Some(p) = self.slave_mut() {
+            p.switch_column();
+        }
+    }
+
     pub fn slave_toggle(&mut self, field: SlaveField) {
         if let Some(p) = self.slave_mut() {
             match field {

@@ -360,6 +360,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
                 },
                 KeyCode::Up => app.slave_move(false),
                 KeyCode::Down => app.slave_move(true),
+                KeyCode::Tab | KeyCode::BackTab => app.slave_switch_column(),
                 c if c == kb.pause && field.is_toggle() => app.slave_toggle(field),
                 KeyCode::Left | KeyCode::Right if field.is_toggle() => app.slave_toggle(field),
                 KeyCode::Backspace => app.slave_backspace(field),

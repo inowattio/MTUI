@@ -46,6 +46,7 @@ pub(super) fn draw(
     let (footer_w, footer) = if right.is_some() {
         let items = [
             Hint::pair(KeyCode::Up, KeyCode::Down, "Field"),
+            Hint::key(KeyCode::Tab, "Column"),
             Hint::key(kb.pause, "Toggle"),
             Hint::key(kb.action, primary),
             Hint::key(KeyCode::Esc, "Close"),
