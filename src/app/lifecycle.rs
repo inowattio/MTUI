@@ -67,6 +67,7 @@ impl App {
             previous_position: None,
             background_task: None,
             network_scan: None,
+            slave_scan: None,
             #[cfg(not(target_arch = "wasm32"))]
             network_scan_task: None,
             changed: BTreeMap::new(),
@@ -224,7 +225,10 @@ impl App {
     }
 
     pub fn close_popup(&mut self) {
-        self.read_mut().popup = None;
+        if let Some(Popup::Slave(params)) = self.read_mut().popup.take() {
+            let endpoint = self.config.device.interface.endpoint();
+            self.slave_scan = Some((endpoint, params.suspended()));
+        }
     }
 
     pub fn set_read_status(&mut self, message: StatusMessage) {

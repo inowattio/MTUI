@@ -281,6 +281,50 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn the_last_scan_is_remembered_until_the_device_changes() {
+        use crate::modbus::{Interface, InterfaceNetworkParams};
+        let mut app = slave_popup().await;
+        {
+            let p = app.popup_as_mut::<SlaveParams>().unwrap();
+            p.from = 2;
+            p.to = 4;
+        }
+        app.slave_scan_action();
+        drive_scan(&mut app).await;
+        app.close_popup();
+        assert!(app.popup_as::<SlaveParams>().is_none());
+
+        app.config.device.slave_id = 3;
+        app.open_slave();
+        let p = app.popup_as::<SlaveParams>().unwrap();
+        assert_eq!(p.scan, ScanState::Done);
+        assert_eq!((p.from, p.to), (2, 4));
+        let ids: Vec<u8> = p.hits.iter().map(|h| h.slave_id).collect();
+        assert_eq!(ids, vec![2, 3, 4]);
+        assert_eq!(p.id, 3, "the id field follows the config");
+
+        app.commit_slave().await;
+        assert!(app.popup_as::<SlaveParams>().is_none());
+        app.open_slave();
+        assert_eq!(
+            app.popup_as::<SlaveParams>().unwrap().hits.len(),
+            3,
+            "setting the id keeps the session"
+        );
+
+        app.close_popup();
+        app.config.device.interface = Interface::Network(InterfaceNetworkParams {
+            ip: "10.0.0.1".into(),
+            port: 502,
+        });
+        app.open_slave();
+        let p = app.popup_as::<SlaveParams>().unwrap();
+        assert_eq!(p.scan, ScanState::Idle, "another device starts fresh");
+        assert!(p.hits.is_empty());
+        assert_eq!((p.from, p.to), (1, 247));
+    }
+
+    #[tokio::test]
     async fn an_exception_entry_sets_the_slave_id_too() {
         let mut app = slave_popup().await;
         {

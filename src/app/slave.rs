@@ -8,13 +8,16 @@ impl App {
     pub fn open_slave(&mut self) {
         let (address, amount) = self.read_window();
         let register_type = self.read().register_type;
-        self.read_mut().popup = Some(Popup::Slave(SlaveParams {
-            id: self.config.device.slave_id,
-            register_type,
-            address,
-            amount,
-            ..Default::default()
-        }));
+        let id = self.config.device.slave_id;
+        let endpoint = self.config.device.interface.endpoint();
+        let remembered = match self.slave_scan.take() {
+            Some((previous, params)) if previous == endpoint => Some(params),
+            _ => None,
+        };
+        let params = remembered
+            .unwrap_or_default()
+            .resumed(id, register_type, address, amount);
+        self.read_mut().popup = Some(Popup::Slave(params));
     }
 
     pub async fn commit_slave(&mut self) {
@@ -40,7 +43,7 @@ impl App {
 
     async fn apply_slave(&mut self, id: u8) {
         self.set_slave(id).await;
-        self.read_mut().popup = None;
+        self.close_popup();
         self.refresh().await;
     }
 

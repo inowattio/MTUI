@@ -9,7 +9,7 @@ use crate::modbus::{DeviceConfig, DeviceIdAccess, ModbusDevice};
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::state::ScanMethod;
-use crate::state::{ConnectionStatus, CustomParams, State};
+use crate::state::{ConnectionStatus, CustomParams, SlaveParams, State};
 use crate::writes_log::SharedWritesLog;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -425,6 +425,7 @@ pub struct App {
     previous_position: Option<RegisterCell>,
     background_task: Option<BackgroundTask>,
     network_scan: Option<ScanProgress>,
+    slave_scan: Option<(String, SlaveParams)>,
     #[cfg(not(target_arch = "wasm32"))]
     network_scan_task: Option<TaskHandle<Result<Vec<String>, String>>>,
     changed: BTreeMap<RegisterCell, DateTime<Utc>>,

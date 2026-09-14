@@ -94,6 +94,17 @@ serial_enum!(StopBits => tokio_serial::StopBits, "Failed to parse stop bits", {
     Two = 2 => Two,
 });
 
+impl Interface {
+    pub fn endpoint(&self) -> String {
+        match self {
+            Interface::Mock => "mock".to_string(),
+            Interface::Wired(p) => format!("wired:{}", p.path),
+            Interface::Network(p) => format!("tcp:{}:{}", p.ip, p.port),
+            Interface::RtuOverTcp(p) => format!("rtu-tcp:{}:{}", p.ip, p.port),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct InterfaceWiredParams {
     pub path: String,

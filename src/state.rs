@@ -635,6 +635,28 @@ impl SlaveParams {
         }
     }
 
+    pub fn suspended(mut self) -> Self {
+        if self.active() {
+            self.scan = ScanState::Stopped;
+        }
+        self.status = None;
+        self
+    }
+
+    pub fn resumed(
+        mut self,
+        id: u8,
+        register_type: RegisterType,
+        address: u16,
+        amount: u16,
+    ) -> Self {
+        self.id = id;
+        self.register_type = register_type;
+        self.address = address;
+        self.amount = amount;
+        self
+    }
+
     pub fn active(&self) -> bool {
         self.scan == ScanState::Probing
     }
@@ -1386,6 +1408,43 @@ mod tests {
 
         params.show_exceptions = false;
         assert_eq!(hits(&params), vec![SlaveField::Hit(0), SlaveField::Hit(2)]);
+    }
+
+    #[test]
+    fn a_remembered_scan_keeps_its_hits_but_follows_the_current_request() {
+        use super::{ScanState, SlaveParams, SlaveScanHit, StatusMessage};
+        use crate::register::RegisterType;
+        let params = SlaveParams {
+            scan: ScanState::Probing,
+            from: 3,
+            to: 9,
+            status: Some(StatusMessage::info("Device is busy.")),
+            hits: vec![SlaveScanHit {
+                slave_id: 5,
+                result: Ok(vec![1]),
+            }],
+            ..SlaveParams::default()
+        };
+        let resumed = params.suspended().resumed(7, RegisterType::Input, 40, 2);
+        assert_eq!(
+            resumed.scan,
+            ScanState::Stopped,
+            "a closed popup ends its scan"
+        );
+        assert_eq!(resumed.status, None);
+        assert_eq!((resumed.from, resumed.to), (3, 9));
+        assert_eq!(resumed.hits.len(), 1);
+        assert_eq!(resumed.id, 7);
+        assert_eq!(
+            (resumed.register_type, resumed.address, resumed.amount),
+            (RegisterType::Input, 40, 2)
+        );
+
+        let done = SlaveParams {
+            scan: ScanState::Done,
+            ..SlaveParams::default()
+        };
+        assert_eq!(done.suspended().scan, ScanState::Done);
     }
 
     #[test]
