@@ -203,6 +203,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
 
         PopupKind::Stats => match key_event.code {
             c if c == KeyCode::Esc || c == kb.stats => app.close_popup(),
+            c if c == kb.clear => app.clear_session_data(),
             _ => {}
         },
 
@@ -905,6 +906,24 @@ mod tests {
         app.config.save_position_on_exit = false;
         handle_key_events(KeyEvent::new(KeyCode::Right), &mut app).await;
         assert_eq!(app.config.startup.address, address + 1);
+    }
+
+    #[tokio::test]
+    async fn the_stats_popup_clears_the_counters_in_place() {
+        let mut app = app().await;
+        app.stats
+            .record_read_ok(std::time::Duration::from_millis(5));
+        app.open_stats();
+        assert_eq!(app.popup_kind(), Some(PopupKind::Stats));
+
+        handle_key_events(KeyEvent::new(app.config.keybinds.clear), &mut app).await;
+        assert_eq!(app.stats.reads_ok, 0);
+        assert_eq!(app.stats.latency(), None);
+        assert_eq!(
+            app.popup_kind(),
+            Some(PopupKind::Stats),
+            "the popup stays open to show the reset"
+        );
     }
 
     #[tokio::test]

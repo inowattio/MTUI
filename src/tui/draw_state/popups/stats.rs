@@ -65,7 +65,14 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App) {
         lines.push(field("Error", format!("{short} | {ago}")));
     }
 
-    super::push_footer(&mut lines, theme, [Hint::key(KeyCode::Esc, "Close")]);
+    super::push_footer(
+        &mut lines,
+        theme,
+        [
+            Hint::key(app.config.keybinds.clear, "Clear"),
+            Hint::key(KeyCode::Esc, "Close"),
+        ],
+    );
 
     let content_w = lines.iter().map(Line::width).max().unwrap_or(0) as u16;
     // borders (2) + a column of right padding
