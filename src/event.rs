@@ -31,6 +31,8 @@ fn convert_key(code: CrosstermKeyCode) -> Option<input::KeyCode> {
         CrosstermKeyCode::Right => input::KeyCode::Right,
         CrosstermKeyCode::PageUp => input::KeyCode::PageUp,
         CrosstermKeyCode::PageDown => input::KeyCode::PageDown,
+        CrosstermKeyCode::Home => input::KeyCode::Home,
+        CrosstermKeyCode::End => input::KeyCode::End,
         _ => return None,
     })
 }

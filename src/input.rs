@@ -17,6 +17,8 @@ pub enum KeyCode {
     Right,
     PageUp,
     PageDown,
+    Home,
+    End,
 }
 
 macro_rules! named_keys {
@@ -50,6 +52,8 @@ named_keys! {
     Right => "Right",
     PageUp => "PageUp",
     PageDown => "PageDown",
+    Home => "Home",
+    End => "End",
 }
 
 impl KeyCode {

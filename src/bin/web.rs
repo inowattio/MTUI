@@ -47,6 +47,8 @@ mod web {
             KeyCode::Right => input::KeyCode::Right,
             KeyCode::PageUp => input::KeyCode::PageUp,
             KeyCode::PageDown => input::KeyCode::PageDown,
+            KeyCode::Home => input::KeyCode::Home,
+            KeyCode::End => input::KeyCode::End,
             _ => return None,
         };
         Some(input::KeyEvent::new(code))
