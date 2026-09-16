@@ -95,7 +95,7 @@ impl App {
     }
 
     #[cfg(target_arch = "wasm32")]
-    pub(super) fn request_ports(&mut self) {}
+    pub(super) fn request_ports(&self) {}
 
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn request_ports(&mut self) {
