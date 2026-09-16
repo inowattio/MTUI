@@ -42,7 +42,14 @@ pub fn make_bottom_title(theme: &Theme, app: &App) -> Line<'static> {
             } else {
                 Hint::key(kb.action, "Apply")
             };
-            hints::footer(theme, [primary, Hint::key(KeyCode::Esc, "Back")])
+            hints::footer(
+                theme,
+                [
+                    primary,
+                    Hint::key(kb.switch_view, "Category"),
+                    Hint::key(KeyCode::Esc, "Back"),
+                ],
+            )
         }
         State::Logs(l) => hints::footer(
             theme,
