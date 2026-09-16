@@ -31,6 +31,13 @@ fn local_subnet_prefix() -> Option<String> {
     None
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+fn available_ports() -> Vec<String> {
+    tokio_serial::available_ports()
+        .map(|ports| ports.into_iter().map(|p| p.port_name).collect())
+        .unwrap_or_default()
+}
+
 impl App {
     pub fn discovery(&self) -> Option<&DiscoveryParams> {
         self.popup_as()
@@ -43,7 +50,6 @@ impl App {
     pub(super) fn discovery_params(config: &Config) -> DiscoveryParams {
         let device = &config.device;
         let mut d = DiscoveryParams {
-            ports: Self::available_ports(),
             ip: match &device.interface {
                 Interface::Network(n) | Interface::RtuOverTcp(n) => n.ip.clone(),
                 _ => local_subnet_prefix().unwrap_or_else(|| "127.0.0.1".to_string()),
@@ -62,10 +68,7 @@ impl App {
                 d.data_bits = w.data_bits;
                 d.parity = w.parity;
                 d.stop_bits = w.stop_bits;
-                match d.ports.iter().position(|p| p == &w.path) {
-                    Some(i) => d.port_index = i as u16,
-                    None => d.custom_path = w.path.clone(),
-                }
+                d.custom_path = w.path.clone();
             }
             Interface::Network(n) => {
                 d.interface = InterfaceKind::Network;
@@ -88,6 +91,38 @@ impl App {
         self.free_background_slot();
         let params = Self::discovery_params(&self.config);
         self.read_mut().popup = Some(Popup::Discovery(params));
+        self.request_ports();
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(super) fn request_ports(&mut self) {}
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(super) fn request_ports(&mut self) {
+        if let Some(d) = self.discovery_mut() {
+            d.ports_pending = true;
+        }
+        self.ports_task = Some(compat::spawn(async {
+            tokio::task::spawn_blocking(available_ports)
+                .await
+                .unwrap_or_default()
+        }));
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(super) fn poll_ports_task(&mut self) {
+        let Some(handle) = self.ports_task.as_mut() else {
+            return;
+        };
+        let ports = match handle.poll_result() {
+            TaskPoll::Pending => return,
+            TaskPoll::Finished(ports) => ports,
+            TaskPoll::Gone => Vec::new(),
+        };
+        self.ports_task = None;
+        if let Some(d) = self.discovery_mut() {
+            d.set_ports(ports);
+        }
     }
 
     pub fn discovery_connect(&mut self) {
@@ -538,6 +573,38 @@ mod tests {
         assert_eq!(d.interface, InterfaceKind::Network);
         assert_eq!(d.ip, "10.1.2.3");
         assert_eq!(d.net_port, 1502);
+    }
+
+    #[test]
+    fn arriving_ports_select_the_configured_path_and_keep_the_cursor() {
+        let mut d = DiscoveryParams {
+            custom_path: "/dev/ttyUSB1".to_string(),
+            ports_pending: true,
+            ..DiscoveryParams::default()
+        };
+        d.set_interface(InterfaceKind::Wired);
+        d.toggle_column();
+        d.move_cursor(true);
+        assert_eq!(d.current_field(), DiscoveryField::Baud);
+
+        d.set_ports(vec!["/dev/ttyUSB0".to_string(), "/dev/ttyUSB1".to_string()]);
+        assert!(!d.ports_pending);
+        assert_eq!(d.port_index, 1);
+        assert!(!d.custom_path_active());
+        assert_eq!(d.serial_path().as_deref(), Some("/dev/ttyUSB1"));
+        assert_eq!(d.current_field(), DiscoveryField::Baud);
+    }
+
+    #[test]
+    fn arriving_ports_leave_an_unlisted_custom_path_alone() {
+        let mut d = DiscoveryParams {
+            custom_path: "/dev/serial/by-id/x".to_string(),
+            ..DiscoveryParams::default()
+        };
+        d.set_interface(InterfaceKind::Wired);
+        d.set_ports(vec!["/dev/ttyUSB0".to_string()]);
+        assert_eq!(d.ports.len(), 1);
+        assert_eq!(d.serial_path().as_deref(), Some("/dev/serial/by-id/x"));
     }
 
     #[test]

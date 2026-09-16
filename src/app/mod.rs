@@ -428,6 +428,8 @@ pub struct App {
     slave_scan: Option<(String, SlaveParams)>,
     #[cfg(not(target_arch = "wasm32"))]
     network_scan_task: Option<TaskHandle<Result<Vec<String>, String>>>,
+    #[cfg(not(target_arch = "wasm32"))]
+    ports_task: Option<TaskHandle<Vec<String>>>,
     changed: BTreeMap<RegisterCell, DateTime<Utc>>,
     read_log: BTreeMap<RegisterCell, ReadEntry>,
     value_history: BTreeMap<RegisterCell, VecDeque<(u16, DateTime<Utc>)>>,

@@ -70,6 +70,8 @@ impl App {
             slave_scan: None,
             #[cfg(not(target_arch = "wasm32"))]
             network_scan_task: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            ports_task: None,
             changed: BTreeMap::new(),
             read_log: BTreeMap::new(),
             value_history: BTreeMap::new(),
@@ -111,6 +113,7 @@ impl App {
             let mut read = app.startup_read_params();
             read.popup = Some(Popup::Discovery(Self::discovery_params(&app.config)));
             app.state = State::Read(read);
+            app.request_ports();
             log::warn!("Started | no device, opened Discovery");
         }
 
@@ -192,18 +195,6 @@ impl App {
 
     pub(super) fn is_reading(&self) -> bool {
         matches!(self.state, State::Read(_))
-    }
-
-    #[cfg(target_arch = "wasm32")]
-    pub(super) fn available_ports() -> Vec<String> {
-        Vec::new()
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    pub(super) fn available_ports() -> Vec<String> {
-        tokio_serial::available_ports()
-            .map(|ports| ports.into_iter().map(|p| p.port_name).collect())
-            .unwrap_or_default()
     }
 
     pub fn popup_kind(&self) -> Option<PopupKind> {
@@ -710,6 +701,8 @@ impl App {
     pub async fn complete_background_task(&mut self) {
         #[cfg(not(target_arch = "wasm32"))]
         self.poll_network_scan();
+        #[cfg(not(target_arch = "wasm32"))]
+        self.poll_ports_task();
 
         enum Done {
             Refresh(Option<RefreshTaskResult>),

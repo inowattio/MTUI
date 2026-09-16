@@ -179,7 +179,12 @@ fn side_lines(
         InterfaceKind::Wired => {
             lines.push(section_title(theme, "SERIAL PORTS"));
             if p.ports.is_empty() {
-                lines.push(dim_line(theme, "   (no serial ports found)"));
+                let hint = if p.ports_pending {
+                    "   (scanning serial ports...)"
+                } else {
+                    "   (no serial ports found)"
+                };
+                lines.push(dim_line(theme, hint));
             } else {
                 let cursor = match current {
                     DiscoveryField::Port(i) if focused => Some(i),

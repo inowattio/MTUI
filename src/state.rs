@@ -149,6 +149,7 @@ pub struct DiscoveryParams {
     pub selected: u16,
     pub side_selected: u16,
     pub ports: Vec<String>,
+    pub ports_pending: bool,
     pub port_index: u16,
     pub custom_path: String,
     pub baud_rate: u32,
@@ -175,6 +176,7 @@ impl Default for DiscoveryParams {
             selected: 0,
             side_selected: 0,
             ports: Vec::new(),
+            ports_pending: false,
             port_index: 0,
             custom_path: String::new(),
             baud_rate: 9600,
@@ -336,6 +338,21 @@ impl DiscoveryParams {
 
     pub fn set_found(&mut self, found: Vec<String>) {
         self.found = found;
+        self.clamp_side();
+    }
+
+    pub fn set_ports(&mut self, ports: Vec<String>) {
+        let before = self.ports.len() as u16;
+        let after = ports.len() as u16;
+        if self.interface == InterfaceKind::Wired && self.side_selected >= before {
+            self.side_selected = self.side_selected - before + after;
+        }
+        if let Some(i) = ports.iter().position(|p| p == self.custom_path.trim()) {
+            self.port_index = i as u16;
+            self.custom_path.clear();
+        }
+        self.ports = ports;
+        self.ports_pending = false;
         self.clamp_side();
     }
 
