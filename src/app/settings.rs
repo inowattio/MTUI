@@ -55,6 +55,7 @@ impl App {
         };
         previous.loading = false;
         self.state = State::Read(previous);
+        self.clamp_panel_cursor();
     }
 
     pub(super) fn set_settings_status(&mut self, message: StatusMessage) {
@@ -136,6 +137,9 @@ impl App {
             }
             SettingsField::CustomBatchBySize => {
                 self.config.custom_batch_by_size = !self.config.custom_batch_by_size
+            }
+            SettingsField::PanelTypeFilter => {
+                self.config.panel_type_filter = !self.config.panel_type_filter
             }
             SettingsField::ApiSlaveOverride => {
                 self.config.allow_api_slave_id = !self.config.allow_api_slave_id

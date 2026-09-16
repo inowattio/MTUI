@@ -262,6 +262,7 @@ impl App {
         p.read_duration = None;
         p.read_error = None;
         p.register_type = next;
+        self.clamp_panel_cursor();
     }
 
     pub(super) fn notify_no_cycle_types(&mut self) {

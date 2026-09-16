@@ -152,7 +152,11 @@ impl TableCtx<'_> {
         let now = Utc::now();
         let show_window = app.config.show_read_window;
         let read_cells = show_window.then(|| app.panel_read_cells());
-        let mut header = format!("{:<2}{}", "T", app.interpreter.header());
+        let type_marker = !app.config.panel_type_filter;
+        let mut header = app.interpreter.header().to_string();
+        if type_marker {
+            header.insert_str(0, "T ");
+        }
         if show_window {
             header.insert(0, ' ');
         }
@@ -174,17 +178,18 @@ impl TableCtx<'_> {
                 ),
             };
 
-            let text = match &read_cells {
-                Some(read_cells) => {
-                    let marker = if read_cells.contains(&(kind, address)) {
-                        "|"
-                    } else {
-                        " "
-                    };
-                    format!("{marker}{:<2}{text}", kind.marker())
-                }
-                None => format!("{:<2}{text}", kind.marker()),
-            };
+            let mut text = text;
+            if type_marker {
+                text.insert_str(0, &format!("{:<2}", kind.marker()));
+            }
+            if let Some(read_cells) = &read_cells {
+                let marker = if read_cells.contains(&(kind, address)) {
+                    '|'
+                } else {
+                    ' '
+                };
+                text.insert(0, marker);
+            }
 
             let style = if (top + ord) as u16 == params.pinned_index {
                 theme.selected_style()
@@ -199,8 +204,8 @@ impl TableCtx<'_> {
             block = block.title_top(ascii_title(ascii, theme));
         }
 
-        // 2-char type marker alongside the address, plus the read-window marker
-        let prefix = 2 + u16::from(show_window) + app.interpreter.prefix_width();
+        let prefix =
+            2 * u16::from(type_marker) + u16::from(show_window) + app.interpreter.prefix_width();
         self.scrollable_table(rows, &header, prefix, block)
     }
 
@@ -436,7 +441,14 @@ pub fn draw(
                 frame.render_widget(t, rows[1]);
 
                 let kb = &app.config.keybinds;
+                let hidden = app
+                    .panel_hidden_by_type()
+                    .then(|| format!("no {} registers here -", params.register_type.name()));
                 let (message, hint) = match params.panel {
+                    _ if hidden.is_some() => (
+                        hidden.as_deref().unwrap_or_default(),
+                        Hint::key(kb.toggle, "switch register type"),
+                    ),
                     ReadPanel::Labeled => (
                         "no labeled registers yet -",
                         Hint::key(kb.label, "label the selected register"),

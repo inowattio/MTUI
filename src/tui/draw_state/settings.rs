@@ -188,6 +188,9 @@ fn description(field: SettingsField) -> &'static str {
         SettingsField::CustomBatchBySize => {
             "In the Custom panel, size the batch by registers instead of rules"
         }
+        SettingsField::PanelTypeFilter => {
+            "In Pinned, Labeled and Custom, list only the current register type"
+        }
         SettingsField::AutoUpdate => "Delay between automatic reads, 0 turns auto-refresh off",
         SettingsField::ReconnectOnTimeout => "Reconnect to the device after a read times out",
         SettingsField::HistoryCap => "Samples kept per register for the value graph",
@@ -357,6 +360,11 @@ fn field_view(
         SettingsField::CustomBatchBySize => (
             "Custom batch by size",
             on_off(device.custom_batch_by_size),
+            None,
+        ),
+        SettingsField::PanelTypeFilter => (
+            "Filter panels by type",
+            on_off(device.panel_type_filter),
             None,
         ),
         SettingsField::AutoUpdate => (

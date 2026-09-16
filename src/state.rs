@@ -783,6 +783,7 @@ field_enum! {
         BatchAnchor,
         ReadFullCustoms,
         CustomBatchBySize,
+        PanelTypeFilter,
         AutoUpdate,
         ReconnectOnTimeout,
         HistoryCap,
@@ -856,6 +857,7 @@ impl SettingsField {
                 | SettingsField::BatchAnchor
                 | SettingsField::ReadFullCustoms
                 | SettingsField::CustomBatchBySize
+                | SettingsField::PanelTypeFilter
                 | SettingsField::ApiSlaveOverride
                 | SettingsField::LogWrites
                 | SettingsField::ReconnectOnTimeout
@@ -999,6 +1001,7 @@ impl SettingsCategory {
                     ShowStatusLabel,
                     ShowAscii,
                     ShowInactiveTabs,
+                    PanelTypeFilter,
                 ],
                 &[CyclePinned, CycleLabeled, CycleCustom, CycleMatrix],
                 &[

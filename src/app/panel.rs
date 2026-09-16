@@ -50,7 +50,7 @@ impl App {
         self.read_mut().popup = Some(Popup::Stats);
     }
 
-    fn panel_cells(&self) -> Box<dyn Iterator<Item = RegisterCell> + '_> {
+    fn all_panel_cells(&self) -> Box<dyn Iterator<Item = RegisterCell> + '_> {
         match self.read().panel {
             ReadPanel::Main | ReadPanel::Pinned | ReadPanel::Matrix => {
                 Box::new(self.pinned_registers.iter().copied())
@@ -58,6 +58,32 @@ impl App {
             ReadPanel::Labeled => Box::new(self.labels.keys().copied()),
             ReadPanel::Custom => Box::new(self.custom_rules.keys().copied()),
         }
+    }
+
+    fn panel_cells(&self) -> Box<dyn Iterator<Item = RegisterCell> + '_> {
+        if !self.config.panel_type_filter {
+            return self.all_panel_cells();
+        }
+        let current = self.read().register_type;
+        Box::new(
+            self.all_panel_cells()
+                .filter(move |&(kind, _)| kind == current),
+        )
+    }
+
+    pub fn panel_hidden_by_type(&self) -> bool {
+        self.config.panel_type_filter
+            && self.panel_cells().next().is_none()
+            && self.all_panel_cells().next().is_some()
+    }
+
+    pub(super) fn clamp_panel_cursor(&mut self) {
+        if matches!(self.read().panel, ReadPanel::Main | ReadPanel::Matrix) {
+            return;
+        }
+        let rows = self.panel_scroll_rows();
+        let len = self.panel_len();
+        self.read_mut().scroll_pinned(rows, len);
     }
 
     pub fn panel_cell_at(&self, index: usize) -> Option<RegisterCell> {
@@ -393,6 +419,64 @@ fn sized_window(costs: &[usize], pos: usize, budget: usize, anchor: BatchAnchor)
         }
     }
     (start, end)
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod panel_tests {
+    use crate::app::App;
+    use crate::config::Config;
+    use crate::register::RegisterType::{Holding, Input};
+    use crate::state::ReadPanel;
+
+    async fn pinned_app() -> App {
+        let mut app = App::boot(Config::default(), String::new()).await;
+        app.pinned_registers = vec![(Holding, 1), (Input, 2), (Holding, 3)];
+        app.read_mut().panel = ReadPanel::Pinned;
+        app.read_mut().register_type = Holding;
+        app
+    }
+
+    #[tokio::test]
+    async fn the_type_filter_narrows_the_panel_and_drops_group_breaks() {
+        let mut app = pinned_app().await;
+        assert_eq!(app.panel_len(), 3);
+        assert_eq!(app.panel_group_breaks(), 1);
+        assert!(!app.panel_hidden_by_type());
+
+        app.config.panel_type_filter = true;
+        assert_eq!(app.panel_len(), 2);
+        assert_eq!(app.panel_group_breaks(), 0);
+        assert_eq!(app.panel_cell_at(1), Some((Holding, 3)));
+
+        app.read_mut().register_type = Input;
+        assert_eq!(app.panel_window(0, 10), vec![(Input, 2)]);
+    }
+
+    #[tokio::test]
+    async fn switching_type_clamps_the_cursor_and_reports_hidden_cells() {
+        let mut app = pinned_app().await;
+        app.config.panel_type_filter = true;
+        app.read_mut().pinned_index = 1;
+        assert_eq!(app.cursor_cell(), (Holding, 3));
+
+        app.toggle_type();
+        assert_eq!(app.read().register_type, Input);
+        assert_eq!(app.read().pinned_index, 0);
+        assert_eq!(app.cursor_cell(), (Input, 2));
+
+        app.toggle_type();
+        assert!(app.panel_hidden_by_type());
+        assert_eq!(app.panel_len(), 0);
+    }
+
+    #[tokio::test]
+    async fn disabled_setting_keeps_every_type_listed() {
+        let mut app = pinned_app().await;
+        app.read_mut().pinned_index = 2;
+        app.toggle_type();
+        assert_eq!(app.cursor_cell(), (Holding, 3));
+        assert_eq!(app.panel_len(), 3);
+    }
 }
 
 #[cfg(test)]
