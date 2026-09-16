@@ -1087,11 +1087,10 @@ mod tests {
 
     #[tokio::test]
     async fn a_failed_save_keeps_the_session_and_reports_it() {
-        let mut app = App::boot(
-            Config::default(),
-            "/nonexistent-dir/mtui/config.json".to_string(),
-        )
-        .await;
+        let blocker = std::env::temp_dir().join(format!("mtui-blocker-{}", std::process::id()));
+        std::fs::write(&blocker, b"").unwrap();
+        let path = blocker.join("config.json").to_string_lossy().to_string();
+        let mut app = App::boot(Config::default(), path).await;
         app.pin();
         handle_key_events(KeyEvent::new(KeyCode::Esc), &mut app).await;
         handle_key_events(KeyEvent::new(KeyCode::Char('s')), &mut app).await;
@@ -1102,6 +1101,7 @@ mod tests {
             app.read().status.as_ref().map(|s| s.kind),
             Some(MessageKind::Err)
         );
+        let _ = std::fs::remove_file(blocker);
     }
 
     #[tokio::test]
