@@ -126,7 +126,7 @@ impl App {
     }
 
     #[cfg(target_arch = "wasm32")]
-    pub(super) fn set_clipboard(&mut self, _text: String) -> bool {
+    pub(super) fn set_clipboard(&self, _text: String) -> bool {
         false
     }
 
