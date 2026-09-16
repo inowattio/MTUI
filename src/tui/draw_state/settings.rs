@@ -17,8 +17,8 @@ fn on_off(value: bool) -> String {
     if value { "on" } else { "off" }.to_string()
 }
 
-fn color_view(name: &'static str, color: Color) -> (&'static str, String, Option<Color>) {
-    (name, color.to_string(), Some(color))
+fn color_view(color: Color) -> (String, Option<Color>) {
+    (color.to_string(), Some(color))
 }
 
 pub fn draw(params: &SettingsParams, app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
@@ -60,6 +60,9 @@ fn draw_categories(params: &SettingsParams, frame: &mut Frame, area: Rect, theme
     let mut lines: Vec<Line> = vec![Line::default()];
 
     for (i, &category) in SettingsCategory::ALL.iter().enumerate() {
+        if category.is_search() {
+            lines.push(Line::default());
+        }
         let selected = i as u16 == params.category;
         let style = match (selected, focused) {
             (true, true) => theme.selected_style(),
@@ -77,14 +80,39 @@ fn draw_categories(params: &SettingsParams, frame: &mut Frame, area: Rect, theme
 
 fn draw_fields(params: &SettingsParams, app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
     let focused = params.focus == SettingsFocus::Fields;
+    let search = params.current_category().is_search();
     let mut lines: Vec<Line> = vec![Line::default()];
+    if search {
+        lines.push(query_line(params, theme));
+        lines.push(Line::from(Span::styled(
+            "  keybinds and theme are not included",
+            theme.dim_style(),
+        )));
+    }
+
+    let groups = params.current_groups();
+    if search && groups.is_empty() {
+        let text = if params.query.trim().is_empty() {
+            "  type to search"
+        } else {
+            "  no matches"
+        };
+        lines.push(Line::default());
+        lines.push(Line::from(Span::styled(text, theme.dim_style())));
+    }
 
     let mut selected_line = None;
     let mut field_lines = Vec::new();
     let mut index = 0u16;
-    for (g, group) in params.current_category().groups().iter().enumerate() {
-        if g > 0 {
+    for (g, (category, group)) in groups.iter().enumerate() {
+        if g > 0 || search {
             lines.push(Line::default());
+        }
+        if let Some(category) = category {
+            lines.push(Line::from(Span::styled(
+                format!("  {}", category.label()),
+                theme.accent_style(),
+            )));
         }
         for &field in group.iter() {
             let selected = focused && index == params.field;
@@ -106,7 +134,7 @@ fn draw_fields(params: &SettingsParams, app: &App, frame: &mut Frame, area: Rect
     let mut footer_lines = Vec::new();
     if let Some(field) = params.current_field().filter(|_| focused) {
         footer_lines.push(Line::from(Span::styled(
-            format!("  {}", description(field)),
+            format!("  {}", field.description()),
             theme.dim_style(),
         )));
     }
@@ -132,6 +160,18 @@ fn draw_fields(params: &SettingsParams, app: &App, frame: &mut Frame, area: Rect
         frame.render_widget(Paragraph::new(hints::more(theme, above, below)), row);
     }
     render_footer(frame, footer, footer_lines);
+}
+
+fn query_line(params: &SettingsParams, theme: &Theme) -> Line<'static> {
+    let typing = params.focus == SettingsFocus::Categories;
+    let mut spans = vec![
+        Span::styled("  Search: ", theme.dim_style()),
+        Span::styled(params.query.clone(), theme.base()),
+    ];
+    if typing {
+        spans.push(Span::styled("_", theme.accent_style()));
+    }
+    Line::from(spans)
 }
 
 fn footer_split(area: Rect, rows: u16) -> (Rect, Option<Rect>) {
@@ -173,100 +213,6 @@ fn render_footer(frame: &mut Frame, footer: Option<Rect>, lines: Vec<Line<'stati
     }
 }
 
-fn description(field: SettingsField) -> &'static str {
-    match field {
-        SettingsField::Name => "Name shown in the title bar for this configuration",
-        SettingsField::RegistersBatch => {
-            "How many registers each read request fetches around the cursor"
-        }
-        SettingsField::BatchAnchor => {
-            "Where the cursor sits inside the read batch: start, middle or end"
-        }
-        SettingsField::ReadFullCustoms => {
-            "Also read every register a custom rule spans, even outside the batch"
-        }
-        SettingsField::CustomBatchBySize => {
-            "In the Custom panel, size the batch by registers instead of rules"
-        }
-        SettingsField::PanelTypeFilter => {
-            "In Pinned, Labeled and Custom, list only the current register type"
-        }
-        SettingsField::AutoUpdate => "Delay between automatic reads, 0 turns auto-refresh off",
-        SettingsField::ReconnectOnTimeout => "Reconnect to the device after a read times out",
-        SettingsField::HistoryCap => "Samples kept per register for the value graph",
-        SettingsField::MatrixCols => "Registers per row in the Matrix panel",
-        SettingsField::ReadOnly => "Refuse all writes from the UI and the API",
-        SettingsField::LogWrites => "Append every write to a log file",
-        SettingsField::ApiPort => "Port for the HTTP API, 0 picks any free port, off disables it",
-        SettingsField::ApiSlaveOverride => {
-            "Let API requests target a slave id other than the configured one"
-        }
-        SettingsField::SavePositionOnExit => {
-            "Store the cursor position as the startup position when quitting"
-        }
-        SettingsField::StartupPanel => "Panel opened on start",
-        SettingsField::StartupType => "Register type selected on start",
-        SettingsField::StartupAddress => "Address the cursor starts on",
-        SettingsField::CycleHoldings => "Include holding registers when cycling register types",
-        SettingsField::CycleInputs => "Include input registers when cycling register types",
-        SettingsField::CycleCoils => "Include coils when cycling register types",
-        SettingsField::CycleDiscretes => "Include discrete inputs when cycling register types",
-        SettingsField::CyclePinned => "Include the Pinned panel when cycling panels",
-        SettingsField::CycleLabeled => "Include the Labeled panel when cycling panels",
-        SettingsField::CycleCustom => "Include the Custom panel when cycling panels",
-        SettingsField::CycleMatrix => "Include the Matrix panel when cycling panels",
-        SettingsField::IgnoreDirty => {
-            "Quit or switch configuration without asking about unsaved changes"
-        }
-        SettingsField::ShowMock => "Offer the built-in mock device in Discovery",
-        SettingsField::ClearPins => "Remove every pinned register",
-        SettingsField::ClearLabels => "Remove every label",
-        SettingsField::ClearCustom => "Remove every custom rule",
-        SettingsField::CopyData => {
-            "Copy pins, labels and custom rules as JSON, paste into another MTUI to import"
-        }
-        SettingsField::CopyConfig => "Copy the whole configuration as JSON, as Save would write it",
-        SettingsField::ShowContinuation => {
-            "Mark registers that belong to a multi-register custom rule"
-        }
-        SettingsField::ShowClock => "Show the current time in the bottom bar",
-        SettingsField::ShowFrameTime => "Show how long each frame takes to render",
-        SettingsField::ShowRam => "Show the memory used by the application",
-        SettingsField::ShowStatusLabel => {
-            "Show the connection state as a word next to the refresh countdown"
-        }
-        SettingsField::ShowAscii => "Show the read registers decoded as an ASCII string",
-        SettingsField::ShowInactiveTabs => {
-            "Show every panel and register type tab, not just the active one"
-        }
-        SettingsField::ShowReadWindow => {
-            "Highlight the address range covered by the current read batch"
-        }
-        SettingsField::GraphTimeAxis => "Plot the graph against time instead of sample count",
-        SettingsField::ChangedExpiry => {
-            "How long a changed value stays highlighted, 0 never clears it"
-        }
-        SettingsField::PaddingHorizontal => "Empty columns kept on both sides of the interface",
-        SettingsField::PaddingVertical => "Empty rows kept above and below the interface",
-        SettingsField::ThemePreset => "Switch between the built-in color schemes",
-        SettingsField::ThemeBg => "Background color",
-        SettingsField::ThemeBorder => "Color of the frame borders",
-        SettingsField::ThemeAccent => "Color for titles, keys and highlights",
-        SettingsField::ThemeText => "Main text color",
-        SettingsField::ThemeDim => "Color for secondary and muted text",
-        SettingsField::ThemeChanged => "Color for values that changed recently",
-        SettingsField::ThemeZebra => "Background of alternating table rows",
-        SettingsField::ThemeOk => "Color for success and connected states",
-        SettingsField::ThemeWarn => "Color for warnings",
-        SettingsField::ThemeErr => "Color for errors",
-        SettingsField::ThemeSelectedFg => "Text color of the selected row",
-        SettingsField::ThemeSelectedBg => "Background color of the selected row",
-        SettingsField::Save => "Write the current settings to the configuration file",
-        SettingsField::LoadConfig => "Path of a configuration file to load now",
-        SettingsField::NextConfig => "Configuration file loaded by the cycle config key",
-    }
-}
-
 fn scroll_offset(selected: usize, len: usize, height: usize) -> usize {
     let height = height.max(1);
     selected
@@ -296,7 +242,8 @@ fn render_field(
     selected: bool,
     theme: &Theme,
 ) -> Line<'static> {
-    let (name, value, color) = field_view(app, params, field);
+    let name = field.label();
+    let (value, color) = field_value(app, params, field);
 
     if app.settings_field_disabled(field) {
         return disabled_row(theme, name, value, selected);
@@ -336,60 +283,32 @@ fn color_row(
     line
 }
 
-fn field_view(
+fn field_value(
     app: &App,
     params: &SettingsParams,
     field: SettingsField,
-) -> (&'static str, String, Option<Color>) {
+) -> (String, Option<Color>) {
     let device = &app.config;
     match field {
-        SettingsField::Name => ("Config name", device.name.clone(), None),
-        SettingsField::RegistersBatch => {
-            ("Registers batch", device.registers_batch.to_string(), None)
-        }
-        SettingsField::BatchAnchor => (
-            "Batch anchor",
-            device.batch_anchor.label().to_string(),
-            None,
-        ),
-        SettingsField::ReadFullCustoms => (
-            "Read full custom values",
-            on_off(device.read_full_customs),
-            None,
-        ),
-        SettingsField::CustomBatchBySize => (
-            "Custom batch by size",
-            on_off(device.custom_batch_by_size),
-            None,
-        ),
-        SettingsField::PanelTypeFilter => (
-            "Filter panels by type",
-            on_off(device.panel_type_filter),
-            None,
-        ),
+        SettingsField::Name => (device.name.clone(), None),
+        SettingsField::RegistersBatch => (device.registers_batch.to_string(), None),
+        SettingsField::BatchAnchor => (device.batch_anchor.label().to_string(), None),
+        SettingsField::ReadFullCustoms => (on_off(device.read_full_customs), None),
+        SettingsField::CustomBatchBySize => (on_off(device.custom_batch_by_size), None),
+        SettingsField::PanelTypeFilter => (on_off(device.panel_type_filter), None),
         SettingsField::AutoUpdate => (
-            "Auto-update (ms)",
             device
                 .update_interval_ms
                 .map_or_else(|| "off".to_string(), |n| n.to_string()),
             None,
         ),
-        SettingsField::ReconnectOnTimeout => (
-            "Reconnect on timeout",
-            on_off(device.reconnect_on_timeout),
-            None,
-        ),
-        SettingsField::HistoryCap => (
-            "Graph history cap",
-            device.graph_history_cap.to_string(),
-            None,
-        ),
-        SettingsField::MatrixCols => ("Matrix columns", device.matrix_cols.to_string(), None),
-        SettingsField::IgnoreDirty => ("Ignore unsaved warning", on_off(device.ignore_dirty), None),
-        SettingsField::ShowMock => ("Show mock device", on_off(device.show_mock), None),
-        SettingsField::ReadOnly => ("Read-only", on_off(device.read_only), None),
+        SettingsField::ReconnectOnTimeout => (on_off(device.reconnect_on_timeout), None),
+        SettingsField::HistoryCap => (device.graph_history_cap.to_string(), None),
+        SettingsField::MatrixCols => (device.matrix_cols.to_string(), None),
+        SettingsField::IgnoreDirty => (on_off(device.ignore_dirty), None),
+        SettingsField::ShowMock => (on_off(device.show_mock), None),
+        SettingsField::ReadOnly => (on_off(device.read_only), None),
         SettingsField::ApiPort => (
-            "API port",
             match device.port {
                 None => "off".to_string(),
                 Some(0) if app.api_bind_state() == ApiBindState::Failed => {
@@ -406,89 +325,34 @@ fn field_view(
             },
             None,
         ),
-        SettingsField::ApiSlaveOverride => (
-            "API slave id override",
-            on_off(device.allow_api_slave_id),
-            None,
-        ),
-        SettingsField::LogWrites => ("Log writes to file", on_off(device.log_writes), None),
-        SettingsField::StartupPanel => (
-            "Startup panel",
-            device.startup.panel.name().to_string(),
-            None,
-        ),
-        SettingsField::StartupType => (
-            "Startup type",
-            device.startup.register_type.name().to_string(),
-            None,
-        ),
-        SettingsField::StartupAddress => {
-            ("Startup address", device.startup.address.to_string(), None)
-        }
-        SettingsField::SavePositionOnExit => (
-            "Save position on exit",
-            on_off(device.save_position_on_exit),
-            None,
-        ),
-        SettingsField::CycleHoldings => {
-            ("Cycle holdings", on_off(device.cycle_types.holdings), None)
-        }
-        SettingsField::CycleInputs => ("Cycle inputs", on_off(device.cycle_types.inputs), None),
-        SettingsField::CycleCoils => ("Cycle coils", on_off(device.cycle_types.coils), None),
-        SettingsField::CycleDiscretes => (
-            "Cycle discretes",
-            on_off(device.cycle_types.discretes),
-            None,
-        ),
-        SettingsField::CyclePinned => ("Cycle pinned", on_off(device.cycle_panels.pinned), None),
-        SettingsField::CycleLabeled => ("Cycle labeled", on_off(device.cycle_panels.labeled), None),
-        SettingsField::CycleCustom => ("Cycle custom", on_off(device.cycle_panels.custom), None),
-        SettingsField::CycleMatrix => ("Cycle matrix", on_off(device.cycle_panels.matrix), None),
-        SettingsField::ClearPins => (
-            "Clear pinned registers",
-            format!("{} pinned", app.pinned_registers.len()),
-            None,
-        ),
-        SettingsField::ClearLabels => (
-            "Clear labels",
-            format!("{} labels", app.label_count()),
-            None,
-        ),
-        SettingsField::ClearCustom => (
-            "Clear custom rules",
-            format!("{} rules", app.custom_count()),
-            None,
-        ),
-        SettingsField::CopyData => ("Copy all", String::new(), None),
-        SettingsField::CopyConfig => ("Copy configuration", String::new(), None),
-        SettingsField::ShowContinuation => (
-            "Show \"part of\" marker",
-            on_off(device.custom_rules.show_continuation),
-            None,
-        ),
-        SettingsField::ShowClock => ("Show clock", on_off(device.show_clock), None),
-        SettingsField::ShowFrameTime => (
-            "Show frame render time",
-            on_off(device.show_frame_time),
-            None,
-        ),
-        SettingsField::ShowRam => ("Show RAM usage", on_off(device.show_ram), None),
-        SettingsField::ShowStatusLabel => (
-            "Show connection label",
-            on_off(device.show_status_label),
-            None,
-        ),
-        SettingsField::ShowAscii => ("Show ASCII of all data", on_off(device.show_ascii), None),
-        SettingsField::ShowInactiveTabs => (
-            "Show inactive tabs",
-            on_off(device.show_inactive_tabs),
-            None,
-        ),
-        SettingsField::ShowReadWindow => {
-            ("Show read window", on_off(device.show_read_window), None)
-        }
+        SettingsField::ApiSlaveOverride => (on_off(device.allow_api_slave_id), None),
+        SettingsField::LogWrites => (on_off(device.log_writes), None),
+        SettingsField::StartupPanel => (device.startup.panel.name().to_string(), None),
+        SettingsField::StartupType => (device.startup.register_type.name().to_string(), None),
+        SettingsField::StartupAddress => (device.startup.address.to_string(), None),
+        SettingsField::SavePositionOnExit => (on_off(device.save_position_on_exit), None),
+        SettingsField::CycleHoldings => (on_off(device.cycle_types.holdings), None),
+        SettingsField::CycleInputs => (on_off(device.cycle_types.inputs), None),
+        SettingsField::CycleCoils => (on_off(device.cycle_types.coils), None),
+        SettingsField::CycleDiscretes => (on_off(device.cycle_types.discretes), None),
+        SettingsField::CyclePinned => (on_off(device.cycle_panels.pinned), None),
+        SettingsField::CycleLabeled => (on_off(device.cycle_panels.labeled), None),
+        SettingsField::CycleCustom => (on_off(device.cycle_panels.custom), None),
+        SettingsField::CycleMatrix => (on_off(device.cycle_panels.matrix), None),
+        SettingsField::ClearPins => (format!("{} pinned", app.pinned_registers.len()), None),
+        SettingsField::ClearLabels => (format!("{} labels", app.label_count()), None),
+        SettingsField::ClearCustom => (format!("{} rules", app.custom_count()), None),
+        SettingsField::CopyData => (String::new(), None),
+        SettingsField::CopyConfig => (String::new(), None),
+        SettingsField::ShowContinuation => (on_off(device.custom_rules.show_continuation), None),
+        SettingsField::ShowClock => (on_off(device.show_clock), None),
+        SettingsField::ShowFrameTime => (on_off(device.show_frame_time), None),
+        SettingsField::ShowRam => (on_off(device.show_ram), None),
+        SettingsField::ShowStatusLabel => (on_off(device.show_status_label), None),
+        SettingsField::ShowAscii => (on_off(device.show_ascii), None),
+        SettingsField::ShowInactiveTabs => (on_off(device.show_inactive_tabs), None),
+        SettingsField::ShowReadWindow => (on_off(device.show_read_window), None),
         SettingsField::GraphTimeAxis => (
-            "Graph X axis",
             if device.graph_time_axis {
                 "time".to_string()
             } else {
@@ -496,46 +360,36 @@ fn field_view(
             },
             None,
         ),
-        SettingsField::PaddingHorizontal => (
-            "Horizontal padding",
-            device.padding_horizontal.to_string(),
-            None,
-        ),
-        SettingsField::PaddingVertical => (
-            "Vertical padding",
-            device.padding_vertical.to_string(),
-            None,
-        ),
+        SettingsField::PaddingHorizontal => (device.padding_horizontal.to_string(), None),
+        SettingsField::PaddingVertical => (device.padding_vertical.to_string(), None),
         SettingsField::ChangedExpiry => (
-            "Changed highlight (ms)",
             device
                 .changed_expiry_ms
                 .map_or_else(|| "never".to_string(), |n| n.to_string()),
             None,
         ),
         SettingsField::ThemePreset => (
-            "Preset",
             Theme::PRESETS
                 .iter()
                 .find(|&&(_, t)| t == device.theme)
                 .map_or_else(|| "custom".to_string(), |&(name, _)| name.to_string()),
             None,
         ),
-        SettingsField::ThemeBorder => color_view("Frame border", device.theme.border),
-        SettingsField::ThemeAccent => color_view("Accent / titles", device.theme.accent),
-        SettingsField::ThemeText => color_view("Text", device.theme.text),
-        SettingsField::ThemeBg => color_view("Background", device.theme.bg),
-        SettingsField::ThemeDim => color_view("Dim / muted", device.theme.dim),
-        SettingsField::ThemeChanged => color_view("Changed value", device.theme.changed),
-        SettingsField::ThemeZebra => color_view("Zebra stripe", device.theme.zebra),
-        SettingsField::ThemeOk => color_view("OK / connected", device.theme.ok),
-        SettingsField::ThemeWarn => color_view("Warning", device.theme.warn),
-        SettingsField::ThemeErr => color_view("Error", device.theme.err),
-        SettingsField::ThemeSelectedFg => color_view("Selected text", device.theme.selected_fg),
-        SettingsField::ThemeSelectedBg => color_view("Selected bg", device.theme.selected_bg),
-        SettingsField::Save => ("Save configuration", app.config_path().to_string(), None),
-        SettingsField::LoadConfig => ("Load configuration", params.load_path.clone(), None),
-        SettingsField::NextConfig => ("Next configuration", device.next_config.clone(), None),
+        SettingsField::ThemeBorder => color_view(device.theme.border),
+        SettingsField::ThemeAccent => color_view(device.theme.accent),
+        SettingsField::ThemeText => color_view(device.theme.text),
+        SettingsField::ThemeBg => color_view(device.theme.bg),
+        SettingsField::ThemeDim => color_view(device.theme.dim),
+        SettingsField::ThemeChanged => color_view(device.theme.changed),
+        SettingsField::ThemeZebra => color_view(device.theme.zebra),
+        SettingsField::ThemeOk => color_view(device.theme.ok),
+        SettingsField::ThemeWarn => color_view(device.theme.warn),
+        SettingsField::ThemeErr => color_view(device.theme.err),
+        SettingsField::ThemeSelectedFg => color_view(device.theme.selected_fg),
+        SettingsField::ThemeSelectedBg => color_view(device.theme.selected_bg),
+        SettingsField::Save => (app.config_path().to_string(), None),
+        SettingsField::LoadConfig => (params.load_path.clone(), None),
+        SettingsField::NextConfig => (device.next_config.clone(), None),
     }
 }
 

@@ -843,6 +843,178 @@ field_enum! {
 }
 
 impl SettingsField {
+    pub fn label(self) -> &'static str {
+        match self {
+            SettingsField::Name => "Config name",
+            SettingsField::RegistersBatch => "Registers batch",
+            SettingsField::BatchAnchor => "Batch anchor",
+            SettingsField::ReadFullCustoms => "Read full custom values",
+            SettingsField::CustomBatchBySize => "Custom batch by size",
+            SettingsField::PanelTypeFilter => "Filter panels by type",
+            SettingsField::AutoUpdate => "Auto-update (ms)",
+            SettingsField::ReconnectOnTimeout => "Reconnect on timeout",
+            SettingsField::HistoryCap => "Graph history cap",
+            SettingsField::MatrixCols => "Matrix columns",
+            SettingsField::IgnoreDirty => "Ignore unsaved warning",
+            SettingsField::ShowMock => "Show mock device",
+            SettingsField::ReadOnly => "Read-only",
+            SettingsField::ApiPort => "API port",
+            SettingsField::ApiSlaveOverride => "API slave id override",
+            SettingsField::LogWrites => "Log writes to file",
+            SettingsField::StartupPanel => "Startup panel",
+            SettingsField::StartupType => "Startup type",
+            SettingsField::StartupAddress => "Startup address",
+            SettingsField::SavePositionOnExit => "Save position on exit",
+            SettingsField::CycleHoldings => "Cycle holdings",
+            SettingsField::CycleInputs => "Cycle inputs",
+            SettingsField::CycleCoils => "Cycle coils",
+            SettingsField::CycleDiscretes => "Cycle discretes",
+            SettingsField::CyclePinned => "Cycle pinned",
+            SettingsField::CycleLabeled => "Cycle labeled",
+            SettingsField::CycleCustom => "Cycle custom",
+            SettingsField::CycleMatrix => "Cycle matrix",
+            SettingsField::ClearPins => "Clear pinned registers",
+            SettingsField::ClearLabels => "Clear labels",
+            SettingsField::ClearCustom => "Clear custom rules",
+            SettingsField::CopyData => "Copy all",
+            SettingsField::CopyConfig => "Copy configuration",
+            SettingsField::ShowContinuation => "Show \"part of\" marker",
+            SettingsField::ShowClock => "Show clock",
+            SettingsField::ShowFrameTime => "Show frame render time",
+            SettingsField::ShowRam => "Show RAM usage",
+            SettingsField::ShowStatusLabel => "Show connection label",
+            SettingsField::ShowAscii => "Show ASCII of all data",
+            SettingsField::ShowInactiveTabs => "Show inactive tabs",
+            SettingsField::ShowReadWindow => "Show read window",
+            SettingsField::GraphTimeAxis => "Graph X axis",
+            SettingsField::PaddingHorizontal => "Horizontal padding",
+            SettingsField::PaddingVertical => "Vertical padding",
+            SettingsField::ChangedExpiry => "Changed highlight (ms)",
+            SettingsField::ThemePreset => "Preset",
+            SettingsField::ThemeBorder => "Frame border",
+            SettingsField::ThemeAccent => "Accent / titles",
+            SettingsField::ThemeText => "Text",
+            SettingsField::ThemeBg => "Background",
+            SettingsField::ThemeDim => "Dim / muted",
+            SettingsField::ThemeChanged => "Changed value",
+            SettingsField::ThemeZebra => "Zebra stripe",
+            SettingsField::ThemeOk => "OK / connected",
+            SettingsField::ThemeWarn => "Warning",
+            SettingsField::ThemeErr => "Error",
+            SettingsField::ThemeSelectedFg => "Selected text",
+            SettingsField::ThemeSelectedBg => "Selected bg",
+            SettingsField::Save => "Save configuration",
+            SettingsField::LoadConfig => "Load configuration",
+            SettingsField::NextConfig => "Next configuration",
+        }
+    }
+
+    pub fn description(self) -> &'static str {
+        match self {
+            SettingsField::Name => "Name shown in the title bar for this configuration",
+            SettingsField::RegistersBatch => {
+                "How many registers each read request fetches around the cursor"
+            }
+            SettingsField::BatchAnchor => {
+                "Where the cursor sits inside the read batch: start, middle or end"
+            }
+            SettingsField::ReadFullCustoms => {
+                "Also read every register a custom rule spans, even outside the batch"
+            }
+            SettingsField::CustomBatchBySize => {
+                "In the Custom panel, size the batch by registers instead of rules"
+            }
+            SettingsField::PanelTypeFilter => {
+                "In Pinned, Labeled and Custom, list only the current register type"
+            }
+            SettingsField::AutoUpdate => "Delay between automatic reads, 0 turns auto-refresh off",
+            SettingsField::ReconnectOnTimeout => "Reconnect to the device after a read times out",
+            SettingsField::HistoryCap => "Samples kept per register for the value graph",
+            SettingsField::MatrixCols => "Registers per row in the Matrix panel",
+            SettingsField::ReadOnly => "Refuse all writes from the UI and the API",
+            SettingsField::LogWrites => "Append every write to a log file",
+            SettingsField::ApiPort => {
+                "Port for the HTTP API, 0 picks any free port, off disables it"
+            }
+            SettingsField::ApiSlaveOverride => {
+                "Let API requests target a slave id other than the configured one"
+            }
+            SettingsField::SavePositionOnExit => {
+                "Store the cursor position as the startup position when quitting"
+            }
+            SettingsField::StartupPanel => "Panel opened on start",
+            SettingsField::StartupType => "Register type selected on start",
+            SettingsField::StartupAddress => "Address the cursor starts on",
+            SettingsField::CycleHoldings => "Include holding registers when cycling register types",
+            SettingsField::CycleInputs => "Include input registers when cycling register types",
+            SettingsField::CycleCoils => "Include coils when cycling register types",
+            SettingsField::CycleDiscretes => "Include discrete inputs when cycling register types",
+            SettingsField::CyclePinned => "Include the Pinned panel when cycling panels",
+            SettingsField::CycleLabeled => "Include the Labeled panel when cycling panels",
+            SettingsField::CycleCustom => "Include the Custom panel when cycling panels",
+            SettingsField::CycleMatrix => "Include the Matrix panel when cycling panels",
+            SettingsField::IgnoreDirty => {
+                "Quit or switch configuration without asking about unsaved changes"
+            }
+            SettingsField::ShowMock => "Offer the built-in mock device in Discovery",
+            SettingsField::ClearPins => "Remove every pinned register",
+            SettingsField::ClearLabels => "Remove every label",
+            SettingsField::ClearCustom => "Remove every custom rule",
+            SettingsField::CopyData => {
+                "Copy pins, labels and custom rules as JSON, paste into another MTUI to import"
+            }
+            SettingsField::CopyConfig => {
+                "Copy the whole configuration as JSON, as Save would write it"
+            }
+            SettingsField::ShowContinuation => {
+                "Mark registers that belong to a multi-register custom rule"
+            }
+            SettingsField::ShowClock => "Show the current time in the bottom bar",
+            SettingsField::ShowFrameTime => "Show how long each frame takes to render",
+            SettingsField::ShowRam => "Show the memory used by the application",
+            SettingsField::ShowStatusLabel => {
+                "Show the connection state as a word next to the refresh countdown"
+            }
+            SettingsField::ShowAscii => "Show the read registers decoded as an ASCII string",
+            SettingsField::ShowInactiveTabs => {
+                "Show every panel and register type tab, not just the active one"
+            }
+            SettingsField::ShowReadWindow => {
+                "Highlight the address range covered by the current read batch"
+            }
+            SettingsField::GraphTimeAxis => "Plot the graph against time instead of sample count",
+            SettingsField::ChangedExpiry => {
+                "How long a changed value stays highlighted, 0 never clears it"
+            }
+            SettingsField::PaddingHorizontal => "Empty columns kept on both sides of the interface",
+            SettingsField::PaddingVertical => "Empty rows kept above and below the interface",
+            SettingsField::ThemePreset => "Switch between the built-in color schemes",
+            SettingsField::ThemeBg => "Background color",
+            SettingsField::ThemeBorder => "Color of the frame borders",
+            SettingsField::ThemeAccent => "Color for titles, keys and highlights",
+            SettingsField::ThemeText => "Main text color",
+            SettingsField::ThemeDim => "Color for secondary and muted text",
+            SettingsField::ThemeChanged => "Color for values that changed recently",
+            SettingsField::ThemeZebra => "Background of alternating table rows",
+            SettingsField::ThemeOk => "Color for success and connected states",
+            SettingsField::ThemeWarn => "Color for warnings",
+            SettingsField::ThemeErr => "Color for errors",
+            SettingsField::ThemeSelectedFg => "Text color of the selected row",
+            SettingsField::ThemeSelectedBg => "Background color of the selected row",
+            SettingsField::Save => "Write the current settings to the configuration file",
+            SettingsField::LoadConfig => "Path of a configuration file to load now",
+            SettingsField::NextConfig => "Configuration file loaded by the cycle config key",
+        }
+    }
+
+    pub fn matches(self, query: &str) -> bool {
+        let label = self.label().to_lowercase();
+        let description = self.description().to_lowercase();
+        query.split_whitespace().all(|word| {
+            label.contains(&word.to_lowercase()) || description.contains(&word.to_lowercase())
+        })
+    }
+
     pub fn is_text_input(self) -> bool {
         matches!(
             self,
@@ -956,6 +1128,7 @@ field_enum! {
         Theme,
         Keybinds,
         Config,
+        Search,
     }
 }
 
@@ -968,7 +1141,27 @@ impl SettingsCategory {
             SettingsCategory::Theme => "Theme",
             SettingsCategory::Keybinds => "Keybinds",
             SettingsCategory::Config => "Config",
+            SettingsCategory::Search => "Search",
         }
+    }
+
+    pub fn search(query: &str) -> Vec<(Option<Self>, Vec<SettingsField>)> {
+        if query.trim().is_empty() {
+            return Vec::new();
+        }
+        Self::ALL
+            .into_iter()
+            .filter(|c| c.is_searchable())
+            .map(|c| {
+                let fields: Vec<SettingsField> = c
+                    .fields()
+                    .into_iter()
+                    .filter(|f| f.matches(query))
+                    .collect();
+                (Some(c), fields)
+            })
+            .filter(|(_, fields)| !fields.is_empty())
+            .collect()
     }
 
     pub fn groups(self) -> &'static [&'static [SettingsField]] {
@@ -1029,7 +1222,7 @@ impl SettingsCategory {
                     ThemeSelectedBg,
                 ],
             ],
-            SettingsCategory::Keybinds => &[],
+            SettingsCategory::Keybinds | SettingsCategory::Search => &[],
             SettingsCategory::Config => &[
                 &[Name, IgnoreDirty],
                 &[ClearPins, ClearLabels, ClearCustom, CopyData],
@@ -1047,6 +1240,17 @@ impl SettingsCategory {
 
     pub fn is_keybinds(self) -> bool {
         matches!(self, SettingsCategory::Keybinds)
+    }
+
+    pub fn is_search(self) -> bool {
+        matches!(self, SettingsCategory::Search)
+    }
+
+    pub fn is_searchable(self) -> bool {
+        !matches!(
+            self,
+            SettingsCategory::Keybinds | SettingsCategory::Theme | SettingsCategory::Search
+        )
     }
 }
 
@@ -1122,6 +1326,7 @@ pub struct SettingsParams {
     pub previous: ReadParams,
     pub kb_selected: u16,
     pub kb_capturing: bool,
+    pub query: String,
 }
 
 impl SettingsParams {
@@ -1131,8 +1336,33 @@ impl SettingsParams {
         SettingsCategory::ALL[self.category as usize]
     }
 
+    pub fn current_groups(&self) -> Vec<(Option<SettingsCategory>, Vec<SettingsField>)> {
+        let category = self.current_category();
+        if category.is_search() {
+            return SettingsCategory::search(&self.query);
+        }
+        category
+            .groups()
+            .iter()
+            .map(|group| (None, group.to_vec()))
+            .collect()
+    }
+
     pub fn current_fields(&self) -> Vec<SettingsField> {
-        self.current_category().fields()
+        self.current_groups()
+            .into_iter()
+            .flat_map(|(_, fields)| fields)
+            .collect()
+    }
+
+    pub fn query_push(&mut self, c: char) {
+        self.query.push(c);
+        self.field = 0;
+    }
+
+    pub fn query_pop(&mut self) {
+        self.query.pop();
+        self.field = 0;
     }
 
     pub fn current_field(&self) -> Option<SettingsField> {
@@ -1140,6 +1370,9 @@ impl SettingsParams {
     }
 
     pub fn enter_category(&mut self) {
+        if !self.current_category().is_keybinds() && self.current_fields().is_empty() {
+            return;
+        }
         self.focus = SettingsFocus::Fields;
         self.field = 0;
         if self.current_category().is_keybinds() {
@@ -1504,7 +1737,7 @@ mod tests {
 
 #[cfg(test)]
 mod settings_params_tests {
-    use super::{SettingsCategory, SettingsFocus, SettingsParams};
+    use super::{SettingsCategory, SettingsField, SettingsFocus, SettingsParams};
 
     #[test]
     fn cycling_categories_wraps_and_keeps_focus() {
@@ -1522,5 +1755,57 @@ mod settings_params_tests {
         );
         s.cycle_category(false);
         assert_eq!(s.category, last);
+    }
+
+    #[test]
+    fn search_is_the_last_category_and_lists_no_static_fields() {
+        assert_eq!(
+            *SettingsCategory::ALL.last().unwrap(),
+            SettingsCategory::Search
+        );
+        assert!(SettingsCategory::Search.fields().is_empty());
+    }
+
+    #[test]
+    fn searching_matches_labels_and_descriptions_grouped_by_category() {
+        let groups = SettingsCategory::search("clock");
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].0, Some(SettingsCategory::Display));
+        assert_eq!(groups[0].1, vec![SettingsField::ShowClock]);
+
+        let by_description = SettingsCategory::search("auto-refresh");
+        assert_eq!(by_description[0].1, vec![SettingsField::AutoUpdate]);
+
+        let words = SettingsCategory::search("CYCLE panel");
+        let fields: Vec<_> = words.iter().flat_map(|(_, f)| f.iter().copied()).collect();
+        assert!(fields.contains(&SettingsField::CyclePinned));
+        assert!(!fields.contains(&SettingsField::CycleHoldings));
+
+        let colors = SettingsCategory::search("color");
+        assert!(
+            colors
+                .iter()
+                .all(|(c, _)| *c != Some(SettingsCategory::Theme))
+        );
+
+        assert!(SettingsCategory::search("   ").is_empty());
+        assert!(SettingsCategory::search("no such setting").is_empty());
+    }
+
+    #[test]
+    fn typing_a_query_resets_the_field_cursor() {
+        let search = SettingsCategory::ALL.len() as u16 - 1;
+        let mut s = SettingsParams {
+            category: search,
+            field: 4,
+            ..SettingsParams::default()
+        };
+        for c in "memory".chars() {
+            s.query_push(c);
+        }
+        assert_eq!(s.field, 0);
+        assert_eq!(s.current_fields(), vec![SettingsField::ShowRam]);
+        s.query_pop();
+        assert_eq!(s.query, "memor");
     }
 }

@@ -630,8 +630,21 @@ async fn handle_settings_key(key_event: KeyEvent, app: &mut App) {
 fn handle_settings_category_key(key_event: KeyEvent, app: &mut App) {
     let kb = app.config.keybinds;
     let count = SettingsCategory::ALL.len() as u16;
+    let searching = app
+        .settings()
+        .is_some_and(|s| s.current_category().is_search());
 
     match key_event.code {
+        KeyCode::Char(c) if searching => {
+            if let Some(s) = app.settings_mut() {
+                s.query_push(c);
+            }
+        }
+        KeyCode::Backspace if searching => {
+            if let Some(s) = app.settings_mut() {
+                s.query_pop();
+            }
+        }
         c if c == KeyCode::Esc || c == kb.settings => app.close_settings(),
         KeyCode::Up => {
             if let Some(s) = app.settings_mut() {
@@ -658,6 +671,11 @@ async fn handle_settings_field_key(key_event: KeyEvent, app: &mut App) {
         .settings()
         .map_or(0, |s| s.current_fields().len() as u16);
     let Some(field) = app.settings().and_then(|s| s.current_field()) else {
+        if key_event.code == KeyCode::Esc
+            && let Some(s) = app.settings_mut()
+        {
+            s.focus = SettingsFocus::Categories;
+        }
         return;
     };
 
@@ -871,6 +889,50 @@ mod tests {
             handle_key_events(KeyEvent::new(KeyCode::Right), &mut app).await;
             assert_eq!(kind(&app), expected);
         }
+    }
+
+    #[tokio::test]
+    async fn an_empty_search_cannot_trap_the_cursor_in_the_fields_pane() {
+        let mut app = app().await;
+        app.open_settings();
+        app.settings_mut().unwrap().category = SettingsCategory::ALL.len() as u16 - 1;
+
+        handle_key_events(KeyEvent::new(KeyCode::Right), &mut app).await;
+        assert_eq!(app.settings().unwrap().focus, SettingsFocus::Categories);
+        handle_key_events(KeyEvent::new(KeyCode::Enter), &mut app).await;
+        assert_eq!(app.settings().unwrap().focus, SettingsFocus::Categories);
+
+        {
+            let s = app.settings_mut().unwrap();
+            s.focus = SettingsFocus::Fields;
+        }
+        handle_key_events(KeyEvent::new(KeyCode::Esc), &mut app).await;
+        assert_eq!(app.settings().unwrap().focus, SettingsFocus::Categories);
+    }
+
+    #[tokio::test]
+    async fn the_search_category_filters_settings_as_you_type() {
+        let mut app = app().await;
+        app.open_settings();
+        app.settings_mut().unwrap().category = SettingsCategory::ALL.len() as u16 - 1;
+
+        for c in "clock".chars() {
+            handle_key_events(KeyEvent::new(KeyCode::Char(c)), &mut app).await;
+        }
+        let s = app.settings().unwrap();
+        assert_eq!(s.query, "clock");
+        assert_eq!(s.current_fields(), vec![SettingsField::ShowClock]);
+        assert_eq!(s.focus, SettingsFocus::Categories);
+
+        let before = app.config.show_clock;
+        handle_key_events(KeyEvent::new(KeyCode::Enter), &mut app).await;
+        assert_eq!(app.settings().unwrap().focus, SettingsFocus::Fields);
+        handle_key_events(KeyEvent::new(KeyCode::Enter), &mut app).await;
+        assert_ne!(app.config.show_clock, before);
+
+        handle_key_events(KeyEvent::new(KeyCode::Esc), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Backspace), &mut app).await;
+        assert_eq!(app.settings().unwrap().query, "cloc");
     }
 
     #[tokio::test]
