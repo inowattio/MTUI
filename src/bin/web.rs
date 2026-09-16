@@ -92,10 +92,10 @@ mod web {
     }
 
     fn hide_error_overlay() {
-        if let Ok(document) = document() {
-            if let Some(overlay) = document.get_element_by_id(ERROR_OVERLAY_ID) {
-                overlay.remove();
-            }
+        if let Ok(document) = document()
+            && let Some(overlay) = document.get_element_by_id(ERROR_OVERLAY_ID)
+        {
+            overlay.remove();
         }
     }
 
@@ -160,10 +160,10 @@ mod web {
     }
 
     fn clear_terminal_container() {
-        if let Ok(document) = document() {
-            if let Some(container) = document.get_element_by_id(TERMINAL_CONTAINER_ID) {
-                container.set_inner_html("");
-            }
+        if let Ok(document) = document()
+            && let Some(container) = document.get_element_by_id(TERMINAL_CONTAINER_ID)
+        {
+            container.set_inner_html("");
         }
     }
 
