@@ -432,13 +432,7 @@ pub fn draw(
         _ => {
             let len = app.panel_len() as usize;
             if len == 0 {
-                let t = rows_table(
-                    Vec::new(),
-                    header.to_string(),
-                    theme,
-                    panel_block(theme, params.panel, &app.config),
-                );
-                frame.render_widget(t, rows[1]);
+                frame.render_widget(ctx.list_table(&[], 0, None), rows[1]);
 
                 let kb = &app.config.keybinds;
                 let hidden = app
