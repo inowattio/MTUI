@@ -5,7 +5,10 @@ use std::time::Duration;
 pub use web_time::Instant;
 
 pub async fn sleep(duration: Duration) {
+    #[cfg(target_arch = "wasm32")]
     futures_timer::Delay::new(duration).await;
+    #[cfg(not(target_arch = "wasm32"))]
+    tokio::time::sleep(duration).await;
 }
 
 /// Resident set size of the current process, in bytes.
