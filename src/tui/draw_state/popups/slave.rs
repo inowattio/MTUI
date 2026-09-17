@@ -269,27 +269,16 @@ mod tests {
     use super::*;
     use crate::state::StatusMessage;
     use ScanState::{Done, Failed, Probing, Stopped};
-    use ratatui::Terminal;
-    use ratatui::backend::TestBackend;
 
     fn render(params: &SlaveParams) -> Vec<String> {
         render_with(params, params.id)
     }
 
     fn render_with(params: &SlaveParams, active_id: u8) -> Vec<String> {
-        let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
         let (theme, kb) = (Theme::default(), Keybinds::default());
-        terminal
-            .draw(|frame| draw(frame, frame.area(), &theme, &kb, params, active_id))
-            .unwrap();
-        let buffer = terminal.backend().buffer();
-        (0..buffer.area.height)
-            .map(|y| {
-                (0..buffer.area.width)
-                    .map(|x| buffer.cell((x, y)).map_or(" ", |c| c.symbol()))
-                    .collect()
-            })
-            .collect()
+        crate::tui::test_util::draw_rows(100, 30, |frame| {
+            draw(frame, frame.area(), &theme, &kb, params, active_id)
+        })
     }
 
     fn locate(rows: &[String], needle: &str) -> (usize, usize) {

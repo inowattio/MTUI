@@ -304,21 +304,18 @@ mod tests {
     use crate::config::Config;
     use crate::modbus::DeviceIdAccess;
     use crate::state::{DeviceIdParams, SlaveParams};
-    use std::time::Duration;
 
     fn device_id(app: &App) -> &DeviceIdParams {
         app.popup_as().expect("device id popup")
     }
 
     async fn settle(app: &mut App) {
-        for _ in 0..400 {
-            app.complete_background_task().await;
-            if app.background_task.is_none() && !device_id(app).loading {
-                return;
-            }
-            tokio::time::sleep(Duration::from_millis(2)).await;
-        }
-        panic!("device id read never finished");
+        crate::app::settle_until(
+            app,
+            |app| app.background_task.is_none() && !device_id(app).loading,
+            "device id read",
+        )
+        .await;
     }
 
     #[tokio::test]

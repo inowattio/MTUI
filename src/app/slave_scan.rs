@@ -190,17 +190,14 @@ mod tests {
     use crate::config::Config;
     use crate::register::RegisterType;
     use crate::state::{ScanState, SlaveField, SlaveParams};
-    use std::time::Duration;
 
     async fn drive_scan(app: &mut App) {
-        for _ in 0..500 {
-            app.complete_background_task().await;
-            if app.popup_as::<SlaveParams>().is_none_or(|p| !p.active()) {
-                return;
-            }
-            tokio::time::sleep(Duration::from_millis(2)).await;
-        }
-        panic!("scan never finished");
+        crate::app::settle_until(
+            app,
+            |app| app.popup_as::<SlaveParams>().is_none_or(|p| !p.active()),
+            "scan",
+        )
+        .await;
     }
 
     async fn slave_popup() -> App {

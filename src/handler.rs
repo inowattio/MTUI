@@ -1027,21 +1027,7 @@ mod tests {
 
     #[cfg(not(target_arch = "wasm32"))]
     fn screen(app: &mut App) -> String {
-        use ratatui::Terminal;
-        use ratatui::backend::TestBackend;
-        let mut terminal = Terminal::new(TestBackend::new(120, 40)).unwrap();
-        terminal
-            .draw(|frame| crate::tui::render(app, frame))
-            .unwrap();
-        let buffer = terminal.backend().buffer();
-        (0..buffer.area.height)
-            .map(|y| {
-                (0..buffer.area.width)
-                    .map(|x| buffer.cell((x, y)).map_or(" ", |c| c.symbol()))
-                    .chain(std::iter::once("\n"))
-                    .collect::<String>()
-            })
-            .collect()
+        crate::tui::test_util::draw_rows(120, 40, |frame| crate::tui::render(app, frame)).join("\n")
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -1059,13 +1045,12 @@ mod tests {
             p.to = 3;
         }
         app.slave_scan_action();
-        for _ in 0..500 {
-            app.complete_background_task().await;
-            if !app.popup_as::<SlaveParams>().unwrap().active() {
-                break;
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(2)).await;
-        }
+        crate::app::settle_until(
+            &mut app,
+            |app| !app.popup_as::<SlaveParams>().unwrap().active(),
+            "scan",
+        )
+        .await;
         assert_eq!(app.popup_as::<SlaveParams>().unwrap().hits.len(), 3);
 
         let before = screen(&mut app);

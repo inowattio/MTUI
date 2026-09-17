@@ -1182,14 +1182,7 @@ mod tests {
 
     #[cfg(not(target_arch = "wasm32"))]
     async fn settle(app: &mut App) {
-        for _ in 0..400 {
-            app.complete_background_task().await;
-            if app.background_task.is_none() {
-                return;
-            }
-            tokio::time::sleep(Duration::from_millis(5)).await;
-        }
-        panic!("background task never finished");
+        crate::app::settle_until(app, |app| app.background_task.is_none(), "background task").await;
     }
 
     #[cfg(not(target_arch = "wasm32"))]

@@ -162,9 +162,7 @@ mod tests {
     }
 
     fn line(buf: &Buffer, y: u16) -> String {
-        (0..buf.area.width)
-            .map(|x| buf[(x, y)].symbol().to_string())
-            .collect()
+        crate::tui::test_util::buffer_rows(buf).swap_remove(y as usize)
     }
 
     #[test]

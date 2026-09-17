@@ -762,6 +762,18 @@ fn load_config(path: &str, create_if_missing: bool) -> Result<Config, ConfigErro
     })
 }
 
+#[cfg(all(test, not(target_arch = "wasm32")))]
+pub(crate) async fn settle_until(app: &mut App, done: impl Fn(&App) -> bool, what: &str) {
+    for _ in 0..500 {
+        app.complete_background_task().await;
+        if done(app) {
+            return;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+    }
+    panic!("{what} never finished");
+}
+
 #[cfg(test)]
 mod tests {
     use super::{ConfigError, load_config};
