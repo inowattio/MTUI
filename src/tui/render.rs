@@ -52,6 +52,10 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         ));
     }
     mode_spans.push(Span::styled(format!(" {mode}"), theme.base()));
+    if !app.config.name.is_empty() {
+        mode_spans.push(Span::styled(" - ", theme.dim_style()));
+        mode_spans.push(Span::styled(app.config.name.clone(), theme.accent_style()));
+    }
 
     let mut outer = Block::default()
         .title_top(Line::from(left_top))

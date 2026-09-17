@@ -326,12 +326,6 @@ pub fn draw(
         Span::styled("device: ", theme.dim_style()),
         Span::styled(device.to_string(), theme.base()),
     ]);
-    if !app.config.name.is_empty() {
-        identity.push(vec![Span::styled(
-            app.config.name.clone(),
-            theme.accent_style(),
-        )]);
-    }
 
     let cycle = &app.config.cycle_types;
     let types: Vec<RegisterType> = if app.config.show_inactive_tabs {
