@@ -144,7 +144,7 @@ fn common_lines(
 fn common_view(p: &DiscoveryParams, field: DiscoveryField) -> (&'static str, String, bool) {
     match field {
         DiscoveryField::Interface => ("Interface", p.interface.label().to_string(), true),
-        DiscoveryField::SlaveId => ("Slave ID", p.slave_id.to_string(), false),
+        DiscoveryField::SlaveId => ("Slave id", p.slave_id.to_string(), false),
         DiscoveryField::ConnectTimeout => (
             "Connect timeout (ms)",
             p.connect_timeout_ms.to_string(),
