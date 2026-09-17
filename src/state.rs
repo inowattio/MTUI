@@ -753,7 +753,7 @@ fn scroll_window(cursor: &mut u16, top: &mut u16, rows: u16, len: u16) {
 }
 
 field_enum! {
-    #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+    #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
     pub enum ReadPanel {
         #[default]
         Main,
@@ -776,238 +776,157 @@ impl ReadPanel {
     }
 }
 
-field_enum! {
-    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-    pub enum SettingsField {
-        Name,
-        RegistersBatch,
-        BatchAnchor,
-        ReadFullCustoms,
-        CustomBatchBySize,
-        PanelTypeFilter,
-        AutoUpdate,
-        ReconnectOnTimeout,
-        HistoryCap,
-        MatrixCols,
-        ReadOnly,
-        LogWrites,
-        ApiPort,
-        ApiSlaveOverride,
-        SavePositionOnExit,
-        StartupPanel,
-        StartupType,
-        StartupAddress,
-        CycleHoldings,
-        CycleInputs,
-        CycleCoils,
-        CycleDiscretes,
-        CyclePinned,
-        CycleLabeled,
-        CycleCustom,
-        CycleMatrix,
-        IgnoreDirty,
-        ShowMock,
-        ClearPins,
-        ClearLabels,
-        ClearCustom,
-        CopyData,
-        CopyConfig,
-        ShowContinuation,
-        ShowClock,
-        ShowFrameTime,
-        ShowRam,
-        ShowStatusLabel,
-        ShowAscii,
-        ShowInactiveTabs,
-        ShowReadWindow,
-        GraphTimeAxis,
-        ChangedExpiry,
-        PaddingHorizontal,
-        PaddingVertical,
-        ThemePreset,
-        ThemeBg,
-        ThemeBorder,
-        ThemeAccent,
-        ThemeText,
-        ThemeDim,
-        ThemeChanged,
-        ThemeZebra,
-        ThemeOk,
-        ThemeWarn,
-        ThemeErr,
-        ThemeSelectedFg,
-        ThemeSelectedBg,
-        Save,
-        LoadConfig,
-        NextConfig,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FieldKind {
+    Number,
+    Text,
+    Toggle,
+    Action,
+    Color,
+    CycleType(RegisterType),
+    CyclePanel(ReadPanel),
+}
+
+macro_rules! settings_fields {
+    (
+        $( $category:ident {
+            $( [ $( $field:ident : $kind:expr => $label:literal, $description:literal ),+ $(,)? ] ),*
+            $(,)?
+        } )+
+    ) => {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        pub enum SettingsField { $( $( $( $field, )+ )* )+ }
+
+        impl SettingsField {
+            pub fn label(self) -> &'static str {
+                match self { $( $( $( SettingsField::$field => $label, )+ )* )+ }
+            }
+
+            pub fn description(self) -> &'static str {
+                match self { $( $( $( SettingsField::$field => $description, )+ )* )+ }
+            }
+
+            pub fn kind(self) -> FieldKind {
+                use FieldKind::*;
+                match self { $( $( $( SettingsField::$field => $kind, )+ )* )+ }
+            }
+        }
+
+        impl SettingsCategory {
+            pub fn groups(self) -> &'static [&'static [SettingsField]] {
+                match self {
+                    $( SettingsCategory::$category => &[ $( &[ $( SettingsField::$field ),+ ] ),* ], )+
+                }
+            }
+        }
+    };
+}
+
+settings_fields! {
+    Data {
+        [
+            RegistersBatch: Number => "Registers batch", "How many registers each read request fetches around the cursor",
+            BatchAnchor: Toggle => "Batch anchor", "Where the cursor sits inside the read batch: start, middle or end",
+            ReadFullCustoms: Toggle => "Read full custom values", "Also read every register a custom rule spans, even outside the batch",
+            CustomBatchBySize: Toggle => "Custom batch by size", "In the Custom panel, size the batch by registers instead of rules",
+        ],
+        [
+            AutoUpdate: Number => "Auto-update (ms)", "Delay between automatic reads, 0 turns auto-refresh off",
+            ReconnectOnTimeout: Toggle => "Reconnect on timeout", "Reconnect to the device after a read times out",
+            ReadOnly: Toggle => "Read-only", "Refuse all writes from the UI and the API",
+        ],
+        [
+            HistoryCap: Number => "Graph history cap", "Samples kept per register for the value graph",
+            MatrixCols: Number => "Matrix columns", "Registers per row in the Matrix panel",
+        ],
+        [
+            CycleHoldings: CycleType(RegisterType::Holding) => "Cycle holdings", "Include holding registers when cycling register types",
+            CycleInputs: CycleType(RegisterType::Input) => "Cycle inputs", "Include input registers when cycling register types",
+            CycleCoils: CycleType(RegisterType::Coil) => "Cycle coils", "Include coils when cycling register types",
+            CycleDiscretes: CycleType(RegisterType::Discrete) => "Cycle discretes", "Include discrete inputs when cycling register types",
+        ],
+        [
+            ShowMock: Toggle => "Show mock device", "Offer the built-in mock device in Discovery",
+            SavePositionOnExit: Toggle => "Save position on exit", "Store the cursor position as the startup position when quitting",
+            StartupPanel: Toggle => "Startup panel", "Panel opened on start",
+            StartupType: Toggle => "Startup type", "Register type selected on start",
+            StartupAddress: Number => "Startup address", "Address the cursor starts on",
+        ],
     }
+    Api {
+        [LogWrites: Toggle => "Log writes to file", "Append every write to a log file"],
+        [
+            ApiPort: Number => "API port", "Port for the HTTP API, 0 picks any free port, off disables it",
+            ApiSlaveOverride: Toggle => "API slave id override", "Let API requests target a slave id other than the configured one",
+        ],
+    }
+    Display {
+        [
+            ShowClock: Toggle => "Show clock", "Show the current time in the bottom bar",
+            ShowFrameTime: Toggle => "Show frame render time", "Show how long each frame takes to render",
+            ShowRam: Toggle => "Show RAM usage", "Show the memory used by the application",
+            ShowStatusLabel: Toggle => "Show connection label", "Show the connection state as a word next to the refresh countdown",
+            ShowAscii: Toggle => "Show ASCII of all data", "Show the read registers decoded as an ASCII string",
+            ShowInactiveTabs: Toggle => "Show inactive tabs", "Show every panel and register type tab, not just the active one",
+            PanelTypeFilter: Toggle => "Filter panels by type", "In Pinned, Labeled and Custom, list only the current register type",
+        ],
+        [
+            CyclePinned: CyclePanel(ReadPanel::Pinned) => "Cycle pinned", "Include the Pinned panel when cycling panels",
+            CycleLabeled: CyclePanel(ReadPanel::Labeled) => "Cycle labeled", "Include the Labeled panel when cycling panels",
+            CycleCustom: CyclePanel(ReadPanel::Custom) => "Cycle custom", "Include the Custom panel when cycling panels",
+            CycleMatrix: CyclePanel(ReadPanel::Matrix) => "Cycle matrix", "Include the Matrix panel when cycling panels",
+        ],
+        [
+            ShowReadWindow: Toggle => "Show read window", "Highlight the address range covered by the current read batch",
+            GraphTimeAxis: Toggle => "Graph X axis", "Plot the graph against time instead of sample count",
+            ChangedExpiry: Number => "Changed highlight (ms)", "How long a changed value stays highlighted, 0 never clears it",
+            ShowContinuation: Toggle => "Show \"part of\" marker", "Mark registers that belong to a multi-register custom rule",
+        ],
+        [
+            PaddingHorizontal: Number => "Horizontal padding", "Empty columns kept on both sides of the interface",
+            PaddingVertical: Number => "Vertical padding", "Empty rows kept above and below the interface",
+        ],
+    }
+    Theme {
+        [ThemePreset: Toggle => "Preset", "Switch between the built-in color schemes"],
+        [
+            ThemeBorder: Color => "Frame border", "Color of the frame borders",
+            ThemeAccent: Color => "Accent / titles", "Color for titles, keys and highlights",
+            ThemeText: Color => "Text", "Main text color",
+            ThemeBg: Color => "Background", "Background color",
+            ThemeDim: Color => "Dim / muted", "Color for secondary and muted text",
+            ThemeChanged: Color => "Changed value", "Color for values that changed recently",
+            ThemeZebra: Color => "Zebra stripe", "Background of alternating table rows",
+            ThemeOk: Color => "OK / connected", "Color for success and connected states",
+            ThemeWarn: Color => "Warning", "Color for warnings",
+            ThemeErr: Color => "Error", "Color for errors",
+            ThemeSelectedFg: Color => "Selected text", "Text color of the selected row",
+            ThemeSelectedBg: Color => "Selected bg", "Background color of the selected row",
+        ],
+    }
+    Keybinds {}
+    Config {
+        [
+            Name: Text => "Config name", "Name shown in the title bar for this configuration",
+            IgnoreDirty: Toggle => "Ignore unsaved warning", "Quit or switch configuration without asking about unsaved changes",
+        ],
+        [
+            ClearPins: Action => "Clear pinned registers", "Remove every pinned register",
+            ClearLabels: Action => "Clear labels", "Remove every label",
+            ClearCustom: Action => "Clear custom rules", "Remove every custom rule",
+            CopyData: Action => "Copy all", "Copy pins, labels and custom rules as JSON, paste into another MTUI to import",
+        ],
+        [
+            CopyConfig: Action => "Copy configuration", "Copy the whole configuration as JSON, as Save would write it",
+            Save: Action => "Save configuration", "Write the current settings to the configuration file",
+            LoadConfig: Text => "Load configuration", "Path of a configuration file to load now",
+            NextConfig: Text => "Next configuration", "Configuration file loaded by the cycle config key",
+        ],
+    }
+    Search {}
 }
 
 impl SettingsField {
-    pub fn label(self) -> &'static str {
-        match self {
-            SettingsField::Name => "Config name",
-            SettingsField::RegistersBatch => "Registers batch",
-            SettingsField::BatchAnchor => "Batch anchor",
-            SettingsField::ReadFullCustoms => "Read full custom values",
-            SettingsField::CustomBatchBySize => "Custom batch by size",
-            SettingsField::PanelTypeFilter => "Filter panels by type",
-            SettingsField::AutoUpdate => "Auto-update (ms)",
-            SettingsField::ReconnectOnTimeout => "Reconnect on timeout",
-            SettingsField::HistoryCap => "Graph history cap",
-            SettingsField::MatrixCols => "Matrix columns",
-            SettingsField::IgnoreDirty => "Ignore unsaved warning",
-            SettingsField::ShowMock => "Show mock device",
-            SettingsField::ReadOnly => "Read-only",
-            SettingsField::ApiPort => "API port",
-            SettingsField::ApiSlaveOverride => "API slave id override",
-            SettingsField::LogWrites => "Log writes to file",
-            SettingsField::StartupPanel => "Startup panel",
-            SettingsField::StartupType => "Startup type",
-            SettingsField::StartupAddress => "Startup address",
-            SettingsField::SavePositionOnExit => "Save position on exit",
-            SettingsField::CycleHoldings => "Cycle holdings",
-            SettingsField::CycleInputs => "Cycle inputs",
-            SettingsField::CycleCoils => "Cycle coils",
-            SettingsField::CycleDiscretes => "Cycle discretes",
-            SettingsField::CyclePinned => "Cycle pinned",
-            SettingsField::CycleLabeled => "Cycle labeled",
-            SettingsField::CycleCustom => "Cycle custom",
-            SettingsField::CycleMatrix => "Cycle matrix",
-            SettingsField::ClearPins => "Clear pinned registers",
-            SettingsField::ClearLabels => "Clear labels",
-            SettingsField::ClearCustom => "Clear custom rules",
-            SettingsField::CopyData => "Copy all",
-            SettingsField::CopyConfig => "Copy configuration",
-            SettingsField::ShowContinuation => "Show \"part of\" marker",
-            SettingsField::ShowClock => "Show clock",
-            SettingsField::ShowFrameTime => "Show frame render time",
-            SettingsField::ShowRam => "Show RAM usage",
-            SettingsField::ShowStatusLabel => "Show connection label",
-            SettingsField::ShowAscii => "Show ASCII of all data",
-            SettingsField::ShowInactiveTabs => "Show inactive tabs",
-            SettingsField::ShowReadWindow => "Show read window",
-            SettingsField::GraphTimeAxis => "Graph X axis",
-            SettingsField::PaddingHorizontal => "Horizontal padding",
-            SettingsField::PaddingVertical => "Vertical padding",
-            SettingsField::ChangedExpiry => "Changed highlight (ms)",
-            SettingsField::ThemePreset => "Preset",
-            SettingsField::ThemeBorder => "Frame border",
-            SettingsField::ThemeAccent => "Accent / titles",
-            SettingsField::ThemeText => "Text",
-            SettingsField::ThemeBg => "Background",
-            SettingsField::ThemeDim => "Dim / muted",
-            SettingsField::ThemeChanged => "Changed value",
-            SettingsField::ThemeZebra => "Zebra stripe",
-            SettingsField::ThemeOk => "OK / connected",
-            SettingsField::ThemeWarn => "Warning",
-            SettingsField::ThemeErr => "Error",
-            SettingsField::ThemeSelectedFg => "Selected text",
-            SettingsField::ThemeSelectedBg => "Selected bg",
-            SettingsField::Save => "Save configuration",
-            SettingsField::LoadConfig => "Load configuration",
-            SettingsField::NextConfig => "Next configuration",
-        }
-    }
-
-    pub fn description(self) -> &'static str {
-        match self {
-            SettingsField::Name => "Name shown in the title bar for this configuration",
-            SettingsField::RegistersBatch => {
-                "How many registers each read request fetches around the cursor"
-            }
-            SettingsField::BatchAnchor => {
-                "Where the cursor sits inside the read batch: start, middle or end"
-            }
-            SettingsField::ReadFullCustoms => {
-                "Also read every register a custom rule spans, even outside the batch"
-            }
-            SettingsField::CustomBatchBySize => {
-                "In the Custom panel, size the batch by registers instead of rules"
-            }
-            SettingsField::PanelTypeFilter => {
-                "In Pinned, Labeled and Custom, list only the current register type"
-            }
-            SettingsField::AutoUpdate => "Delay between automatic reads, 0 turns auto-refresh off",
-            SettingsField::ReconnectOnTimeout => "Reconnect to the device after a read times out",
-            SettingsField::HistoryCap => "Samples kept per register for the value graph",
-            SettingsField::MatrixCols => "Registers per row in the Matrix panel",
-            SettingsField::ReadOnly => "Refuse all writes from the UI and the API",
-            SettingsField::LogWrites => "Append every write to a log file",
-            SettingsField::ApiPort => {
-                "Port for the HTTP API, 0 picks any free port, off disables it"
-            }
-            SettingsField::ApiSlaveOverride => {
-                "Let API requests target a slave id other than the configured one"
-            }
-            SettingsField::SavePositionOnExit => {
-                "Store the cursor position as the startup position when quitting"
-            }
-            SettingsField::StartupPanel => "Panel opened on start",
-            SettingsField::StartupType => "Register type selected on start",
-            SettingsField::StartupAddress => "Address the cursor starts on",
-            SettingsField::CycleHoldings => "Include holding registers when cycling register types",
-            SettingsField::CycleInputs => "Include input registers when cycling register types",
-            SettingsField::CycleCoils => "Include coils when cycling register types",
-            SettingsField::CycleDiscretes => "Include discrete inputs when cycling register types",
-            SettingsField::CyclePinned => "Include the Pinned panel when cycling panels",
-            SettingsField::CycleLabeled => "Include the Labeled panel when cycling panels",
-            SettingsField::CycleCustom => "Include the Custom panel when cycling panels",
-            SettingsField::CycleMatrix => "Include the Matrix panel when cycling panels",
-            SettingsField::IgnoreDirty => {
-                "Quit or switch configuration without asking about unsaved changes"
-            }
-            SettingsField::ShowMock => "Offer the built-in mock device in Discovery",
-            SettingsField::ClearPins => "Remove every pinned register",
-            SettingsField::ClearLabels => "Remove every label",
-            SettingsField::ClearCustom => "Remove every custom rule",
-            SettingsField::CopyData => {
-                "Copy pins, labels and custom rules as JSON, paste into another MTUI to import"
-            }
-            SettingsField::CopyConfig => {
-                "Copy the whole configuration as JSON, as Save would write it"
-            }
-            SettingsField::ShowContinuation => {
-                "Mark registers that belong to a multi-register custom rule"
-            }
-            SettingsField::ShowClock => "Show the current time in the bottom bar",
-            SettingsField::ShowFrameTime => "Show how long each frame takes to render",
-            SettingsField::ShowRam => "Show the memory used by the application",
-            SettingsField::ShowStatusLabel => {
-                "Show the connection state as a word next to the refresh countdown"
-            }
-            SettingsField::ShowAscii => "Show the read registers decoded as an ASCII string",
-            SettingsField::ShowInactiveTabs => {
-                "Show every panel and register type tab, not just the active one"
-            }
-            SettingsField::ShowReadWindow => {
-                "Highlight the address range covered by the current read batch"
-            }
-            SettingsField::GraphTimeAxis => "Plot the graph against time instead of sample count",
-            SettingsField::ChangedExpiry => {
-                "How long a changed value stays highlighted, 0 never clears it"
-            }
-            SettingsField::PaddingHorizontal => "Empty columns kept on both sides of the interface",
-            SettingsField::PaddingVertical => "Empty rows kept above and below the interface",
-            SettingsField::ThemePreset => "Switch between the built-in color schemes",
-            SettingsField::ThemeBg => "Background color",
-            SettingsField::ThemeBorder => "Color of the frame borders",
-            SettingsField::ThemeAccent => "Color for titles, keys and highlights",
-            SettingsField::ThemeText => "Main text color",
-            SettingsField::ThemeDim => "Color for secondary and muted text",
-            SettingsField::ThemeChanged => "Color for values that changed recently",
-            SettingsField::ThemeZebra => "Background of alternating table rows",
-            SettingsField::ThemeOk => "Color for success and connected states",
-            SettingsField::ThemeWarn => "Color for warnings",
-            SettingsField::ThemeErr => "Color for errors",
-            SettingsField::ThemeSelectedFg => "Text color of the selected row",
-            SettingsField::ThemeSelectedBg => "Background color of the selected row",
-            SettingsField::Save => "Write the current settings to the configuration file",
-            SettingsField::LoadConfig => "Path of a configuration file to load now",
-            SettingsField::NextConfig => "Configuration file loaded by the cycle config key",
-        }
-    }
-
     pub fn matches(self, query: &str) -> bool {
         let label = self.label().to_lowercase();
         let description = self.description().to_lowercase();
@@ -1017,46 +936,13 @@ impl SettingsField {
     }
 
     pub fn is_text_input(self) -> bool {
-        matches!(
-            self,
-            SettingsField::Name | SettingsField::LoadConfig | SettingsField::NextConfig
-        )
+        self.kind() == FieldKind::Text
     }
 
     pub fn is_toggle(self) -> bool {
         matches!(
-            self,
-            SettingsField::ReadOnly
-                | SettingsField::BatchAnchor
-                | SettingsField::ReadFullCustoms
-                | SettingsField::CustomBatchBySize
-                | SettingsField::PanelTypeFilter
-                | SettingsField::ApiSlaveOverride
-                | SettingsField::LogWrites
-                | SettingsField::ReconnectOnTimeout
-                | SettingsField::ShowContinuation
-                | SettingsField::ShowClock
-                | SettingsField::ShowFrameTime
-                | SettingsField::ShowRam
-                | SettingsField::ShowStatusLabel
-                | SettingsField::ShowAscii
-                | SettingsField::ShowInactiveTabs
-                | SettingsField::ShowReadWindow
-                | SettingsField::GraphTimeAxis
-                | SettingsField::StartupPanel
-                | SettingsField::StartupType
-                | SettingsField::SavePositionOnExit
-                | SettingsField::IgnoreDirty
-                | SettingsField::ShowMock
-                | SettingsField::CycleHoldings
-                | SettingsField::CycleInputs
-                | SettingsField::CycleCoils
-                | SettingsField::CycleDiscretes
-                | SettingsField::CyclePinned
-                | SettingsField::CycleLabeled
-                | SettingsField::CycleCustom
-                | SettingsField::CycleMatrix
-                | SettingsField::ThemePreset
+            self.kind(),
+            FieldKind::Toggle | FieldKind::CycleType(_) | FieldKind::CyclePanel(_)
         )
     }
 
@@ -1070,53 +956,25 @@ impl SettingsField {
     }
 
     pub fn cycle_register_type(self) -> Option<RegisterType> {
-        Some(match self {
-            SettingsField::CycleHoldings => RegisterType::Holding,
-            SettingsField::CycleInputs => RegisterType::Input,
-            SettingsField::CycleCoils => RegisterType::Coil,
-            SettingsField::CycleDiscretes => RegisterType::Discrete,
-            _ => return None,
-        })
+        match self.kind() {
+            FieldKind::CycleType(register_type) => Some(register_type),
+            _ => None,
+        }
     }
 
     pub fn cycle_panel(self) -> Option<ReadPanel> {
-        Some(match self {
-            SettingsField::CyclePinned => ReadPanel::Pinned,
-            SettingsField::CycleLabeled => ReadPanel::Labeled,
-            SettingsField::CycleCustom => ReadPanel::Custom,
-            SettingsField::CycleMatrix => ReadPanel::Matrix,
-            _ => return None,
-        })
+        match self.kind() {
+            FieldKind::CyclePanel(panel) => Some(panel),
+            _ => None,
+        }
     }
 
     pub fn is_theme_color(self) -> bool {
-        matches!(
-            self,
-            SettingsField::ThemeBg
-                | SettingsField::ThemeBorder
-                | SettingsField::ThemeAccent
-                | SettingsField::ThemeText
-                | SettingsField::ThemeDim
-                | SettingsField::ThemeChanged
-                | SettingsField::ThemeZebra
-                | SettingsField::ThemeOk
-                | SettingsField::ThemeWarn
-                | SettingsField::ThemeErr
-                | SettingsField::ThemeSelectedFg
-                | SettingsField::ThemeSelectedBg
-        )
+        self.kind() == FieldKind::Color
     }
 
     pub fn is_action(self) -> bool {
-        matches!(
-            self,
-            SettingsField::ClearPins
-                | SettingsField::ClearLabels
-                | SettingsField::ClearCustom
-                | SettingsField::CopyData
-                | SettingsField::CopyConfig
-                | SettingsField::Save
-        )
+        self.kind() == FieldKind::Action
     }
 }
 
@@ -1163,73 +1021,6 @@ impl SettingsCategory {
             })
             .filter(|(_, fields)| !fields.is_empty())
             .collect()
-    }
-
-    pub fn groups(self) -> &'static [&'static [SettingsField]] {
-        use SettingsField::*;
-        match self {
-            SettingsCategory::Data => &[
-                &[
-                    RegistersBatch,
-                    BatchAnchor,
-                    ReadFullCustoms,
-                    CustomBatchBySize,
-                ],
-                &[AutoUpdate, ReconnectOnTimeout, ReadOnly],
-                &[HistoryCap, MatrixCols],
-                &[CycleHoldings, CycleInputs, CycleCoils, CycleDiscretes],
-                &[
-                    ShowMock,
-                    SavePositionOnExit,
-                    StartupPanel,
-                    StartupType,
-                    StartupAddress,
-                ],
-            ],
-            SettingsCategory::Api => &[&[LogWrites], &[ApiPort, ApiSlaveOverride]],
-            SettingsCategory::Display => &[
-                &[
-                    ShowClock,
-                    ShowFrameTime,
-                    ShowRam,
-                    ShowStatusLabel,
-                    ShowAscii,
-                    ShowInactiveTabs,
-                    PanelTypeFilter,
-                ],
-                &[CyclePinned, CycleLabeled, CycleCustom, CycleMatrix],
-                &[
-                    ShowReadWindow,
-                    GraphTimeAxis,
-                    ChangedExpiry,
-                    ShowContinuation,
-                ],
-                &[PaddingHorizontal, PaddingVertical],
-            ],
-            SettingsCategory::Theme => &[
-                &[ThemePreset],
-                &[
-                    ThemeBorder,
-                    ThemeAccent,
-                    ThemeText,
-                    ThemeBg,
-                    ThemeDim,
-                    ThemeChanged,
-                    ThemeZebra,
-                    ThemeOk,
-                    ThemeWarn,
-                    ThemeErr,
-                    ThemeSelectedFg,
-                    ThemeSelectedBg,
-                ],
-            ],
-            SettingsCategory::Keybinds | SettingsCategory::Search => &[],
-            SettingsCategory::Config => &[
-                &[Name, IgnoreDirty],
-                &[ClearPins, ClearLabels, ClearCustom, CopyData],
-                &[CopyConfig, Save, LoadConfig, NextConfig],
-            ],
-        }
     }
 
     pub fn fields(self) -> Vec<SettingsField> {
