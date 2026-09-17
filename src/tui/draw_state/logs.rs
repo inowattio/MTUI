@@ -114,30 +114,26 @@ pub fn draw(params: &LogViewParams, app: &App, frame: &mut Frame, area: Rect, th
     if len == 0 {
         lines.push(dim_line(theme, " (no activity yet)"));
     } else if params.wrap && params.follow {
-        // Fill from the bottom so the newest entry is fully visible
-        let mut rows: Vec<Line> = Vec::new();
-        'fill: for entry in entries.iter().rev() {
-            for row in entry_rows(entry, theme, true, msg_width, 0)
-                .into_iter()
-                .rev()
-            {
-                rows.push(row);
-                if rows.len() >= visible {
-                    break 'fill;
-                }
-            }
-        }
+        let mut rows: Vec<Line> = entries
+            .iter()
+            .rev()
+            .flat_map(|entry| {
+                entry_rows(entry, theme, true, msg_width, 0)
+                    .into_iter()
+                    .rev()
+            })
+            .take(visible)
+            .collect();
         rows.reverse();
         lines.extend(rows);
     } else {
-        'take: for entry in entries.iter().skip(top) {
-            for row in entry_rows(entry, theme, params.wrap, msg_width, h_off) {
-                lines.push(row);
-                if lines.len() >= visible {
-                    break 'take;
-                }
-            }
-        }
+        lines.extend(
+            entries
+                .iter()
+                .skip(top)
+                .flat_map(|entry| entry_rows(entry, theme, params.wrap, msg_width, h_off))
+                .take(visible),
+        );
     }
 
     frame.render_widget(Paragraph::new(lines), area);
