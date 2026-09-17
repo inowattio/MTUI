@@ -2,7 +2,7 @@ use crate::config::Keybinds;
 use crate::input::KeyCode;
 use crate::interpretator::ascii_words;
 use crate::state::{ScanState, SlaveField, SlaveParams, SlaveScanHit};
-use crate::tui::draw_state::{dim_line, edit_value, field_row, marker};
+use crate::tui::draw_state::{action_line, dim_line, edit_value, field_row, marker};
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
 use ratatui::Frame;
@@ -138,28 +138,17 @@ fn form_lines(params: &SlaveParams, sel: SlaveField, theme: &Theme) -> Vec<Line<
     };
     let exceptions_val = edit_value(exceptions.to_string(), sel == SlaveField::Exceptions, true);
 
-    let scan_sel = sel == SlaveField::Scan;
     let scan_label = if params.active() {
         "Stop scan"
     } else {
         "Start scan"
     };
-    let scan_text = if scan_sel {
-        format!("{scan_label}  <- enter")
-    } else {
-        scan_label.to_string()
-    };
-    let scan_style = if scan_sel {
-        theme.selected_style()
-    } else if params.active() {
+    let scan_style = if params.active() {
         theme.warn_style()
     } else {
         theme.ok_style()
     };
-    let scan_line = Line::from(Span::styled(
-        format!("{}{scan_text}", marker(scan_sel)),
-        scan_style,
-    ));
+    let scan_line = action_line(theme, scan_label, sel == SlaveField::Scan, scan_style, None);
 
     vec![
         Line::default(),

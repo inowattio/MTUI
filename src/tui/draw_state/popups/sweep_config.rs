@@ -1,12 +1,12 @@
 use crate::config::Keybinds;
 use crate::input::KeyCode;
 use crate::state::{SweepConfigParams, SweepField};
-use crate::tui::draw_state::{edit_value, field_row, marker};
+use crate::tui::draw_state::{action_line, edit_value, field_row};
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use ratatui::text::{Line, Span};
+use ratatui::text::Line;
 
 pub(super) fn draw(
     frame: &mut Frame,
@@ -26,24 +26,19 @@ pub(super) fn draw(
     let mode = if params.continuous { "loop" } else { "once" };
     let mode_val = edit_value(mode.to_string(), sel == SweepField::Mode, true);
 
-    let action_sel = sel == SweepField::Action;
     let action_label = if running { "Stop sweep" } else { "Start sweep" };
-    let action_text = if action_sel {
-        format!("{action_label}  <- enter")
-    } else {
-        action_label.to_string()
-    };
-    let action_style = if action_sel {
-        theme.selected_style()
-    } else if running {
+    let action_style = if running {
         theme.warn_style()
     } else {
         theme.ok_style()
     };
-    let action_line = Line::from(Span::styled(
-        format!("{}{action_text}", marker(action_sel)),
+    let action_line = action_line(
+        theme,
+        action_label,
+        sel == SweepField::Action,
         action_style,
-    ));
+        None,
+    );
 
     let lines = vec![
         Line::default(),

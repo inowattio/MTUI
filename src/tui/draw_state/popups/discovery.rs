@@ -2,7 +2,7 @@ use crate::app::App;
 use crate::constants::ELLIPSIS;
 use crate::input::KeyCode;
 use crate::state::{DiscoveryColumn, DiscoveryField, DiscoveryParams, InterfaceKind};
-use crate::tui::draw_state::{cyclable, dim_line, edit_value, field_row, marker};
+use crate::tui::draw_state::{action_line, cyclable, dim_line, edit_value, field_row, marker};
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::{Theme, spinner_frame};
 use ratatui::Frame;
@@ -430,20 +430,8 @@ fn button_line(
 ) -> Line<'static> {
     let style = if disabled {
         theme.dim_style()
-    } else if selected {
-        theme.selected_style()
     } else {
-        theme.accent_style()
+        theme.ok_style()
     };
-    let marker_style = if selected {
-        theme.accent_style()
-    } else {
-        theme.dim_style()
-    };
-    let mut spans = vec![
-        Span::styled(marker(selected), marker_style),
-        Span::styled(format!("[ {label} ]"), style),
-    ];
-    spans.extend(suffix);
-    Line::from(spans)
+    action_line(theme, label, selected && !disabled, style, suffix)
 }

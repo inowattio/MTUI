@@ -7,6 +7,24 @@ pub(crate) fn marker(selected: bool) -> &'static str {
     if selected { "> " } else { "  " }
 }
 
+pub(crate) fn action_line(
+    theme: &crate::tui::theme::Theme,
+    label: &str,
+    selected: bool,
+    style: ratatui::style::Style,
+    suffix: Option<ratatui::text::Span<'static>>,
+) -> ratatui::text::Line<'static> {
+    use ratatui::text::{Line, Span};
+    let style = if selected {
+        theme.selected_style()
+    } else {
+        style
+    };
+    let mut spans = vec![Span::styled(format!("{}{label}", marker(selected)), style)];
+    spans.extend(suffix);
+    Line::from(spans)
+}
+
 pub(crate) fn cyclable(value: &str) -> String {
     format!("< {value} >")
 }
