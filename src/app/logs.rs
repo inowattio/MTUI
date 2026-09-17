@@ -161,7 +161,13 @@ impl App {
             WriteType::DWord => WriteKind::DWord(pending.new_value as u32),
             WriteType::Coil => WriteKind::Coil(pending.new_value != 0),
         };
-        crate::writes_log::append(&self.writes_log, pending.address, kind, pending.previous);
+        crate::writes_log::append(
+            &self.writes_log,
+            pending.slave,
+            pending.address,
+            kind,
+            pending.previous,
+        );
     }
 
     pub fn pin(&mut self) {

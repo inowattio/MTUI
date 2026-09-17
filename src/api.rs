@@ -186,6 +186,7 @@ async fn write_handler(
         Ok(()) => {
             writes_log::append(
                 &state.writes_log,
+                request.slave_id.unwrap_or_else(|| device.slave()),
                 request.address,
                 WriteKind::Multiple(request.values),
                 None,

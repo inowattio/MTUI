@@ -166,6 +166,7 @@ impl App {
             ),
         };
         self.pending_write = Some(PendingWrite {
+            slave: self.config.device.slave_id,
             address: position,
             write_type,
             previous,

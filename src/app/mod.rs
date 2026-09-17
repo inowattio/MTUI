@@ -270,6 +270,7 @@ struct WriteOutcome {
 
 #[derive(Debug)]
 struct PendingWrite {
+    slave: u8,
     address: u16,
     write_type: WriteType,
     previous: Option<u64>,

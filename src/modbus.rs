@@ -760,6 +760,10 @@ impl ModbusDevice {
         Ok(context)
     }
 
+    pub fn slave(&self) -> SlaveId {
+        self.default_slave.load(Ordering::Relaxed)
+    }
+
     pub async fn set_slave(&self, slave_id: SlaveId) {
         self.default_slave.store(slave_id, Ordering::Relaxed);
         self.context.lock().await.set_slave(Slave(slave_id));
