@@ -8,6 +8,7 @@ use crate::modbus::{
 };
 use crate::num_ops::wrap_index;
 use crate::register::{RegisterCell, RegisterType};
+use crate::writes_log::WriteEntry;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
@@ -1412,7 +1413,8 @@ impl SettingsParams {
 #[derive(Debug, Default, PartialEq)]
 pub struct LogsParams {
     pub path: String,
-    pub lines: Vec<String>,
+    pub entries: Vec<WriteEntry>,
+    pub missing: bool,
     pub top: u16,
 }
 
@@ -1420,7 +1422,7 @@ impl LogsParams {
     pub const VISIBLE: u16 = 16;
 
     pub fn scroll(&mut self, delta: i32) {
-        let len = self.lines.len() as i32;
+        let len = self.entries.len() as i32;
         let max_top = (len - Self::VISIBLE as i32).max(0);
         self.top = (self.top as i32 + delta).clamp(0, max_top) as u16;
     }

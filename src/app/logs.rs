@@ -2,8 +2,7 @@ use super::{App, WriteType};
 use crate::modbus::Interface;
 use crate::num_ops::step_hscroll;
 use crate::state::{LogViewParams, LogsParams, Popup, ReadPanel, State, StatusMessage};
-use crate::writes_log::{SharedWritesLog, WriteKind};
-use std::fs;
+use crate::writes_log::{self, SharedWritesLog, WriteKind};
 
 impl App {
     fn note_cleared(&mut self, n: usize, noun: &str) {
@@ -43,7 +42,7 @@ impl App {
             Interface::Network(_) => "network",
             Interface::RtuOverTcp(_) => "rtu-tcp",
         };
-        let name = format!("writes_{kind}_{}.txt", self.config.device.slave_id);
+        let name = format!("writes_{kind}_{}.csv", self.config.device.slave_id);
         #[cfg(not(target_arch = "wasm32"))]
         let dir = std::env::temp_dir();
         #[cfg(target_arch = "wasm32")]
@@ -57,16 +56,14 @@ impl App {
 
     pub fn open_logs(&mut self) {
         let path = self.writes_log_path();
-        let lines: Vec<String> = match fs::read_to_string(&path) {
-            Ok(content) if !content.trim().is_empty() => {
-                content.lines().map(str::to_string).collect()
-            }
-            Ok(_) => vec!["(no writes logged yet)".to_string()],
-            Err(_) => vec!["(log file not found - enable \"Log writes\" in settings)".to_string()],
+        let (entries, missing) = match writes_log::read_entries(&path) {
+            Ok(entries) => (entries, false),
+            Err(_) => (Vec::new(), true),
         };
         let mut params = LogsParams {
             path: path.display().to_string(),
-            lines,
+            entries,
+            missing,
             top: 0,
         };
         params.scroll_to_bottom();
@@ -161,7 +158,7 @@ impl App {
             WriteType::DWord => WriteKind::DWord(pending.new_value as u32),
             WriteType::Coil => WriteKind::Coil(pending.new_value != 0),
         };
-        crate::writes_log::append(
+        writes_log::append(
             &self.writes_log,
             pending.slave,
             pending.address,
