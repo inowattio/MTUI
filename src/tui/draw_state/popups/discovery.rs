@@ -117,7 +117,8 @@ fn common_lines(
     theme: &Theme,
 ) -> Vec<Line<'static>> {
     let focused = p.column == DiscoveryColumn::Common;
-    let mut lines = Vec::with_capacity(DiscoveryParams::COMMON.len() + 1);
+    let mut lines = Vec::with_capacity(DiscoveryParams::COMMON.len() + 2);
+    lines.push(Line::default());
     for field in DiscoveryParams::COMMON {
         let selected = focused && field == current;
         if field == DiscoveryField::Connect {
@@ -173,6 +174,11 @@ fn side_lines(
     let focused = p.column == DiscoveryColumn::Side;
     let selected = |field: DiscoveryField| focused && field == current;
     let mut lines: Vec<Line> = Vec::new();
+
+    match p.interface {
+        InterfaceKind::Mock => return lines,
+        _ => lines.push(Line::default()),
+    }
 
     match p.interface {
         InterfaceKind::Mock => {}
