@@ -359,22 +359,19 @@ pub fn draw(
     if is_pinned {
         cell_seg.push(Span::styled(" (pinned)", theme.changed_style()));
     }
-    let mut right: Vec<Vec<Span>> = Vec::new();
     if let Some(d) = params.read_duration {
-        right.push(vec![Span::styled(format!("{d:.2?}"), theme.dim_style())]);
+        cell_seg.push(Span::styled(format!(" - {d:.2?}"), theme.dim_style()));
     }
-    right.push(cell_seg);
 
-    let left_line = theme.join_dotted(right.into_iter().rev());
-    let right_line = theme.join_dotted(identity.into_iter().rev());
+    let identity = theme.join_dotted(identity.into_iter().rev());
 
     let info_rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Length(1), Constraint::Length(1)])
         .split(rows[0]);
 
-    frame.render_widget(Line::from(left_line), info_rows[0]);
-    frame.render_widget(Line::from(right_line).right_aligned(), info_rows[0]);
+    frame.render_widget(Line::from(cell_seg), info_rows[0]);
+    frame.render_widget(Line::from(identity).right_aligned(), info_rows[0]);
 
     if let Some(status) = params.active_status() {
         frame.render_widget(theme.status_line(status), info_rows[1]);
