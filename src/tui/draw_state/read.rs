@@ -305,32 +305,33 @@ pub fn draw(
         Some(theme.warn_style())
     };
 
-    let mut identity: Vec<Vec<Span>> = Vec::new();
+    let mut identity: Vec<Vec<Span>> = vec![
+        vec![
+            Span::styled("batch ", theme.dim_style()),
+            Span::styled(app.config.registers_batch.to_string(), theme.base()),
+        ],
+        vec![
+            Span::styled("order ", theme.dim_style()),
+            Span::styled(format!("{:?}", app.config.device.word_order), theme.base()),
+        ],
+    ];
+    if let Some(style) = read_only {
+        identity.push(vec![Span::styled("RO", style)]);
+    }
+    identity.push(vec![
+        Span::styled("slave ", theme.dim_style()),
+        Span::styled(app.config.device.slave_id.to_string(), theme.base()),
+    ]);
+    identity.push(vec![
+        Span::styled("device: ", theme.dim_style()),
+        Span::styled(device.to_string(), theme.base()),
+    ]);
     if !app.config.name.is_empty() {
         identity.push(vec![Span::styled(
             app.config.name.clone(),
             theme.accent_style(),
         )]);
     }
-    identity.push(vec![
-        Span::styled("device: ", theme.dim_style()),
-        Span::styled(device.to_string(), theme.base()),
-    ]);
-    identity.push(vec![
-        Span::styled("slave ", theme.dim_style()),
-        Span::styled(app.config.device.slave_id.to_string(), theme.base()),
-    ]);
-    if let Some(style) = read_only {
-        identity.push(vec![Span::styled("RO", style)]);
-    }
-    identity.push(vec![
-        Span::styled("order ", theme.dim_style()),
-        Span::styled(format!("{:?}", app.config.device.word_order), theme.base()),
-    ]);
-    identity.push(vec![
-        Span::styled("batch ", theme.dim_style()),
-        Span::styled(app.config.registers_batch.to_string(), theme.base()),
-    ]);
 
     let cycle = &app.config.cycle_types;
     let types: Vec<RegisterType> = if app.config.show_inactive_tabs {
@@ -363,7 +364,7 @@ pub fn draw(
         cell_seg.push(Span::styled(format!(" - {d:.2?}"), theme.dim_style()));
     }
 
-    let identity = theme.join_dotted(identity.into_iter().rev());
+    let identity = theme.join_dotted(identity);
 
     let info_rows = Layout::default()
         .direction(Direction::Vertical)
