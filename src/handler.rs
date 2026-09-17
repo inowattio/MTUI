@@ -1069,7 +1069,7 @@ mod tests {
         assert_eq!(app.popup_as::<SlaveParams>().unwrap().hits.len(), 3);
 
         let before = screen(&mut app);
-        assert!(before.contains("FOUND (3)"), "{before}");
+        assert!(before.contains("Found 3"), "{before}");
         assert_eq!(before.matches("Illegal").count(), 3);
 
         let index = SlaveParams::default()
@@ -1082,13 +1082,13 @@ mod tests {
         }
         handle_key_events(KeyEvent::new(KeyCode::Right), &mut app).await;
         let hidden = screen(&mut app);
-        assert!(hidden.contains("FOUND (0)"), "{hidden}");
+        assert!(hidden.contains("Found 0"), "{hidden}");
         assert!(!hidden.contains("Illegal"), "exceptions vanish at once");
         assert!(hidden.contains("(no hits)"));
 
         handle_key_events(KeyEvent::new(KeyCode::Left), &mut app).await;
         let shown = screen(&mut app);
-        assert!(shown.contains("FOUND (3)"), "{shown}");
+        assert!(shown.contains("Found 3"), "{shown}");
         assert_eq!(shown.matches("Illegal").count(), 3);
     }
 

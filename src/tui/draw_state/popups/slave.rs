@@ -316,7 +316,7 @@ mod tests {
         let rows = render(&params);
 
         let (form_x, form_y) = locate(&rows, "Slave id");
-        let (title_x, _) = locate(&rows, "FOUND (1)");
+        let (title_x, _) = locate(&rows, "Found 1");
         let (hit_x, hit_y) = locate(&rows, " 17  1 2 3");
         assert!(
             title_x > form_x + LEFT_W as usize - LABEL_W,
@@ -362,14 +362,14 @@ mod tests {
         let mut params = SlaveParams::default();
         let before = render(&params);
         assert!(
-            !before.iter().any(|row| row.contains("FOUND")),
+            !before.iter().any(|row| row.contains("Found")),
             "no list before a scan"
         );
 
         params.scan = Probing;
         params.current = 17;
         let scanning = render(&params);
-        locate(&scanning, "FOUND (0) | PROBING 17...");
+        locate(&scanning, "Found 0 | Probing 17...");
         locate(&scanning, "scanning...");
         assert_eq!(
             popup_width(&scanning) - popup_width(&before),
@@ -429,14 +429,14 @@ mod tests {
             ..SlaveParams::default()
         };
         let rows = render(&params);
-        locate(&rows, "FOUND (2)");
+        locate(&rows, "Found 2");
         locate(&rows, "  2  IllegalDataAddress");
         let (_, y) = locate(&rows, "Exceptions");
         assert!(rows[y].contains("included"));
 
         params.show_exceptions = false;
         let rows = render(&params);
-        locate(&rows, "FOUND (1)");
+        locate(&rows, "Found 1");
         locate(&rows, "  1  5");
         assert!(
             !rows.iter().any(|row| row.contains("IllegalDataAddress")),
@@ -480,13 +480,13 @@ mod tests {
             ..SlaveParams::default()
         };
         let rows = render(&params);
-        let (_, title_y) = locate(&rows, "FOUND (1) | PROBING 17...");
+        let (_, title_y) = locate(&rows, "Found 1 | Probing 17...");
         let (_, id_y) = locate(&rows, "Slave id");
         assert_eq!(title_y, id_y, "the title heads the list column");
 
-        for (scan, phase) in [(Done, "DONE"), (Stopped, "STOPPED"), (Failed, "FAILED")] {
+        for (scan, phase) in [(Done, "Done"), (Stopped, "Stopped"), (Failed, "Failed")] {
             params.scan = scan;
-            locate(&render(&params), &format!("FOUND (1) | {phase}"));
+            locate(&render(&params), &format!("Found 1 | {phase}"));
         }
     }
 
