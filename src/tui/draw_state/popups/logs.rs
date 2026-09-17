@@ -17,7 +17,14 @@ const PREV_W: usize = 10;
 const VALUE_W: usize = 24;
 const GAP: &str = "  ";
 
-pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, kb: &Keybinds, logs: &LogsParams) {
+pub(super) fn draw(
+    frame: &mut Frame,
+    area: Rect,
+    theme: &Theme,
+    kb: &Keybinds,
+    logs: &LogsParams,
+    logging: bool,
+) {
     let visible = LogsParams::VISIBLE as usize;
     let len = logs.entries.len();
     let (top, end) = super::window(logs.top as usize, visible, len);
@@ -29,10 +36,10 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, kb: &Keybinds, 
     ];
 
     if len == 0 {
-        let text = if logs.missing {
-            "   log file not found, enable \"Log writes\" in settings"
-        } else {
+        let text = if logging {
             "   no writes logged yet"
+        } else {
+            "   logging is off, enable \"Log writes\" in settings"
         };
         lines.push(Line::from(Span::styled(text, theme.dim_style())));
         for _ in 1..visible {

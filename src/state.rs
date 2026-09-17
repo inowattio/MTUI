@@ -1414,7 +1414,6 @@ impl SettingsParams {
 pub struct LogsParams {
     pub path: String,
     pub entries: Vec<WriteEntry>,
-    pub missing: bool,
     pub top: u16,
 }
 

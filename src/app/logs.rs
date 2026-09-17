@@ -56,14 +56,9 @@ impl App {
 
     pub fn open_logs(&mut self) {
         let path = self.writes_log_path();
-        let (entries, missing) = match writes_log::read_entries(&path) {
-            Ok(entries) => (entries, false),
-            Err(_) => (Vec::new(), true),
-        };
         let mut params = LogsParams {
             path: path.display().to_string(),
-            entries,
-            missing,
+            entries: writes_log::read_entries(&path).unwrap_or_default(),
             top: 0,
         };
         params.scroll_to_bottom();
