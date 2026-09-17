@@ -175,13 +175,13 @@ fn form_lines(params: &SlaveParams, sel: SlaveField, theme: &Theme) -> Vec<Line<
 fn title_line(params: &SlaveParams, theme: &Theme) -> Line<'static> {
     let (phase, style) = match params.scan {
         ScanState::Idle => (String::new(), theme.dim_style()),
-        ScanState::Probing => (format!("PROBING {}...", params.current), theme.warn_style()),
-        ScanState::Done => ("DONE".to_string(), theme.ok_style()),
-        ScanState::Stopped => ("STOPPED".to_string(), theme.warn_style()),
-        ScanState::Failed => ("FAILED".to_string(), theme.err_style()),
+        ScanState::Probing => (format!("Probing {}...", params.current), theme.warn_style()),
+        ScanState::Done => ("Done".to_string(), theme.ok_style()),
+        ScanState::Stopped => ("Stopped".to_string(), theme.warn_style()),
+        ScanState::Failed => ("Failed".to_string(), theme.err_style()),
     };
     let mut spans = vec![Span::styled(
-        format!(" FOUND ({})", params.visible_hits().count()),
+        format!(" Found {}", params.visible_hits().count()),
         theme.header_style(),
     )];
     if !phase.is_empty() {
