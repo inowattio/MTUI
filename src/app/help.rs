@@ -25,11 +25,7 @@ impl App {
     pub fn help_move(&mut self, down: bool) {
         let count = self.help_matches().len() as u16;
         if let Some(h) = self.popup_as_mut::<HelpParams>() {
-            if count == 0 {
-                h.selected = 0;
-            } else {
-                h.selected = wrap_index(h.selected, count, down);
-            }
+            h.selected = wrap_index(h.selected, count, down);
         }
     }
 

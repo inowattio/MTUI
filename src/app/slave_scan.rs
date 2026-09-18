@@ -11,7 +11,7 @@ impl App {
     pub fn slave_move(&mut self, down: bool) {
         if let Some(p) = self.slave_mut() {
             let n = p.fields().len() as u16;
-            p.selected = wrap_index(p.selected.min(n - 1), n, down);
+            p.selected = wrap_index(p.selected, n, down);
         }
     }
 

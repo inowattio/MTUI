@@ -45,7 +45,7 @@ impl App {
         self.with_custom(|c| {
             c.error = None;
             let n = c.fields().len() as u16;
-            c.selected = wrap_index(c.selected.min(n - 1), n, down);
+            c.selected = wrap_index(c.selected, n, down);
         });
     }
 

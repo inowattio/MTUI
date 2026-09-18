@@ -25,10 +25,16 @@ where
 }
 
 pub fn wrap_index(index: u16, len: u16, forward: bool) -> u16 {
-    if forward {
-        (index + 1) % len
-    } else {
-        (index + len - 1) % len
+    if len == 0 {
+        return 0;
+    }
+    let last = len - 1;
+    let index = index.min(last);
+    match (forward, index) {
+        (true, i) if i == last => 0,
+        (true, i) => i + 1,
+        (false, 0) => last,
+        (false, i) => i - 1,
     }
 }
 
@@ -53,5 +59,32 @@ pub fn step_hscroll(current: u16, max: u16, right: bool) -> u16 {
         (current + STEP).min(max)
     } else {
         current.saturating_sub(STEP)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::wrap_index;
+
+    #[test]
+    fn wrapping_moves_in_both_directions_and_round_trips_at_the_ends() {
+        assert_eq!(wrap_index(0, 3, true), 1);
+        assert_eq!(wrap_index(2, 3, true), 0);
+        assert_eq!(wrap_index(0, 3, false), 2);
+        assert_eq!(wrap_index(1, 3, false), 0);
+    }
+
+    #[test]
+    fn empty_lists_and_stale_indices_are_safe() {
+        assert_eq!(wrap_index(5, 0, true), 0);
+        assert_eq!(wrap_index(5, 0, false), 0);
+        assert_eq!(
+            wrap_index(9, 3, true),
+            0,
+            "a stale index clamps to the end first"
+        );
+        assert_eq!(wrap_index(9, 3, false), 1);
+        assert_eq!(wrap_index(u16::MAX, u16::MAX, true), 0);
+        assert_eq!(wrap_index(0, u16::MAX, false), u16::MAX - 1);
     }
 }

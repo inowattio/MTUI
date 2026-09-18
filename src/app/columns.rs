@@ -45,9 +45,6 @@ impl App {
 
     pub fn columns_move(&mut self, down: bool) {
         let count = self.column_matches().len() as u16;
-        if count == 0 {
-            return;
-        }
         if let Some(p) = self.popup_as_mut::<ColumnsParams>() {
             let rows = count.div_ceil(2);
             let (col_start, col_len, row) = if p.selected < rows {

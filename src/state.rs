@@ -316,9 +316,7 @@ impl DiscoveryParams {
             }
             DiscoveryColumn::Side => {
                 let count = self.side_fields().len() as u16;
-                if count > 0 {
-                    self.side_selected = wrap_index(self.side_selected.min(count - 1), count, down);
-                }
+                self.side_selected = wrap_index(self.side_selected, count, down);
             }
         }
     }
