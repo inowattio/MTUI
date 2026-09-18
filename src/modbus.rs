@@ -545,7 +545,7 @@ impl Default for DeviceConfig {
     fn default() -> Self {
         Self {
             interface: Interface::Mock,
-            slave_id: 0,
+            slave_id: 1,
             timeout_connect_ms: 1000,
             timeout_command_ms: 2000,
             time_between_commands_ms: 0,
