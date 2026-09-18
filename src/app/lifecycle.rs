@@ -913,6 +913,7 @@ mod tests {
     #[cfg(not(target_arch = "wasm32"))]
     use crate::state::{ConnectionStatus, ReadPanel};
     use std::collections::BTreeMap;
+    #[cfg(not(target_arch = "wasm32"))]
     use std::path::PathBuf;
     #[cfg(not(target_arch = "wasm32"))]
     use std::time::Duration;
