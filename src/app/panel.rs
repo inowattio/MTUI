@@ -374,6 +374,12 @@ impl App {
         Some((row, self.changed_since(cell, now)))
     }
 
+    pub fn custom_text(&self, cell: RegisterCell) -> Option<String> {
+        let value = self.read_log.get(&cell)?.value;
+        let at = |address: u16| self.read_log.get(&(cell.0, address)).map(|e| e.value);
+        self.custom_value(cell, value, self.config.device.word_order, &at)
+    }
+
     pub fn ascii_string_for(&self, cells: impl Iterator<Item = RegisterCell>) -> String {
         let values: Vec<RegisterCellValue> = cells
             .filter_map(|cell| self.read_log.get(&cell).map(|e| (cell, e.value)))

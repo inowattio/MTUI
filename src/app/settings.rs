@@ -164,6 +164,9 @@ impl App {
             SettingsField::ShowInactiveTabs => {
                 self.config.show_inactive_tabs = !self.config.show_inactive_tabs
             }
+            SettingsField::ShowMatrixContext => {
+                self.config.show_matrix_context = !self.config.show_matrix_context;
+            }
             SettingsField::ShowReadWindow => {
                 self.config.show_read_window = !self.config.show_read_window
             }

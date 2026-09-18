@@ -268,12 +268,38 @@ impl TableCtx<'_> {
             });
         }
 
-        rows_table(
-            table_rows,
-            header,
-            theme,
-            panel_block(theme, ReadPanel::Matrix, &app.config),
-        )
+        let mut block = panel_block(theme, ReadPanel::Matrix, &app.config);
+        if let Some(context) = self.matrix_context_line() {
+            block = block.title_bottom(context.left_aligned());
+        }
+        rows_table(table_rows, header, theme, block)
+    }
+
+    fn matrix_context_line(&self) -> Option<Line<'static>> {
+        let (params, app, theme) = (self.params, self.app, self.theme);
+        if !app.config.show_matrix_context {
+            return None;
+        }
+        let cell = (params.register_type, params.position);
+        let custom = app.custom_text(cell);
+        let label = app.label(cell);
+        if custom.is_none() && label.is_none() {
+            return None;
+        }
+        let mut spans = vec![Span::raw(" ")];
+        if let Some(custom) = custom {
+            spans.push(Span::styled("Custom: ", theme.dim_style()));
+            spans.push(Span::styled(custom, theme.accent_style()));
+        }
+        if let Some(label) = label {
+            if spans.len() > 1 {
+                spans.push(Span::styled(" ", theme.dim_style()));
+            }
+            spans.push(Span::styled("Label: ", theme.dim_style()));
+            spans.push(Span::styled(label.to_string(), theme.base()));
+        }
+        spans.push(Span::raw(" "));
+        Some(Line::from(spans))
     }
 }
 
@@ -374,11 +400,16 @@ pub fn draw(
 
     let header = app.interpreter.header();
 
-    // Tab line + header row; the read-error message adds a bottom title row.
-    let error_row = params.panel == ReadPanel::Main && params.read_error.is_some();
+    // Tab line + header row; a bottom title (read error, matrix context) takes one more.
+    let matrix_context = params.panel == ReadPanel::Matrix && app.config.show_matrix_context && {
+        let cell = (params.register_type, params.position);
+        app.custom_text(cell).is_some() || app.label(cell).is_some()
+    };
+    let bottom_row =
+        (params.panel == ReadPanel::Main && params.read_error.is_some()) || matrix_context;
     let visible = rows[1]
         .height
-        .saturating_sub(2 + u16::from(error_row))
+        .saturating_sub(2 + u16::from(bottom_row))
         .max(1);
     app.visible_rows.set(visible);
     // Inner table width. Panels without interpretation columns leave the offset at zero.

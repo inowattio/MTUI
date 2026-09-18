@@ -876,6 +876,7 @@ settings_fields! {
         ],
         [
             ShowReadWindow: Toggle => "Show read window", "Highlight the address range covered by the current read batch",
+            ShowMatrixContext: Toggle => "Show matrix context", "Show the custom value and label of the selected register under the Matrix panel",
             GraphTimeAxis: Toggle => "Graph X axis", "Plot the graph against time instead of sample count",
             ChangedExpiry: Number => "Changed highlight (ms)", "How long a changed value stays highlighted, 0 never clears it",
             ShowContinuation: Toggle => "Show \"part of\" marker", "Mark registers that belong to a multi-register custom rule",

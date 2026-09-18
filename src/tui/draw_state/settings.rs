@@ -352,6 +352,7 @@ fn field_value(
         SettingsField::ShowAscii => (on_off(device.show_ascii), None),
         SettingsField::ShowInactiveTabs => (on_off(device.show_inactive_tabs), None),
         SettingsField::ShowReadWindow => (on_off(device.show_read_window), None),
+        SettingsField::ShowMatrixContext => (on_off(device.show_matrix_context), None),
         SettingsField::GraphTimeAxis => (
             if device.graph_time_axis {
                 "time".to_string()
