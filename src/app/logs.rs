@@ -1,8 +1,11 @@
 use super::{App, WriteType};
+use crate::logger;
 use crate::modbus::Interface;
 use crate::num_ops::step_hscroll;
 use crate::state::{LogViewParams, LogsParams, Popup, ReadPanel, State, StatusMessage};
 use crate::writes_log::{self, SharedWritesLog, WriteKind};
+use chrono::Local;
+use std::fs;
 
 impl App {
     fn note_cleared(&mut self, n: usize, noun: &str) {
@@ -120,6 +123,25 @@ impl App {
             _ => return,
         };
         self.state = State::Read(previous);
+    }
+
+    pub fn copy_app_logs(&mut self) {
+        let entries = logger::snapshot();
+        let count = entries.len();
+        if self.set_clipboard(logger::export(&entries)) {
+            log::info!("Copied {count} log line(s) to clipboard");
+        } else {
+            log::error!("Clipboard unavailable");
+        }
+    }
+
+    pub fn dump_app_logs(&mut self) {
+        let entries = logger::snapshot();
+        let filename = format!("logs_{}.txt", Local::now().format("%Y%m%d_%H%M%S"));
+        match fs::write(&filename, logger::export(&entries)) {
+            Ok(()) => log::info!("Saved {} log line(s) to {filename}", entries.len()),
+            Err(e) => log::error!("Log dump failed | {e}"),
+        }
     }
 
     pub fn log_view_scroll(&mut self, delta: i32) {

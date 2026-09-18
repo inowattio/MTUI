@@ -92,3 +92,55 @@ pub fn snapshot() -> Vec<LogEntry> {
         .map(|e| e.iter().cloned().collect())
         .unwrap_or_default()
 }
+
+impl LogLevel {
+    pub fn tag(self) -> &'static str {
+        match self {
+            LogLevel::Info => "INFO",
+            LogLevel::Warn => "WARN",
+            LogLevel::Error => "ERROR",
+        }
+    }
+}
+
+pub fn export(entries: &[LogEntry]) -> String {
+    entries
+        .iter()
+        .map(|e| {
+            format!(
+                "{} {:<5} {}\n",
+                e.time.format("%Y-%m-%dT%H:%M:%S%.3f"),
+                e.level.tag(),
+                e.message
+            )
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{LogEntry, LogLevel, export};
+    use chrono::{Local, TimeZone};
+
+    #[test]
+    fn exported_lines_carry_the_full_timestamp_and_a_padded_level() {
+        let time = Local.with_ymd_and_hms(2026, 9, 18, 13, 5, 7).unwrap();
+        let entries = [
+            LogEntry {
+                time,
+                level: LogLevel::Info,
+                message: "Connected".to_string(),
+            },
+            LogEntry {
+                time,
+                level: LogLevel::Error,
+                message: "Read error | timeout".to_string(),
+            },
+        ];
+        assert_eq!(
+            export(&entries),
+            "2026-09-18T13:05:07.000 INFO  Connected\n2026-09-18T13:05:07.000 ERROR Read error | timeout\n"
+        );
+        assert_eq!(export(&[]), "");
+    }
+}
