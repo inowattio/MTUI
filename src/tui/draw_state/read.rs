@@ -211,7 +211,7 @@ impl TableCtx<'_> {
 
     fn matrix_table(&self, visible: u16) -> RowsTable {
         let (params, app, theme) = (self.params, self.app, self.theme);
-        let cols = app.config.matrix_cols.max(1);
+        let cols = app.matrix_cols();
         let base = params.window_start - (params.window_start % cols);
 
         let show_window = app.config.show_read_window;

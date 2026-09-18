@@ -39,7 +39,7 @@ impl App {
             self.sweep.errored = false;
             self.sweep.active = true;
             let rows = self.visible_rows.get();
-            let cols = self.config.matrix_cols;
+            let cols = self.matrix_cols();
             {
                 let p = self.read_mut();
                 p.position = from;

@@ -56,7 +56,7 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) {
         KeyCode::Esc => app.request_quit(),
         KeyCode::Up | KeyCode::Down => move_read_cursor(app, key_event.code),
         KeyCode::Left | KeyCode::Right if app.read().panel == ReadPanel::Matrix => {
-            let cols = app.config.matrix_cols;
+            let cols = app.matrix_cols();
             let p = app.read_mut();
             p.position = step_pos(p.position, key_event.code == KeyCode::Left, 1);
             p.scroll_to_cursor(rows, cols);
@@ -69,14 +69,14 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) {
             }
             let digit = c as u8 - b'0';
             {
-                let cols = app.config.matrix_cols;
+                let cols = app.matrix_cols();
                 let p = app.read_mut();
                 digit_add(&mut p.position, digit);
                 p.scroll_to_cursor(rows, cols);
             }
         }
         KeyCode::Backspace => {
-            let cols = app.config.matrix_cols;
+            let cols = app.matrix_cols();
             let p = app.read_mut();
             digit_remove(&mut p.position);
             p.scroll_to_cursor(rows, cols);
@@ -96,7 +96,7 @@ fn step_pos(value: u16, up: bool, step: u16) -> u16 {
 fn move_read_cursor(app: &mut App, code: KeyCode) {
     let rows = app.visible_rows.get();
     let panel_len = app.panel_len();
-    let cols = app.config.matrix_cols;
+    let cols = app.matrix_cols();
     let kb = app.config.keybinds;
     let step = if code == kb.page_up || code == kb.page_down {
         rows
@@ -164,7 +164,7 @@ async fn run_action(app: &mut App, action: KeybindAction) {
             let rows = app.visible_rows.get();
             app.toggle_panel(action == SwitchView);
             let len = app.panel_len();
-            let cols = app.config.matrix_cols;
+            let cols = app.matrix_cols();
             let scroll_rows = app.panel_scroll_rows();
             let p = app.read_mut();
             p.scroll_pinned(scroll_rows, len);
@@ -471,7 +471,7 @@ fn paste_digits(digits: &str, app: &mut App) {
             }
         }
         None => {
-            let cols = app.config.matrix_cols;
+            let cols = app.matrix_cols();
             let p = app.read_mut();
             p.position = 0;
             for digit in digits {

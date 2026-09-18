@@ -94,6 +94,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         frame.render_widget(Block::default().style(Style::default().bg(theme.bg)), full);
     }
     let inner = outer.inner(area);
+    app.viewport_width = inner.width;
     frame.render_widget(outer, area);
 
     match &app.state {

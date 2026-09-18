@@ -64,6 +64,7 @@ impl App {
             stats: CommStats::default(),
             reconnect: ReconnectState::default(),
             visible_rows: Cell::new(1),
+            viewport_width: 0,
             h_max_offset: Cell::new(0),
             search_rows: Cell::new(1),
             previous_position: None,
@@ -272,7 +273,7 @@ impl App {
 
         if self.is_reading() {
             let rows = self.visible_rows.get();
-            let cols = self.config.matrix_cols;
+            let cols = self.matrix_cols();
             self.read_mut().scroll_to_cursor(rows, cols);
         }
 
@@ -283,7 +284,7 @@ impl App {
         if self.sweep.active {
             if self.is_reading() {
                 let rows = self.visible_rows.get();
-                let cols = self.config.matrix_cols;
+                let cols = self.matrix_cols();
                 let current = self.sweep.current;
                 {
                     let p = self.read_mut();
@@ -506,7 +507,7 @@ impl App {
         let sweeping = self.sweep.active;
         let (read_start, amount) = self.read_window();
         let visible = self.visible_rows.get().max(1);
-        let cols = self.config.matrix_cols;
+        let cols = self.matrix_cols();
         let (panel, register_type) = {
             let p = self.read_mut();
             p.loading = true;

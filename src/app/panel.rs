@@ -374,6 +374,13 @@ impl App {
         Some((row, self.changed_since(cell, now)))
     }
 
+    pub fn matrix_cols(&self) -> u16 {
+        match self.config.matrix_cols {
+            0 => fit_matrix_cols(self.viewport_width),
+            n => n,
+        }
+    }
+
     pub fn custom_text(&self, cell: RegisterCell) -> Option<String> {
         let value = self.read_log.get(&cell)?.value;
         let at = |address: u16| self.read_log.get(&(cell.0, address)).map(|e| e.value);
@@ -394,6 +401,13 @@ impl App {
     pub fn label(&self, cell: RegisterCell) -> Option<&str> {
         self.labels.get(&cell).map(String::as_str)
     }
+}
+
+pub const MATRIX_PREFIX_W: u16 = 7;
+pub const MATRIX_CELL_W: u16 = 6;
+
+pub fn fit_matrix_cols(width: u16) -> u16 {
+    (width.saturating_sub(MATRIX_PREFIX_W) / MATRIX_CELL_W).max(1)
 }
 
 fn sized_window(costs: &[usize], pos: usize, budget: usize, anchor: BatchAnchor) -> (usize, usize) {
@@ -489,6 +503,15 @@ mod panel_tests {
 mod tests {
     use super::sized_window;
     use crate::config::BatchAnchor;
+
+    #[test]
+    fn fitted_columns_fill_the_width_and_never_drop_below_one() {
+        assert_eq!(super::fit_matrix_cols(0), 1);
+        assert_eq!(super::fit_matrix_cols(13), 1);
+        assert_eq!(super::fit_matrix_cols(19), 2);
+        assert_eq!(super::fit_matrix_cols(80), 12);
+        assert_eq!(super::fit_matrix_cols(120), 18);
+    }
 
     fn middle(costs: &[usize], pos: usize, budget: usize) -> (usize, usize) {
         sized_window(costs, pos, budget, BatchAnchor::Middle)

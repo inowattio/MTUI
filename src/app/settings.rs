@@ -66,10 +66,12 @@ impl App {
 
     fn numeric_spec(field: SettingsField) -> Option<(i64, i64, i64)> {
         match field {
-            SettingsField::RegistersBatch
-            | SettingsField::HistoryCap
-            | SettingsField::MatrixCols => Some((1, u16::MAX as i64, 1)),
-            SettingsField::StartupAddress => Some((0, u16::MAX as i64, 1)),
+            SettingsField::RegistersBatch | SettingsField::HistoryCap => {
+                Some((1, u16::MAX as i64, 1))
+            }
+            SettingsField::MatrixCols | SettingsField::StartupAddress => {
+                Some((0, u16::MAX as i64, 1))
+            }
             SettingsField::PaddingHorizontal | SettingsField::PaddingVertical => Some((0, 50, 1)),
             SettingsField::AutoUpdate | SettingsField::ChangedExpiry => {
                 Some((0, u32::MAX as i64, 100))

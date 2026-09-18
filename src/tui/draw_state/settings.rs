@@ -304,7 +304,13 @@ fn field_value(
         ),
         SettingsField::ReconnectOnTimeout => (on_off(device.reconnect_on_timeout), None),
         SettingsField::HistoryCap => (device.graph_history_cap.to_string(), None),
-        SettingsField::MatrixCols => (device.matrix_cols.to_string(), None),
+        SettingsField::MatrixCols => (
+            match device.matrix_cols {
+                0 => "auto".to_string(),
+                n => n.to_string(),
+            },
+            None,
+        ),
         SettingsField::IgnoreDirty => (on_off(device.ignore_dirty), None),
         SettingsField::ShowMock => (on_off(device.show_mock), None),
         SettingsField::ReadOnly => (on_off(device.read_only), None),

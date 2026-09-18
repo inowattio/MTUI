@@ -481,7 +481,7 @@ impl Default for Config {
             reconnect_on_timeout: true,
             changed_expiry_ms: Some(1000),
             graph_history_cap: 180,
-            matrix_cols: 10,
+            matrix_cols: 0,
             read_only: false,
             log_writes: false,
             ignore_dirty: false,

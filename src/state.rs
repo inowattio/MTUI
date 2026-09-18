@@ -835,7 +835,7 @@ settings_fields! {
         ],
         [
             HistoryCap: Number => "Graph history cap", "Samples kept per register for the value graph",
-            MatrixCols: Number => "Matrix columns", "Registers per row in the Matrix panel",
+            MatrixCols: Number => "Matrix columns", "Registers per row in the Matrix panel, 0 fits as many as the screen shows",
         ],
         [
             CycleHoldings: CycleType(RegisterType::Holding) => "Cycle holdings", "Include holding registers when cycling register types",

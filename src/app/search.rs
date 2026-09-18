@@ -88,7 +88,7 @@ impl App {
             self.stop_sweep();
         }
         let rows = self.visible_rows.get();
-        let cols = self.config.matrix_cols;
+        let cols = self.matrix_cols();
         let p = self.read_mut();
         if p.panel != ReadPanel::Matrix {
             p.panel = ReadPanel::Main;
