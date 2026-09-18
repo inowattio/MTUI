@@ -15,6 +15,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::cell::Cell;
 use std::collections::{BTreeMap, VecDeque};
+use std::path::{Path, PathBuf};
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::atomic::Ordering;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU16, AtomicUsize};
@@ -121,7 +122,7 @@ struct RawTaskResult {
 
 #[derive(Debug)]
 struct LoadConfigTaskResult {
-    path: String,
+    path: PathBuf,
     config: Box<Config>,
     result: Result<ModbusDevice, String>,
 }
@@ -402,8 +403,8 @@ pub struct ReadEntry {
 #[derive(Debug)]
 pub struct App {
     pub config: Config,
-    config_path: String,
-    origin_config_path: String,
+    config_path: PathBuf,
+    origin_config_path: PathBuf,
     pub running: bool,
     pub state: State,
     pub pinned_registers: Vec<RegisterCell>,
@@ -597,8 +598,8 @@ impl From<&BTreeMap<RegisterCell, CustomRule>> for CustomRules {
     }
 }
 
-fn ensure_parent_dir(path: &str) -> Result<(), String> {
-    match std::path::Path::new(path).parent() {
+fn ensure_parent_dir(path: &Path) -> Result<(), String> {
+    match path.parent() {
         Some(parent) if !parent.as_os_str().is_empty() => {
             fs::create_dir_all(parent).map_err(|e| e.to_string())
         }
@@ -607,26 +608,21 @@ fn ensure_parent_dir(path: &str) -> Result<(), String> {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn default_config_path() -> String {
-    if std::path::Path::new(CONFIG_PATH).exists() {
-        return CONFIG_PATH.to_string();
+fn default_config_path() -> PathBuf {
+    if Path::new(CONFIG_PATH).exists() {
+        return PathBuf::from(CONFIG_PATH);
     }
     directories::ProjectDirs::from("io", "inowattio", "mtui")
-        .map(|dirs| {
-            dirs.config_dir()
-                .join(CONFIG_PATH)
-                .to_string_lossy()
-                .into_owned()
-        })
-        .unwrap_or_else(|| CONFIG_PATH.to_string())
+        .map(|dirs| dirs.config_dir().join(CONFIG_PATH))
+        .unwrap_or_else(|| PathBuf::from(CONFIG_PATH))
 }
 
 #[cfg(target_arch = "wasm32")]
-fn default_config_path() -> String {
-    CONFIG_PATH.to_string()
+fn default_config_path() -> PathBuf {
+    PathBuf::from(CONFIG_PATH)
 }
 
-fn save_config(path: &str, config: &Config) -> Result<(), String> {
+fn save_config(path: &Path, config: &Config) -> Result<(), String> {
     let content = serde_json::to_string_pretty(config).map_err(|e| e.to_string())?;
     ensure_parent_dir(path)?;
     fs::write(path, content).map_err(|e| e.to_string())
@@ -692,14 +688,20 @@ fn parse_hex_bytes(input: &str) -> Result<Vec<u8>, String> {
         .collect()
 }
 
-fn create_default_config(path: &str) -> Config {
+fn create_default_config(path: &Path) -> Config {
     let config = Config::demo();
     let serialized = serde_json::to_string_pretty(&config).expect("serialize default config");
 
     let _ = ensure_parent_dir(path);
     match fs::write(path, serialized) {
-        Ok(()) => log::info!("No config found; created a default one at {path}"),
-        Err(e) => log::warn!("No config found and could not write {path}: {e}; using defaults"),
+        Ok(()) => log::info!(
+            "No config found; created a default one at {}",
+            path.display()
+        ),
+        Err(e) => log::warn!(
+            "No config found and could not write {}: {e}; using defaults",
+            path.display()
+        ),
     }
     config
 }
@@ -707,11 +709,11 @@ fn create_default_config(path: &str) -> Config {
 #[derive(Debug)]
 pub enum ConfigError {
     Read {
-        path: String,
+        path: PathBuf,
         source: io::Error,
     },
     Parse {
-        path: String,
+        path: PathBuf,
         source: serde_json::Error,
     },
 }
@@ -728,8 +730,10 @@ impl ConfigError {
 impl fmt::Display for ConfigError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ConfigError::Read { path, .. } => write!(f, "Could not read config {path}"),
-            ConfigError::Parse { path, .. } => write!(f, "Could not parse config {path}"),
+            ConfigError::Read { path, .. } => write!(f, "Could not read config {}", path.display()),
+            ConfigError::Parse { path, .. } => {
+                write!(f, "Could not parse config {}", path.display())
+            }
         }
     }
 }
@@ -743,7 +747,7 @@ impl std::error::Error for ConfigError {
     }
 }
 
-fn load_config(path: &str, create_if_missing: bool) -> Result<Config, ConfigError> {
+fn load_config(path: &Path, create_if_missing: bool) -> Result<Config, ConfigError> {
     let content = match fs::read_to_string(path) {
         Ok(content) => content,
         Err(source) if create_if_missing && source.kind() == io::ErrorKind::NotFound => {
@@ -751,13 +755,13 @@ fn load_config(path: &str, create_if_missing: bool) -> Result<Config, ConfigErro
         }
         Err(source) => {
             return Err(ConfigError::Read {
-                path: path.to_string(),
+                path: path.to_path_buf(),
                 source,
             });
         }
     };
     serde_json::from_str(&content).map_err(|source| ConfigError::Parse {
-        path: path.to_string(),
+        path: path.to_path_buf(),
         source,
     })
 }
@@ -790,8 +794,8 @@ mod tests {
             Self(dir)
         }
 
-        fn path(&self, file: &str) -> String {
-            self.0.join(file).to_string_lossy().into_owned()
+        fn path(&self, file: &str) -> PathBuf {
+            self.0.join(file)
         }
     }
 

@@ -7,6 +7,7 @@ use crate::register::RegisterCell;
 use crate::state::{ConnectionStatus, ImportParams, Outcome, Popup, State, StatusMessage};
 use std::collections::BTreeMap;
 use std::fs;
+use std::path::{Path, PathBuf};
 
 impl App {
     fn parse_import(data: &str) -> Option<ImportPayload> {
@@ -182,7 +183,7 @@ impl App {
         }
 
         let result = save_config(&self.config_path, &self.config)
-            .map(|()| format!("Saved to {}", self.config_path))
+            .map(|()| format!("Saved to {}", self.config_path.display()))
             .map_err(|e| format!("Save failed: {e}"));
         if result.is_ok() {
             self.mark_config_saved();
@@ -226,19 +227,19 @@ impl App {
         }
     }
 
-    pub fn config_path(&self) -> &str {
+    pub fn config_path(&self) -> &Path {
         &self.config_path
     }
 
-    fn read_config_file(path: &str) -> Result<Config, String> {
-        if path.is_empty() {
+    fn read_config_file(path: &Path) -> Result<Config, String> {
+        if path.as_os_str().is_empty() {
             return Err("Load failed: enter a file name".to_string());
         }
         let content = fs::read_to_string(path).map_err(|e| format!("Load failed: {e}"))?;
         serde_json::from_str(&content).map_err(|e| format!("Load failed: {e}"))
     }
 
-    pub(super) fn load_config_from(&mut self, path: String) -> StatusMessage {
+    pub(super) fn load_config_from(&mut self, path: PathBuf) -> StatusMessage {
         let config = match Self::read_config_file(&path) {
             Ok(config) => config,
             Err(error) => {
@@ -253,7 +254,7 @@ impl App {
         StatusMessage::info("Loading...")
     }
 
-    fn spawn_config_load(&mut self, path: String, config: Config) {
+    fn spawn_config_load(&mut self, path: PathBuf, config: Config) {
         let previous = self.take_device();
         let device_config = config.device.clone();
         self.background_task = Some(BackgroundTask::LoadConfig(compat::spawn(async move {
@@ -288,7 +289,7 @@ impl App {
                         _ => {}
                     }
 
-                    Ok(format!("Loaded {path}"))
+                    Ok(format!("Loaded {}", path.display()))
                 }
                 Err(e) => {
                     if self.device.is_none() {
@@ -312,10 +313,10 @@ impl App {
         }
     }
 
-    fn cycle_target(&self) -> Option<String> {
+    fn cycle_target(&self) -> Option<PathBuf> {
         let next = self.config.next_config.trim();
         if !next.is_empty() {
-            Some(next.to_string())
+            Some(PathBuf::from(next))
         } else if self.config_path != self.origin_config_path {
             Some(self.origin_config_path.clone())
         } else {
@@ -344,7 +345,7 @@ impl App {
         }
     }
 
-    fn load_config_target(&mut self, target: String) {
+    fn load_config_target(&mut self, target: PathBuf) {
         let status = self.load_config_from(target);
         self.set_read_status(status);
     }

@@ -323,7 +323,7 @@ impl App {
         let Some(path) = self.settings().map(|s| s.load_path.trim().to_string()) else {
             return;
         };
-        let status = self.load_config_from(path);
+        let status = self.load_config_from(std::path::PathBuf::from(path));
         self.set_settings_status(status);
     }
 }

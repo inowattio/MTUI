@@ -53,10 +53,6 @@ impl App {
         dir.join(name)
     }
 
-    pub fn writes_log_path_string(&self) -> String {
-        self.writes_log_path().display().to_string()
-    }
-
     pub fn open_logs(&mut self) {
         let path = self.writes_log_path();
         let mut params = LogsParams {

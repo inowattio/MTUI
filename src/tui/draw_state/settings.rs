@@ -123,7 +123,7 @@ fn draw_fields(params: &SettingsParams, app: &App, frame: &mut Frame, area: Rect
             lines.push(render_field(app, params, field, selected, theme));
             if field == SettingsField::LogWrites {
                 lines.push(Line::from(Span::styled(
-                    format!("  {:<24} {}", "", app.writes_log_path_string()),
+                    format!("  {:<24} {}", "", app.writes_log_path().display()),
                     theme.dim_style(),
                 )));
             }
@@ -387,7 +387,7 @@ fn field_value(
         SettingsField::ThemeErr => color_view(device.theme.err),
         SettingsField::ThemeSelectedFg => color_view(device.theme.selected_fg),
         SettingsField::ThemeSelectedBg => color_view(device.theme.selected_bg),
-        SettingsField::Save => (app.config_path().to_string(), None),
+        SettingsField::Save => (app.config_path().display().to_string(), None),
         SettingsField::LoadConfig => (params.load_path.clone(), None),
         SettingsField::NextConfig => (device.next_config.clone(), None),
     }

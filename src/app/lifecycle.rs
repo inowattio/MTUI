@@ -17,12 +17,13 @@ use crate::writes_log::WritesLogState;
 use chrono::{Local, Utc};
 use std::cell::Cell;
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU16};
 use std::sync::{Arc, Mutex};
 
 impl App {
     pub async fn new(
-        config_path: Option<String>,
+        config_path: Option<PathBuf>,
         make_config_if_none: bool,
     ) -> Result<Self, ConfigError> {
         let create_if_missing = make_config_if_none || config_path.is_none();
@@ -31,7 +32,8 @@ impl App {
         Ok(Self::boot(config, config_path).await)
     }
 
-    pub async fn boot(config: Config, config_path: String) -> Self {
+    pub async fn boot(config: Config, config_path: impl Into<PathBuf>) -> Self {
+        let config_path = config_path.into();
         let device = ModbusDevice::new(&config.device)
             .await
             .inspect_err(|e| println!("Could not initialize device: {e}"))
@@ -911,6 +913,7 @@ mod tests {
     #[cfg(not(target_arch = "wasm32"))]
     use crate::state::{ConnectionStatus, ReadPanel};
     use std::collections::BTreeMap;
+    use std::path::PathBuf;
     #[cfg(not(target_arch = "wasm32"))]
     use std::time::Duration;
 
@@ -1083,7 +1086,7 @@ mod tests {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    struct ScratchConfig(std::path::PathBuf);
+    struct ScratchConfig(PathBuf);
 
     #[cfg(not(target_arch = "wasm32"))]
     impl ScratchConfig {
@@ -1094,8 +1097,8 @@ mod tests {
             Self(dir)
         }
 
-        fn path(&self) -> String {
-            self.0.join("config.json").to_string_lossy().into_owned()
+        fn path(&self) -> PathBuf {
+            self.0.join("config.json")
         }
 
         fn saved(&self) -> Config {
@@ -1148,7 +1151,7 @@ mod tests {
 
         app.quit();
         assert!(!app.running);
-        assert!(!std::path::Path::new(&scratch.path()).exists());
+        assert!(!scratch.path().exists());
     }
 
     #[cfg(not(target_arch = "wasm32"))]

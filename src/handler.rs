@@ -1115,7 +1115,7 @@ mod tests {
     #[tokio::test]
     async fn s_in_the_quit_prompt_saves_and_quits() {
         let dir = std::env::temp_dir().join(format!("mtui-quit-{}", std::process::id()));
-        let path = dir.join("config.json").to_string_lossy().to_string();
+        let path = dir.join("config.json");
         let mut app = App::boot(Config::default(), path.clone()).await;
         app.pin();
         assert!(app.dirty);
@@ -1138,7 +1138,7 @@ mod tests {
     async fn a_failed_save_keeps_the_session_and_reports_it() {
         let blocker = std::env::temp_dir().join(format!("mtui-blocker-{}", std::process::id()));
         std::fs::write(&blocker, b"").unwrap();
-        let path = blocker.join("config.json").to_string_lossy().to_string();
+        let path = blocker.join("config.json");
         let mut app = App::boot(Config::default(), path).await;
         app.pin();
         handle_key_events(KeyEvent::new(KeyCode::Esc), &mut app).await;

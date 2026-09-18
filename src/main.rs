@@ -9,6 +9,7 @@ mod native {
     use ratatui::Terminal;
     use ratatui::backend::CrosstermBackend;
     use std::io;
+    use std::path::PathBuf;
 
     /// A TUI for Modbus reads and writes (RTU and TCP).
     #[derive(Parser)]
@@ -16,7 +17,7 @@ mod native {
     struct Args {
         /// Path to the configuration file [default: config.json]
         #[arg(long)]
-        config: Option<String>,
+        config: Option<PathBuf>,
 
         /// Create a default configuration file if none exists at the config path.
         #[arg(long)]
@@ -53,7 +54,7 @@ mod native {
         Ok(())
     }
 
-    async fn run_headless(config: Option<String>, make_config_if_none: bool) -> AppResult<()> {
+    async fn run_headless(config: Option<PathBuf>, make_config_if_none: bool) -> AppResult<()> {
         logger::enable_echo();
         let mut app = App::new(config, make_config_if_none).await?;
         app.headless = true;
