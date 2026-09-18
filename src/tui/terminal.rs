@@ -3,16 +3,20 @@ use crate::event::{Event, EventHandler};
 use crate::handler::{handle_key_events, handle_paste};
 use crate::tui::render;
 use crossterm::event::{DisableBracketedPaste, EnableBracketedPaste};
-use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
+use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen, SetTitle};
 use ratatui::Terminal;
 use ratatui::backend::Backend;
-use std::io;
+use std::io::{self, Write as _};
 use std::panic;
+
+const SAVE_TITLE: &[u8] = b"\x1b[22;0t";
+const RESTORE_TITLE: &[u8] = b"\x1b[23;0t";
 
 #[derive(Debug)]
 pub struct Tui<B: Backend> {
     terminal: Terminal<B>,
     events: EventHandler,
+    title: String,
 }
 
 impl<B: Backend> Tui<B>
@@ -22,7 +26,12 @@ where
     pub fn new(terminal: Terminal<B>, events: EventHandler) -> AppResult<Self> {
         terminal::enable_raw_mode()?;
 
-        let mut tui = Self { terminal, events };
+        let mut tui = Self {
+            terminal,
+            events,
+            title: String::new(),
+        };
+        let _ = io::stderr().write_all(SAVE_TITLE);
         crossterm::execute!(io::stderr(), EnterAlternateScreen, EnableBracketedPaste)?;
 
         let panic_hook = panic::take_hook();
@@ -38,6 +47,11 @@ where
     }
 
     pub fn draw(&mut self, app: &mut App) -> AppResult<()> {
+        let title = window_title(&app.config.name, &app.config.display_device());
+        if title != self.title {
+            let _ = crossterm::execute!(io::stderr(), SetTitle(&title));
+            self.title = title;
+        }
         let started = crate::compat::Instant::now();
         self.terminal.draw(|frame| render(app, frame))?;
         app.last_frame = started.elapsed();
@@ -67,5 +81,15 @@ impl<B: Backend> Drop for Tui<B> {
 
 fn restore_terminal() -> io::Result<()> {
     terminal::disable_raw_mode()?;
-    crossterm::execute!(io::stderr(), LeaveAlternateScreen, DisableBracketedPaste)
+    crossterm::execute!(io::stderr(), LeaveAlternateScreen, DisableBracketedPaste)?;
+    let _ = io::stderr().write_all(RESTORE_TITLE);
+    Ok(())
+}
+
+fn window_title(name: &str, device: &str) -> String {
+    if name.is_empty() {
+        format!("mtui - {device}")
+    } else {
+        format!("mtui - {name} - {device}")
+    }
 }
