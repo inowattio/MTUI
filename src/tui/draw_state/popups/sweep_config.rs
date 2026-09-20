@@ -1,4 +1,3 @@
-use crate::config::Keybinds;
 use crate::input::KeyCode;
 use crate::state::{SweepConfigParams, SweepField};
 use crate::tui::draw_state::{action_line, edit_value, field_row};
@@ -12,7 +11,6 @@ pub(super) fn draw(
     frame: &mut Frame,
     area: Rect,
     theme: &Theme,
-    kb: &Keybinds,
     params: &SweepConfigParams,
     running: bool,
 ) {
@@ -52,17 +50,11 @@ pub(super) fn draw(
             theme,
             [
                 Hint::pair(KeyCode::Up, KeyCode::Down, "Field"),
-                Hint::key(kb.pause, "Toggle mode"),
-            ],
-        ),
-        hints::footer(
-            theme,
-            [
-                Hint::key(KeyCode::Enter, "Start/Stop"),
+                Hint::key(KeyCode::Enter, "Action"),
                 Hint::key(KeyCode::Esc, "Close"),
             ],
         ),
     ];
 
-    super::render(frame, area, theme, "Sweep", 46, lines);
+    super::render(frame, area, theme, "Sweep", 42, lines);
 }
