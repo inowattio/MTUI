@@ -1,7 +1,7 @@
 #[cfg(not(target_arch = "wasm32"))]
 mod native {
     use clap::Parser;
-    use mtui::app::{App, AppResult};
+    use mtui::app::{ApiBindState, App, AppResult};
     use mtui::constants::EVENT_HANDLER_TICKRATE;
     use mtui::event::EventHandler;
     use mtui::logger;
@@ -59,17 +59,20 @@ mod native {
         let mut app = App::new(config, make_config_if_none).await?;
         app.headless = true;
 
-        app.config
-            .port
-            .inspect(|port| log::info!("Headless mode - API server on port {port}"))
-            .ok_or_else(|| {
-                anyhow::anyhow!("Headless mode requires an API port; set `port` in the config")
-            })?;
+        let port = app.config.port.ok_or_else(|| {
+            anyhow::anyhow!("Headless mode requires an API port; set `port` in the config")
+        })?;
+        log::info!("Headless mode - API server on port {port}");
 
         let mut ticker = tokio::time::interval(EVENT_HANDLER_TICKRATE);
         while app.running {
             tokio::select! {
-                _ = ticker.tick() => app.tick().await,
+                _ = ticker.tick() => {
+                    app.tick().await;
+                    if app.api_bind_state() == ApiBindState::Failed {
+                        anyhow::bail!("API server could not bind port {port}");
+                    }
+                }
                 _ = tokio::signal::ctrl_c() => {
                     log::info!("Shutdown requested, stopping");
                     break;
