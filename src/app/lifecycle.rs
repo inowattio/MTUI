@@ -224,9 +224,7 @@ impl App {
     }
 
     pub fn set_read_status(&mut self, message: StatusMessage) {
-        let p = self.read_mut();
-        p.status = Some(message);
-        p.status_at = Instant::now();
+        self.read_mut().set_status(message);
     }
 
     pub fn request_quit(&mut self) {

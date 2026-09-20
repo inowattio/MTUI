@@ -1313,6 +1313,11 @@ impl ReadParams {
         self.refresh_timer = Instant::now();
     }
 
+    pub fn set_status(&mut self, message: StatusMessage) {
+        self.status = Some(message);
+        self.status_at = Instant::now();
+    }
+
     pub fn active_status(&self) -> Option<&StatusMessage> {
         self.status
             .as_ref()

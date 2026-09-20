@@ -278,8 +278,8 @@ impl App {
                     let read = self.startup_read_params();
                     match &mut self.state {
                         State::Settings(s) => s.previous = read,
+                        State::Logs(l) => l.previous = read,
                         State::Read(p) => *p = read,
-                        _ => {}
                     }
 
                     Ok(format!("Loaded {}", path.display()))
@@ -299,10 +299,10 @@ impl App {
             Ok(message) => log::info!("{message}"),
             Err(error) => log::error!("{error}"),
         }
-        match &self.state {
-            State::Read(_) => self.set_read_status(outcome.into()),
+        match &mut self.state {
+            State::Read(p) => p.set_status(outcome.into()),
             State::Settings(_) => self.set_settings_status(outcome.into()),
-            _ => {}
+            State::Logs(l) => l.previous.set_status(outcome.into()),
         }
     }
 
