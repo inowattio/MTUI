@@ -421,29 +421,20 @@ fn draw_keybinds(params: &SettingsParams, app: &App, frame: &mut Frame, area: Re
         let selected = idx == params.kb_selected;
         let capturing = selected && params.kb_capturing;
 
-        let marker = marker(selected);
-        let style = theme.line_style(selected);
-
         let value = if capturing {
             "press a key...".to_string()
         } else {
             key.to_string()
         };
-
-        let mut spans = vec![
-            Span::styled(
-                format!("{marker}{:<22} ", action.label()),
-                theme.dim_style(),
-            ),
-            Span::styled(value, style),
-        ];
+        let mut line = field_row(theme, action.label(), 22, value, selected);
 
         let duplicate = actions.iter().filter(|&&a| kb.get(a) == key).count() > 1;
         if duplicate && !capturing {
-            spans.push(Span::styled(" | duplicate", theme.warn_style()));
+            line.spans
+                .push(Span::styled(" | duplicate", theme.warn_style()));
         }
 
-        lines.push(Line::from(spans));
+        lines.push(line);
     }
 
     let hint = if params.kb_capturing {
