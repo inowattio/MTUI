@@ -83,7 +83,7 @@ pub(super) fn draw(
 
     let footer = [
         Hint::pair(KeyCode::Up, KeyCode::Down, "Select"),
-        Hint::key(kb.action, "Run"),
+        Hint::key(KeyCode::Enter, "Run"),
         Hint::key(KeyCode::Esc, "Close"),
     ];
     let grid_w = 2 + col_key_w.iter().map(|&kw| cell_w(kw)).sum::<usize>();

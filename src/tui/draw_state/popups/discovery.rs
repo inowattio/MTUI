@@ -39,14 +39,14 @@ pub fn draw(params: &DiscoveryParams, app: &App, frame: &mut Frame, area: Rect, 
         let items = [
             Hint::pair(KeyCode::Up, KeyCode::Down, "Move"),
             Hint::key(kb.switch_view, "Section"),
-            Hint::key(kb.action, action),
+            Hint::key(KeyCode::Enter, action),
             Hint::key(KeyCode::Esc, "Back"),
         ];
         (hints::width(&items) as u16, hints::footer(theme, items))
     } else {
         let items = [
             Hint::pair(KeyCode::Up, KeyCode::Down, "Move"),
-            Hint::key(kb.action, action),
+            Hint::key(KeyCode::Enter, action),
             Hint::key(KeyCode::Esc, "Back"),
         ];
         (hints::width(&items) as u16, hints::footer(theme, items))

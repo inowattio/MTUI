@@ -19,7 +19,6 @@ fn max_rows(area: Rect) -> u16 {
 }
 
 pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, search: &SearchParams) {
-    let kb = &app.config.keybinds;
     let rows = max_rows(area);
     app.search_rows.set(rows);
 
@@ -33,7 +32,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, sear
 
     let footer = [
         Hint::pair(KeyCode::Up, KeyCode::Down, "Select"),
-        Hint::key(kb.action, "Go"),
+        Hint::key(KeyCode::Enter, "Go"),
         Hint::key(KeyCode::Esc, "Close"),
     ];
     let longest = search.matches[top..end]

@@ -705,7 +705,7 @@ fn draw_graph(
             hints::footer(
                 theme,
                 [
-                    Hint::pair(kb.action, kb.refresh, "Read"),
+                    Hint::key(kb.refresh, "Read"),
                     Hint::key(kb.pause, "Pause"),
                     Hint::pair(KeyCode::Esc, kb.graph, "Close"),
                 ],

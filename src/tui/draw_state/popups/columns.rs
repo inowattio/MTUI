@@ -48,10 +48,9 @@ pub(super) fn draw(
     }
 
     lines.push(Line::default());
-    let kb = &app.config.keybinds;
     let footer = [
         Hint::pair(KeyCode::Down, KeyCode::Right, "Move"),
-        Hint::key(kb.action, "Toggle"),
+        Hint::key(KeyCode::Enter, "Toggle"),
         Hint::key(KeyCode::Esc, "Close"),
     ];
     let width = hints::min_width((CELL as u16 + 6) * 2 + 3, &footer);

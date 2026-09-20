@@ -452,7 +452,7 @@ fn draw_keybinds(params: &SettingsParams, app: &App, frame: &mut Frame, area: Re
         hints::footer(
             theme,
             [
-                Hint::key(kb.action, "Rebind"),
+                Hint::key(KeyCode::Enter, "Rebind"),
                 Hint::key(KeyCode::Backspace, "Reset to default"),
                 Hint::key(KeyCode::Esc, "Back"),
             ],

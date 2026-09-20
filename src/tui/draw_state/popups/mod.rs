@@ -32,9 +32,9 @@ pub fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup
     match popup {
         Popup::Discovery(d) => discovery::draw(d, app, frame, area, theme),
         Popup::Help(h) => help::draw(frame, area, theme, kb, app, h),
-        Popup::Dump(d) => dump::draw(frame, area, theme, kb, app.read_count(), &d.result),
+        Popup::Dump(d) => dump::draw(frame, area, theme, app.read_count(), &d.result),
         Popup::Search(s) => search::draw(frame, area, theme, app, s),
-        Popup::Label(l) => label::draw(frame, area, theme, kb, l),
+        Popup::Label(l) => label::draw(frame, area, theme, l),
         Popup::Custom(c) => custom::draw(frame, area, theme, app, c),
         Popup::Columns(params) => columns::draw(frame, area, theme, app, params),
         Popup::Write(write) => {
@@ -56,10 +56,10 @@ pub fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup
         Popup::About => about::draw(frame, area, theme),
         Popup::Stats => stats::draw(frame, area, theme, app),
         Popup::DeviceId(params) => device_id::draw(frame, area, theme, app, params),
-        Popup::Raw(params) => raw::draw(frame, area, theme, kb, params),
-        Popup::Import(params) => import::draw(frame, area, theme, kb, params),
+        Popup::Raw(params) => raw::draw(frame, area, theme, params),
+        Popup::Import(params) => import::draw(frame, area, theme, params),
         Popup::CycleConfig | Popup::Quit => {
-            unsaved::draw(frame, area, theme, kb, matches!(popup, Popup::Quit))
+            unsaved::draw(frame, area, theme, matches!(popup, Popup::Quit))
         }
     }
 }

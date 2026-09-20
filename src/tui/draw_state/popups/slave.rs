@@ -48,7 +48,7 @@ pub(super) fn draw(
             Hint::pair(KeyCode::Up, KeyCode::Down, "Field"),
             Hint::key(KeyCode::Tab, "Column"),
             Hint::key(kb.pause, "Toggle"),
-            Hint::key(kb.action, primary),
+            Hint::key(KeyCode::Enter, primary),
             Hint::key(KeyCode::Esc, "Close"),
         ];
         (hints::width(&items), vec![hints::footer(theme, items)])
@@ -58,7 +58,7 @@ pub(super) fn draw(
             Hint::key(kb.pause, "Toggle"),
         ];
         let actions = [
-            Hint::key(kb.action, primary),
+            Hint::key(KeyCode::Enter, primary),
             Hint::key(KeyCode::Esc, "Close"),
         ];
         (

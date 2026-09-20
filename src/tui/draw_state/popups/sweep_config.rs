@@ -58,7 +58,7 @@ pub(super) fn draw(
         hints::footer(
             theme,
             [
-                Hint::key(kb.action, "Start/Stop"),
+                Hint::key(KeyCode::Enter, "Start/Stop"),
                 Hint::key(KeyCode::Esc, "Close"),
             ],
         ),

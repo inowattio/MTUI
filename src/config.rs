@@ -148,7 +148,6 @@ keybinds! {
     Clear => clear : "Clear session data" = CLEAR,
     NextConfig => next_config : "Cycle config" = NEXT_CONFIG,
     SwitchView => switch_view : "Cycle panel" = SWITCH_VIEW,
-    Action => action : "Read / confirm" = ACTION,
     PageUp => page_up : "Page up" = PAGE_UP,
     PageDown => page_down : "Page down" = PAGE_DOWN,
     BatchDecrease => batch_decrease : "Decrease batch" = BATCH_DECREASE,

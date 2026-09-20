@@ -72,7 +72,7 @@ pub(super) fn draw(
         }
     }
     let footer1 = [
-        Hint::key(kb.action, "Write"),
+        Hint::key(KeyCode::Enter, "Write"),
         Hint::key(KeyCode::Esc, "Exit"),
         Hint::key(kb.write, "Cycle mode"),
     ];
@@ -218,7 +218,7 @@ fn draw_coil(
     push_result(&mut lines, theme, write);
 
     let footer = [
-        Hint::key(kb.action, "Write"),
+        Hint::key(KeyCode::Enter, "Write"),
         Hint::key(kb.pause, "Toggle on/off"),
         Hint::key(KeyCode::Esc, "Exit"),
     ];

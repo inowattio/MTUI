@@ -38,11 +38,10 @@ fn wrap_items(items: Vec<String>, width: usize) -> Vec<String> {
 pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &CustomParams) {
     let sel = c.current_field();
 
-    let kb = &app.config.keybinds;
     let footer = [
         Hint::pair(KeyCode::Up, KeyCode::Down, "Field"),
         Hint::pair(KeyCode::Left, KeyCode::Right, "Change"),
-        Hint::key(kb.action, "Save"),
+        Hint::key(KeyCode::Enter, "Save"),
         Hint::key(KeyCode::Delete, "Remove"),
         Hint::key(KeyCode::Esc, "Close"),
     ];

@@ -130,7 +130,7 @@ async fn run_action(app: &mut App, action: KeybindAction) {
         Dump => app.open_dump(),
         Help => app.open_help(),
         About => app.open_about(),
-        Refresh | Action => app.refresh().await,
+        Refresh => app.refresh().await,
         Toggle => app.toggle_type(),
         Write => app.open_write(),
         Jump => app.open_search(),
@@ -184,7 +184,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
 
         PopupKind::Help => match key_event.code {
             KeyCode::Esc => app.close_popup(),
-            c if c == kb.action => {
+            KeyCode::Enter => {
                 if let Some(action) = app.help_commit() {
                     run_action(app, action).await;
                 }
@@ -209,7 +209,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
 
         PopupKind::Inspect => match key_event.code {
             c if c == KeyCode::Esc || c == kb.inspect => app.close_popup(),
-            c if c == kb.refresh || c == kb.action => app.refresh().await,
+            c if c == kb.refresh => app.refresh().await,
             c if c == kb.word_order => app.toggle_word_order(),
             KeyCode::Left => app.inspect_cycle(false),
             KeyCode::Right => app.inspect_cycle(true),
@@ -222,7 +222,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
 
         PopupKind::DeviceId => match key_event.code {
             c if c == KeyCode::Esc || c == kb.device_id => app.close_popup(),
-            c if c == kb.refresh || c == kb.action => app.device_id_refresh(),
+            c if c == kb.refresh => app.device_id_refresh(),
             c if c == kb.switch_view => app.device_id_cycle(),
             KeyCode::Left => app.device_id_hscroll(false),
             KeyCode::Right => app.device_id_hscroll(true),
@@ -231,7 +231,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
 
         PopupKind::Raw => match key_event.code {
             KeyCode::Esc => app.close_popup(),
-            c if c == kb.action => app.raw_send(),
+            KeyCode::Enter => app.raw_send(),
             KeyCode::Up => app.raw_move(false),
             KeyCode::Down => app.raw_move(true),
             KeyCode::Backspace => app.raw_backspace(),
@@ -240,14 +240,14 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
         },
 
         PopupKind::Dump => match key_event.code {
-            c if c == kb.action => app.commit_dump(),
+            KeyCode::Enter => app.commit_dump(),
             c if c == KeyCode::Esc || c == kb.dump => app.close_popup(),
             _ => {}
         },
 
         PopupKind::Columns => match key_event.code {
             KeyCode::Esc => app.close_popup(),
-            c if c == kb.action => app.columns_toggle_selected(),
+            KeyCode::Enter => app.columns_toggle_selected(),
             KeyCode::Up => app.columns_move(false),
             KeyCode::Down => app.columns_move(true),
             KeyCode::Left => app.columns_switch(false),
@@ -259,7 +259,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
 
         PopupKind::Write => match key_event.code {
             KeyCode::Esc => app.close_popup(),
-            c if c == kb.action => app.commit_write(),
+            KeyCode::Enter => app.commit_write(),
             c if c == kb.write => app.write_toggle_type(),
             KeyCode::Up => {
                 if let Some(w) = app.write_mut() {
@@ -304,7 +304,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
 
         PopupKind::Search => match key_event.code {
             KeyCode::Esc => app.close_popup(),
-            c if c == kb.action => app.search_commit(),
+            KeyCode::Enter => app.search_commit(),
             KeyCode::Up => app.search_move(false),
             KeyCode::Down => app.search_move(true),
             KeyCode::Backspace => app.search_backspace(),
@@ -314,7 +314,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
 
         PopupKind::Label => match key_event.code {
             KeyCode::Esc => app.close_popup(),
-            c if c == kb.action => app.commit_label(),
+            KeyCode::Enter => app.commit_label(),
             KeyCode::Backspace => app.label_backspace(),
             KeyCode::Char(c) => app.label_input(c),
             _ => {}
@@ -334,7 +334,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
                 KeyCode::Left => app.custom_cycle(field, false),
                 KeyCode::Right => app.custom_cycle(field, true),
                 KeyCode::Delete => app.remove_custom(),
-                c if c == kb.action => app.custom_enter(field),
+                KeyCode::Enter => app.custom_enter(field),
                 KeyCode::Backspace => app.custom_backspace(field),
                 KeyCode::Char(c) => app.custom_char(field, c),
                 _ => {}
@@ -350,7 +350,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
             };
             match key_event.code {
                 c if c == KeyCode::Esc || c == kb.slave => app.close_popup(),
-                c if c == kb.action => match field {
+                KeyCode::Enter => match field {
                     SlaveField::Id => app.commit_slave().await,
                     SlaveField::Hit(index) => app.commit_slave_hit(index).await,
                     SlaveField::Repr | SlaveField::Exceptions => app.slave_toggle(field),
@@ -387,7 +387,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
             };
             match key_event.code {
                 c if c == KeyCode::Esc || c == kb.sweep => app.close_popup(),
-                c if c == kb.action => app.sweep_action(),
+                KeyCode::Enter => app.sweep_action(),
                 KeyCode::Up => app.sweep_config_move(false),
                 KeyCode::Down => app.sweep_config_move(true),
                 c if c == kb.pause && field == SweepField::Mode => app.sweep_config_toggle(),
@@ -408,7 +408,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
                 _ => (App::quit, App::close_popup),
             };
             match key_event.code {
-                c if c == kb.action => confirm(app),
+                KeyCode::Enter => confirm(app),
                 KeyCode::Char('s') if kind == PopupKind::Quit => app.save_and_quit(),
                 KeyCode::Char('s') if kind == PopupKind::CycleConfig => {
                     app.save_and_cycle_config();
@@ -490,7 +490,7 @@ async fn handle_discovery_key(key_event: KeyEvent, app: &mut App) {
 
     match key_event.code {
         KeyCode::Esc => app.close_popup(),
-        c if c == kb.action => match field {
+        KeyCode::Enter => match field {
             DiscoveryField::ScanNetwork => app.start_network_scan(),
             DiscoveryField::ScanMethod => {
                 if let Some(d) = app.discovery_mut() {
@@ -657,7 +657,7 @@ fn handle_settings_category_key(key_event: KeyEvent, app: &mut App) {
                 s.category = wrap_index(s.category, count, true);
             }
         }
-        c if c == kb.action || c == KeyCode::Right => {
+        KeyCode::Enter | KeyCode::Right => {
             if let Some(s) = app.settings_mut() {
                 s.enter_category();
             }
@@ -700,7 +700,7 @@ async fn handle_settings_field_key(key_event: KeyEvent, app: &mut App) {
         KeyCode::Left => app.settings_adjust(field, -1),
         KeyCode::Right => app.settings_adjust(field, 1),
         c if c == kb.pause && field.is_toggle() => app.settings_adjust(field, 1),
-        c if c == kb.action => match field {
+        KeyCode::Enter => match field {
             SettingsField::ClearPins => app.clear_pins(),
             SettingsField::ClearLabels => app.clear_labels(),
             SettingsField::ClearCustom => app.clear_custom(),
@@ -763,7 +763,7 @@ fn handle_keybinds_key(key_event: KeyEvent, app: &mut App) {
                 s.kb_page(false, count);
             }
         }
-        c if c == kb.action => {
+        KeyCode::Enter => {
             if let Some(s) = app.settings_mut() {
                 s.kb_capturing = true;
             }
@@ -1009,7 +1009,7 @@ mod tests {
 
         handle_key_events(KeyEvent::new(KeyCode::Right), &mut app).await;
         assert!(slave(&app).ascii, "arrows switch to ASCII");
-        handle_key_events(KeyEvent::new(kb.action), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Enter), &mut app).await;
         assert!(!slave(&app).ascii, "enter switches back");
         assert!(
             !slave(&app).active(),

@@ -1,4 +1,3 @@
-use crate::config::Keybinds;
 use crate::input::KeyCode;
 use crate::state::StatusMessage;
 use crate::tui::hints::{self, Hint};
@@ -11,7 +10,6 @@ pub(super) fn draw(
     frame: &mut Frame,
     area: Rect,
     theme: &Theme,
-    kb: &Keybinds,
     read_count: usize,
     result: &Option<StatusMessage>,
 ) {
@@ -39,7 +37,7 @@ pub(super) fn draw(
     lines.push(hints::footer(
         theme,
         [
-            Hint::key(kb.action, "Confirm"),
+            Hint::key(KeyCode::Enter, "Confirm"),
             Hint::pair(KeyCode::Backspace, KeyCode::Esc, "Cancel"),
         ],
     ));

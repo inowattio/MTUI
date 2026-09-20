@@ -1,4 +1,3 @@
-use crate::config::Keybinds;
 use crate::input::KeyCode;
 use crate::state::{RawField, RawParams};
 use crate::tui::hints::Hint;
@@ -7,13 +6,7 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 
-pub(super) fn draw(
-    frame: &mut Frame,
-    area: Rect,
-    theme: &Theme,
-    kb: &Keybinds,
-    params: &RawParams,
-) {
+pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, params: &RawParams) {
     let field = params.current_field();
     let cursor = |f: RawField| if field == f { "_" } else { "" };
 
@@ -52,7 +45,7 @@ pub(super) fn draw(
         theme,
         [
             Hint::pair(KeyCode::Up, KeyCode::Down, "Field"),
-            Hint::key(kb.action, "Send"),
+            Hint::key(KeyCode::Enter, "Send"),
             Hint::key(KeyCode::Esc, "Close"),
         ],
     );

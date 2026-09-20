@@ -10,7 +10,7 @@ pub fn make_bottom_title(theme: &Theme, app: &App) -> Line<'static> {
     match &app.state {
         State::Read(p) => {
             let panel = Hint::key(kb.switch_view, "Panel");
-            let read = Hint::key(kb.action, "Read");
+            let read = Hint::key(kb.refresh, "Read");
             let help = Hint::key(kb.help, "Help");
 
             if p.graph {
@@ -38,9 +38,9 @@ pub fn make_bottom_title(theme: &Theme, app: &App) -> Line<'static> {
         }
         State::Settings(s) => {
             let primary = if s.focus == SettingsFocus::Categories {
-                Hint::key(kb.action, "Open")
+                Hint::key(KeyCode::Enter, "Open")
             } else {
-                Hint::key(kb.action, "Apply")
+                Hint::key(KeyCode::Enter, "Apply")
             };
             hints::footer(
                 theme,
