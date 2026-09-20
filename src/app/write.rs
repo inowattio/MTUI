@@ -243,10 +243,10 @@ impl App {
     }
 
     pub fn write_toggle_bit(&mut self) {
+        let width = (1u64 << self.write_bit_count()) - 1;
         if let Some(w) = self.write_mut() {
-            let mask = 1u32 << w.bit_cursor;
-            let current = w.value.unwrap_or(0) as u32;
-            w.value = Some((current ^ mask) as i64);
+            let current = w.value.unwrap_or(0) as u64 & width;
+            w.value = Some((current ^ (1u64 << w.bit_cursor)) as i64);
         }
     }
 
@@ -315,6 +315,19 @@ mod tests {
         assert_eq!(result.kind, MessageKind::Err);
         assert_eq!(result.text, "No device connected");
         assert!(app.background_task.is_none(), "nothing to run");
+    }
+
+    #[tokio::test]
+    async fn toggling_a_bit_on_a_negative_word_stays_within_16_bits() {
+        let mut app = write_popup().await;
+        let w = app.write_mut().expect("write popup");
+        w.value = Some(-1);
+        w.bit_cursor = 0;
+
+        app.write_toggle_bit();
+
+        let value = app.write_mut().expect("write popup").value;
+        assert_eq!(value, Some(0xFFFE));
     }
 
     #[tokio::test]
