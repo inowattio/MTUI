@@ -46,6 +46,18 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) {
         return;
     }
 
+    if app.read().copy_column.is_some() {
+        match key_event.code {
+            KeyCode::Left => return app.copy_column_move(false),
+            KeyCode::Right => return app.copy_column_move(true),
+            KeyCode::Enter => return app.copy_column_commit(),
+            KeyCode::Esc => return app.copy_column_cancel(),
+            c if c == kb.copy_column => return app.copy_column_commit(),
+            KeyCode::Up | KeyCode::Down => {}
+            _ => app.copy_column_cancel(),
+        }
+    }
+
     if let Some(action) = kb.action_for(key_event.code) {
         run_action(app, action).await;
         return;
@@ -136,7 +148,7 @@ async fn run_action(app: &mut App, action: KeybindAction) {
         Graph => app.toggle_graph(),
         Discovery => app.open_discovery(),
         Settings => app.open_settings(),
-        CopyAddress => app.copy_address(),
+        CopyColumn => app.copy_column_arm(),
         Logs => app.open_logs(),
         AppLogs => app.open_log_view(),
         Stats => app.open_stats(),
@@ -578,7 +590,7 @@ fn handle_logs_view_key(key_event: KeyEvent, app: &mut App) {
         c if c == kb.page_up => app.log_view_scroll(-(app.visible_rows.get() as i32)),
         c if c == kb.page_down => app.log_view_scroll(app.visible_rows.get() as i32),
         c if c == kb.write => app.log_view_toggle_wrap(),
-        c if c == kb.copy_address => app.copy_app_logs(),
+        c if c == kb.copy_column => app.copy_app_logs(),
         c if c == kb.dump => app.dump_app_logs(),
         KeyCode::Left => app.log_view_hscroll(false),
         KeyCode::Right => app.log_view_hscroll(true),
@@ -899,6 +911,48 @@ mod tests {
         }
         handle_key_events(KeyEvent::new(KeyCode::Esc), &mut app).await;
         assert_eq!(app.settings().unwrap().focus, SettingsFocus::Categories);
+    }
+
+    #[tokio::test]
+    async fn copy_column_walks_the_row_and_escape_only_leaves_the_mode() {
+        let mut app = app().await;
+        let kb = app.config.keybinds;
+
+        handle_key_events(KeyEvent::new(kb.copy_column), &mut app).await;
+        assert_eq!(
+            app.copy_column_name(),
+            Some("address"),
+            "arms on the address"
+        );
+
+        handle_key_events(KeyEvent::new(KeyCode::Left), &mut app).await;
+        assert_eq!(app.copy_column_name(), Some("time"));
+
+        handle_key_events(KeyEvent::new(KeyCode::Left), &mut app).await;
+        assert_eq!(
+            app.copy_column_name(),
+            Some("time"),
+            "clamps at the left edge"
+        );
+
+        handle_key_events(KeyEvent::new(KeyCode::Right), &mut app).await;
+        assert_eq!(app.copy_column_name(), Some("address"));
+
+        handle_key_events(KeyEvent::new(KeyCode::Esc), &mut app).await;
+        assert_eq!(app.copy_column_name(), None);
+        assert!(app.running, "escape leaves the mode without quitting");
+    }
+
+    #[tokio::test]
+    async fn copy_column_commits_on_enter_and_reports() {
+        let mut app = app().await;
+        let kb = app.config.keybinds;
+
+        handle_key_events(KeyEvent::new(kb.copy_column), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Enter), &mut app).await;
+
+        assert_eq!(app.copy_column_name(), None, "committing disarms");
+        assert!(app.read().status.is_some(), "the copy reports an outcome");
     }
 
     #[tokio::test]

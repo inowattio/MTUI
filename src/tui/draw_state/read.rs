@@ -35,6 +35,23 @@ fn ascii_title(ascii: &str, theme: &Theme) -> Line<'static> {
     Line::from(Span::styled(format!(" '{ascii}'"), theme.base())).right_aligned()
 }
 
+fn picked_row(text: String, style: Style, start: usize, width: usize) -> TableRow {
+    let chars: Vec<char> = text.chars().collect();
+    let start = start.min(chars.len());
+    let end = start.saturating_add(width).min(chars.len());
+    TableRow {
+        spans: vec![
+            Span::styled(chars[..start].iter().collect::<String>(), style),
+            Span::styled(
+                chars[start..end].iter().collect::<String>(),
+                style.add_modifier(Modifier::REVERSED),
+            ),
+            Span::styled(chars[end..].iter().collect::<String>(), style),
+        ],
+        style,
+    }
+}
+
 fn rows_table(
     rows: Vec<TableRow>,
     header: String,
@@ -73,19 +90,30 @@ impl TableCtx<'_> {
         header: &str,
         prefix: u16,
         block: Block<'static>,
+        pick: Option<(usize, usize, usize)>,
     ) -> RowsTable {
         let h_off = self.horizontal_offset(&rows, header, prefix);
         let table_rows = rows
             .into_iter()
-            .map(|(text, style)| TableRow::plain(text, style))
+            .enumerate()
+            .map(|(index, (text, style))| match pick {
+                Some((row, start, width)) if row == index => picked_row(text, style, start, width),
+                _ => TableRow::plain(text, style),
+            })
             .collect();
         rows_table(table_rows, header.to_string(), self.theme, block).hscroll(prefix, h_off)
+    }
+
+    fn pick_spans(&self, row: Option<usize>, lead: u16) -> Option<(usize, usize, usize)> {
+        let segment = self.app.copy_column_segment()?;
+        Some((row?, segment.start + lead as usize, segment.width))
     }
 
     fn main_table(&self, visible: u16, header: &str, ascii: Option<&str>) -> RowsTable {
         let (params, app, theme) = (self.params, self.app, self.theme);
         let now = Utc::now();
         let mut rows: Vec<(String, Style)> = Vec::with_capacity(visible as usize);
+        let mut pick_row = None;
 
         let show_window = app.config.show_read_window;
         let (read_start, read_amount) = app.read_window();
@@ -117,6 +145,9 @@ impl TableCtx<'_> {
                 base_style
             };
 
+            if selected {
+                pick_row = Some(rows.len());
+            }
             if show_window {
                 let marker = if (read_start..=read_end).contains(&addr)
                     || extra.contains(&(params.register_type, addr))
@@ -139,11 +170,19 @@ impl TableCtx<'_> {
             block = block.title_top(ascii_title(ascii, theme));
         }
 
+        let lead = u16::from(show_window);
+        let pick = self.pick_spans(pick_row, lead);
         if show_window {
             let header = format!(" {header}");
-            self.scrollable_table(rows, &header, 1 + app.interpreter.prefix_width(), block)
+            self.scrollable_table(
+                rows,
+                &header,
+                1 + app.interpreter.prefix_width(),
+                block,
+                pick,
+            )
         } else {
-            self.scrollable_table(rows, header, app.interpreter.prefix_width(), block)
+            self.scrollable_table(rows, header, app.interpreter.prefix_width(), block, pick)
         }
     }
 
@@ -162,6 +201,7 @@ impl TableCtx<'_> {
         }
 
         let mut rows: Vec<(String, Style)> = Vec::with_capacity(cells.len() + 3);
+        let mut pick_row = None;
         let mut prev_kind: Option<RegisterType> = None;
         for (ord, &(kind, address)) in cells.iter().enumerate() {
             if prev_kind.is_some_and(|pk| pk != kind) {
@@ -192,6 +232,7 @@ impl TableCtx<'_> {
             }
 
             let style = if (top + ord) as u16 == params.pinned_index {
+                pick_row = Some(rows.len());
                 theme.selected_style()
             } else {
                 theme.row_style(ord % 2 == 1, changed)
@@ -204,9 +245,10 @@ impl TableCtx<'_> {
             block = block.title_top(ascii_title(ascii, theme));
         }
 
-        let prefix =
-            2 * u16::from(type_marker) + u16::from(show_window) + app.interpreter.prefix_width();
-        self.scrollable_table(rows, &header, prefix, block)
+        let lead = 2 * u16::from(type_marker) + u16::from(show_window);
+        let pick = self.pick_spans(pick_row, lead);
+        let prefix = lead + app.interpreter.prefix_width();
+        self.scrollable_table(rows, &header, prefix, block, pick)
     }
 
     fn matrix_table(&self, visible: u16) -> RowsTable {

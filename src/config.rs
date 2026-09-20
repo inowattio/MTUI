@@ -139,7 +139,7 @@ keybinds! {
     Graph => graph : "Value graph" = GRAPH,
     Discovery => discovery : "Switch device" = DISCOVERY,
     Settings => settings : "Settings" = SETTINGS,
-    CopyAddress => copy_address : "Copy address" = COPY_ADDRESS,
+    CopyColumn => copy_column : "Copy column" = COPY_COLUMN,
     Logs => logs : "View write logs" = LOGS,
     AppLogs => app_logs : "App logs" = APP_LOGS,
     Stats => stats : "Statistics" = STATS,

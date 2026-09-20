@@ -3,12 +3,25 @@ use crate::input::KeyCode;
 use crate::state::{SettingsFocus, State};
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
-use ratatui::text::Line;
+use ratatui::text::{Line, Span};
 
 pub fn make_bottom_title(theme: &Theme, app: &App) -> Line<'static> {
     let kb = &app.config.keybinds;
     match &app.state {
         State::Read(p) => {
+            if let Some(name) = app.copy_column_name() {
+                let mut line = hints::footer(
+                    theme,
+                    [
+                        Hint::pair(KeyCode::Left, KeyCode::Right, "Column"),
+                        Hint::key(KeyCode::Enter, "Copy"),
+                        Hint::key(KeyCode::Esc, "Cancel"),
+                    ],
+                );
+                line.spans
+                    .insert(0, Span::styled(format!(" {name}"), theme.accent_style()));
+                return line;
+            }
             let panel = Hint::key(kb.switch_view, "Panel");
             let read = Hint::key(kb.refresh, "Read");
             let help = Hint::key(kb.help, "Help");
@@ -56,7 +69,7 @@ pub fn make_bottom_title(theme: &Theme, app: &App) -> Line<'static> {
             [
                 Hint::pair(KeyCode::Down, KeyCode::Right, "Scroll"),
                 Hint::key(kb.write, if l.wrap { "Unwrap" } else { "Wrap" }),
-                Hint::key(kb.copy_address, "Copy"),
+                Hint::key(kb.copy_column, "Copy"),
                 Hint::key(kb.dump, "Dump"),
                 Hint::key(KeyCode::Esc, "Back"),
             ],

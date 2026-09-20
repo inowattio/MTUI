@@ -16,6 +16,32 @@ const TIME_W: usize = 12;
 const AGO_W: usize = 9;
 const INSPECT_W: usize = 21;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RowSegment {
+    pub name: &'static str,
+    pub start: usize,
+    pub width: usize,
+}
+
+impl RowSegment {
+    const fn new(name: &'static str, start: usize, width: usize) -> Self {
+        Self { name, start, width }
+    }
+
+    pub fn text(self, row: &str) -> String {
+        row.chars()
+            .skip(self.start)
+            .take(self.width)
+            .collect::<String>()
+            .trim()
+            .to_string()
+    }
+
+    pub fn end(self) -> usize {
+        self.start.saturating_add(self.width)
+    }
+}
+
 struct ColumnSpec {
     column: Column,
     width: usize,
@@ -208,6 +234,29 @@ impl Interpretor {
         let mut prefix = String::new();
         self.write_row_prefix(&mut prefix, 0, None);
         prefix.chars().count() as u16
+    }
+
+    pub fn row_segments(&self) -> Vec<RowSegment> {
+        let mut segments = Vec::new();
+        let mut start = 0usize;
+        if self.config.time {
+            segments.push(RowSegment::new("time", start, TIME_W));
+            start += TIME_W + 1;
+        }
+        if self.config.ago {
+            segments.push(RowSegment::new("ago", start, AGO_W));
+            start += AGO_W + 1;
+        }
+        segments.push(RowSegment::new("address", start, ADDRESS_W));
+        start += ADDRESS_W + 2;
+        for col in self.enabled_columns() {
+            segments.push(RowSegment::new(col.column.name(), start, col.width));
+            start += col.width + 1;
+        }
+        if self.config.label {
+            segments.push(RowSegment::new("label", start, usize::MAX));
+        }
+        segments
     }
 
     fn write_address(&self, out: &mut String, value: u16) {
@@ -419,6 +468,58 @@ pub(crate) fn f16_to_f32(bits: u16) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn row_segments_line_up_with_the_header() {
+        for (time, ago, label) in [
+            (true, true, true),
+            (false, false, false),
+            (true, false, true),
+        ] {
+            let config = InterpretorConfig {
+                time,
+                ago,
+                label,
+                ..InterpretorConfig::default()
+            };
+            let interpretor = Interpretor::new(config, WordOrder::ABCD);
+            let header = interpretor.header();
+            for segment in interpretor.row_segments() {
+                assert_eq!(
+                    segment.text(header),
+                    segment.name,
+                    "segment {} is misaligned in {header:?}",
+                    segment.name
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn row_segments_line_up_with_a_rendered_row() {
+        let interpretor = interpretor();
+        let row = interpretor.format_row(
+            42,
+            0x1234,
+            [Some(0), Some(0), Some(0)],
+            "12:00:00.000",
+            chrono::Duration::zero(),
+            None,
+            Some("pump"),
+        );
+        let named = |name: &str| {
+            interpretor
+                .row_segments()
+                .into_iter()
+                .find(|s| s.name == name)
+                .expect("segment")
+                .text(&row)
+        };
+        assert_eq!(named("address"), "42");
+        assert_eq!(named("u16"), "4660");
+        assert_eq!(named("hex"), "1234");
+        assert_eq!(named("time"), "12:00:00.000");
+    }
 
     fn interpretor() -> Interpretor {
         let config = InterpretorConfig {

@@ -1,8 +1,10 @@
 use super::{App, fuzzy_rank};
 use crate::config::Column;
+use crate::interpretator::RowSegment;
 use crate::num_ops::{step_hscroll, wrap_index};
 use crate::register::RegisterCell;
-use crate::state::{ColumnsParams, Popup, StatusMessage};
+use crate::state::{ColumnsParams, Popup, ReadPanel, StatusMessage};
+use chrono::Utc;
 
 impl App {
     pub fn open_columns(&mut self) {
@@ -101,14 +103,112 @@ impl App {
         self.set_read_status(message);
     }
 
-    pub fn copy_address(&mut self) {
-        let (_, address) = self.cursor_cell();
-        let message = if self.set_clipboard(address.to_string()) {
-            StatusMessage::ok(format!("Copied address {address} to clipboard"))
+    pub fn copy_column_arm(&mut self) {
+        if self.read().panel == ReadPanel::Matrix {
+            self.copy_matrix_cell();
+            return;
+        }
+        let segments = self.interpreter.row_segments();
+        if segments.is_empty() {
+            return;
+        }
+        let index = segments
+            .iter()
+            .position(|s| s.name == "address")
+            .unwrap_or(0) as u16;
+        self.read_mut().copy_column = Some(index);
+        self.scroll_column_into_view();
+    }
+
+    pub fn copy_column_move(&mut self, right: bool) {
+        let last = self.interpreter.row_segments().len().saturating_sub(1) as u16;
+        let Some(index) = self.read().copy_column else {
+            return;
+        };
+        let next = if right {
+            index.saturating_add(1).min(last)
+        } else {
+            index.saturating_sub(1)
+        };
+        self.read_mut().copy_column = Some(next);
+        self.scroll_column_into_view();
+    }
+
+    pub fn copy_column_cancel(&mut self) {
+        self.read_mut().copy_column = None;
+    }
+
+    pub fn copy_column_commit(&mut self) {
+        let Some(index) = self.read().copy_column else {
+            return;
+        };
+        self.read_mut().copy_column = None;
+        let Some(segment) = self.interpreter.row_segments().get(index as usize).copied() else {
+            return;
+        };
+        let cell = self.cursor_cell();
+        let row = match self.cell_row(cell, Utc::now()) {
+            Some((row, _)) => row,
+            None => self.interpreter.placeholder(cell.1, self.label(cell)),
+        };
+        let text = segment.text(&row);
+        let name = segment.name;
+        let message = if text.is_empty() {
+            StatusMessage::warn(format!("Nothing to copy in {name}"))
+        } else if self.set_clipboard(text.clone()) {
+            StatusMessage::ok(format!("Copied {name} '{text}' to clipboard"))
         } else {
             StatusMessage::err("Clipboard unavailable")
         };
         self.set_read_status(message);
+    }
+
+    pub fn copy_column_segment(&self) -> Option<RowSegment> {
+        let index = self.read().copy_column?;
+        self.interpreter.row_segments().get(index as usize).copied()
+    }
+
+    pub fn copy_column_name(&self) -> Option<&'static str> {
+        Some(self.copy_column_segment()?.name)
+    }
+
+    fn copy_matrix_cell(&mut self) {
+        let cell = self.cursor_cell();
+        let message = match self.cell_value(cell) {
+            None => StatusMessage::warn("Nothing read here yet"),
+            Some(value) if self.set_clipboard(value.to_string()) => {
+                StatusMessage::ok(format!("Copied {value} to clipboard"))
+            }
+            Some(_) => StatusMessage::err("Clipboard unavailable"),
+        };
+        self.set_read_status(message);
+    }
+
+    fn scroll_column_into_view(&mut self) {
+        let Some(index) = self.read().copy_column else {
+            return;
+        };
+        let Some(segment) = self.interpreter.row_segments().get(index as usize).copied() else {
+            return;
+        };
+        let prefix = self.interpreter.prefix_width() as usize;
+        if segment.start < prefix {
+            self.read_mut().col_offset = 0;
+            return;
+        }
+        let visible = (self.viewport_width as usize).saturating_sub(prefix).max(1);
+        let start = segment.start - prefix;
+        let end = segment.end().saturating_sub(prefix);
+        let offset = self.read().col_offset as usize;
+        let next = if start < offset {
+            start
+        } else if end > offset + visible {
+            end - visible
+        } else {
+            offset
+        };
+        let max = self.h_max_offset.get() as usize;
+        self.read_mut().col_offset = next.min(max) as u16;
     }
 
     #[cfg(not(target_arch = "wasm32"))]
