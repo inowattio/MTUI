@@ -5,8 +5,8 @@ use crate::modbus::{DataBits, Parity, StopBits, WordOrder};
 use crate::num_ops::{cycle, digit_add, digit_remove, wrap_index};
 use crate::state::{
     CustomParams, DiscoveryField, DiscoveryParams, InterfaceKind, LogsParams, PopupKind, ReadPanel,
-    SettingsCategory, SettingsField, SettingsFocus, SlaveField, SlaveParams, SweepConfigParams,
-    SweepField,
+    SettingsCategory, SettingsField, SettingsFocus, SlaveField, SlaveParams, StatusMessage,
+    SweepConfigParams, SweepField,
 };
 
 pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) {
@@ -706,16 +706,23 @@ fn handle_keybinds_key(key_event: KeyEvent, app: &mut App) {
     let count = KeybindAction::ALL.len() as u16;
     let selected = app.settings().map_or(0, |s| s.kb_selected) as usize;
 
-    // Capture mode: the next key (other than Esc) becomes the new binding.
     if app.settings().is_some_and(|s| s.kb_capturing) {
-        if key_event.code != KeyCode::Esc
-            && let Some(&action) = KeybindAction::ALL.get(selected)
-        {
-            app.config.keybinds.set(action, key_event.code);
-            app.dirty = true;
-        }
         if let Some(s) = app.settings_mut() {
             s.kb_capturing = false;
+        }
+        if key_event.code == KeyCode::Esc {
+            return;
+        }
+        if key_event.code.is_reserved() {
+            app.set_settings_status(StatusMessage::warn(format!(
+                "{} is reserved and cannot be bound",
+                key_event.code
+            )));
+            return;
+        }
+        if let Some(&action) = KeybindAction::ALL.get(selected) {
+            app.config.keybinds.set(action, key_event.code);
+            app.dirty = true;
         }
         return;
     }
@@ -766,7 +773,7 @@ fn handle_keybinds_key(key_event: KeyEvent, app: &mut App) {
 mod tests {
     use super::handle_key_events;
     use crate::app::App;
-    use crate::config::Config;
+    use crate::config::{Config, KeybindAction};
     use crate::input::{KeyCode, KeyEvent};
     use crate::state::{
         DiscoveryField, DiscoveryParams, InterfaceKind, MessageKind, Popup, PopupKind,
@@ -892,6 +899,44 @@ mod tests {
         }
         handle_key_events(KeyEvent::new(KeyCode::Esc), &mut app).await;
         assert_eq!(app.settings().unwrap().focus, SettingsFocus::Categories);
+    }
+
+    #[tokio::test]
+    async fn rebinding_rejects_reserved_keys_but_accepts_others() {
+        let mut app = app().await;
+        app.open_settings();
+        let keybinds = SettingsCategory::ALL
+            .iter()
+            .position(|&c| c == SettingsCategory::Keybinds)
+            .unwrap() as u16;
+        let action = KeybindAction::ALL[0];
+        let before = app.config.keybinds.get(action);
+        {
+            let s = app.settings_mut().unwrap();
+            s.category = keybinds;
+            s.focus = SettingsFocus::Fields;
+            s.kb_selected = 0;
+            s.kb_capturing = true;
+        }
+
+        handle_key_events(KeyEvent::new(KeyCode::Up), &mut app).await;
+        let s = app.settings().unwrap();
+        assert!(!s.kb_capturing, "capture ends on a reserved key");
+        assert_eq!(
+            app.config.keybinds.get(action),
+            before,
+            "binding is untouched"
+        );
+        assert_eq!(
+            s.status.as_ref().map(|m| m.kind),
+            Some(MessageKind::Warn),
+            "the user is told why"
+        );
+
+        app.settings_mut().unwrap().kb_capturing = true;
+        handle_key_events(KeyEvent::new(KeyCode::Char('z')), &mut app).await;
+        assert_eq!(app.config.keybinds.get(action), KeyCode::Char('z'));
+        assert!(app.dirty);
     }
 
     #[tokio::test]

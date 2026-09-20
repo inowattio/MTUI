@@ -55,6 +55,21 @@ named_keys! {
 }
 
 impl KeyCode {
+    pub fn is_reserved(self) -> bool {
+        match self {
+            KeyCode::Esc
+            | KeyCode::Enter
+            | KeyCode::Backspace
+            | KeyCode::Delete
+            | KeyCode::Up
+            | KeyCode::Down
+            | KeyCode::Left
+            | KeyCode::Right => true,
+            KeyCode::Char(c) => c.is_ascii_digit(),
+            _ => false,
+        }
+    }
+
     fn from_name(s: &str) -> Option<Self> {
         let named = NAMED_KEYS.iter().find(|(_, canonical, aliases)| {
             canonical.eq_ignore_ascii_case(s) || aliases.iter().any(|a| a.eq_ignore_ascii_case(s))

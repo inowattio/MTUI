@@ -58,7 +58,7 @@ impl App {
         self.clamp_panel_cursor();
     }
 
-    pub(super) fn set_settings_status(&mut self, message: StatusMessage) {
+    pub fn set_settings_status(&mut self, message: StatusMessage) {
         if let Some(s) = self.settings_mut() {
             s.status = Some(message);
         }
