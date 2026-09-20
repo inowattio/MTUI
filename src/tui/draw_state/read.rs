@@ -531,12 +531,11 @@ pub fn live_status(app: &App, params: &ReadParams, theme: &Theme) -> Vec<Span<'s
     let text = match interval {
         _ if params.loading => Some(seconds(params.read_started.elapsed().as_secs_f64())),
         _ if settled && app.paused => None,
-        Some(interval) if settled => {
+        Some(interval) if settled || matches!(app.connection, ConnectionStatus::Unknown) => {
             let remaining =
                 (interval as u128).saturating_sub(params.refresh_timer.elapsed().as_millis());
             Some(seconds(remaining as f64 / 1000.0))
         }
-        Some(_) if matches!(app.connection, ConnectionStatus::Unknown) => Some("_._s".to_string()),
         _ => None,
     };
     let mut field = vec![Span::styled(format!("{symbol} "), style)];
