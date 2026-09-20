@@ -1,5 +1,5 @@
 use crate::app::App;
-use crate::constants::{ELLIPSIS, NO_VALUE};
+use crate::constants::NO_VALUE;
 use crate::input::KeyCode;
 use crate::interpretator::format_ago;
 use crate::tui::hints::Hint;
@@ -55,11 +55,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App) {
     ];
 
     if let Some((message, at)) = s.last_error() {
-        let mut short: String = message.chars().take(ERROR_W).collect();
-        if short.len() < message.len() {
-            short.truncate(ERROR_W.saturating_sub(ELLIPSIS.len()));
-            short.push_str(ELLIPSIS);
-        }
+        let short = super::truncate(message, ERROR_W);
         let ago = format_ago(Utc::now().signed_duration_since(at));
         lines.push(Line::default());
         lines.push(field("Error", format!("{short} | {ago}")));

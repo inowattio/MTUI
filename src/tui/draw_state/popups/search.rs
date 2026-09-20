@@ -104,13 +104,8 @@ fn row(
     if m.labeled {
         spans.extend(label_spans(theme, &m.text, query, label_w, selected));
     } else {
-        let (shown, truncated) = clipped(&m.text, label_w);
-        let mut text: String = shown.into_iter().collect();
-        if truncated {
-            text.push_str(ELLIPSIS);
-        }
         spans.push(Span::styled(
-            text,
+            super::truncate(&m.text, label_w),
             style(theme.dim_style()).add_modifier(Modifier::ITALIC),
         ));
     }

@@ -1,5 +1,4 @@
 use crate::config::Keybinds;
-use crate::constants::ELLIPSIS;
 use crate::input::KeyCode;
 use crate::state::LogsParams;
 use crate::tui::hints::{self, Hint};
@@ -97,32 +96,28 @@ fn entry_line(theme: &Theme, entry: &WriteEntry, zebra: bool) -> Line<'static> {
     let time = entry.timestamp.replacen('T', " ", 1);
     Line::from(vec![
         Span::styled(
-            format!(" {:<TIME_W$}{GAP}", clip(&time, TIME_W)),
+            format!(" {:<TIME_W$}{GAP}", super::truncate(&time, TIME_W)),
             row.patch(theme.dim_style()),
         ),
         Span::styled(format!("{:>SLAVE_W$}{GAP}", entry.slave), row),
         Span::styled(format!("{:>ADDR_W$}{GAP}", entry.address), row),
         Span::styled(
-            format!("{:<TYPE_W$}{GAP}", clip(&entry.kind, TYPE_W)),
+            format!("{:<TYPE_W$}{GAP}", super::truncate(&entry.kind, TYPE_W)),
             row.patch(theme.accent_style()),
         ),
         Span::styled(
-            format!("{:>PREV_W$}{GAP}", clip(&entry.display_previous(), PREV_W)),
+            format!(
+                "{:>PREV_W$}{GAP}",
+                super::truncate(&entry.display_previous(), PREV_W)
+            ),
             row.patch(theme.dim_style()),
         ),
         Span::styled(
-            format!("{:<VALUE_W$}", clip(&entry.display_value(), VALUE_W)),
+            format!(
+                "{:<VALUE_W$}",
+                super::truncate(&entry.display_value(), VALUE_W)
+            ),
             row,
         ),
     ])
-}
-
-fn clip(text: &str, width: usize) -> String {
-    if text.chars().count() <= width {
-        return text.to_string();
-    }
-    let keep = width.saturating_sub(ELLIPSIS.len());
-    let mut out: String = text.chars().take(keep).collect();
-    out.push_str(ELLIPSIS);
-    out
 }

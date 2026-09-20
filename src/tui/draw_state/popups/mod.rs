@@ -152,3 +152,13 @@ pub(super) fn two_column(
         })
         .collect()
 }
+
+pub(super) fn truncate(text: &str, width: usize) -> String {
+    if text.chars().count() <= width {
+        return text.to_string();
+    }
+    let keep = width.saturating_sub(crate::constants::ELLIPSIS.len());
+    let mut out: String = text.chars().take(keep).collect();
+    out.push_str(crate::constants::ELLIPSIS);
+    out
+}

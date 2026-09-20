@@ -348,7 +348,7 @@ fn push_list(
         };
         lines.push(Line::from(vec![
             Span::styled(marker(selected), theme.dim_style()),
-            Span::styled(format!("{mark}{}", truncate(item, room)), style),
+            Span::styled(format!("{mark}{}", super::truncate(item, room)), style),
         ]));
     }
     if end < len {
@@ -366,7 +366,7 @@ fn custom_path_row(p: &DiscoveryParams, selected: bool, theme: &Theme) -> Line<'
             theme.selected_style(),
         )
     } else if active {
-        (truncate(&p.custom_path, room), theme.accent_style())
+        (super::truncate(&p.custom_path, room), theme.accent_style())
     } else {
         ("type a path".to_string(), theme.dim_style())
     };
@@ -391,18 +391,6 @@ fn truncate_start(text: &str, room: usize) -> String {
     let keep = room.saturating_sub(ELLIPSIS.len());
     let tail: String = text.chars().skip(count - keep).collect();
     format!("{ELLIPSIS}{tail}")
-}
-
-fn truncate(text: &str, room: usize) -> String {
-    if text.chars().count() <= room {
-        return text.to_string();
-    }
-    let mut shown: String = text
-        .chars()
-        .take(room.saturating_sub(ELLIPSIS.len()))
-        .collect();
-    shown.push_str(ELLIPSIS);
-    shown
 }
 
 fn section_title(theme: &Theme, text: &str) -> Line<'static> {
