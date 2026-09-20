@@ -10,7 +10,7 @@ use ratatui::text::Line;
 const LABEL_W: usize = 13;
 
 pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, params: &RawParams) {
-    let sel = params.current_field();
+    let sel = params.field;
     let field = |label: &str, value: String, selected: bool| {
         field_row(theme, label, LABEL_W, value, selected)
     };

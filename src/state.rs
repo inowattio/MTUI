@@ -411,31 +411,24 @@ pub struct DeviceIdParams {
     pub h_offset: u16,
 }
 
-field_enum! {
-    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-    pub enum RawField {
-        Code,
-        Data,
-    }
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum RawField {
+    #[default]
+    Code,
+    Data,
 }
 
 #[derive(Debug, Default, PartialEq)]
 pub struct RawParams {
     pub code: String,
     pub data: String,
-    pub selected: u16,
+    pub field: RawField,
     pub response: Option<String>,
     pub status: Option<StatusMessage>,
 }
 
 fn clamp_pick<const N: usize, T: Copy>(selected: u16, all: &[T; N]) -> T {
     all[(selected as usize).min(N - 1)]
-}
-
-impl RawParams {
-    pub fn current_field(&self) -> RawField {
-        clamp_pick(self.selected, &RawField::ALL)
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

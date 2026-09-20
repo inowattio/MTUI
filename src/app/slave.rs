@@ -1,7 +1,7 @@
 use super::{App, BackgroundTask, DeviceIdTaskResult, RawTaskResult, parse_hex_bytes};
 use crate::compat;
 use crate::modbus::DeviceIdAccess;
-use crate::num_ops::{cycle, step_hscroll, wrap_index};
+use crate::num_ops::{cycle, step_hscroll};
 use crate::state::{DeviceIdParams, Popup, RawField, RawParams, SlaveParams, StatusMessage};
 
 impl App {
@@ -170,16 +170,18 @@ impl App {
         self.popup_as_mut()
     }
 
-    pub fn raw_move(&mut self, down: bool) {
+    pub fn raw_move(&mut self) {
         if let Some(p) = self.raw_mut() {
-            let n = RawField::ALL.len() as u16;
-            p.selected = wrap_index(p.selected, n, down);
+            p.field = match p.field {
+                RawField::Code => RawField::Data,
+                RawField::Data => RawField::Code,
+            };
         }
     }
 
     pub fn raw_input(&mut self, c: char) {
         if let Some(p) = self.raw_mut() {
-            match p.current_field() {
+            match p.field {
                 RawField::Code if c.is_ascii_digit() && p.code.len() < 3 => p.code.push(c),
                 RawField::Data if c.is_ascii_hexdigit() || c == ' ' => p.data.push(c),
                 _ => {}
@@ -189,7 +191,7 @@ impl App {
 
     pub fn raw_backspace(&mut self) {
         if let Some(p) = self.raw_mut() {
-            match p.current_field() {
+            match p.field {
                 RawField::Code => {
                     p.code.pop();
                 }

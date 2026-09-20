@@ -231,8 +231,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
         PopupKind::Raw => match key_event.code {
             KeyCode::Esc => app.close_popup(),
             KeyCode::Enter => app.raw_send(),
-            KeyCode::Up => app.raw_move(false),
-            KeyCode::Down => app.raw_move(true),
+            KeyCode::Up | KeyCode::Down => app.raw_move(),
             KeyCode::Backspace => app.raw_backspace(),
             KeyCode::Char(c) => app.raw_input(c),
             _ => {}
