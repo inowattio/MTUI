@@ -2,7 +2,6 @@ use crate::config::{Column, InterpretorConfig};
 use crate::constants::{NO_VALUE, UNINTERPRETABLE};
 use crate::custom::CustomRepr;
 use crate::modbus::WordOrder;
-use crate::register::RegisterCellValue;
 use std::fmt::Write as _;
 
 #[derive(Debug, Clone)]
@@ -211,13 +210,6 @@ impl Interpretor {
         prefix.chars().count() as u16
     }
 
-    pub fn ascii_string(&self, data: &[RegisterCellValue]) -> String {
-        data.iter()
-            .flat_map(|&(_, v)| v.to_be_bytes())
-            .map(glyph)
-            .collect()
-    }
-
     fn write_address(&self, out: &mut String, value: u16) {
         if self.config.address_hex {
             let _ = write!(out, "{value:>w$X}: ", w = ADDRESS_W);
@@ -319,11 +311,7 @@ pub fn ascii_words(words: &[u16]) -> String {
 }
 
 fn ascii_cell(a: u16, b: u16, out: &mut String) {
-    for n in [a, b] {
-        for byte in n.to_be_bytes() {
-            out.push(glyph(byte));
-        }
-    }
+    out.push_str(&ascii_words(&[a, b]));
 }
 
 fn bits_cell(value: u16, out: &mut String) {

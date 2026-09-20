@@ -1,9 +1,9 @@
 use super::App;
 use crate::config::{BatchAnchor, Column};
 use crate::constants::NO_VALUE;
-use crate::interpretator::{fmt_num, format_ago, graph_value};
+use crate::interpretator::{ascii_words, fmt_num, format_ago, graph_value};
 use crate::num_ops::cycle;
-use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
+use crate::register::{RegisterCell, RegisterType};
 use crate::state::{InspectMode, Popup, ReadPanel};
 use chrono::{DateTime, Local, Utc};
 use std::collections::{BTreeSet, VecDeque};
@@ -388,10 +388,10 @@ impl App {
     }
 
     pub fn ascii_string_for(&self, cells: impl Iterator<Item = RegisterCell>) -> String {
-        let values: Vec<RegisterCellValue> = cells
-            .filter_map(|cell| self.read_log.get(&cell).map(|e| (cell, e.value)))
+        let words: Vec<u16> = cells
+            .filter_map(|cell| self.read_log.get(&cell).map(|e| e.value))
             .collect();
-        self.interpreter.ascii_string(&values)
+        ascii_words(&words)
     }
 
     pub fn label_text(&self, register_type: RegisterType, address: u16) -> Option<String> {
