@@ -17,9 +17,8 @@ const AGO_W: usize = 9;
 const INSPECT_W: usize = 21;
 
 struct ColumnSpec {
-    name: &'static str,
+    column: Column,
     width: usize,
-    enabled: fn(&InterpretorConfig) -> bool,
     render: fn(&RowCtx, usize, &mut String),
 }
 
@@ -54,36 +53,37 @@ impl<'a> RowCtx<'a> {
 
 #[rustfmt::skip]
 const COLUMNS: &[ColumnSpec] = &[
-    ColumnSpec { name: "u16",     width: 5,  enabled: |c| c.u16,      render: |c, _, o| { let _ = write!(o, "{}", c.value); } },
-    ColumnSpec { name: "i16",     width: 6,  enabled: |c| c.i16,      render: |c, _, o| { let _ = write!(o, "{}", c.value as i16); } },
-    ColumnSpec { name: "u8s",     width: 8,  enabled: |c| c.u8s,      render: |c, _, o| { let _ = write!(o, "{}/{}", (c.value >> 8) as u8, (c.value & 0xFF) as u8); } },
-    ColumnSpec { name: "i8s",     width: 9,  enabled: |c| c.i8s,      render: |c, _, o| { let _ = write!(o, "{}/{}", (c.value >> 8) as u8 as i8, (c.value & 0xFF) as u8 as i8); } },
-    ColumnSpec { name: "hex",     width: 4,  enabled: |c| c.hex,      render: |c, _, o| { let _ = write!(o, "{:04X}", c.value); } },
-    ColumnSpec { name: "hex32",   width: 9,  enabled: |c| c.hex32,    render: |c, _, o| if c.two() { let _ = write!(o, "{:08X}", c.word); } else { o.push_str(UNINTERPRETABLE); } },
-    ColumnSpec { name: "f16",     width: 10, enabled: |c| c.f16,      render: |c, w, o| float_cell(f16_to_f32(c.value), w, o) },
-    ColumnSpec { name: "bcd",     width: 6,  enabled: |c| c.bcd,      render: |c, _, o| match bcd_to_decimal(c.value) { Some(n) => { let _ = write!(o, "{n}"); } None => o.push_str(UNINTERPRETABLE) } },
-    ColumnSpec { name: "bcd32",   width: 10, enabled: |c| c.bcd32,    render: |c, _, o| if c.two() { match bcd_to_decimal(c.word) { Some(n) => { let _ = write!(o, "{n}"); } None => o.push_str(UNINTERPRETABLE) } } else { o.push_str(UNINTERPRETABLE); } },
-    ColumnSpec { name: "u32",     width: 10, enabled: |c| c.u32,      render: |c, _, o| if c.two() { let _ = write!(o, "{}", c.word); } else { o.push_str(UNINTERPRETABLE); } },
-    ColumnSpec { name: "i32",     width: 11, enabled: |c| c.i32,      render: |c, _, o| if c.two() { let _ = write!(o, "{}", c.word as i32); } else { o.push_str(UNINTERPRETABLE); } },
-    ColumnSpec { name: "u32 m10k", width: 11, enabled: |c| c.u32_m10k, render: |c, _, o| if c.two() { let (h, l) = m10k_to_u32(c.word); let _ = write!(o, "{h}/{l}"); } else { o.push_str(UNINTERPRETABLE); } },
-    ColumnSpec { name: "i32 m10k", width: 14, enabled: |c| c.i32_m10k, render: |c, _, o| if c.two() { let (h, l) = m10k_to_i32(c.word); let _ = write!(o, "{h}/{l}"); } else { o.push_str(UNINTERPRETABLE); } },
-    ColumnSpec { name: "u64",     width: 20, enabled: |c| c.u64,      render: |c, _, o| if c.four() { let _ = write!(o, "{}", c.dword); } else { o.push_str(UNINTERPRETABLE); } },
-    ColumnSpec { name: "i64",     width: 21, enabled: |c| c.i64,      render: |c, _, o| if c.four() { let _ = write!(o, "{}", c.dword as i64); } else { o.push_str(UNINTERPRETABLE); } },
-    ColumnSpec { name: "f32",     width: 10, enabled: |c| c.f32,      render: |c, w, o| if c.two() { float_cell(f32::from_bits(c.word), w, o) } else { o.push_str(UNINTERPRETABLE); } },
-    ColumnSpec { name: "f64",     width: 12, enabled: |c| c.f64,      render: |c, w, o| if c.four() { float_cell(f64::from_bits(c.dword), w, o) } else { o.push_str(UNINTERPRETABLE); } },
-    ColumnSpec { name: "ascii",   width: 5,  enabled: |c| c.ascii,    render: |c, _, o| ascii_cell(c.value, c.next[0].unwrap_or_default(), o) },
-    ColumnSpec { name: "bits",    width: 19, enabled: |c| c.bits,     render: |c, _, o| bits_cell(c.value, o) },
-    ColumnSpec { name: "custom",  width: 18, enabled: |c| c.custom,   render: |c, _, o| o.push_str(c.custom) },
+    ColumnSpec { column: Column::U16,     width: 5,  render: |c, _, o| { let _ = write!(o, "{}", c.value); } },
+    ColumnSpec { column: Column::I16,     width: 6,  render: |c, _, o| { let _ = write!(o, "{}", c.value as i16); } },
+    ColumnSpec { column: Column::U8s,     width: 8,  render: |c, _, o| { let _ = write!(o, "{}/{}", (c.value >> 8) as u8, (c.value & 0xFF) as u8); } },
+    ColumnSpec { column: Column::I8s,     width: 9,  render: |c, _, o| { let _ = write!(o, "{}/{}", (c.value >> 8) as u8 as i8, (c.value & 0xFF) as u8 as i8); } },
+    ColumnSpec { column: Column::Hex,     width: 4,  render: |c, _, o| { let _ = write!(o, "{:04X}", c.value); } },
+    ColumnSpec { column: Column::Hex32,   width: 9,  render: |c, _, o| if c.two() { let _ = write!(o, "{:08X}", c.word); } else { o.push_str(UNINTERPRETABLE); } },
+    ColumnSpec { column: Column::F16,     width: 10, render: |c, w, o| float_cell(f16_to_f32(c.value), w, o) },
+    ColumnSpec { column: Column::Bcd,     width: 6,  render: |c, _, o| match bcd_to_decimal(c.value) { Some(n) => { let _ = write!(o, "{n}"); } None => o.push_str(UNINTERPRETABLE) } },
+    ColumnSpec { column: Column::Bcd32,   width: 10, render: |c, _, o| if c.two() { match bcd_to_decimal(c.word) { Some(n) => { let _ = write!(o, "{n}"); } None => o.push_str(UNINTERPRETABLE) } } else { o.push_str(UNINTERPRETABLE); } },
+    ColumnSpec { column: Column::U32,     width: 10, render: |c, _, o| if c.two() { let _ = write!(o, "{}", c.word); } else { o.push_str(UNINTERPRETABLE); } },
+    ColumnSpec { column: Column::I32,     width: 11, render: |c, _, o| if c.two() { let _ = write!(o, "{}", c.word as i32); } else { o.push_str(UNINTERPRETABLE); } },
+    ColumnSpec { column: Column::U32M10K, width: 11, render: |c, _, o| if c.two() { let (h, l) = m10k_to_u32(c.word); let _ = write!(o, "{h}/{l}"); } else { o.push_str(UNINTERPRETABLE); } },
+    ColumnSpec { column: Column::I32M10K, width: 14, render: |c, _, o| if c.two() { let (h, l) = m10k_to_i32(c.word); let _ = write!(o, "{h}/{l}"); } else { o.push_str(UNINTERPRETABLE); } },
+    ColumnSpec { column: Column::U64,     width: 20, render: |c, _, o| if c.four() { let _ = write!(o, "{}", c.dword); } else { o.push_str(UNINTERPRETABLE); } },
+    ColumnSpec { column: Column::I64,     width: 21, render: |c, _, o| if c.four() { let _ = write!(o, "{}", c.dword as i64); } else { o.push_str(UNINTERPRETABLE); } },
+    ColumnSpec { column: Column::F32,     width: 10, render: |c, w, o| if c.two() { float_cell(f32::from_bits(c.word), w, o) } else { o.push_str(UNINTERPRETABLE); } },
+    ColumnSpec { column: Column::F64,     width: 12, render: |c, w, o| if c.four() { float_cell(f64::from_bits(c.dword), w, o) } else { o.push_str(UNINTERPRETABLE); } },
+    ColumnSpec { column: Column::Ascii,   width: 5,  render: |c, _, o| ascii_cell(c.value, c.next[0].unwrap_or_default(), o) },
+    ColumnSpec { column: Column::Bits,    width: 19, render: |c, _, o| bits_cell(c.value, o) },
+    ColumnSpec { column: Column::Custom,  width: 18, render: |c, _, o| o.push_str(c.custom) },
 ];
 
 impl Column {
     pub fn graph_width(self) -> Option<usize> {
-        Some(match self {
-            Column::U16 | Column::I16 | Column::F16 | Column::Bcd => 1,
-            Column::U32 | Column::I32 | Column::F32 | Column::Bcd32 => 2,
-            Column::U64 | Column::I64 | Column::F64 => 4,
-            _ => return None,
-        })
+        self.custom_repr()
+            .map(CustomRepr::register_count)
+            .or(match self {
+                Column::Bcd => Some(1),
+                Column::Bcd32 => Some(2),
+                _ => None,
+            })
     }
 
     pub fn is_graphable(self) -> bool {
@@ -140,7 +140,7 @@ impl Interpretor {
         let _ = write!(header, "{:>w$}: ", "address", w = ADDRESS_W);
 
         for col in self.enabled_columns() {
-            let _ = write!(header, "{:<w$} ", col.name, w = col.width);
+            let _ = write!(header, "{:<w$} ", col.column.name(), w = col.width);
         }
         if self.config.label {
             header.push_str("label");
@@ -150,7 +150,7 @@ impl Interpretor {
     }
 
     fn enabled_columns(&self) -> impl Iterator<Item = &'static ColumnSpec> + '_ {
-        COLUMNS.iter().filter(|col| (col.enabled)(&self.config))
+        COLUMNS.iter().filter(|col| self.config.get(col.column))
     }
 
     fn write_prefix(&self, out: &mut String, time: &str, ago: &str) {
@@ -280,7 +280,7 @@ impl Interpretor {
             .map(|col| {
                 let mut cell = String::new();
                 (col.render)(&ctx, INSPECT_W, &mut cell);
-                (col.name, cell)
+                (col.column.name(), cell)
             })
             .collect();
         entries.push(("label", label.unwrap_or("").to_string()));
