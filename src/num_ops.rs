@@ -5,9 +5,7 @@ where
     T: Copy + PartialEq + From<u8> + CheckedDiv<Output = T>,
 {
     let ten = T::from(10u8);
-    if let Some(c) = v.checked_div(&ten) {
-        *v = c;
-    }
+    *v = *v / ten;
 }
 
 pub fn digit_add<T>(v: &mut T, digit: u8)
