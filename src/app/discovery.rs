@@ -88,7 +88,6 @@ impl App {
     }
 
     pub fn open_discovery(&mut self) {
-        self.free_background_slot();
         let params = Self::discovery_params(&self.config);
         self.read_mut().popup = Some(Popup::Discovery(params));
         self.request_ports();
