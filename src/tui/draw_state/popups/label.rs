@@ -1,6 +1,6 @@
 use crate::input::KeyCode;
 use crate::state::LabelParams;
-use crate::tui::hints::{self, Hint};
+use crate::tui::hints::Hint;
 use crate::tui::theme::Theme;
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -13,25 +13,22 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, label: &LabelPa
         (label.text.clone(), theme.base())
     };
 
-    let lines = vec![
+    let mut lines = vec![
+        Line::default(),
         Line::from(vec![
-            Span::styled("Label ", theme.dim_style()),
-            Span::styled(label.position.to_string(), theme.accent_style()),
-            Span::styled(format!("  ({:?})", label.register_type), theme.dim_style()),
-        ]),
-        Line::from(vec![
-            Span::styled("Text: ", theme.dim_style()),
+            Span::styled(" Text: ", theme.dim_style()),
             Span::styled(text, text_style),
             super::cursor_span(theme),
         ]),
-        hints::footer(
-            theme,
-            [
-                Hint::key(KeyCode::Enter, "Set"),
-                Hint::key(KeyCode::Esc, "Cancel"),
-            ],
-        ),
     ];
+    super::push_footer(
+        &mut lines,
+        theme,
+        [
+            Hint::key(KeyCode::Enter, "Set"),
+            Hint::key(KeyCode::Esc, "Cancel"),
+        ],
+    );
 
     super::render(frame, area, theme, "Label", 48, lines);
 }
