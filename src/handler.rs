@@ -19,7 +19,6 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) {
         return;
     }
 
-    let rows = app.visible_rows.get();
     let kb = app.config.keybinds;
 
     if app.settings().is_some() {
@@ -56,10 +55,9 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) {
         KeyCode::Esc => app.request_quit(),
         KeyCode::Up | KeyCode::Down => move_read_cursor(app, key_event.code),
         KeyCode::Left | KeyCode::Right if app.read().panel == ReadPanel::Matrix => {
-            let cols = app.matrix_cols();
             let p = app.read_mut();
             p.position = step_pos(p.position, key_event.code == KeyCode::Left, 1);
-            p.scroll_to_cursor(rows, cols);
+            app.scroll_to_cursor();
         }
         KeyCode::Left => app.scroll_columns(false),
         KeyCode::Right => app.scroll_columns(true),
@@ -68,18 +66,12 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) {
                 return;
             }
             let digit = c as u8 - b'0';
-            {
-                let cols = app.matrix_cols();
-                let p = app.read_mut();
-                digit_add(&mut p.position, digit);
-                p.scroll_to_cursor(rows, cols);
-            }
+            digit_add(&mut app.read_mut().position, digit);
+            app.scroll_to_cursor();
         }
         KeyCode::Backspace => {
-            let cols = app.matrix_cols();
-            let p = app.read_mut();
-            digit_remove(&mut p.position);
-            p.scroll_to_cursor(rows, cols);
+            digit_remove(&mut app.read_mut().position);
+            app.scroll_to_cursor();
         }
         _ => {}
     }
@@ -107,20 +99,18 @@ fn move_read_cursor(app: &mut App, code: KeyCode) {
     let scroll_rows = app.panel_scroll_rows();
     let p = app.read_mut();
     match p.panel {
-        ReadPanel::Main => {
-            p.position = step_pos(p.position, up, step);
-            p.scroll_to_cursor(rows, cols);
-        }
+        ReadPanel::Main => p.position = step_pos(p.position, up, step),
         ReadPanel::Matrix => {
             let step = step.saturating_mul(cols.max(1));
             p.position = step_pos(p.position, up, step);
-            p.scroll_to_cursor(rows, cols);
         }
         _ => {
             p.pinned_index = step_pos(p.pinned_index, up, step);
             p.scroll_pinned(scroll_rows, panel_len);
+            return;
         }
     }
+    app.scroll_to_cursor();
 }
 
 async fn run_action(app: &mut App, action: KeybindAction) {
@@ -160,14 +150,11 @@ async fn run_action(app: &mut App, action: KeybindAction) {
         }
         NextConfig => app.cycle_config(),
         SwitchView => {
-            let rows = app.visible_rows.get();
             app.toggle_panel();
             let len = app.panel_len();
-            let cols = app.matrix_cols();
             let scroll_rows = app.panel_scroll_rows();
-            let p = app.read_mut();
-            p.scroll_pinned(scroll_rows, len);
-            p.scroll_to_cursor(rows, cols);
+            app.read_mut().scroll_pinned(scroll_rows, len);
+            app.scroll_to_cursor();
         }
         BatchDecrease | BatchIncrease => app.adjust_batch(action == BatchIncrease),
         PageUp | PageDown => {
@@ -448,7 +435,6 @@ pub fn handle_paste(data: String, app: &mut App) {
 
 fn paste_digits(digits: &str, app: &mut App) {
     let digits = digits.bytes().map(|b| b - b'0');
-    let rows = app.visible_rows.get();
 
     match app.popup_kind() {
         Some(PopupKind::Write) => {
@@ -468,13 +454,12 @@ fn paste_digits(digits: &str, app: &mut App) {
             }
         }
         None => {
-            let cols = app.matrix_cols();
             let p = app.read_mut();
             p.position = 0;
             for digit in digits {
                 digit_add(&mut p.position, digit);
             }
-            p.scroll_to_cursor(rows, cols);
+            app.scroll_to_cursor();
         }
         _ => {}
     }

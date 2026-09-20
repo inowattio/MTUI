@@ -38,13 +38,8 @@ impl App {
             self.sweep.current = from;
             self.sweep.errored = false;
             self.sweep.active = true;
-            let rows = self.visible_rows.get();
-            let cols = self.matrix_cols();
-            {
-                let p = self.read_mut();
-                p.position = from;
-                p.scroll_to_cursor(rows, cols);
-            }
+            self.read_mut().position = from;
+            self.scroll_to_cursor();
             log::info!(
                 "Sweep started | {from}..{to}{}",
                 if continuous { " (loop)" } else { "" }

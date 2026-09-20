@@ -77,6 +77,12 @@ impl App {
             && self.all_panel_cells().next().is_some()
     }
 
+    pub fn scroll_to_cursor(&mut self) {
+        let rows = self.visible_rows.get();
+        let cols = self.matrix_cols();
+        self.read_mut().scroll_to_cursor(rows, cols);
+    }
+
     pub(super) fn clamp_panel_cursor(&mut self) {
         if matches!(self.read().panel, ReadPanel::Main | ReadPanel::Matrix) {
             return;

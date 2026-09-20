@@ -268,9 +268,7 @@ impl App {
         }
 
         if self.is_reading() {
-            let rows = self.visible_rows.get();
-            let cols = self.matrix_cols();
-            self.read_mut().scroll_to_cursor(rows, cols);
+            self.scroll_to_cursor();
         }
 
         if self.maybe_reconnect() {
@@ -279,14 +277,9 @@ impl App {
 
         if self.sweep.active {
             if self.is_reading() {
-                let rows = self.visible_rows.get();
-                let cols = self.matrix_cols();
                 let current = self.sweep.current;
-                {
-                    let p = self.read_mut();
-                    p.position = current;
-                    p.scroll_to_cursor(rows, cols);
-                }
+                self.read_mut().position = current;
+                self.scroll_to_cursor();
                 self.refresh().await;
             }
             return;
@@ -502,13 +495,11 @@ impl App {
 
         let sweeping = self.sweep.active;
         let (read_start, amount) = self.read_window();
-        let visible = self.visible_rows.get().max(1);
-        let cols = self.matrix_cols();
+        self.scroll_to_cursor();
         let (panel, register_type) = {
             let p = self.read_mut();
             p.loading = true;
             p.read_started = Instant::now();
-            p.scroll_to_cursor(visible, cols);
             (p.panel, p.register_type)
         };
 
