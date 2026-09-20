@@ -522,16 +522,16 @@ pub fn live_status(app: &App, params: &ReadParams, theme: &Theme) -> Vec<Span<'s
     let mut fields: Vec<Vec<Span<'static>>> = Vec::new();
 
     let (symbol, label, style) = status_parts(&app.connection, theme);
-    let settled = matches!(
+    let idle = !matches!(
         app.connection,
-        ConnectionStatus::Connected | ConnectionStatus::Error(_)
+        ConnectionStatus::Reading | ConnectionStatus::Reconnecting
     );
     let interval = app.config.update_interval_ms.filter(|_| !app.sweep.active);
     let seconds = |s: f64| format!("{s:>3.1}s");
     let text = match interval {
         _ if params.loading => Some(seconds(params.read_started.elapsed().as_secs_f64())),
-        _ if settled && app.paused => None,
-        Some(interval) if settled || matches!(app.connection, ConnectionStatus::Unknown) => {
+        _ if idle && app.paused => None,
+        Some(interval) if idle && app.device.is_some() => {
             let remaining =
                 (interval as u128).saturating_sub(params.refresh_timer.elapsed().as_millis());
             Some(seconds(remaining as f64 / 1000.0))
@@ -546,7 +546,7 @@ pub fn live_status(app: &App, params: &ReadParams, theme: &Theme) -> Vec<Span<'s
                 field.push(Span::styled(format!(" {label}"), theme.dim_style()));
             }
         }
-        None if settled && app.paused => {
+        None if idle && app.paused => {
             field.push(Span::styled("paused".to_string(), theme.warn_style()));
         }
         None => field.push(Span::styled(label.to_string(), style)),
