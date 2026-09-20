@@ -119,10 +119,10 @@ macro_rules! keybinds {
 }
 
 keybinds! {
+    About => about : "About" = ABOUT,
     Pin => pin : "Add/remove pin" = PIN,
     Dump => dump : "Dump read data" = DUMP,
     Help => help : "Help" = HELP,
-    About => about : "About" = ABOUT,
     Refresh => refresh : "Refresh" = REFRESH,
     Toggle => toggle : "Switch register type" = TOGGLE,
     Write => write : "Write register" = WRITE,
