@@ -161,6 +161,7 @@ impl App {
         } else {
             self.labels.insert(key, text);
         }
+        self.sync_auto_widths();
         self.refresh_dirty();
 
         self.read_mut().popup = None;

@@ -19,7 +19,7 @@ pub(super) fn draw(
     let count = matches.len();
     let selected = params.selected as usize;
 
-    const CELL: usize = 14;
+    const CELL: usize = 10;
 
     let query_line = super::query_line(theme, &params.query, count);
 
@@ -48,13 +48,17 @@ pub(super) fn draw(
     }
 
     lines.push(Line::default());
-    let footer = [
+    let footer1 = [
         Hint::pair(KeyCode::Down, KeyCode::Right, "Move"),
         Hint::key(KeyCode::Enter, "Toggle"),
+    ];
+    let footer2 = [
+        Hint::pair(KeyCode::Char(','), KeyCode::Char('.'), "Order"),
         Hint::key(KeyCode::Esc, "Close"),
     ];
-    let width = hints::min_width((CELL as u16 + 6) * 2 + 3, &footer);
-    lines.push(hints::footer(theme, footer));
+    let width = hints::min_width((CELL as u16 + 6) * 2 + 3, &footer1);
+    lines.push(hints::footer(theme, footer1));
+    lines.push(hints::footer(theme, footer2));
 
     super::render(frame, area, theme, "Columns", width, lines);
 }

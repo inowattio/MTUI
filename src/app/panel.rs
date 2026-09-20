@@ -1,7 +1,7 @@
 use super::App;
 use crate::config::{BatchAnchor, Column};
 use crate::constants::NO_VALUE;
-use crate::interpretator::{ascii_words, fmt_num, format_ago, graph_value};
+use crate::interpretator::{ascii_words, fmt_num, graph_value};
 use crate::num_ops::cycle;
 use crate::register::{RegisterCell, RegisterType};
 use crate::state::{InspectMode, Popup, ReadPanel};
@@ -228,22 +228,19 @@ impl App {
         let at = |address: u16| self.read_log.get(&(kind, address)).map(|e| e.value);
         let custom = self.custom_value(cell, value, &at);
         let label = self.labels.get(&cell).map(String::as_str);
-        let mut lines = vec![
-            (
-                "read at",
-                time.with_timezone(&Local)
-                    .format("%H:%M:%S.%3f")
-                    .to_string(),
-            ),
-            ("ago", format_ago(Utc::now().signed_duration_since(time))),
-        ];
-        lines.extend(self.interpreter.interpret_all(
+        let time_text = time
+            .with_timezone(&Local)
+            .format("%H:%M:%S.%3f")
+            .to_string();
+        self.interpreter.interpret_all(
+            addr,
             value,
             [1, 2, 3].map(|offset| at(addr.saturating_add(offset))),
+            &time_text,
+            Utc::now().signed_duration_since(time),
             custom.as_deref(),
             label,
-        ));
-        lines
+        )
     }
 
     fn inspect_aggregates(

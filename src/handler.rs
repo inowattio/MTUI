@@ -250,6 +250,8 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
             KeyCode::Left => app.columns_switch(false),
             KeyCode::Right => app.columns_switch(true),
             KeyCode::Backspace => app.columns_backspace(),
+            KeyCode::Char(',') => app.columns_move_selected(false),
+            KeyCode::Char('.') => app.columns_move_selected(true),
             KeyCode::Char(c) => app.columns_input(c),
             _ => {}
         },
@@ -914,6 +916,27 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn order_keys_reorder_columns_instead_of_typing() {
+        let mut app = app().await;
+        app.open_columns();
+        let first = app.interpreter.ordered_columns()[0];
+
+        handle_key_events(KeyEvent::new(KeyCode::Char('.')), &mut app).await;
+
+        assert_eq!(app.interpreter.ordered_columns()[1], first, "moved right");
+        assert!(app.dirty, "the order is part of the config");
+        assert_eq!(
+            app.popup_as::<crate::state::ColumnsParams>()
+                .map(|p| p.query.as_str()),
+            Some(""),
+            "the order key is not typed into the search"
+        );
+
+        handle_key_events(KeyEvent::new(KeyCode::Char(',')), &mut app).await;
+        assert_eq!(app.interpreter.ordered_columns()[0], first, "and back");
+    }
+
+    #[tokio::test]
     async fn copy_column_walks_the_row_and_escape_only_leaves_the_mode() {
         let mut app = app().await;
         let kb = app.config.keybinds;
@@ -926,16 +949,16 @@ mod tests {
         );
 
         handle_key_events(KeyEvent::new(KeyCode::Left), &mut app).await;
-        assert_eq!(app.copy_column_name(), Some("time"));
-
-        handle_key_events(KeyEvent::new(KeyCode::Left), &mut app).await;
         assert_eq!(
             app.copy_column_name(),
-            Some("time"),
-            "clamps at the left edge"
+            Some("address"),
+            "the anchor is the left edge"
         );
 
         handle_key_events(KeyEvent::new(KeyCode::Right), &mut app).await;
+        assert_eq!(app.copy_column_name(), Some("time"));
+
+        handle_key_events(KeyEvent::new(KeyCode::Left), &mut app).await;
         assert_eq!(app.copy_column_name(), Some("address"));
 
         handle_key_events(KeyEvent::new(KeyCode::Esc), &mut app).await;

@@ -70,6 +70,7 @@ impl App {
             self.custom_rules.extend(incoming);
         }
 
+        self.sync_auto_widths();
         self.refresh_dirty();
         self.close_popup();
         log::info!("Imported {pins} pin(s), {labels} label(s), {rules} rule(s) from clipboard");

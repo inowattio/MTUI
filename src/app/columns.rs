@@ -15,7 +15,36 @@ impl App {
         let Some(c) = self.popup_as::<ColumnsParams>() else {
             return Vec::new();
         };
-        fuzzy_rank(&c.query, Column::ALL, |col| col.name())
+        fuzzy_rank(&c.query, self.interpreter.ordered_columns(), |col| {
+            col.name()
+        })
+    }
+
+    pub fn columns_move_selected(&mut self, right: bool) {
+        let matches = self.column_matches();
+        let Some(selected) = self
+            .popup_as::<ColumnsParams>()
+            .map(|p| p.selected as usize)
+        else {
+            return;
+        };
+        let Some(&column) = matches.get(selected) else {
+            return;
+        };
+        if !self.interpreter.move_column(column, right) {
+            return;
+        }
+        self.refresh_dirty();
+        let moved = self
+            .column_matches()
+            .iter()
+            .position(|&c| c == column)
+            .map(|index| index as u16);
+        if let Some(index) = moved
+            && let Some(p) = self.popup_as_mut::<ColumnsParams>()
+        {
+            p.selected = index;
+        }
     }
 
     pub fn columns_input(&mut self, c: char) {
@@ -322,6 +351,28 @@ impl App {
         let max = self.h_max_offset.get();
         let p = self.read_mut();
         p.col_offset = step_hscroll(p.col_offset, max, right);
+    }
+
+    pub(super) fn sync_auto_widths(&mut self) {
+        if self.interpreter.label_width() == 0 {
+            let longest = self
+                .labels
+                .values()
+                .map(|label| label.chars().count())
+                .max()
+                .unwrap_or(0);
+            self.interpreter.set_label_auto(longest);
+        }
+        if self.interpreter.custom_width() == 0 {
+            let longest = self
+                .custom_rules
+                .keys()
+                .filter_map(|&cell| self.custom_text(cell))
+                .map(|text| text.chars().count())
+                .max()
+                .unwrap_or(0);
+            self.interpreter.set_custom_auto(longest);
+        }
     }
 
     pub fn toggle_column(&mut self, column: Column) {

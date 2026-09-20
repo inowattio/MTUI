@@ -102,6 +102,7 @@ impl App {
         app.sync_api_allow_slave_id();
         app.refresh_writes_log_state();
 
+        app.sync_auto_widths();
         app.mark_config_saved();
         app.visible_rows.set(app.config.registers_batch.max(1));
 
@@ -158,6 +159,7 @@ impl App {
         self.refresh_writes_log_state();
 
         self.clear_read_accumulation();
+        self.sync_auto_widths();
         self.connection = ConnectionStatus::Unknown;
         self.logged_connection = ConnectionStatus::Unknown;
         self.reconnect = ReconnectState::default();
@@ -622,6 +624,8 @@ impl App {
                 }
             }
         }
+
+        self.sync_auto_widths();
 
         let connection = match (&result.main_data, &result.pinned_data) {
             (Some(Ok(_)), _) | (_, Some(Ok(_))) => {

@@ -201,6 +201,7 @@ impl App {
         match built {
             Ok((cell, rule)) => {
                 self.custom_rules.insert(cell, rule);
+                self.sync_auto_widths();
                 self.refresh_dirty();
                 self.read_mut().popup = None;
                 log::info!("Custom rule set | {:?}@{}", cell.0, cell.1);
@@ -217,6 +218,7 @@ impl App {
             return;
         };
         if self.custom_rules.remove(&cell).is_some() {
+            self.sync_auto_widths();
             self.refresh_dirty();
             log::info!("Custom rule removed | {:?}@{}", cell.0, cell.1);
         }

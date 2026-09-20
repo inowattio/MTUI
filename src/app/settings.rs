@@ -1,6 +1,7 @@
 use super::App;
 
-use crate::config::BatchAnchor;
+use crate::config::{AddressMode, BatchAnchor, TimeMode};
+use crate::interpretator::WIDTH_MAX;
 use crate::num_ops::cycle;
 use crate::register::RegisterType;
 use crate::state::{ReadPanel, SettingsField, SettingsParams, State, StatusMessage};
@@ -73,6 +74,9 @@ impl App {
                 Some((0, u16::MAX as i64, 1))
             }
             SettingsField::PaddingHorizontal | SettingsField::PaddingVertical => Some((0, 50, 1)),
+            SettingsField::LabelWidth | SettingsField::CustomWidth => {
+                Some((0, WIDTH_MAX as i64, 1))
+            }
             SettingsField::AutoUpdate | SettingsField::ChangedExpiry => {
                 Some((0, u32::MAX as i64, 100))
             }
@@ -88,6 +92,8 @@ impl App {
             SettingsField::ChangedExpiry => self.config.changed_expiry_ms.map_or(0, |n| n as i64),
             SettingsField::HistoryCap => self.config.graph_history_cap as i64,
             SettingsField::MatrixCols => self.config.matrix_cols as i64,
+            SettingsField::LabelWidth => self.interpreter.label_width() as i64,
+            SettingsField::CustomWidth => self.interpreter.custom_width() as i64,
             SettingsField::StartupAddress => self.config.startup.address as i64,
             SettingsField::PaddingHorizontal => self.config.padding_horizontal as i64,
             SettingsField::PaddingVertical => self.config.padding_vertical as i64,
@@ -107,6 +113,14 @@ impl App {
             }
             SettingsField::HistoryCap => self.config.graph_history_cap = value as u16,
             SettingsField::MatrixCols => self.config.matrix_cols = value as u16,
+            SettingsField::LabelWidth => {
+                self.interpreter.set_label_width(value as u16);
+                self.sync_auto_widths();
+            }
+            SettingsField::CustomWidth => {
+                self.interpreter.set_custom_width(value as u16);
+                self.sync_auto_widths();
+            }
             SettingsField::StartupAddress => self.config.startup.address = value as u16,
             SettingsField::PaddingHorizontal => self.config.padding_horizontal = value as u16,
             SettingsField::PaddingVertical => self.config.padding_vertical = value as u16,
@@ -130,6 +144,18 @@ impl App {
             }
             SettingsField::ShowMock => self.config.show_mock = !self.config.show_mock,
             SettingsField::ReadOnly => self.config.read_only = !self.config.read_only,
+            SettingsField::TimeMode => {
+                let next = cycle(&TimeMode::ALL, self.interpreter.time_mode(), delta > 0);
+                self.interpreter.set_time_mode(next);
+            }
+            SettingsField::AddressMode => {
+                let next = cycle(
+                    &AddressMode::ALL,
+                    self.interpreter.address_mode(),
+                    delta > 0,
+                );
+                self.interpreter.set_address_mode(next);
+            }
             SettingsField::BatchAnchor => {
                 self.config.batch_anchor =
                     cycle(&BatchAnchor::ALL, self.config.batch_anchor, delta > 0);

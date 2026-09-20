@@ -23,12 +23,14 @@ impl App {
     pub fn clear_labels(&mut self) {
         let n = self.labels.len();
         self.labels.clear();
+        self.sync_auto_widths();
         self.note_cleared(n, "label");
     }
 
     pub fn clear_custom(&mut self) {
         let n = self.custom_rules.len();
         self.custom_rules.clear();
+        self.sync_auto_widths();
         self.note_cleared(n, "custom rule");
     }
 

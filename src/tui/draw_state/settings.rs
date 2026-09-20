@@ -283,6 +283,13 @@ fn color_row(
     line
 }
 
+fn auto_width(width: u16) -> String {
+    match width {
+        0 => "auto".to_string(),
+        n => n.to_string(),
+    }
+}
+
 fn field_value(
     app: &App,
     params: &SettingsParams,
@@ -293,6 +300,10 @@ fn field_value(
         SettingsField::Name => (device.name.clone(), None),
         SettingsField::RegistersBatch => (device.registers_batch.to_string(), None),
         SettingsField::BatchAnchor => (device.batch_anchor.label().to_string(), None),
+        SettingsField::TimeMode => (app.interpreter.time_mode().label().to_string(), None),
+        SettingsField::AddressMode => (app.interpreter.address_mode().label().to_string(), None),
+        SettingsField::LabelWidth => (auto_width(app.interpreter.label_width()), None),
+        SettingsField::CustomWidth => (auto_width(app.interpreter.custom_width()), None),
         SettingsField::ReadFullCustoms => (on_off(device.read_full_customs), None),
         SettingsField::CustomBatchBySize => (on_off(device.custom_batch_by_size), None),
         SettingsField::PanelTypeFilter => (on_off(device.panel_type_filter), None),
@@ -304,13 +315,7 @@ fn field_value(
         ),
         SettingsField::ReconnectOnTimeout => (on_off(device.reconnect_on_timeout), None),
         SettingsField::HistoryCap => (device.graph_history_cap.to_string(), None),
-        SettingsField::MatrixCols => (
-            match device.matrix_cols {
-                0 => "auto".to_string(),
-                n => n.to_string(),
-            },
-            None,
-        ),
+        SettingsField::MatrixCols => (auto_width(device.matrix_cols), None),
         SettingsField::IgnoreDirty => (on_off(device.ignore_dirty), None),
         SettingsField::ShowMock => (on_off(device.show_mock), None),
         SettingsField::ReadOnly => (on_off(device.read_only), None),

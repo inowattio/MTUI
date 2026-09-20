@@ -72,6 +72,42 @@ impl BatchAnchor {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub enum TimeMode {
+    #[default]
+    ReadAt,
+    Ago,
+}
+
+impl TimeMode {
+    pub const ALL: [TimeMode; 2] = [TimeMode::ReadAt, TimeMode::Ago];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            TimeMode::ReadAt => "read at",
+            TimeMode::Ago => "ago",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub enum AddressMode {
+    #[default]
+    Dec,
+    Hex,
+}
+
+impl AddressMode {
+    pub const ALL: [AddressMode; 2] = [AddressMode::Dec, AddressMode::Hex];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            AddressMode::Dec => "decimal",
+            AddressMode::Hex => "hex",
+        }
+    }
+}
+
 macro_rules! keybinds {
     ($($action:ident => $field:ident : $label:literal = $default:ident),+ $(,)?) => {
         #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
@@ -517,17 +553,46 @@ impl Config {
     }
 }
 
+fn column_order<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Vec<Column>, D::Error> {
+    let keys = Vec::<String>::deserialize(deserializer)?;
+    Ok(keys
+        .iter()
+        .filter_map(|key| Column::from_key(key))
+        .collect())
+}
+
+impl Serialize for Column {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.key())
+    }
+}
+
 macro_rules! interpretation_columns {
     ($($variant:ident => $field:ident : $name:literal = $default:literal),+ $(,)?) => {
         #[derive(Clone, Debug, Deserialize, Serialize)]
         #[serde(default)]
         pub struct InterpretorConfig {
             $(pub $field: bool,)+
+            #[serde(skip_serializing_if = "Vec::is_empty", deserialize_with = "column_order")]
+            pub order: Vec<Column>,
+            pub time_mode: TimeMode,
+            pub address_mode: AddressMode,
+            pub label_width: u16,
+            pub custom_width: u16,
         }
 
         impl Default for InterpretorConfig {
             fn default() -> Self {
-                Self { $($field: $default,)+ }
+                Self {
+                    $($field: $default,)+
+                    order: Vec::new(),
+                    time_mode: TimeMode::ReadAt,
+                    address_mode: AddressMode::Dec,
+                    label_width: 20,
+                    custom_width: 10,
+                }
             }
         }
 
@@ -538,6 +603,16 @@ macro_rules! interpretation_columns {
 
         impl Column {
             pub const ALL: &'static [Column] = &[$(Column::$variant),+];
+
+            pub fn key(self) -> &'static str {
+                match self {
+                    $(Column::$variant => stringify!($field),)+
+                }
+            }
+
+            pub fn from_key(key: &str) -> Option<Column> {
+                Column::ALL.iter().copied().find(|c| c.key() == key)
+            }
 
             pub fn name(self) -> &'static str {
                 match self {
@@ -563,7 +638,7 @@ macro_rules! interpretation_columns {
 }
 
 interpretation_columns! {
-    AddressHex => address_hex : "address (hex)" = false,
+    Address => address : "address" = true,
     U8s => u8s : "u8s" = false,
     I8s => i8s : "i8s" = false,
     U16 => u16 : "u16" = true,
@@ -584,7 +659,6 @@ interpretation_columns! {
     Bits => bits : "bits" = true,
     Ascii => ascii : "ascii" = true,
     Custom => custom : "custom" = true,
-    Time => time : "time (read at)" = true,
-    Ago => ago : "ago (read)" = false,
+    Time => time : "time" = true,
     Label => label : "label" = true,
 }

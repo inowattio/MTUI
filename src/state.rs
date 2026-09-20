@@ -828,7 +828,7 @@ settings_fields! {
         ],
         [
             HistoryCap: Number => "Graph history cap", "Samples kept per register for the value graph",
-            MatrixCols: Number => "Matrix columns", "Registers per row in the Matrix panel, 0 fits as many as the screen shows",
+            MatrixCols: Number => "Matrix columns", "Registers per row in the Matrix panel, auto fits as many as the screen shows",
         ],
         [
             CycleHoldings: CycleType(RegisterType::Holding) => "Cycle holdings", "Include holding registers when cycling register types",
@@ -866,6 +866,12 @@ settings_fields! {
             CycleLabeled: CyclePanel(ReadPanel::Labeled) => "Cycle labeled", "Include the Labeled panel when cycling panels",
             CycleCustom: CyclePanel(ReadPanel::Custom) => "Cycle custom", "Include the Custom panel when cycling panels",
             CycleMatrix: CyclePanel(ReadPanel::Matrix) => "Cycle matrix", "Include the Matrix panel when cycling panels",
+        ],
+        [
+            TimeMode: Toggle => "Time column", "Show the read time as a timestamp or as how long ago it was",
+            AddressMode: Toggle => "Address format", "Show addresses in decimal or hexadecimal",
+            LabelWidth: Number => "Label width", "Characters the label column takes, auto fits the longest label",
+            CustomWidth: Number => "Custom width", "Characters the custom column takes, auto fits the longest value",
         ],
         [
             ShowReadWindow: Toggle => "Show read window", "Highlight the address range covered by the current read batch",

@@ -1,5 +1,5 @@
-use crate::config::{Column, InterpretorConfig};
-use crate::constants::{NO_VALUE, UNINTERPRETABLE};
+use crate::config::{AddressMode, Column, InterpretorConfig, TimeMode};
+use crate::constants::{ELLIPSIS, NO_VALUE, UNINTERPRETABLE};
 use crate::custom::CustomRepr;
 use crate::modbus::WordOrder;
 use std::fmt::Write as _;
@@ -9,12 +9,23 @@ pub struct Interpretor {
     config: InterpretorConfig,
     word_order: WordOrder,
     header: String,
+    order: Vec<Column>,
+    enabled: Vec<EnabledColumn>,
+    label_auto: usize,
+    custom_auto: usize,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct EnabledColumn {
+    spec: &'static ColumnSpec,
+    width: usize,
 }
 
 const ADDRESS_W: usize = 7;
 const TIME_W: usize = 12;
-const AGO_W: usize = 9;
 const INSPECT_W: usize = 21;
+const CONFIGURED: usize = 0;
+pub const WIDTH_MAX: usize = 64;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RowSegment {
@@ -42,6 +53,7 @@ impl RowSegment {
     }
 }
 
+#[derive(Debug)]
 struct ColumnSpec {
     column: Column,
     width: usize,
@@ -54,17 +66,39 @@ struct RowCtx<'a> {
     word: u32,
     dword: u64,
     custom: &'a str,
+    time: &'a str,
+    elapsed: Option<chrono::Duration>,
+    label: &'a str,
+    address: u16,
+    time_mode: TimeMode,
+    address_mode: AddressMode,
+}
+
+struct RowData<'a> {
+    address: u16,
+    value: u16,
+    next: [Option<u16>; 3],
+    custom: Option<&'a str>,
+    time: &'a str,
+    elapsed: Option<chrono::Duration>,
+    label: Option<&'a str>,
 }
 
 impl<'a> RowCtx<'a> {
-    fn new(order: WordOrder, value: u16, next: [Option<u16>; 3], custom: Option<&'a str>) -> Self {
-        let [b, c, d] = next.map(Option::unwrap_or_default);
+    fn new(config: &InterpretorConfig, order: WordOrder, data: RowData<'a>) -> Self {
+        let [b, c, d] = data.next.map(Option::unwrap_or_default);
         Self {
-            value,
-            next,
-            word: order.make_word(value, b),
-            dword: order.make_dword([value, b, c, d]),
-            custom: custom.unwrap_or(NO_VALUE),
+            value: data.value,
+            next: data.next,
+            word: order.make_word(data.value, b),
+            dword: order.make_dword([data.value, b, c, d]),
+            custom: data.custom.unwrap_or(NO_VALUE),
+            time: data.time,
+            elapsed: data.elapsed,
+            label: data.label.unwrap_or(""),
+            address: data.address,
+            time_mode: config.time_mode,
+            address_mode: config.address_mode,
         }
     }
 
@@ -79,6 +113,8 @@ impl<'a> RowCtx<'a> {
 
 #[rustfmt::skip]
 const COLUMNS: &[ColumnSpec] = &[
+    ColumnSpec { column: Column::Address, width: ADDRESS_W, render: |c, w, o| address_cell(c.address, c.address_mode, w, o) },
+    ColumnSpec { column: Column::Time,    width: TIME_W, render: |c, _, o| time_cell(c, o) },
     ColumnSpec { column: Column::U16,     width: 5,  render: |c, _, o| { let _ = write!(o, "{}", c.value); } },
     ColumnSpec { column: Column::I16,     width: 6,  render: |c, _, o| { let _ = write!(o, "{}", c.value as i16); } },
     ColumnSpec { column: Column::U8s,     width: 8,  render: |c, _, o| { let _ = write!(o, "{}/{}", (c.value >> 8) as u8, (c.value & 0xFF) as u8); } },
@@ -98,10 +134,15 @@ const COLUMNS: &[ColumnSpec] = &[
     ColumnSpec { column: Column::F64,     width: 12, render: |c, w, o| if c.four() { float_cell(f64::from_bits(c.dword), w, o) } else { o.push_str(UNINTERPRETABLE); } },
     ColumnSpec { column: Column::Ascii,   width: 5,  render: |c, _, o| ascii_cell(c.value, c.next[0].unwrap_or_default(), o) },
     ColumnSpec { column: Column::Bits,    width: 19, render: |c, _, o| bits_cell(c.value, o) },
-    ColumnSpec { column: Column::Custom,  width: 18, render: |c, _, o| o.push_str(c.custom) },
+    ColumnSpec { column: Column::Custom,  width: CONFIGURED, render: |c, w, o| clipped_cell(c.custom, w, o) },
+    ColumnSpec { column: Column::Label,   width: CONFIGURED, render: |c, w, o| clipped_cell(c.label, w, o) },
 ];
 
 impl Column {
+    fn is_meta(self) -> bool {
+        matches!(self, Column::Address | Column::Time | Column::Label)
+    }
+
     pub fn graph_width(self) -> Option<usize> {
         self.custom_repr()
             .map(CustomRepr::register_count)
@@ -154,64 +195,122 @@ impl Interpretor {
             config: interpretation,
             word_order,
             header: String::new(),
+            order: Vec::new(),
+            enabled: Vec::new(),
+            label_auto: 0,
+            custom_auto: 0,
         };
-        interpretor.rebuild_header();
+        interpretor.rebuild();
         interpretor
+    }
+
+    pub fn ordered_columns(&self) -> &[Column] {
+        &self.order
+    }
+
+    pub fn move_column(&mut self, column: Column, right: bool) -> bool {
+        let Some(from) = self.order.iter().position(|&c| c == column) else {
+            return false;
+        };
+        let to = if right {
+            from + 1
+        } else {
+            from.wrapping_sub(1)
+        };
+        if to >= self.order.len() {
+            return false;
+        }
+        let mut order = self.order.clone();
+        order.swap(from, to);
+        self.config.order = order;
+        self.rebuild();
+        true
+    }
+
+    fn effective_width(&self, spec: &ColumnSpec) -> usize {
+        let (setting, auto) = match spec.column {
+            Column::Label => (self.config.label_width, self.label_auto),
+            Column::Custom => (self.config.custom_width, self.custom_auto),
+            _ => return spec.width,
+        };
+        let min = spec.column.name().chars().count();
+        let width = match setting {
+            0 => auto,
+            n => n as usize,
+        };
+        width.clamp(min, WIDTH_MAX)
+    }
+
+    fn rebuild(&mut self) {
+        self.order.clear();
+        let configured = self.config.order.iter().copied();
+        let built_in = COLUMNS.iter().map(|spec| spec.column);
+        for column in configured.chain(built_in) {
+            if !self.order.contains(&column) {
+                self.order.push(column);
+            }
+        }
+        self.enabled = self
+            .order
+            .iter()
+            .filter_map(|&column| COLUMNS.iter().find(|spec| spec.column == column))
+            .filter(|spec| self.config.get(spec.column))
+            .map(|spec| EnabledColumn {
+                spec,
+                width: self.effective_width(spec),
+            })
+            .collect();
+        self.rebuild_header();
+    }
+
+    pub fn label_width(&self) -> u16 {
+        self.config.label_width
+    }
+
+    pub fn set_label_width(&mut self, width: u16) {
+        self.config.label_width = width;
+        self.rebuild();
+    }
+
+    pub fn set_label_auto(&mut self, longest: usize) {
+        if self.label_auto != longest {
+            self.label_auto = longest;
+            self.rebuild();
+        }
+    }
+
+    pub fn custom_width(&self) -> u16 {
+        self.config.custom_width
+    }
+
+    pub fn set_custom_width(&mut self, width: u16) {
+        self.config.custom_width = width;
+        self.rebuild();
+    }
+
+    pub fn set_custom_auto(&mut self, longest: usize) {
+        if self.custom_auto != longest {
+            self.custom_auto = longest;
+            self.rebuild();
+        }
     }
 
     fn rebuild_header(&mut self) {
         let mut header = String::new();
 
-        self.write_prefix(&mut header, "time", "ago");
-        let _ = write!(header, "{:>w$}: ", "address", w = ADDRESS_W);
-
         for col in self.enabled_columns() {
-            let _ = write!(header, "{:<w$} ", col.column.name(), w = col.width);
+            let _ = write!(header, "{:<w$} ", col.spec.column.name(), w = col.width);
         }
-        if self.config.label {
-            header.push_str("label");
-        }
-
         self.header = header;
     }
 
-    fn enabled_columns(&self) -> impl Iterator<Item = &'static ColumnSpec> + '_ {
-        COLUMNS.iter().filter(|col| self.config.get(col.column))
-    }
-
-    fn write_prefix(&self, out: &mut String, time: &str, ago: &str) {
-        if self.config.time {
-            let _ = write!(out, "{time:<w$} ", w = TIME_W);
-        }
-        if self.config.ago {
-            let _ = write!(out, "{ago:<w$} ", w = AGO_W);
-        }
-    }
-
-    fn write_row_prefix(
-        &self,
-        out: &mut String,
-        address: u16,
-        read: Option<(&str, chrono::Duration)>,
-    ) {
-        if self.config.time {
-            let time = read.map_or(NO_VALUE, |(time, _)| time);
-            let _ = write!(out, "{time:<w$} ", w = TIME_W);
-        }
-        if self.config.ago {
-            let mark = out.len();
-            match read {
-                Some((_, elapsed)) => write_ago(out, elapsed),
-                None => out.push_str(NO_VALUE),
-            }
-            pad_to(out, mark, AGO_W);
-        }
-        self.write_address(out, address);
+    fn enabled_columns(&self) -> impl Iterator<Item = EnabledColumn> + '_ {
+        self.enabled.iter().copied()
     }
 
     pub fn toggle(&mut self, column: Column) {
         self.config.toggle(column);
-        self.rebuild_header();
+        self.rebuild();
     }
 
     pub fn is_enabled(&self, column: Column) -> bool {
@@ -231,56 +330,62 @@ impl Interpretor {
     }
 
     pub fn prefix_width(&self) -> u16 {
-        let mut prefix = String::new();
-        self.write_row_prefix(&mut prefix, 0, None);
-        prefix.chars().count() as u16
+        match self.enabled.first() {
+            Some(col) if col.spec.column == Column::Address => (col.width + 1) as u16,
+            _ => 0,
+        }
+    }
+
+    pub fn time_mode(&self) -> TimeMode {
+        self.config.time_mode
+    }
+
+    pub fn address_mode(&self) -> AddressMode {
+        self.config.address_mode
+    }
+
+    pub fn set_time_mode(&mut self, mode: TimeMode) {
+        self.config.time_mode = mode;
+    }
+
+    pub fn set_address_mode(&mut self, mode: AddressMode) {
+        self.config.address_mode = mode;
     }
 
     pub fn row_segments(&self) -> Vec<RowSegment> {
         let mut segments = Vec::new();
         let mut start = 0usize;
-        if self.config.time {
-            segments.push(RowSegment::new("time", start, TIME_W));
-            start += TIME_W + 1;
-        }
-        if self.config.ago {
-            segments.push(RowSegment::new("ago", start, AGO_W));
-            start += AGO_W + 1;
-        }
-        segments.push(RowSegment::new("address", start, ADDRESS_W));
-        start += ADDRESS_W + 2;
         for col in self.enabled_columns() {
-            segments.push(RowSegment::new(col.column.name(), start, col.width));
+            segments.push(RowSegment::new(col.spec.column.name(), start, col.width));
             start += col.width + 1;
-        }
-        if self.config.label {
-            segments.push(RowSegment::new("label", start, usize::MAX));
         }
         segments
     }
 
-    fn write_address(&self, out: &mut String, value: u16) {
-        if self.config.address_hex {
-            let _ = write!(out, "{value:>w$X}: ", w = ADDRESS_W);
-        } else {
-            let _ = write!(out, "{value:>w$}: ", w = ADDRESS_W);
-        }
-    }
-
     pub fn placeholder(&self, address: u16, label: Option<&str>) -> String {
         let mut row = String::with_capacity(self.header.len() + 32);
-        self.write_row_prefix(&mut row, address, None);
+        let ctx = RowCtx::new(
+            &self.config,
+            self.word_order,
+            RowData {
+                address,
+                value: 0,
+                next: [None; 3],
+                custom: None,
+                time: NO_VALUE,
+                elapsed: None,
+                label,
+            },
+        );
 
         for col in self.enabled_columns() {
             let mark = row.len();
-            row.push_str(NO_VALUE);
+            if col.spec.column.is_meta() {
+                (col.spec.render)(&ctx, col.width, &mut row);
+            } else {
+                row.push_str(NO_VALUE);
+            }
             pad_to(&mut row, mark, col.width);
-        }
-
-        if self.config.label
-            && let Some(text) = label
-        {
-            row.push_str(text);
         }
 
         row
@@ -298,42 +403,60 @@ impl Interpretor {
         label: Option<&str>,
     ) -> String {
         let mut row = String::with_capacity(self.header.len() + 32);
-        self.write_row_prefix(&mut row, address, Some((time_text, elapsed)));
-
-        let ctx = RowCtx::new(self.word_order, value, next, custom);
+        let ctx = RowCtx::new(
+            &self.config,
+            self.word_order,
+            RowData {
+                address,
+                value,
+                next,
+                custom,
+                time: time_text,
+                elapsed: Some(elapsed),
+                label,
+            },
+        );
         for col in self.enabled_columns() {
             let mark = row.len();
-            (col.render)(&ctx, col.width, &mut row);
+            (col.spec.render)(&ctx, col.width, &mut row);
             pad_to(&mut row, mark, col.width);
-        }
-
-        if self.config.label
-            && let Some(t) = label
-        {
-            row.push_str(t);
         }
 
         row
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn interpret_all(
         &self,
+        address: u16,
         value: u16,
         next: [Option<u16>; 3],
+        time: &str,
+        elapsed: chrono::Duration,
         custom: Option<&str>,
         label: Option<&str>,
     ) -> Vec<(&'static str, String)> {
-        let ctx = RowCtx::new(self.word_order, value, next, custom);
-        let mut entries: Vec<(&'static str, String)> = COLUMNS
+        let ctx = RowCtx::new(
+            &self.config,
+            self.word_order,
+            RowData {
+                address,
+                value,
+                next,
+                custom,
+                time,
+                elapsed: Some(elapsed),
+                label,
+            },
+        );
+        COLUMNS
             .iter()
             .map(|col| {
                 let mut cell = String::new();
                 (col.render)(&ctx, INSPECT_W, &mut cell);
-                (col.column.name(), cell)
+                (col.column.name(), cell.trim().to_string())
             })
-            .collect();
-        entries.push(("label", label.unwrap_or("").to_string()));
-        entries
+            .collect()
     }
 }
 
@@ -408,6 +531,35 @@ fn write_ago(out: &mut String, elapsed: chrono::Duration) {
     }
 }
 
+fn address_cell(address: u16, mode: AddressMode, width: usize, out: &mut String) {
+    match mode {
+        AddressMode::Dec => {
+            let _ = write!(out, "{address:>width$}");
+        }
+        AddressMode::Hex => {
+            let _ = write!(out, "{address:>width$X}");
+        }
+    }
+}
+
+fn time_cell(ctx: &RowCtx, out: &mut String) {
+    match (ctx.time_mode, ctx.elapsed) {
+        (TimeMode::ReadAt, _) => out.push_str(ctx.time),
+        (TimeMode::Ago, Some(elapsed)) => write_ago(out, elapsed),
+        (TimeMode::Ago, None) => out.push_str(NO_VALUE),
+    }
+}
+
+fn clipped_cell(text: &str, width: usize, out: &mut String) {
+    if text.chars().count() <= width {
+        out.push_str(text);
+        return;
+    }
+    let keep = width.saturating_sub(ELLIPSIS.chars().count());
+    out.extend(text.chars().take(keep));
+    out.push_str(ELLIPSIS);
+}
+
 fn pad_to(out: &mut String, mark: usize, width: usize) {
     let written = out[mark..].chars().count();
     for _ in written..width {
@@ -469,16 +621,109 @@ pub(crate) fn f16_to_f32(bits: u16) -> f32 {
 mod tests {
     use super::*;
 
+    fn ordered(order: Vec<Column>) -> Interpretor {
+        let config = InterpretorConfig {
+            bits: false,
+            ascii: false,
+            custom: false,
+            time: false,
+            label: false,
+            order,
+            ..InterpretorConfig::default()
+        };
+        Interpretor::new(config, WordOrder::ABCD)
+    }
+
+    fn segment_names(interpretor: &Interpretor) -> Vec<&'static str> {
+        interpretor
+            .row_segments()
+            .into_iter()
+            .map(|segment| segment.name)
+            .collect()
+    }
+
+    #[test]
+    fn the_configured_order_leads_and_the_rest_follows() {
+        let interpretor = ordered(vec![Column::Hex, Column::I16]);
+        assert_eq!(
+            segment_names(&interpretor),
+            ["hex", "i16", "address", "u16"]
+        );
+    }
+
+    #[test]
+    fn an_empty_order_keeps_the_built_in_one() {
+        let interpretor = ordered(Vec::new());
+        assert_eq!(
+            segment_names(&interpretor),
+            ["address", "u16", "i16", "hex"]
+        );
+    }
+
+    #[test]
+    fn duplicates_in_the_order_are_ignored() {
+        let interpretor = ordered(vec![Column::Hex, Column::Hex, Column::I16]);
+        assert_eq!(
+            segment_names(&interpretor),
+            ["hex", "i16", "address", "u16"]
+        );
+    }
+
+    #[test]
+    fn moving_a_column_stops_at_the_edges() {
+        let mut interpretor = ordered(Vec::new());
+        let first = interpretor.ordered_columns()[0];
+        assert_eq!(
+            first,
+            Column::Address,
+            "the address leads the built-in order"
+        );
+
+        assert!(!interpretor.move_column(first, false), "already leftmost");
+        assert!(
+            !interpretor.move_column(Column::Label, true),
+            "already last"
+        );
+
+        assert!(interpretor.move_column(first, true));
+        assert_eq!(interpretor.ordered_columns()[1], first);
+    }
+
+    #[test]
+    fn address_time_and_label_can_be_ordered_like_any_column() {
+        let config = InterpretorConfig {
+            bits: false,
+            ascii: false,
+            custom: false,
+            time: true,
+            label: true,
+            order: vec![Column::Label, Column::Hex, Column::Time],
+            ..InterpretorConfig::default()
+        };
+        let interpretor = Interpretor::new(config, WordOrder::ABCD);
+        assert_eq!(
+            segment_names(&interpretor),
+            ["label", "hex", "time", "address", "u16", "i16"]
+        );
+    }
+
+    #[test]
+    fn unknown_column_keys_are_dropped_when_loading() {
+        let config: InterpretorConfig =
+            serde_json::from_str(r#"{"order":["hex","not_a_column","i16"]}"#).expect("loads");
+        assert_eq!(config.order, vec![Column::Hex, Column::I16]);
+    }
+
     #[test]
     fn row_segments_line_up_with_the_header() {
-        for (time, ago, label) in [
+        for (address, time, label) in [
             (true, true, true),
             (false, false, false),
             (true, false, true),
         ] {
             let config = InterpretorConfig {
+                address,
                 time,
-                ago,
                 label,
                 ..InterpretorConfig::default()
             };
@@ -524,16 +769,13 @@ mod tests {
     fn interpretor() -> Interpretor {
         let config = InterpretorConfig {
             time: true,
-            ago: true,
-            address_hex: false,
             ..InterpretorConfig::default()
         };
         Interpretor::new(config, WordOrder::ABCD)
     }
 
-    #[test]
-    fn row_prefix_pads_time_ago_and_address() {
-        let row = interpretor().format_row(
+    fn row_of(interpretor: &Interpretor) -> String {
+        interpretor.format_row(
             5,
             1,
             [None; 3],
@@ -541,22 +783,152 @@ mod tests {
             chrono::Duration::seconds(3),
             None,
             None,
+        )
+    }
+
+    #[test]
+    fn the_address_leads_and_time_reads_the_clock_by_default() {
+        let row = row_of(&interpretor());
+        assert!(row.starts_with("      5 12:34:56.789 "), "{row:?}");
+    }
+
+    #[test]
+    fn the_time_mode_switches_the_column_to_elapsed() {
+        let mut interpretor = interpretor();
+        interpretor.set_time_mode(TimeMode::Ago);
+        let row = row_of(&interpretor);
+        assert!(row.starts_with("      5 3s ago       "), "{row:?}");
+    }
+
+    fn segment(interpretor: &Interpretor, name: &str) -> RowSegment {
+        interpretor
+            .row_segments()
+            .into_iter()
+            .find(|s| s.name == name)
+            .expect("segment")
+    }
+
+    #[test]
+    fn inspect_reports_the_real_address_unpadded() {
+        let mut interpretor = interpretor();
+        let entry = |i: &Interpretor, name: &str| {
+            i.interpret_all(
+                4660,
+                1,
+                [None; 3],
+                "12:34:56.789",
+                chrono::Duration::seconds(3),
+                None,
+                None,
+            )
+            .into_iter()
+            .find(|(key, _)| *key == name)
+            .expect("entry")
+            .1
+        };
+
+        assert_eq!(entry(&interpretor, "address"), "4660");
+        interpretor.set_address_mode(AddressMode::Hex);
+        assert_eq!(entry(&interpretor, "address"), "1234");
+    }
+
+    #[test]
+    fn the_defaults_are_fixed_widths() {
+        let defaults = InterpretorConfig::default();
+        assert_ne!(defaults.label_width, 0, "label ships with a fixed width");
+        assert_ne!(defaults.custom_width, 0, "custom ships with a fixed width");
+
+        let interpretor = interpretor();
+        assert_eq!(
+            segment(&interpretor, "label").width,
+            defaults.label_width as usize
         );
-        assert!(
-            row.starts_with("12:34:56.789 3s ago          5: "),
-            "{row:?}"
+        assert_eq!(
+            segment(&interpretor, "custom").width,
+            defaults.custom_width as usize
         );
     }
 
     #[test]
-    fn placeholder_prefix_matches_row_prefix_width() {
-        let i = interpretor();
-        let placeholder = i.placeholder(5, None);
-        assert!(
-            placeholder.starts_with("-            -               5: "),
-            "{placeholder:?}"
+    fn zero_fits_the_column_to_its_longest_value() {
+        let mut interpretor = interpretor();
+        interpretor.set_label_width(0);
+        interpretor.set_custom_width(0);
+
+        interpretor.set_label_auto(20);
+        interpretor.set_custom_auto(12);
+        assert_eq!(segment(&interpretor, "label").width, 20);
+        assert_eq!(segment(&interpretor, "custom").width, 12);
+
+        interpretor.set_label_auto(2);
+        interpretor.set_custom_auto(2);
+        assert_eq!(
+            segment(&interpretor, "label").width,
+            "label".len(),
+            "never narrower than its own header"
         );
-        assert_eq!(placeholder.find("5: "), Some(i.prefix_width() as usize - 3));
+        assert_eq!(segment(&interpretor, "custom").width, "custom".len());
+
+        interpretor.set_label_auto(500);
+        assert_eq!(segment(&interpretor, "label").width, WIDTH_MAX);
+    }
+
+    #[test]
+    fn an_explicit_label_width_wins_over_auto_and_clips() {
+        let mut interpretor = interpretor();
+        interpretor.set_label_auto(30);
+        interpretor.set_label_width(8);
+
+        let row = interpretor.format_row(
+            5,
+            1,
+            [None; 3],
+            "12:34:56.789",
+            chrono::Duration::seconds(3),
+            None,
+            Some("Plant.Line2.Pump"),
+        );
+        let label = segment(&interpretor, "label");
+        assert_eq!(label.width, 8);
+        assert_eq!(label.text(&row), "Plant...");
+        assert_eq!(
+            label.text(interpretor.header()),
+            "label",
+            "the header still lines up"
+        );
+    }
+
+    #[test]
+    fn the_address_mode_switches_the_column_to_hex() {
+        let mut interpretor = interpretor();
+        interpretor.set_address_mode(AddressMode::Hex);
+        let row = interpretor.format_row(
+            255,
+            1,
+            [None; 3],
+            "12:34:56.789",
+            chrono::Duration::seconds(3),
+            None,
+            None,
+        );
+        assert!(row.starts_with("     FF "), "{row:?}");
+    }
+
+    #[test]
+    fn a_placeholder_keeps_the_anchor_and_its_label() {
+        let i = interpretor();
+        let placeholder = i.placeholder(5, Some("pump"));
+        assert!(placeholder.starts_with("      5 "), "{placeholder:?}");
+        assert_eq!(i.prefix_width() as usize, "      5 ".len());
+        let named = |name: &str| {
+            i.row_segments()
+                .into_iter()
+                .find(|s| s.name == name)
+                .expect("segment")
+                .text(&placeholder)
+        };
+        assert_eq!(named("label"), "pump", "the label survives with no read");
+        assert_eq!(named("u16"), NO_VALUE, "value columns have nothing to show");
     }
 
     #[test]
