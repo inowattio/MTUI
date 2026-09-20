@@ -1,44 +1,38 @@
 use crate::input::KeyCode;
 use crate::state::{RawField, RawParams};
+use crate::tui::draw_state::{edit_value, field_row};
 use crate::tui::hints::Hint;
 use crate::tui::theme::Theme;
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use ratatui::text::{Line, Span};
+use ratatui::text::Line;
+
+const LABEL_W: usize = 13;
 
 pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, params: &RawParams) {
-    let field = params.current_field();
-    let cursor = |f: RawField| if field == f { "_" } else { "" };
+    let sel = params.current_field();
+    let field = |label: &str, value: String, selected: bool| {
+        field_row(theme, label, LABEL_W, value, selected)
+    };
 
-    let code_display = match params.code.trim().parse::<u16>() {
+    let code = match params.code.trim().parse::<u16>() {
         Ok(value) if value <= u8::MAX as u16 => format!("{value} ({value:#04X})"),
         _ => params.code.clone(),
     };
+    let code_val = edit_value(code, sel == RawField::Code, false);
+    let data_val = edit_value(params.data.clone(), sel == RawField::Data, false);
 
-    let mut lines: Vec<Line> = vec![
-        Line::from(vec![
-            Span::styled(" Function code ", theme.dim_style()),
-            Span::styled(code_display, theme.base()),
-            Span::styled(cursor(RawField::Code), theme.accent_style()),
-        ]),
-        Line::from(vec![
-            Span::styled(" Data (hex)    ", theme.dim_style()),
-            Span::styled(params.data.clone(), theme.base()),
-            Span::styled(cursor(RawField::Data), theme.accent_style()),
-        ]),
+    let mut lines = vec![
         Line::default(),
+        field("Function code", code_val, sel == RawField::Code),
+        field("Data (hex)", data_val, sel == RawField::Data),
     ];
 
     if let Some(response) = &params.response {
-        lines.push(Line::from(vec![
-            Span::styled(" Response      ", theme.dim_style()),
-            Span::styled(response.clone(), theme.base()),
-        ]));
+        lines.push(Line::default());
+        lines.push(field("Response", response.clone(), false));
     }
-
-    if let Some(status) = &params.status {
-        lines.push(theme.status_line(status));
-    }
+    super::push_status(&mut lines, theme, params.status.as_ref());
 
     super::push_footer(
         &mut lines,
