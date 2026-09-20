@@ -899,8 +899,8 @@ fn draw_graph(
 
     let width = chunks[1].width as usize;
     let mut axis_line = " ".repeat(y_gutter.min(width));
-    axis_line.push('+');
-    axis_line.push_str(&"-".repeat(width.saturating_sub(y_gutter + 1)));
+    axis_line.push_str(symbols::line::BOTTOM_LEFT);
+    axis_line.push_str(&symbols::line::HORIZONTAL.repeat(width.saturating_sub(y_gutter + 1)));
     frame.render_widget(
         Paragraph::new(Line::from(Span::styled(axis_line, theme.dim_style()))),
         chunks[1],
