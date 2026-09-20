@@ -1172,8 +1172,8 @@ impl SettingsParams {
         }
     }
 
-    pub fn cycle_category(&mut self, forward: bool) {
-        self.category = wrap_index(self.category, SettingsCategory::ALL.len() as u16, forward);
+    pub fn cycle_category(&mut self) {
+        self.category = wrap_index(self.category, SettingsCategory::ALL.len() as u16, true);
         self.field = 0;
         self.kb_selected = 0;
         self.kb_capturing = false;
@@ -1539,13 +1539,11 @@ mod settings_params_tests {
             focus: SettingsFocus::Fields,
             ..SettingsParams::default()
         };
-        s.cycle_category(true);
+        s.cycle_category();
         assert_eq!(
             (s.category, s.field, s.focus),
             (0, 0, SettingsFocus::Fields)
         );
-        s.cycle_category(false);
-        assert_eq!(s.category, last);
     }
 
     #[test]

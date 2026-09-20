@@ -1395,14 +1395,12 @@ mod tests {
         app.config.cycle_panels.custom = false;
         app.read_mut().panel = ReadPanel::Main;
 
-        app.toggle_panel(true);
+        app.toggle_panel();
         assert_eq!(app.read_mut().panel, ReadPanel::Labeled);
-        app.toggle_panel(true);
+        app.toggle_panel();
         assert_eq!(app.read_mut().panel, ReadPanel::Matrix);
-        app.toggle_panel(true);
+        app.toggle_panel();
         assert_eq!(app.read_mut().panel, ReadPanel::Main);
-        app.toggle_panel(false);
-        assert_eq!(app.read_mut().panel, ReadPanel::Matrix);
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -1417,9 +1415,7 @@ mod tests {
         };
         app.read_mut().panel = ReadPanel::Main;
 
-        app.toggle_panel(true);
-        assert_eq!(app.read_mut().panel, ReadPanel::Main);
-        app.toggle_panel(false);
+        app.toggle_panel();
         assert_eq!(app.read_mut().panel, ReadPanel::Main);
     }
 }

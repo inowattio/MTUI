@@ -69,11 +69,11 @@ impl App {
         self.popup_as_mut()
     }
 
-    pub fn device_id_cycle(&mut self, forward: bool) {
+    pub fn device_id_cycle(&mut self) {
         let Some(params) = self.device_id_mut() else {
             return;
         };
-        params.access = cycle(&DeviceIdAccess::ALL, params.access, forward);
+        params.access = cycle(&DeviceIdAccess::ALL, params.access, true);
         params.h_offset = 0;
         if matches!(self.background_task, Some(BackgroundTask::DeviceId(_))) {
             return;
@@ -327,7 +327,7 @@ mod tests {
             Some(BackgroundTask::DeviceId(_))
         ));
 
-        app.device_id_cycle(true);
+        app.device_id_cycle();
         assert_eq!(device_id(&app).access, DeviceIdAccess::Regular);
         assert!(device_id(&app).loading, "the pending read keeps loading");
 

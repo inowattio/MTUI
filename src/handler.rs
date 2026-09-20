@@ -160,9 +160,9 @@ async fn run_action(app: &mut App, action: KeybindAction) {
             }
         }
         NextConfig => app.cycle_config(),
-        SwitchView | SwitchViewBack => {
+        SwitchView => {
             let rows = app.visible_rows.get();
-            app.toggle_panel(action == SwitchView);
+            app.toggle_panel();
             let len = app.panel_len();
             let cols = app.matrix_cols();
             let scroll_rows = app.panel_scroll_rows();
@@ -223,8 +223,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
         PopupKind::DeviceId => match key_event.code {
             c if c == KeyCode::Esc || c == kb.device_id => app.close_popup(),
             c if c == kb.refresh || c == kb.action => app.device_id_refresh(),
-            c if c == kb.switch_view => app.device_id_cycle(true),
-            c if c == kb.switch_view_back => app.device_id_cycle(false),
+            c if c == kb.switch_view => app.device_id_cycle(),
             KeyCode::Left => app.device_id_hscroll(false),
             KeyCode::Right => app.device_id_hscroll(true),
             _ => {}
@@ -361,7 +360,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
                 },
                 KeyCode::Up => app.slave_move(false),
                 KeyCode::Down => app.slave_move(true),
-                KeyCode::Tab | KeyCode::BackTab => app.slave_switch_column(),
+                KeyCode::Tab => app.slave_switch_column(),
                 c if c == kb.pause && field.is_toggle() => app.slave_toggle(field),
                 KeyCode::Left | KeyCode::Right if field.is_toggle() => app.slave_toggle(field),
                 KeyCode::Backspace => app.slave_backspace(field),
@@ -507,7 +506,7 @@ async fn handle_discovery_key(key_event: KeyEvent, app: &mut App) {
                 d.move_cursor(key_event.code == KeyCode::Down);
             }
         }
-        c if c == kb.switch_view || c == kb.switch_view_back => {
+        c if c == kb.switch_view => {
             if let Some(d) = app.discovery_mut() {
                 d.toggle_column();
             }
@@ -607,9 +606,9 @@ fn handle_logs_view_key(key_event: KeyEvent, app: &mut App) {
 async fn handle_settings_key(key_event: KeyEvent, app: &mut App) {
     let kb = app.config.keybinds;
     let capturing = app.settings().is_some_and(|s| s.kb_capturing);
-    if !capturing && (key_event.code == kb.switch_view || key_event.code == kb.switch_view_back) {
+    if !capturing && key_event.code == kb.switch_view {
         if let Some(s) = app.settings_mut() {
-            s.cycle_category(key_event.code == kb.switch_view);
+            s.cycle_category();
         }
         return;
     }

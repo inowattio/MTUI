@@ -45,7 +45,6 @@ pub mod keybind {
     pub const CLEAR: KeyCode = KeyCode::Char('x');
     pub const NEXT_CONFIG: KeyCode = KeyCode::Char('C');
     pub const SWITCH_VIEW: KeyCode = KeyCode::Tab;
-    pub const SWITCH_VIEW_BACK: KeyCode = KeyCode::BackTab;
     pub const ACTION: KeyCode = KeyCode::Enter;
     pub const PAGE_UP: KeyCode = KeyCode::Char(',');
     pub const PAGE_DOWN: KeyCode = KeyCode::Char('.');

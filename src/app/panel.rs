@@ -166,11 +166,11 @@ impl App {
             .max(1)
     }
 
-    pub fn toggle_panel(&mut self, forward: bool) {
+    pub fn toggle_panel(&mut self) {
         let enabled = self.config.cycle_panels;
         let mut next = self.read().panel;
         for _ in 0..ReadPanel::ALL.len() {
-            next = cycle(&ReadPanel::ALL, next, forward);
+            next = cycle(&ReadPanel::ALL, next, true);
             if enabled.enabled(next) {
                 break;
             }
