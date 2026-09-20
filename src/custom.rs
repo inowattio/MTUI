@@ -203,59 +203,51 @@ impl CustomRule {
         }
     }
 
-    pub fn numeric(&self, words: &[u16], order: WordOrder) -> Option<f64> {
-        let base = self.base(words, order)?;
-
-        if base.is_finite() && !self.enum_map.is_empty() {
+    fn resolve(&self, words: &[u16], order: WordOrder) -> Option<Resolved<'_>> {
+        let raw = self.raw(words, order)?;
+        let base = self.repr.decode(raw);
+        if base.is_finite() {
             let key = base as i64;
-            if self.enum_map.iter().any(|e| e.value == key) {
-                return None;
+            if let Some(entry) = self.enum_map.iter().find(|e| e.value == key) {
+                return Some(Resolved::Enum(&entry.text));
             }
         }
         if !self.bits.is_empty() {
-            return None;
+            return Some(Resolved::Bits(raw));
         }
+        Some(Resolved::Number(
+            self.ops.iter().fold(base, |v, op| op.apply(v)),
+        ))
+    }
 
-        let mut value = base;
-        for op in &self.ops {
-            value = op.apply(value);
+    pub fn numeric(&self, words: &[u16], order: WordOrder) -> Option<f64> {
+        match self.resolve(words, order)? {
+            Resolved::Number(v) if v.is_finite() => Some(v),
+            _ => None,
         }
-        value.is_finite().then_some(value)
     }
 
     pub fn evaluate(&self, words: &[u16], order: WordOrder) -> String {
-        let Some(base) = self.base(words, order) else {
+        let Some(resolved) = self.resolve(words, order) else {
             return String::new();
         };
-
-        if base.is_finite() && !self.enum_map.is_empty() {
-            let key = base as i64;
-            if let Some(entry) = self.enum_map.iter().find(|e| e.value == key) {
-                return format!("{}{}{}", self.prefix, entry.text, self.suffix);
-            }
-        }
-
-        if !self.bits.is_empty() {
-            let raw = self.raw(words, order).unwrap_or_default();
-            return format!("{}{}{}", self.prefix, self.bit_names(raw), self.suffix);
-        }
-
-        let mut value = base;
-        for op in &self.ops {
-            value = op.apply(value);
-        }
-
-        let number = if !value.is_finite() {
-            UNINTERPRETABLE.to_string()
-        } else {
-            match self.decimals {
-                Some(d) => format!("{value:.*}", d as usize),
-                None => compact(value),
-            }
+        let text = match resolved {
+            Resolved::Enum(text) => text.to_string(),
+            Resolved::Bits(raw) => self.bit_names(raw),
+            Resolved::Number(v) if !v.is_finite() => UNINTERPRETABLE.to_string(),
+            Resolved::Number(v) => match self.decimals {
+                Some(d) => format!("{v:.*}", d as usize),
+                None => compact(v),
+            },
         };
-
-        format!("{}{}{}", self.prefix, number, self.suffix)
+        format!("{}{text}{}", self.prefix, self.suffix)
     }
+}
+
+enum Resolved<'a> {
+    Enum(&'a str),
+    Bits(u64),
+    Number(f64),
 }
 
 fn compact(value: f64) -> String {
