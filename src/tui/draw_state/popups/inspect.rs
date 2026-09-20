@@ -14,7 +14,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, mode
     const NAME: usize = 9;
     const VALUE: usize = 21;
 
-    let mut lines: Vec<Line> = Vec::new();
+    let mut lines: Vec<Line> = vec![Line::default()];
     if entries.is_empty() {
         lines.push(dim_line(theme, " no data read yet"));
     } else {
