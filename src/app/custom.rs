@@ -231,7 +231,6 @@ impl App {
         &self,
         cell: RegisterCell,
         value: u16,
-        word_order: WordOrder,
         at: &impl Fn(u16) -> Option<u16>,
     ) -> Option<String> {
         let (kind, address) = cell;
@@ -258,7 +257,7 @@ impl App {
                 None => break,
             }
         }
-        let formatted = rule.evaluate(&words, word_order);
+        let formatted = rule.evaluate(&words, self.config.device.word_order);
         (!formatted.is_empty()).then_some(formatted)
     }
 

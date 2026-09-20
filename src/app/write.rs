@@ -100,12 +100,11 @@ impl App {
             return Some(UNINTERPRETABLE.to_string());
         }
 
-        let order = self.config.device.word_order;
         let (value, second) = match w.write_type {
             WriteType::Coil => ((number != 0) as u16, None),
             WriteType::Word => (number as u16, None),
             WriteType::DWord => {
-                let [first, second] = order.split_word(number as u32);
+                let [first, second] = self.config.device.word_order.split_word(number as u32);
                 (first, Some(second))
             }
         };
@@ -115,7 +114,7 @@ impl App {
             }
             self.read_log.get(&(kind, address)).map(|e| e.value)
         };
-        self.custom_value(cell, value, order, &at)
+        self.custom_value(cell, value, &at)
     }
 
     pub fn commit_write(&mut self) {

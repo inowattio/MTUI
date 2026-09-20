@@ -220,7 +220,7 @@ impl App {
         };
         let (value, time) = (entry.value, entry.at);
         let at = |address: u16| self.read_log.get(&(kind, address)).map(|e| e.value);
-        let custom = self.custom_value(cell, value, self.config.device.word_order, &at);
+        let custom = self.custom_value(cell, value, &at);
         let label = self.labels.get(&cell).map(String::as_str);
         let mut lines = vec![
             (
@@ -361,7 +361,7 @@ impl App {
         let entry = self.read_log.get(&cell)?;
         let value = entry.value;
         let at = |address: u16| self.read_log.get(&(kind, address)).map(|e| e.value);
-        let custom = self.custom_value(cell, value, self.config.device.word_order, &at);
+        let custom = self.custom_value(cell, value, &at);
         let row = self.interpreter.format_row(
             addr,
             value,
@@ -384,7 +384,7 @@ impl App {
     pub fn custom_text(&self, cell: RegisterCell) -> Option<String> {
         let value = self.read_log.get(&cell)?.value;
         let at = |address: u16| self.read_log.get(&(cell.0, address)).map(|e| e.value);
-        self.custom_value(cell, value, self.config.device.word_order, &at)
+        self.custom_value(cell, value, &at)
     }
 
     pub fn ascii_string_for(&self, cells: impl Iterator<Item = RegisterCell>) -> String {
