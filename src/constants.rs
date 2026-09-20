@@ -30,7 +30,6 @@ pub mod keybind {
     pub const PAUSE: KeyCode = KeyCode::Char(' ');
     pub const WORD_ORDER: KeyCode = KeyCode::Char('o');
     pub const SLAVE: KeyCode = KeyCode::Char('i');
-    pub const CYCLE_POSITION: KeyCode = KeyCode::Char('b');
     pub const INSPECT: KeyCode = KeyCode::Char('v');
     pub const DEVICE_ID: KeyCode = KeyCode::Char('D');
     pub const RAW: KeyCode = KeyCode::Char('f');

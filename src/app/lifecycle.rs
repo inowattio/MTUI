@@ -67,7 +67,6 @@ impl App {
             viewport_width: 0,
             h_max_offset: Cell::new(0),
             search_rows: Cell::new(1),
-            previous_position: None,
             background_task: None,
             network_scan: None,
             slave_scan: None,
@@ -159,7 +158,6 @@ impl App {
         self.refresh_writes_log_state();
 
         self.clear_read_accumulation();
-        self.previous_position = None;
         self.connection = ConnectionStatus::Unknown;
         self.logged_connection = ConnectionStatus::Unknown;
         self.reconnect = ReconnectState::default();

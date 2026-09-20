@@ -133,7 +133,6 @@ keybinds! {
     Pause => pause : "Pause/resume" = PAUSE,
     WordOrder => word_order : "Cycle word order" = WORD_ORDER,
     Slave => slave : "Set slave id" = SLAVE,
-    CyclePosition => cycle_position : "Previous position" = CYCLE_POSITION,
     Inspect => inspect : "Inspect register" = INSPECT,
     DeviceId => device_id : "Device identification" = DEVICE_ID,
     Raw => raw : "Raw function call" = RAW,

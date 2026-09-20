@@ -140,7 +140,6 @@ async fn run_action(app: &mut App, action: KeybindAction) {
         Pause => app.toggle_pause(),
         WordOrder => app.toggle_word_order(),
         Slave => app.open_slave(),
-        CyclePosition => app.cycle_position(),
         Inspect => app.open_inspect(),
         DeviceId => app.open_device_id(),
         Raw => app.open_raw(),

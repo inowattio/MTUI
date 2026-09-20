@@ -60,27 +60,8 @@ impl App {
             return;
         };
 
-        let from = {
-            let p = self.read();
-            (p.register_type, p.position)
-        };
-        self.previous_position = Some(from);
-
         self.jump_to_cell(register_type, position);
         self.read_mut().popup = None;
-    }
-
-    pub fn cycle_position(&mut self) {
-        let Some((register_type, position)) = self.previous_position else {
-            return;
-        };
-        let current = {
-            let p = self.read();
-            (p.register_type, p.position)
-        };
-        self.previous_position = Some(current);
-
-        self.jump_to_cell(register_type, position);
     }
 
     fn jump_to_cell(&mut self, register_type: RegisterType, position: u16) {
