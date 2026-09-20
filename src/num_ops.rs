@@ -54,7 +54,7 @@ pub fn step_hscroll(current: u16, max: u16, right: bool) -> u16 {
     const STEP: u16 = 8;
     let current = current.min(max);
     if right {
-        (current + STEP).min(max)
+        current.saturating_add(STEP).min(max)
     } else {
         current.saturating_sub(STEP)
     }
