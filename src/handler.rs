@@ -1116,6 +1116,9 @@ mod tests {
         let mut app = App::boot(Config::default(), path.clone()).await;
         app.pin();
         assert!(app.dirty);
+        let startup = app.config.startup;
+        handle_key_events(KeyEvent::new(KeyCode::Down), &mut app).await;
+        assert_ne!(app.read().position, startup.address);
 
         handle_key_events(KeyEvent::new(KeyCode::Esc), &mut app).await;
         assert_eq!(app.popup_kind(), Some(PopupKind::Quit));
@@ -1127,6 +1130,10 @@ mod tests {
         assert_eq!(
             saved.pinned_registers.inputs,
             app.pinned_registers.iter().map(|c| c.1).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            saved.startup.address, startup.address,
+            "saving does not overwrite the configured startup position"
         );
         let _ = std::fs::remove_dir_all(dir);
     }

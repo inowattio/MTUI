@@ -174,13 +174,6 @@ impl App {
 
     pub(super) fn persist_config(&mut self) -> Outcome {
         self.config = self.effective_config();
-        if let State::Read(p) = &self.state {
-            self.config.startup = Startup {
-                address: p.position,
-                register_type: p.register_type,
-                panel: p.panel,
-            };
-        }
 
         let result = save_config(&self.config_path, &self.config)
             .map(|()| format!("Saved to {}", self.config_path.display()))
