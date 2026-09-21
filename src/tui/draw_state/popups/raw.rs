@@ -44,5 +44,5 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, params: &RawPar
         ],
     );
 
-    super::render(frame, area, theme, "Raw function", 60, lines);
+    super::render(frame, area, theme, "Raw request", 60, lines);
 }

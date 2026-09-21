@@ -74,5 +74,5 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App) {
     // borders (2) + a column of right padding
     let width = content_w + 3;
 
-    super::render(frame, area, theme, "Session stats", width, lines);
+    super::render(frame, area, theme, "Statistics", width, lines);
 }

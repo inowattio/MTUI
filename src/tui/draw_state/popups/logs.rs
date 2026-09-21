@@ -63,7 +63,7 @@ pub(super) fn draw(
         ],
     ));
 
-    super::render(frame, area, theme, "Write log", width(), lines);
+    super::render(frame, area, theme, "Write logs", width(), lines);
 }
 
 fn width() -> u16 {

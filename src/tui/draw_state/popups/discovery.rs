@@ -68,7 +68,7 @@ pub fn draw(params: &DiscoveryParams, app: &App, frame: &mut Frame, area: Rect, 
 
     frame.render_widget(Clear, rect);
     let block = theme
-        .panel(" Connection")
+        .panel(" Switch device")
         .borders(Borders::ALL)
         .style(Style::default().bg(theme.background));
     let inner = block.inner(rect);

@@ -85,7 +85,7 @@ pub(super) fn draw(
 
     frame.render_widget(Clear, rect);
     let block = theme
-        .panel(" Unit")
+        .panel(" Set unit id")
         .borders(Borders::ALL)
         .style(Style::default().bg(theme.background));
     let inner = block.inner(rect);
