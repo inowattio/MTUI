@@ -379,7 +379,6 @@ pub fn draw(
             Span::styled(app.config.batch.size.to_string(), theme.base()),
         ],
         vec![
-            Span::styled("order ", theme.dim_style()),
             Span::styled(format!("{:?}", app.config.device.word_order), theme.base()),
         ],
     ];
@@ -391,7 +390,6 @@ pub fn draw(
         Span::styled(app.config.device.unit_id.to_string(), theme.base()),
     ]);
     identity.push(vec![
-        Span::styled("device: ", theme.dim_style()),
         Span::styled(device.to_string(), theme.base()),
     ]);
 

@@ -481,9 +481,9 @@ impl Config {
     pub fn display_device(&self) -> String {
         match &self.device.interface {
             Interface::Mock => "Mock".to_string(),
-            Interface::Serial(p) => format!("Serial {} ({})", p.path, p.baud_rate),
-            Interface::Tcp(p) => format!("TCP: {}:{}", p.ip, p.port),
-            Interface::RtuOverTcp(p) => format!("RTU over TCP: {}:{}", p.ip, p.port),
+            Interface::Serial(p) => format!("{} ({})", p.path, p.baud_rate),
+            Interface::Tcp(p) => format!("{}:{}", p.ip, p.port),
+            Interface::RtuOverTcp(p) => format!("{}:{}", p.ip, p.port),
         }
     }
 }
