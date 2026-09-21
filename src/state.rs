@@ -745,6 +745,7 @@ fn scroll_window(cursor: &mut u16, top: &mut u16, rows: u16, len: u16) {
 
 field_enum! {
     #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+    #[serde(rename_all = "snake_case")]
     pub enum ReadPanel {
         #[default]
         Main,

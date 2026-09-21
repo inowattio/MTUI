@@ -23,6 +23,7 @@ use tokio_modbus::{Request, Response};
 use tokio_serial::SerialStream;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Interface {
     Serial(InterfaceSerialParams),
     Tcp(InterfaceTcpParams),
@@ -32,10 +33,11 @@ pub enum Interface {
 
 macro_rules! serial_enum {
     (
-        $name:ident => $native:path, $err:literal,
+        $(#[$meta:meta])* $name:ident => $native:path, $err:literal,
         { $( $variant:ident = $code:literal => $nvariant:ident ),+ $(,)? }
     ) => {
         #[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
+        $(#[$meta])*
         pub enum $name {
             $( $variant ),+
         }
@@ -76,20 +78,20 @@ macro_rules! serial_enum {
     (@count $head:ident $($tail:ident)*) => (1usize + serial_enum!(@count $($tail)*));
 }
 
-serial_enum!(DataBits => tokio_serial::DataBits, "Failed to parse data bits", {
+serial_enum!(#[serde(into = "u8", try_from = "u8")] DataBits => tokio_serial::DataBits, "Failed to parse data bits", {
     Five = 5 => Five,
     Six = 6 => Six,
     Seven = 7 => Seven,
     Eight = 8 => Eight,
 });
 
-serial_enum!(Parity => tokio_serial::Parity, "Failed to parse parity", {
+serial_enum!(#[serde(rename_all = "snake_case")] Parity => tokio_serial::Parity, "Failed to parse parity", {
     None = 0 => None,
     Odd = 1 => Odd,
     Even = 2 => Even,
 });
 
-serial_enum!(StopBits => tokio_serial::StopBits, "Failed to parse stop bits", {
+serial_enum!(#[serde(into = "u8", try_from = "u8")] StopBits => tokio_serial::StopBits, "Failed to parse stop bits", {
     One = 1 => One,
     Two = 2 => Two,
 });
@@ -122,6 +124,7 @@ pub struct InterfaceTcpParams {
 
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum WordOrder {
     #[default]
     ABCD,

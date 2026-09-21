@@ -4,6 +4,7 @@ use crate::modbus::WordOrder;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
 pub enum CustomRepr {
     #[default]
     U16,
@@ -658,7 +659,7 @@ mod tests {
     #[test]
     fn ops_serialize_as_operator_strings() {
         let r: CustomRule =
-            serde_json::from_str(r#"{"repr": "U16", "ops": ["/10", " x0.5 ", "+ 2"]}"#).unwrap();
+            serde_json::from_str(r#"{"repr": "u16", "ops": ["/10", " x0.5 ", "+ 2"]}"#).unwrap();
         assert_eq!(
             r.ops.iter().map(|o| o.display()).collect::<Vec<_>>(),
             ["/10", "*0.5", "+2"]
@@ -667,12 +668,12 @@ mod tests {
             serde_json::to_string(&r.ops).unwrap(),
             r#"["/10","*0.5","+2"]"#
         );
-        assert!(serde_json::from_str::<CustomRule>(r#"{"repr": "U16", "ops": ["10"]}"#).is_err());
+        assert!(serde_json::from_str::<CustomRule>(r#"{"repr": "u16", "ops": ["10"]}"#).is_err());
     }
 
     #[test]
     fn deserialize_is_terse() {
-        let r: CustomRule = serde_json::from_str(r#"{"repr": "U16"}"#).unwrap();
+        let r: CustomRule = serde_json::from_str(r#"{"repr": "u16"}"#).unwrap();
         assert_eq!(r.repr, CustomRepr::U16);
         assert!(r.ops.is_empty());
         assert!(r.enum_map.is_empty());

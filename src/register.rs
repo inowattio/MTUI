@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone, Ord, PartialOrd, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
 pub enum RegisterType {
     #[default]
     Holding,

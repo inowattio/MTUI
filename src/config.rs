@@ -111,6 +111,7 @@ pub struct ApiConfig {
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
 pub enum BatchAnchor {
     Start,
     #[default]
@@ -131,6 +132,7 @@ impl BatchAnchor {
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
 pub enum TimeMode {
     #[default]
     ReadAt,
@@ -149,6 +151,7 @@ impl TimeMode {
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
 pub enum AddressMode {
     #[default]
     Dec,

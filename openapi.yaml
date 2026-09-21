@@ -29,8 +29,8 @@ paths:
       summary: Read registers or bits
       description: |
         Reads `count` items of the given `type` starting at `address` from the
-        connected device. `Holding` and `Input` return raw 16-bit values;
-        `Coil` and `Discrete` return `0` or `1` per bit.
+        connected device. `holding` and `input` return raw 16-bit values;
+        `coil` and `discrete` return `0` or `1` per bit.
 
         An optional `unit_id` targets a specific Modbus unit for this
         request only; the device's configured unit is restored afterwards.
@@ -48,19 +48,19 @@ paths:
               holdings:
                 summary: Read 4 holding registers from address 0
                 value:
-                  type: Holding
+                  type: holding
                   address: 0
                   count: 4
               coils:
                 summary: Read 8 coils from address 0
                 value:
-                  type: Coil
+                  type: coil
                   address: 0
                   count: 8
               unit:
                 summary: Read 2 holding registers from unit 5
                 value:
-                  type: Holding
+                  type: holding
                   address: 0
                   count: 2
                   unit_id: 5
@@ -73,11 +73,11 @@ paths:
                 $ref: "#/components/schemas/ReadResponse"
               examples:
                 registers:
-                  summary: Holding/Input register values
+                  summary: holding/input register values
                   value:
                     values: [230, 0, 4998, 12]
                 bits:
-                  summary: Coil/Discrete values (0 or 1)
+                  summary: coil/discrete values (0 or 1)
                   value:
                     values: [1, 1, 1, 1, 0, 1, 1, 0]
         "403":
@@ -94,9 +94,9 @@ paths:
       summary: Write registers or coils
       description: |
         Writes one or more consecutive items starting at `address`. The
-        `type` selects `Holding` (16-bit registers) or
-        `Coil` (bits, where `0` is off and any non-zero value is on).
-        Read-only types (`Input`, `Discrete`) are rejected with `400`, and
+        `type` selects `holding` (16-bit registers) or
+        `coil` (bits, where `0` is off and any non-zero value is on).
+        Read-only types (`input`, `discrete`) are rejected with `400`, and
         all writes are rejected with `403` when the server is in read-only
         mode.
 
@@ -116,25 +116,25 @@ paths:
               single:
                 summary: Write one holding register
                 value:
-                  type: Holding
+                  type: holding
                   address: 50
                   values: [1234]
               multiple:
                 summary: Write three consecutive holding registers
                 value:
-                  type: Holding
+                  type: holding
                   address: 50
                   values: [1234, 5678, 9012]
               coils:
                 summary: Write three consecutive coils (on, off, on)
                 value:
-                  type: Coil
+                  type: coil
                   address: 0
                   values: [1, 0, 1]
               unit:
                 summary: Write one holding register to unit 5
                 value:
-                  type: Holding
+                  type: holding
                   address: 50
                   values: [1234]
                   unit_id: 5
@@ -142,7 +142,7 @@ paths:
         "204":
           description: Values written successfully (no body)
         "400":
-          description: The requested type is read-only (Input or Discrete)
+          description: The requested type is read-only (input or discrete)
         "403":
           description: |
             The write is forbidden: the server is in read-only mode, or a
@@ -192,15 +192,15 @@ components:
     RegisterType:
       type: string
       description: |
-        Modbus data class. `Holding` (16-bit, read/write) and `Input` (16-bit,
-        read-only) are register types; `Coil` (1-bit, read/write) and
-        `Discrete` (1-bit, read-only) are bit types. Reads of bit types return
+        Modbus data class. `holding` (16-bit, read/write) and `input` (16-bit,
+        read-only) are register types; `coil` (1-bit, read/write) and
+        `discrete` (1-bit, read-only) are bit types. Reads of bit types return
         `0` or `1` per item.
       enum:
-        - Holding
-        - Input
-        - Coil
-        - Discrete
+        - holding
+        - input
+        - coil
+        - discrete
 
     ReadRequest:
       type: object
@@ -238,8 +238,8 @@ components:
         values:
           type: array
           description: |
-            Values in address order: raw 16-bit for `Holding`/`Input`, or
-            `0`/`1` for `Coil`/`Discrete`.
+            Values in address order: raw 16-bit for `holding`/`input`, or
+            `0`/`1` for `coil`/`discrete`.
           items:
             type: integer
             format: uint16
@@ -254,8 +254,8 @@ components:
           allOf:
             - $ref: "#/components/schemas/RegisterType"
           description: |
-            Target data class. Only `Holding` and `Coil` are writable;
-            `Input` and `Discrete` are rejected with `400`.
+            Target data class. Only `holding` and `coil` are writable;
+            `input` and `discrete` are rejected with `400`.
         address:
           type: integer
           format: uint16
