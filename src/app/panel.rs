@@ -5,7 +5,7 @@ use crate::interpretator::{ascii_words, fmt_num, graph_value};
 use crate::num_ops::cycle;
 use crate::register::{RegisterCell, RegisterType};
 use crate::state::{InspectMode, Popup, ReadPanel};
-use chrono::{DateTime, Local, Utc};
+use chrono::{DateTime, Utc};
 use std::collections::{BTreeSet, VecDeque};
 
 const INSPECT_COLUMNS: &[Column] = &[
@@ -225,20 +225,16 @@ impl App {
         let Some(entry) = self.read_log.get(&cell) else {
             return Vec::new();
         };
-        let (value, time) = (entry.value, entry.at);
+        let value = entry.value;
         let at = |address: u16| self.read_log.get(&(kind, address)).map(|e| e.value);
         let custom = self.custom_value(cell, value, &at);
         let label = self.labels.get(&cell).map(String::as_str);
-        let time_text = time
-            .with_timezone(&Local)
-            .format("%H:%M:%S.%3f")
-            .to_string();
         self.interpreter.interpret_all(
             addr,
             value,
             [1, 2, 3].map(|offset| at(addr.saturating_add(offset))),
-            &time_text,
-            Utc::now().signed_duration_since(time),
+            &entry.time_text,
+            Utc::now().signed_duration_since(entry.at),
             custom.as_deref(),
             label,
         )
