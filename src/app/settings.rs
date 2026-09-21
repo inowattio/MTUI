@@ -173,7 +173,9 @@ impl App {
             SettingsField::ApiUnitIdOverride => {
                 self.config.api.unit_id_override = !self.config.api.unit_id_override
             }
-            SettingsField::LogWrites => self.config.log_writes = !self.config.log_writes,
+            SettingsField::WriteLogEnabled => {
+                self.config.write_log.enabled = !self.config.write_log.enabled
+            }
             SettingsField::ReconnectOnTimeout => {
                 self.config.reconnect_on_timeout = !self.config.reconnect_on_timeout
             }
@@ -296,6 +298,11 @@ impl App {
                 self.config.next_config.push(c);
                 self.refresh_dirty();
             }
+            SettingsField::WriteLogDirectory => {
+                self.config.write_log.directory.push(c);
+                self.refresh_writes_log_state();
+                self.refresh_dirty();
+            }
             _ => {}
         }
     }
@@ -317,6 +324,12 @@ impl App {
         }
         if field == SettingsField::NextConfig {
             self.config.next_config.pop();
+            self.refresh_dirty();
+            return;
+        }
+        if field == SettingsField::WriteLogDirectory {
+            self.config.write_log.directory.pop();
+            self.refresh_writes_log_state();
             self.refresh_dirty();
             return;
         }

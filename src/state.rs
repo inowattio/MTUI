@@ -826,7 +826,8 @@ settings_fields! {
             RefreshInterval: Number => "Auto-refresh (ms)", "Delay between automatic reads, 0 turns auto-refresh off",
             ReconnectOnTimeout: Toggle => "Reconnect on timeout", "Reconnect to the device after a read times out",
             ReadOnly: Toggle => "Read-only", "Refuse all writes from the UI and the API",
-            LogWrites: Toggle => "Log writes to file", "Append every write to a log file",
+            WriteLogEnabled: Toggle => "Log writes to file", "Append every write to a log file",
+            WriteLogDirectory: Text => "Write log folder", "Folder for the write log, empty uses the config file's folder",
         ],
         [
             GraphHistory: Number => "Graph history", "Samples kept per register for the value graph",

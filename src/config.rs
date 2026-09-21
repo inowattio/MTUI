@@ -24,7 +24,7 @@ pub struct Config {
     pub graph: GraphConfig,
     pub matrix: MatrixConfig,
     pub read_only: bool,
-    pub log_writes: bool,
+    pub write_log: WriteLogConfig,
     pub skip_unsaved_warning: bool,
     pub display: DisplayConfig,
     pub cycle_register_types: CycleTypes,
@@ -124,6 +124,13 @@ impl Default for DisplayConfig {
 pub struct Padding {
     pub horizontal: u16,
     pub vertical: u16,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(default)]
+pub struct WriteLogConfig {
+    pub enabled: bool,
+    pub directory: String,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
@@ -732,7 +739,7 @@ impl Default for Config {
             graph: GraphConfig::default(),
             matrix: MatrixConfig::default(),
             read_only: false,
-            log_writes: false,
+            write_log: WriteLogConfig::default(),
             skip_unsaved_warning: false,
             display: DisplayConfig::default(),
             cycle_register_types: CycleTypes::default(),

@@ -92,6 +92,9 @@ pub fn append(
     };
 
     let timestamp = Local::now().format("%Y-%m-%dT%H:%M:%S%.3f").to_string();
+    if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
+        let _ = std::fs::create_dir_all(parent);
+    }
     let Ok(mut file) = std::fs::OpenOptions::new()
         .create(true)
         .append(true)

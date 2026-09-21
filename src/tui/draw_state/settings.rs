@@ -121,7 +121,7 @@ fn draw_fields(params: &SettingsParams, app: &App, frame: &mut Frame, area: Rect
             }
             field_lines.push(lines.len());
             lines.push(render_field(app, params, field, selected, theme));
-            if field == SettingsField::LogWrites {
+            if field == SettingsField::WriteLogDirectory {
                 lines.push(Line::from(Span::styled(
                     format!("  {:<24} {}", "", app.writes_log_path().display()),
                     theme.dim_style(),
@@ -340,7 +340,7 @@ fn field_value(
             None,
         ),
         SettingsField::ApiUnitIdOverride => (on_off(device.api.unit_id_override), None),
-        SettingsField::LogWrites => (on_off(device.log_writes), None),
+        SettingsField::WriteLogEnabled => (on_off(device.write_log.enabled), None),
         SettingsField::StartupPanel => (device.startup.panel.name().to_string(), None),
         SettingsField::StartupType => (device.startup.register_type.name().to_string(), None),
         SettingsField::StartupAddress => (device.startup.address.to_string(), None),
@@ -406,6 +406,7 @@ fn field_value(
         SettingsField::Save => (app.config_path().display().to_string(), None),
         SettingsField::LoadConfig => (params.load_path.clone(), None),
         SettingsField::NextConfig => (device.next_config.clone(), None),
+        SettingsField::WriteLogDirectory => (device.write_log.directory.clone(), None),
     }
 }
 

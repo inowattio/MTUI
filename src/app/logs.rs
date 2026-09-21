@@ -56,10 +56,14 @@ impl App {
             ],
             "csv",
         );
-        #[cfg(not(target_arch = "wasm32"))]
-        let dir = std::env::temp_dir();
-        #[cfg(target_arch = "wasm32")]
-        let dir = std::path::PathBuf::new();
+        let directory = self.config.write_log.directory.trim();
+        let dir = if directory.is_empty() {
+            self.config_path
+                .parent()
+                .map_or_else(std::path::PathBuf::new, std::path::Path::to_path_buf)
+        } else {
+            std::path::PathBuf::from(directory)
+        };
         dir.join(name)
     }
 
@@ -174,7 +178,7 @@ impl App {
 
     pub(super) fn refresh_writes_log_state(&self) {
         if let Ok(mut state) = self.writes_log.lock() {
-            state.enabled = self.config.log_writes;
+            state.enabled = self.config.write_log.enabled;
             state.path = Some(self.writes_log_path());
         }
     }
