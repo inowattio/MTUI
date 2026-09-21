@@ -1,7 +1,9 @@
 use crate::app::App;
 use crate::constants::ELLIPSIS;
 use crate::input::KeyCode;
-use crate::state::{DiscoveryColumn, DiscoveryField, DiscoveryParams, InterfaceKind};
+use crate::state::{
+    DiscoveryColumn, DiscoveryField, DiscoveryParams, InterfaceKind, StatusMessage,
+};
 use crate::tui::draw_state::{action_line, cyclable, dim_line, edit_value, field_row, marker};
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::{Theme, spinner_frame};
@@ -25,7 +27,7 @@ pub fn draw(params: &DiscoveryParams, app: &App, frame: &mut Frame, area: Rect, 
     let has_side = !params.side_fields().is_empty();
     let blocked = blocked_reason(params);
 
-    let left = common_lines(params, field, blocked, theme);
+    let left = common_lines(params, field, blocked, params.status.as_ref(), theme);
     let right = side_lines(params, field, app, theme);
 
     let action = match field {
@@ -52,10 +54,7 @@ pub fn draw(params: &DiscoveryParams, app: &App, frame: &mut Frame, area: Rect, 
         (hints::width(&items) as u16, hints::footer(theme, items))
     };
 
-    let mut tail: Vec<Line> = Vec::new();
-    super::push_status(&mut tail, theme, params.status.as_ref());
-    tail.push(Line::default());
-    tail.push(footer);
+    let tail = vec![Line::default(), footer];
 
     let body_w = if has_side {
         LEFT_W + DIVIDER_W + SIDE_W
@@ -114,10 +113,11 @@ fn common_lines(
     p: &DiscoveryParams,
     current: DiscoveryField,
     blocked: Option<&'static str>,
+    status: Option<&StatusMessage>,
     theme: &Theme,
 ) -> Vec<Line<'static>> {
     let focused = p.column == DiscoveryColumn::Common;
-    let mut lines = Vec::with_capacity(DiscoveryParams::COMMON.len() + 2);
+    let mut lines = Vec::with_capacity(DiscoveryParams::COMMON.len() + 4);
     lines.push(Line::default());
     for field in DiscoveryParams::COMMON {
         let selected = focused && field == current;
@@ -138,7 +138,32 @@ fn common_lines(
         let value = edit_value(value, selected, cyclable);
         lines.push(row(theme, label, COMMON_LABEL, value, selected, None));
     }
+    if let Some(status) = status {
+        lines.push(Line::default());
+        let style = theme.message_style(status.kind);
+        for text in wrap_words(&status.text, LEFT_W as usize - 1) {
+            lines.push(Line::from(Span::styled(format!(" {text}"), style)));
+        }
+    }
     lines
+}
+
+fn wrap_words(text: &str, width: usize) -> Vec<String> {
+    let mut rows: Vec<String> = Vec::new();
+    let mut row = String::new();
+    for word in text.split_whitespace() {
+        if !row.is_empty() && row.chars().count() + 1 + word.chars().count() > width {
+            rows.push(std::mem::take(&mut row));
+        }
+        if !row.is_empty() {
+            row.push(' ');
+        }
+        row.push_str(word);
+    }
+    if !row.is_empty() {
+        rows.push(row);
+    }
+    rows
 }
 
 fn common_view(p: &DiscoveryParams, field: DiscoveryField) -> (&'static str, String, bool) {
@@ -428,4 +453,23 @@ fn button_line(
         theme.ok_style()
     };
     action_line(theme, label, selected && !disabled, style, suffix)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::wrap_words;
+
+    #[test]
+    fn wrap_words_breaks_between_words_and_keeps_long_words_whole() {
+        assert_eq!(wrap_words("short", 10), vec!["short"]);
+        assert_eq!(
+            wrap_words("Connection failed: timed out", 12),
+            vec!["Connection", "failed:", "timed out"]
+        );
+        assert_eq!(
+            wrap_words("a verylongwordthatexceeds b", 8),
+            vec!["a", "verylongwordthatexceeds", "b"]
+        );
+        assert!(wrap_words("   ", 8).is_empty());
+    }
 }
