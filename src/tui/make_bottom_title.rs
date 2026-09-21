@@ -60,7 +60,7 @@ pub fn make_bottom_title(theme: &Theme, app: &App) -> Line<'static> {
                 [
                     primary,
                     Hint::key(kb.panel, "Category"),
-                    Hint::key(KeyCode::Esc, "Back"),
+                    Hint::key(KeyCode::Esc, "Close"),
                 ],
             )
         }
@@ -71,7 +71,7 @@ pub fn make_bottom_title(theme: &Theme, app: &App) -> Line<'static> {
                 Hint::key(kb.write, if l.wrap { "Unwrap" } else { "Wrap" }),
                 Hint::key(kb.copy_column, "Copy"),
                 Hint::key(kb.dump, "Dump"),
-                Hint::key(KeyCode::Esc, "Back"),
+                Hint::key(KeyCode::Esc, "Close"),
             ],
         ),
     }

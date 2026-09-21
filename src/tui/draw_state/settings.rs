@@ -455,7 +455,7 @@ fn draw_keybinds(params: &SettingsParams, app: &App, frame: &mut Frame, area: Re
             [
                 Hint::key(KeyCode::Enter, "Rebind"),
                 Hint::key(KeyCode::Backspace, "Reset to default"),
-                Hint::key(KeyCode::Esc, "Back"),
+                Hint::key(KeyCode::Esc, "Close"),
             ],
         )
     };
