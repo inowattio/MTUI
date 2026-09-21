@@ -1,18 +1,17 @@
-use super::{App, BackgroundTask, ExportPayload, ImportPayload, LoadConfigTaskResult, save_config};
+use super::{App, BackgroundTask, LoadConfigTaskResult, save_config};
 use crate::compat;
-use crate::config::{Config, CustomRules, Startup};
-use crate::custom::CustomRule;
+use crate::config::{Config, Registers, Startup};
 use crate::modbus::ModbusDevice;
-use crate::register::RegisterCell;
 use crate::state::{ConnectionStatus, ImportParams, Outcome, Popup, State, StatusMessage};
-use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 impl App {
-    fn parse_import(data: &str) -> Option<ImportPayload> {
-        let payload: ImportPayload = serde_json::from_str(data.trim()).ok()?;
-        (payload.total() > 0).then_some(payload)
+    fn parse_import(data: &str) -> Option<Registers> {
+        let value: serde_json::Value = serde_json::from_str(data.trim()).ok()?;
+        let value = value.get("registers").cloned().unwrap_or(value);
+        let registers: Registers = serde_json::from_value(value).ok()?;
+        (registers.total() > 0).then_some(registers)
     }
 
     pub fn paste_import(&mut self, data: &str) {
@@ -43,32 +42,16 @@ impl App {
             return;
         };
 
-        let mut pins = 0;
-        if let Some(p) = payload.pinned_registers {
-            let incoming: Vec<RegisterCell> = p.into();
-            pins = incoming.len();
-            for cell in incoming {
-                if !self.pinned_registers.contains(&cell) {
-                    self.pinned_registers.push(cell);
-                }
+        let (pins, labels, rules) = (payload.pins(), payload.labels(), payload.rules());
+        let (pinned, incoming_labels, incoming_rules) = payload.into_views();
+        for cell in pinned {
+            if !self.pinned_registers.contains(&cell) {
+                self.pinned_registers.push(cell);
             }
-            self.pinned_registers.sort();
-            self.pinned_registers.dedup();
         }
-
-        let mut labels = 0;
-        if let Some(l) = payload.labels {
-            let incoming: BTreeMap<RegisterCell, String> = l.into();
-            labels = incoming.len();
-            self.labels.extend(incoming);
-        }
-
-        let mut rules = 0;
-        if let Some(r) = payload.custom_rules {
-            let incoming: BTreeMap<RegisterCell, CustomRule> = r.into();
-            rules = incoming.len();
-            self.custom_rules.extend(incoming);
-        }
+        self.pinned_registers.sort();
+        self.labels.extend(incoming_labels);
+        self.custom_rules.extend(incoming_rules);
 
         self.sync_auto_widths();
         self.refresh_dirty();
@@ -80,12 +63,7 @@ impl App {
     }
 
     fn export_payload_json(&self) -> String {
-        let payload = ExportPayload {
-            pinned_registers: self.pinned_registers.as_slice().into(),
-            labels: (&self.labels).into(),
-            custom_rules: (&self.custom_rules).into(),
-        };
-        serde_json::to_string_pretty(&payload).unwrap_or_default()
+        serde_json::to_string_pretty(&self.registers()).unwrap_or_default()
     }
 
     pub fn copy_data_to_clipboard(&mut self) {
@@ -123,17 +101,13 @@ impl App {
         self.set_settings_status(message);
     }
 
+    fn registers(&self) -> Registers {
+        Registers::from_views(&self.pinned_registers, &self.labels, &self.custom_rules)
+    }
+
     fn effective_config(&self) -> Config {
         let mut config = self.config.clone();
-        config.labels = (&self.labels).into();
-
-        let rebuilt: CustomRules = (&self.custom_rules).into();
-        config.custom_rules.holdings = rebuilt.holdings;
-        config.custom_rules.inputs = rebuilt.inputs;
-        config.custom_rules.coils = rebuilt.coils;
-        config.custom_rules.discretes = rebuilt.discretes;
-
-        config.pinned_registers = self.pinned_registers.as_slice().into();
+        config.registers = self.registers();
         config.interpretations = self.interpreter.config();
         config
     }
@@ -380,8 +354,8 @@ mod tests {
         assert_eq!(parsed.name, "copied");
         assert_eq!(parsed.startup.address, 77);
         assert_eq!(
-            parsed.labels.inputs.len(),
-            Config::demo().labels.inputs.len()
+            parsed.registers.inputs.len(),
+            Config::demo().registers.inputs.len()
         );
     }
 

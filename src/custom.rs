@@ -143,7 +143,7 @@ pub struct BitEntry {
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 pub struct CustomRule {
-    #[serde(rename = "a")]
+    #[serde(skip)]
     pub address: u16,
     pub repr: CustomRepr,
     #[serde(default)]
@@ -622,7 +622,6 @@ mod tests {
     #[test]
     fn serde_round_trip() {
         let mut r = rule(CustomRepr::F32);
-        r.address = 100;
         r.ops = vec![CustomOp {
             op: OpKind::Mul,
             v: 0.1,
@@ -643,8 +642,7 @@ mod tests {
 
     #[test]
     fn deserialize_is_terse() {
-        let r: CustomRule = serde_json::from_str(r#"{"a": 7, "repr": "U16"}"#).unwrap();
-        assert_eq!(r.address, 7);
+        let r: CustomRule = serde_json::from_str(r#"{"repr": "U16"}"#).unwrap();
         assert_eq!(r.repr, CustomRepr::U16);
         assert!(r.ops.is_empty());
         assert!(r.enum_map.is_empty());

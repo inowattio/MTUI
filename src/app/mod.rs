@@ -1,7 +1,7 @@
 #[cfg(not(target_arch = "wasm32"))]
 use crate::compat;
 use crate::compat::{Instant, TaskHandle};
-use crate::config::{Config, CustomRules, Label, Labels};
+use crate::config::{Config, Registers};
 use crate::constants::CONFIG_PATH;
 use crate::custom::CustomRule;
 use crate::interpretator::Interpretor;
@@ -12,7 +12,6 @@ use crate::state::ScanMethod;
 use crate::state::{ConnectionStatus, CustomParams, SlaveParams, State};
 use crate::writes_log::SharedWritesLog;
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
 use std::cell::Cell;
 use std::collections::{BTreeMap, VecDeque};
 use std::path::{Path, PathBuf};
@@ -438,7 +437,7 @@ pub struct App {
     labels: BTreeMap<RegisterCell, String>,
     custom_rules: BTreeMap<RegisterCell, CustomRule>,
     pending_write: Option<PendingWrite>,
-    pending_import: Option<ImportPayload>,
+    pending_import: Option<Registers>,
     logged_connection: ConnectionStatus,
     api_device: ApiDevice,
     api_bound_port: BoundPort,
@@ -455,147 +454,6 @@ pub struct App {
     api_pending_port: Option<u16>,
     #[cfg(not(target_arch = "wasm32"))]
     clipboard: Option<ClipboardHandle>,
-}
-
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(default)]
-pub struct PinnedRegisters {
-    pub holdings: Vec<u16>,
-    pub inputs: Vec<u16>,
-    pub coils: Vec<u16>,
-    pub discretes: Vec<u16>,
-}
-
-#[derive(Debug, Default, Deserialize)]
-struct ImportPayload {
-    pinned_registers: Option<PinnedRegisters>,
-    labels: Option<Labels>,
-    custom_rules: Option<CustomRules>,
-}
-
-#[derive(Serialize)]
-struct ExportPayload {
-    pinned_registers: PinnedRegisters,
-    labels: Labels,
-    custom_rules: CustomRules,
-}
-
-fn section_count<T>(section: &[T], rest: [&[T]; 3]) -> usize {
-    section.len() + rest.iter().map(|s| s.len()).sum::<usize>()
-}
-
-impl ImportPayload {
-    fn pins(&self) -> usize {
-        self.pinned_registers.as_ref().map_or(0, |p| {
-            section_count(&p.holdings, [&p.inputs, &p.coils, &p.discretes])
-        })
-    }
-
-    fn labels(&self) -> usize {
-        self.labels.as_ref().map_or(0, |l| {
-            section_count(&l.holdings, [&l.inputs, &l.coils, &l.discretes])
-        })
-    }
-
-    fn rules(&self) -> usize {
-        self.custom_rules.as_ref().map_or(0, |r| {
-            section_count(&r.holdings, [&r.inputs, &r.coils, &r.discretes])
-        })
-    }
-
-    fn total(&self) -> usize {
-        self.pins() + self.labels() + self.rules()
-    }
-}
-
-macro_rules! impl_section_mut {
-    ($ty:ty, $elem:ty) => {
-        impl $ty {
-            fn section_mut(&mut self, kind: RegisterType) -> &mut Vec<$elem> {
-                match kind {
-                    RegisterType::Holding => &mut self.holdings,
-                    RegisterType::Input => &mut self.inputs,
-                    RegisterType::Coil => &mut self.coils,
-                    RegisterType::Discrete => &mut self.discretes,
-                }
-            }
-        }
-    };
-}
-
-impl_section_mut!(PinnedRegisters, u16);
-impl_section_mut!(Labels, Label);
-impl_section_mut!(CustomRules, CustomRule);
-
-impl From<PinnedRegisters> for Vec<RegisterCell> {
-    fn from(mut value: PinnedRegisters) -> Self {
-        let mut collection = Vec::new();
-        for kind in RegisterType::ALL {
-            for address in std::mem::take(value.section_mut(kind)) {
-                collection.push((kind, address));
-            }
-        }
-        collection
-    }
-}
-
-impl From<&[RegisterCell]> for PinnedRegisters {
-    fn from(cells: &[RegisterCell]) -> Self {
-        let mut pinned = PinnedRegisters::default();
-        for &(kind, address) in cells {
-            pinned.section_mut(kind).push(address);
-        }
-        pinned
-    }
-}
-
-impl From<Labels> for BTreeMap<RegisterCell, String> {
-    fn from(mut value: Labels) -> Self {
-        let mut map = BTreeMap::new();
-        for kind in RegisterType::ALL {
-            for label in std::mem::take(value.section_mut(kind)) {
-                map.insert((kind, label.address), label.text);
-            }
-        }
-        map
-    }
-}
-
-impl From<&BTreeMap<RegisterCell, String>> for Labels {
-    fn from(map: &BTreeMap<RegisterCell, String>) -> Self {
-        let mut labels = Labels::default();
-        for (&(kind, address), text) in map {
-            labels.section_mut(kind).push(Label {
-                address,
-                text: text.clone(),
-            });
-        }
-        labels
-    }
-}
-
-impl From<CustomRules> for BTreeMap<RegisterCell, CustomRule> {
-    fn from(mut value: CustomRules) -> Self {
-        let mut map = BTreeMap::new();
-        for kind in RegisterType::ALL {
-            for rule in std::mem::take(value.section_mut(kind)) {
-                map.insert((kind, rule.address), rule);
-            }
-        }
-        map
-    }
-}
-
-impl From<&BTreeMap<RegisterCell, CustomRule>> for CustomRules {
-    fn from(map: &BTreeMap<RegisterCell, CustomRule>) -> Self {
-        let mut rules = CustomRules::default();
-        for (&(kind, address), rule) in map {
-            let mut rule = rule.clone();
-            rule.address = address;
-            rules.section_mut(kind).push(rule);
-        }
-        rules
-    }
 }
 
 fn ensure_parent_dir(path: &Path) -> Result<(), String> {

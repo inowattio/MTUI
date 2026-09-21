@@ -1,11 +1,11 @@
-use crate::app::PinnedRegisters;
 use crate::custom::{BitEntry, CustomOp, CustomRepr, CustomRule, EnumEntry, OpKind};
 use crate::input::KeyCode;
 use crate::modbus::{DeviceConfig, Interface};
-use crate::register::RegisterType;
+use crate::register::{RegisterCell, RegisterType};
 use crate::state::ReadPanel;
 use crate::tui::theme::Theme;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default)]
@@ -38,6 +38,7 @@ pub struct Config {
     pub show_inactive_tabs: bool,
     pub show_read_window: bool,
     pub show_matrix_context: bool,
+    pub show_continuation: bool,
     pub graph_time_axis: bool,
     pub padding_horizontal: u16,
     pub padding_vertical: u16,
@@ -45,9 +46,7 @@ pub struct Config {
     pub cycle_panels: CyclePanels,
     pub port: Option<u16>,
     pub allow_api_slave_id: bool,
-    pub pinned_registers: PinnedRegisters,
-    pub labels: Labels,
-    pub custom_rules: CustomRules,
+    pub registers: Registers,
     pub keybinds: Keybinds,
     pub theme: Theme,
 }
@@ -198,16 +197,6 @@ impl Keybinds {
     }
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(default)]
-pub struct CustomRules {
-    pub holdings: Vec<CustomRule>,
-    pub inputs: Vec<CustomRule>,
-    pub coils: Vec<CustomRule>,
-    pub discretes: Vec<CustomRule>,
-    pub show_continuation: bool,
-}
-
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
 #[serde(default)]
 pub struct Startup {
@@ -219,19 +208,126 @@ pub struct Startup {
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(default)]
-pub struct Labels {
-    pub holdings: Vec<Label>,
-    pub inputs: Vec<Label>,
-    pub coils: Vec<Label>,
-    pub discretes: Vec<Label>,
+pub struct Registers {
+    pub holdings: Vec<RegisterEntry>,
+    pub inputs: Vec<RegisterEntry>,
+    pub coils: Vec<RegisterEntry>,
+    pub discretes: Vec<RegisterEntry>,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct Label {
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
+pub struct RegisterEntry {
     #[serde(rename = "a")]
     pub address: u16,
-    #[serde(rename = "t")]
-    pub text: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub pinned: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub custom: Option<CustomRule>,
+}
+
+pub type RegisterViews = (
+    Vec<RegisterCell>,
+    BTreeMap<RegisterCell, String>,
+    BTreeMap<RegisterCell, CustomRule>,
+);
+
+impl Registers {
+    fn section(&self, kind: RegisterType) -> &[RegisterEntry] {
+        match kind {
+            RegisterType::Holding => &self.holdings,
+            RegisterType::Input => &self.inputs,
+            RegisterType::Coil => &self.coils,
+            RegisterType::Discrete => &self.discretes,
+        }
+    }
+
+    fn section_mut(&mut self, kind: RegisterType) -> &mut Vec<RegisterEntry> {
+        match kind {
+            RegisterType::Holding => &mut self.holdings,
+            RegisterType::Input => &mut self.inputs,
+            RegisterType::Coil => &mut self.coils,
+            RegisterType::Discrete => &mut self.discretes,
+        }
+    }
+
+    pub fn entries(&self) -> impl Iterator<Item = (RegisterCell, &RegisterEntry)> {
+        RegisterType::ALL.into_iter().flat_map(move |kind| {
+            self.section(kind)
+                .iter()
+                .map(move |entry| ((kind, entry.address), entry))
+        })
+    }
+
+    pub fn pins(&self) -> usize {
+        self.entries().filter(|(_, e)| e.pinned).count()
+    }
+
+    pub fn labels(&self) -> usize {
+        self.entries().filter(|(_, e)| e.label.is_some()).count()
+    }
+
+    pub fn rules(&self) -> usize {
+        self.entries().filter(|(_, e)| e.custom.is_some()).count()
+    }
+
+    pub fn total(&self) -> usize {
+        self.pins() + self.labels() + self.rules()
+    }
+
+    pub fn into_views(mut self) -> RegisterViews {
+        let mut pinned = Vec::new();
+        let mut labels = BTreeMap::new();
+        let mut rules = BTreeMap::new();
+        for kind in RegisterType::ALL {
+            for entry in std::mem::take(self.section_mut(kind)) {
+                let cell = (kind, entry.address);
+                if entry.pinned {
+                    pinned.push(cell);
+                }
+                if let Some(text) = entry.label {
+                    labels.insert(cell, text);
+                }
+                if let Some(mut rule) = entry.custom {
+                    rule.address = entry.address;
+                    rules.insert(cell, rule);
+                }
+            }
+        }
+        (pinned, labels, rules)
+    }
+
+    pub fn from_views(
+        pinned: &[RegisterCell],
+        labels: &BTreeMap<RegisterCell, String>,
+        rules: &BTreeMap<RegisterCell, CustomRule>,
+    ) -> Self {
+        fn entry(
+            merged: &mut BTreeMap<RegisterCell, RegisterEntry>,
+            cell: RegisterCell,
+        ) -> &mut RegisterEntry {
+            merged.entry(cell).or_insert_with(|| RegisterEntry {
+                address: cell.1,
+                ..Default::default()
+            })
+        }
+        let mut merged = BTreeMap::new();
+        for &cell in pinned {
+            entry(&mut merged, cell).pinned = true;
+        }
+        for (&cell, text) in labels {
+            entry(&mut merged, cell).label = Some(text.clone());
+        }
+        for (&cell, rule) in rules {
+            entry(&mut merged, cell).custom = Some(rule.clone());
+        }
+        let mut registers = Registers::default();
+        for ((kind, _), entry) in merged {
+            registers.section_mut(kind).push(entry);
+        }
+        registers
+    }
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
@@ -334,13 +430,6 @@ impl Config {
     }
 }
 
-fn label(address: u16, text: &str) -> Label {
-    Label {
-        address,
-        text: text.to_string(),
-    }
-}
-
 fn scaled(address: u16, repr: CustomRepr, div: f64, decimals: u8, suffix: &str) -> CustomRule {
     CustomRule {
         address,
@@ -395,101 +484,140 @@ fn switch(address: u16, entries: &[(i64, &str)]) -> CustomRule {
     }
 }
 
-fn demo_labels() -> Labels {
-    Labels {
-        holdings: vec![
-            label(0, "model (ascii)"),
-            label(8, "fw version (bcd)"),
-            label(9, "serial (u32)"),
-            label(11, "slave id"),
-            label(12, "uptime (u32 s)"),
-            label(50, "set: voltage"),
-            label(51, "set: current"),
-            label(52, "set: ripple"),
-            label(53, "set: noise"),
-            label(54, "set: time scale"),
-            label(1000, "energy (u32 Wh)"),
-            label(1002, "on-time (u32 s)"),
-            label(1004, "write count"),
-            label(1005, "energy (m10k)"),
-            label(1100, "status bits"),
-            label(1101, "alarm count"),
-        ],
-        inputs: vec![
-            label(0, "voltage L1"),
-            label(1, "voltage L2"),
-            label(2, "voltage L3"),
-            label(3, "current L1"),
-            label(4, "current L2"),
-            label(5, "current L3"),
-            label(6, "frequency"),
-            label(7, "temperature"),
-            label(8, "active power (f32)"),
-            label(10, "power factor (f32)"),
-            label(12, "apparent (u32 VA)"),
-            label(14, "reactive (i32 var)"),
-            label(16, "energy (m10k)"),
-            label(20, "energy (f64 kWh)"),
-            label(30, "seconds"),
-            label(31, "sawtooth"),
-            label(32, "square"),
-            label(33, "noise"),
-            label(34, "random walk"),
-        ],
-        coils: vec![
-            label(0, "main breaker"),
-            label(1, "phase L1 enable"),
-            label(2, "phase L2 enable"),
-            label(3, "phase L3 enable"),
-            label(4, "maintenance bypass"),
-            label(5, "auto mode"),
-        ],
-        discretes: vec![
-            label(0, "device ready"),
-            label(1, "grid present"),
-            label(2, "warning"),
-            label(3, "heartbeat"),
-            label(7, "noise enabled"),
-            label(8, "fault"),
-        ],
-    }
+fn demo_labels() -> BTreeMap<RegisterCell, String> {
+    let sections: [(RegisterType, &[(u16, &str)]); 4] = [
+        (
+            RegisterType::Holding,
+            &[
+                (0, "model (ascii)"),
+                (8, "fw version (bcd)"),
+                (9, "serial (u32)"),
+                (11, "slave id"),
+                (12, "uptime (u32 s)"),
+                (50, "set: voltage"),
+                (51, "set: current"),
+                (52, "set: ripple"),
+                (53, "set: noise"),
+                (54, "set: time scale"),
+                (1000, "energy (u32 Wh)"),
+                (1002, "on-time (u32 s)"),
+                (1004, "write count"),
+                (1005, "energy (m10k)"),
+                (1100, "status bits"),
+                (1101, "alarm count"),
+            ],
+        ),
+        (
+            RegisterType::Input,
+            &[
+                (0, "voltage L1"),
+                (1, "voltage L2"),
+                (2, "voltage L3"),
+                (3, "current L1"),
+                (4, "current L2"),
+                (5, "current L3"),
+                (6, "frequency"),
+                (7, "temperature"),
+                (8, "active power (f32)"),
+                (10, "power factor (f32)"),
+                (12, "apparent (u32 VA)"),
+                (14, "reactive (i32 var)"),
+                (16, "energy (m10k)"),
+                (20, "energy (f64 kWh)"),
+                (30, "seconds"),
+                (31, "sawtooth"),
+                (32, "square"),
+                (33, "noise"),
+                (34, "random walk"),
+            ],
+        ),
+        (
+            RegisterType::Coil,
+            &[
+                (0, "main breaker"),
+                (1, "phase L1 enable"),
+                (2, "phase L2 enable"),
+                (3, "phase L3 enable"),
+                (4, "maintenance bypass"),
+                (5, "auto mode"),
+            ],
+        ),
+        (
+            RegisterType::Discrete,
+            &[
+                (0, "device ready"),
+                (1, "grid present"),
+                (2, "warning"),
+                (3, "heartbeat"),
+                (7, "noise enabled"),
+                (8, "fault"),
+            ],
+        ),
+    ];
+    sections
+        .into_iter()
+        .flat_map(|(kind, entries)| {
+            entries
+                .iter()
+                .map(move |&(address, text)| ((kind, address), text.to_string()))
+        })
+        .collect()
 }
 
-fn demo_rules() -> CustomRules {
-    CustomRules {
-        holdings: vec![
-            scaled(50, CustomRepr::U16, 10.0, 1, " V"),
-            scaled(51, CustomRepr::U16, 100.0, 2, " A"),
-            switch(53, &[(0, "off"), (1, "on")]),
-            plain(54, CustomRepr::U16, None, " %"),
-            scaled(1000, CustomRepr::U32, 1000.0, 2, " kWh"),
-            flags(1100, &[(0, "run"), (1, "grid"), (2, "warn"), (15, "beat")]),
-        ],
-        inputs: vec![
-            scaled(0, CustomRepr::U16, 10.0, 1, " V"),
-            scaled(1, CustomRepr::U16, 10.0, 1, " V"),
-            scaled(2, CustomRepr::U16, 10.0, 1, " V"),
-            scaled(3, CustomRepr::U16, 100.0, 2, " A"),
-            scaled(4, CustomRepr::U16, 100.0, 2, " A"),
-            scaled(5, CustomRepr::U16, 100.0, 2, " A"),
-            scaled(6, CustomRepr::U16, 100.0, 2, " Hz"),
-            scaled(7, CustomRepr::I16, 10.0, 1, " C"),
-            plain(8, CustomRepr::F32, Some(2), " kW"),
-            plain(10, CustomRepr::F32, Some(2), " pf"),
-            plain(12, CustomRepr::U32, None, " VA"),
-            plain(14, CustomRepr::I32, None, " var"),
-            switch(32, &[(0, "low"), (1, "high")]),
-        ],
-        coils: vec![
-            switch(0, &[(0, "open"), (1, "closed")]),
-            switch(4, &[(0, "normal"), (1, "bypass")]),
-        ],
-        discretes: vec![
-            switch(0, &[(0, "no"), (1, "yes")]),
-            switch(8, &[(0, "ok"), (1, "FAULT")]),
-        ],
-        show_continuation: true,
-    }
+fn demo_rules() -> BTreeMap<RegisterCell, CustomRule> {
+    let sections = [
+        (
+            RegisterType::Holding,
+            vec![
+                scaled(50, CustomRepr::U16, 10.0, 1, " V"),
+                scaled(51, CustomRepr::U16, 100.0, 2, " A"),
+                switch(53, &[(0, "off"), (1, "on")]),
+                plain(54, CustomRepr::U16, None, " %"),
+                scaled(1000, CustomRepr::U32, 1000.0, 2, " kWh"),
+                flags(1100, &[(0, "run"), (1, "grid"), (2, "warn"), (15, "beat")]),
+            ],
+        ),
+        (
+            RegisterType::Input,
+            vec![
+                scaled(0, CustomRepr::U16, 10.0, 1, " V"),
+                scaled(1, CustomRepr::U16, 10.0, 1, " V"),
+                scaled(2, CustomRepr::U16, 10.0, 1, " V"),
+                scaled(3, CustomRepr::U16, 100.0, 2, " A"),
+                scaled(4, CustomRepr::U16, 100.0, 2, " A"),
+                scaled(5, CustomRepr::U16, 100.0, 2, " A"),
+                scaled(6, CustomRepr::U16, 100.0, 2, " Hz"),
+                scaled(7, CustomRepr::I16, 10.0, 1, " C"),
+                plain(8, CustomRepr::F32, Some(2), " kW"),
+                plain(10, CustomRepr::F32, Some(2), " pf"),
+                plain(12, CustomRepr::U32, None, " VA"),
+                plain(14, CustomRepr::I32, None, " var"),
+                switch(32, &[(0, "low"), (1, "high")]),
+            ],
+        ),
+        (
+            RegisterType::Coil,
+            vec![
+                switch(0, &[(0, "open"), (1, "closed")]),
+                switch(4, &[(0, "normal"), (1, "bypass")]),
+            ],
+        ),
+        (
+            RegisterType::Discrete,
+            vec![
+                switch(0, &[(0, "no"), (1, "yes")]),
+                switch(8, &[(0, "ok"), (1, "FAULT")]),
+            ],
+        ),
+    ];
+    sections
+        .into_iter()
+        .flat_map(|(kind, rules)| {
+            rules
+                .into_iter()
+                .map(move |rule| ((kind, rule.address), rule))
+        })
+        .collect()
 }
 
 impl Default for Config {
@@ -527,6 +655,7 @@ impl Default for Config {
             show_inactive_tabs: true,
             show_read_window: true,
             show_matrix_context: true,
+            show_continuation: false,
             graph_time_axis: true,
             padding_horizontal: 0,
             padding_vertical: 0,
@@ -534,9 +663,7 @@ impl Default for Config {
             cycle_panels: CyclePanels::default(),
             port: None,
             allow_api_slave_id: false,
-            pinned_registers: Default::default(),
-            labels: Labels::default(),
-            custom_rules: CustomRules::default(),
+            registers: Registers::default(),
             keybinds: Keybinds::default(),
             theme: Theme::default(),
         }
@@ -546,8 +673,8 @@ impl Default for Config {
 impl Config {
     pub fn demo() -> Self {
         Self {
-            labels: demo_labels(),
-            custom_rules: demo_rules(),
+            registers: Registers::from_views(&[], &demo_labels(), &demo_rules()),
+            show_continuation: true,
             ..Self::default()
         }
     }

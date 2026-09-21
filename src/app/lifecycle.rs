@@ -5,7 +5,7 @@ use super::{
     load_config, reconnect_backoff,
 };
 use crate::compat::{self, Instant, TaskPoll};
-use crate::config::{BatchAnchor, Config};
+use crate::config::{BatchAnchor, Config, RegisterViews};
 use crate::custom::CustomRule;
 use crate::interpretator::Interpretor;
 use crate::modbus::{Interface, ModbusDevice};
@@ -39,7 +39,7 @@ impl App {
             .inspect_err(|e| println!("Could not initialize device: {e}"))
             .ok();
 
-        let (interpreter, pinned_registers, labels, custom_rules) =
+        let (interpreter, (pinned_registers, labels, custom_rules)) =
             Self::derive_config_views(&config);
         let mut app = Self {
             origin_config_path: config_path.clone(),
@@ -126,28 +126,17 @@ impl App {
         app
     }
 
-    fn derive_config_views(
-        config: &Config,
-    ) -> (
-        Interpretor,
-        Vec<RegisterCell>,
-        BTreeMap<RegisterCell, String>,
-        BTreeMap<RegisterCell, CustomRule>,
-    ) {
+    fn derive_config_views(config: &Config) -> (Interpretor, RegisterViews) {
         (
             Interpretor::new(config.interpretations.clone(), config.device.word_order),
-            config.pinned_registers.clone().into(),
-            config.labels.clone().into(),
-            config.custom_rules.clone().into(),
+            config.registers.clone().into_views(),
         )
     }
 
     pub(super) fn apply_config(&mut self, config: Config, device: Option<ModbusDevice>) {
         (
             self.interpreter,
-            self.pinned_registers,
-            self.labels,
-            self.custom_rules,
+            (self.pinned_registers, self.labels, self.custom_rules),
         ) = Self::derive_config_views(&config);
         self.device = device;
         self.config = config;

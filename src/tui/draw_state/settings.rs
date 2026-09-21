@@ -355,7 +355,7 @@ fn field_value(
         SettingsField::ClearCustom => (format!("{} rules", app.custom_count()), None),
         SettingsField::CopyData => (String::new(), None),
         SettingsField::CopyConfig => (String::new(), None),
-        SettingsField::ShowContinuation => (on_off(device.custom_rules.show_continuation), None),
+        SettingsField::ShowContinuation => (on_off(device.show_continuation), None),
         SettingsField::ShowClock => (on_off(device.show_clock), None),
         SettingsField::ShowFrameTime => (on_off(device.show_frame_time), None),
         SettingsField::ShowRam => (on_off(device.show_ram), None),

@@ -1235,7 +1235,13 @@ mod tests {
         assert!(!app.dirty);
         let saved: Config = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
         assert_eq!(
-            saved.pinned_registers.inputs,
+            saved
+                .registers
+                .inputs
+                .iter()
+                .filter(|e| e.pinned)
+                .map(|e| e.address)
+                .collect::<Vec<_>>(),
             app.pinned_registers.iter().map(|c| c.1).collect::<Vec<_>>()
         );
         assert_eq!(

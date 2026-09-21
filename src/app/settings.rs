@@ -177,8 +177,7 @@ impl App {
                 self.config.reconnect_on_timeout = !self.config.reconnect_on_timeout
             }
             SettingsField::ShowContinuation => {
-                self.config.custom_rules.show_continuation =
-                    !self.config.custom_rules.show_continuation
+                self.config.show_continuation = !self.config.show_continuation
             }
             SettingsField::ShowClock => self.config.show_clock = !self.config.show_clock,
             SettingsField::ShowFrameTime => {
