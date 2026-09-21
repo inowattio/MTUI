@@ -640,10 +640,17 @@ fn load_config(path: &Path, create_if_missing: bool) -> Result<Config, ConfigErr
             });
         }
     };
-    serde_json::from_str(&content).map_err(|source| ConfigError::Parse {
+    let parse = |source| ConfigError::Parse {
         path: path.to_path_buf(),
         source,
-    })
+    };
+    let value: serde_json::Value = serde_json::from_str(&content).map_err(parse)?;
+    let legacy = value
+        .as_object()
+        .is_some_and(|fields| !fields.is_empty() && !fields.contains_key("version"));
+    let mut config: Config = serde_json::from_value(value).map_err(parse)?;
+    config.legacy = legacy;
+    Ok(config)
 }
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
@@ -740,6 +747,20 @@ mod tests {
         assert_eq!(config.name, "demo");
         let reloaded = load_config(&path, false).expect("the written file parses");
         assert_eq!(reloaded.name, config.name);
+    }
+
+    #[test]
+    fn a_file_without_a_version_is_flagged_as_legacy() {
+        let scratch = Scratch::new("legacy");
+        let path = scratch.path("config.json");
+        fs::write(&path, r#"{"name": "old"}"#).unwrap();
+        assert!(load_config(&path, false).unwrap().legacy);
+
+        fs::write(&path, r#"{"version": 1, "name": "new"}"#).unwrap();
+        assert!(!load_config(&path, false).unwrap().legacy);
+
+        fs::write(&path, "{}").unwrap();
+        assert!(!load_config(&path, false).unwrap().legacy);
     }
 
     #[test]

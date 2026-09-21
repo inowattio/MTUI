@@ -13,6 +13,8 @@ pub const CONFIG_VERSION: u32 = 1;
 #[serde(default)]
 pub struct Config {
     pub version: u32,
+    #[serde(skip)]
+    pub legacy: bool,
     pub name: String,
     pub next_config: String,
     pub device: DeviceConfig,
@@ -725,6 +727,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             version: CONFIG_VERSION,
+            legacy: false,
             name: "demo".to_string(),
             next_config: String::new(),
             device: DeviceConfig::default(),

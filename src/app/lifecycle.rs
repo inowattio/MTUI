@@ -120,6 +120,12 @@ impl App {
             log::warn!("Started | no device, opened the Device popup");
         }
 
+        if app.config.legacy {
+            let msg = "Loaded a pre-1.0 config | delete it and restart to regenerate";
+            log::warn!("{msg}");
+            app.set_read_status(StatusMessage::warn(msg));
+        }
+
         #[cfg(not(target_arch = "wasm32"))]
         app.reconcile_api_server();
 
