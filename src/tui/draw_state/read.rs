@@ -835,7 +835,7 @@ fn draw_graph(
     } else {
         (0..y_count)
             .map(|i| {
-                let v = y_lo + (y_hi - y_lo) * (i as f64 / (y_count - 1) as f64);
+                let v = (y_hi - y_lo).mul_add(i as f64 / (y_count - 1) as f64, y_lo);
                 Span::styled(fmt_num(v, is_float), theme.dim_style())
             })
             .collect()

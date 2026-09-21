@@ -32,7 +32,6 @@ web = []
 [lints.clippy]
 all = { level = "deny", priority = -1 }
 nursery = { level = "deny", priority = -1 }
-suboptimal_flops = "allow"
 missing_const_for_fn = "allow"
 significant_drop_tightening = "allow"
 option_if_let_else = "allow"
