@@ -76,7 +76,7 @@ impl App {
         };
 
         let code = match code_str.parse::<u16>() {
-            Ok(value) if value <= u8::MAX as u16 => value as u8,
+            Ok(value) if u8::try_from(value).is_ok() => value as u8,
             _ => {
                 if let Some(p) = self.raw_mut() {
                     p.status = Some(StatusMessage::err("Function code must be 0-255"));

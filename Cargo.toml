@@ -44,6 +44,7 @@ redundant_closure_for_method_calls = "deny"
 explicit_iter_loop = "deny"
 unused_async = "deny"
 needless_continue = "deny"
+checked_conversions = "deny"
 
 [dependencies]
 ratatui = { version = "0.30.2", default-features = false, features = ["serde"] }

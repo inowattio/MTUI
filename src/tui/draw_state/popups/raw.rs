@@ -16,7 +16,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, params: &RawPar
     };
 
     let code = match params.code.trim().parse::<u16>() {
-        Ok(value) if value <= u8::MAX as u16 => format!("{value} ({value:#04X})"),
+        Ok(value) if u8::try_from(value).is_ok() => format!("{value} ({value:#04X})"),
         _ => params.code.clone(),
     };
     let code_val = edit_value(code, sel == RawField::Code, false);
