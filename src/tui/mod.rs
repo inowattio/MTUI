@@ -18,7 +18,7 @@ pub(crate) mod test_util {
     use ratatui::buffer::Buffer;
     use ratatui::{Frame, Terminal};
 
-    pub(crate) fn buffer_rows(buffer: &Buffer) -> Vec<String> {
+    pub fn buffer_rows(buffer: &Buffer) -> Vec<String> {
         (0..buffer.area.height)
             .map(|y| {
                 (0..buffer.area.width)
@@ -28,7 +28,7 @@ pub(crate) mod test_util {
             .collect()
     }
 
-    pub(crate) fn draw_rows(width: u16, height: u16, draw: impl FnOnce(&mut Frame)) -> Vec<String> {
+    pub fn draw_rows(width: u16, height: u16, draw: impl FnOnce(&mut Frame)) -> Vec<String> {
         let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
         terminal.draw(draw).unwrap();
         buffer_rows(terminal.backend().buffer())
