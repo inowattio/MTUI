@@ -248,7 +248,7 @@ fn fuzzy_score(query: &str, text: &str) -> Option<i32> {
         loop {
             match chars.next() {
                 Some(tc) if tc == qc => break,
-                Some(_) => continue,
+                Some(_) => {},
                 None => return None,
             }
         }
