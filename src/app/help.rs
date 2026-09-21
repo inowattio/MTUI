@@ -33,7 +33,7 @@ impl App {
         let Some(h) = self.popup_as::<HelpParams>() else {
             return Vec::new();
         };
-        fuzzy_rank(&h.query, KeybindAction::ALL, |a| a.label())
+        fuzzy_rank(&h.query, KeybindAction::ALL, KeybindAction::label)
     }
 
     pub fn help_selected_action(&self) -> Option<KeybindAction> {

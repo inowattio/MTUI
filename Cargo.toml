@@ -32,8 +32,15 @@ web = []
 [lints.clippy]
 all = { level = "deny", priority = -1 }
 nursery = { level = "deny", priority = -1 }
+
 significant_drop_tightening = "allow"
 option_if_let_else = "allow"
+
+missing_errors_doc = "allow"
+unreadable_literal = "allow"
+must_use_candidate = "allow"
+
+redundant_closure_for_method_calls = "deny"
 
 [dependencies]
 ratatui = { version = "0.30.2", default-features = false, features = ["serde"] }

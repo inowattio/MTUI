@@ -277,7 +277,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
             c if c == kb.pause => app.write_toggle_bit(),
             KeyCode::Char('-') => {
                 if let Some(w) = app.write_mut() {
-                    w.value = w.value.and_then(|v| v.checked_neg());
+                    w.value = w.value.and_then(i64::checked_neg);
                 }
                 app.clamp_write_value();
             }
@@ -675,7 +675,7 @@ async fn handle_settings_field_key(key_event: KeyEvent, app: &mut App) {
     let count = app
         .settings()
         .map_or(0, |s| s.current_fields().len() as u16);
-    let Some(field) = app.settings().and_then(|s| s.current_field()) else {
+    let Some(field) = app.settings().and_then(super::state::SettingsParams::current_field) else {
         if key_event.code == KeyCode::Esc
             && let Some(s) = app.settings_mut()
         {
