@@ -69,7 +69,7 @@ impl CustomRepr {
     }
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OpKind {
     Add,
     Sub,
@@ -102,9 +102,24 @@ impl OpKind {
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq)]
+#[serde(into = "String", try_from = "String")]
 pub struct CustomOp {
     pub op: OpKind,
     pub v: f64,
+}
+
+impl From<CustomOp> for String {
+    fn from(op: CustomOp) -> Self {
+        op.display()
+    }
+}
+
+impl TryFrom<String> for CustomOp {
+    type Error = &'static str;
+
+    fn try_from(input: String) -> Result<Self, Self::Error> {
+        parse_op(&input)
+    }
 }
 
 impl CustomOp {
@@ -125,7 +140,7 @@ impl CustomOp {
     }
 
     pub fn display(self) -> String {
-        format!("{}{:?}", self.op.symbol(), self.v)
+        format!("{}{}", self.op.symbol(), self.v)
     }
 }
 
@@ -638,6 +653,21 @@ mod tests {
         let json = serde_json::to_string(&r).unwrap();
         let back: CustomRule = serde_json::from_str(&json).unwrap();
         assert_eq!(r, back);
+    }
+
+    #[test]
+    fn ops_serialize_as_operator_strings() {
+        let r: CustomRule =
+            serde_json::from_str(r#"{"repr": "U16", "ops": ["/10", " x0.5 ", "+ 2"]}"#).unwrap();
+        assert_eq!(
+            r.ops.iter().map(|o| o.display()).collect::<Vec<_>>(),
+            ["/10", "*0.5", "+2"]
+        );
+        assert_eq!(
+            serde_json::to_string(&r.ops).unwrap(),
+            r#"["/10","*0.5","+2"]"#
+        );
+        assert!(serde_json::from_str::<CustomRule>(r#"{"repr": "U16", "ops": ["10"]}"#).is_err());
     }
 
     #[test]
