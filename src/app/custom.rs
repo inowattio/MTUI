@@ -307,6 +307,13 @@ impl App {
             output,
         })
     }
+
+    pub fn clear_custom(&mut self) {
+        let n = self.custom_rules.len();
+        self.custom_rules.clear();
+        self.sync_auto_widths();
+        self.note_cleared(n, "custom rule");
+    }
 }
 
 pub struct CustomPreview {

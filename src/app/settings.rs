@@ -65,6 +65,12 @@ impl App {
         }
     }
 
+    pub(super) fn note_cleared(&mut self, n: usize, noun: &str) {
+        self.refresh_dirty();
+        log::info!("Cleared {n} {noun}(s)");
+        self.set_settings_status(StatusMessage::ok(format!("Cleared {n} {noun}(s)")));
+    }
+
     fn numeric_spec(field: SettingsField) -> Option<(i64, i64, i64)> {
         match field {
             SettingsField::BatchSize | SettingsField::GraphHistory => Some((1, u16::MAX as i64, 1)),
