@@ -59,8 +59,8 @@ mod native {
         let mut app = App::new(config, make_config_if_none).await?;
         app.headless = true;
 
-        let port = app.config.api.port.ok_or_else(|| {
-            anyhow::anyhow!("Headless mode requires an API port; set `port` in the config")
+        let port = app.config.api.desired_port().ok_or_else(|| {
+            anyhow::anyhow!("Headless mode requires the API; set `api.enabled` in the config")
         })?;
         log::info!("Headless mode - API server on port {port}");
 

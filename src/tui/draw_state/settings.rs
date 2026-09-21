@@ -308,9 +308,10 @@ fn field_value(
         SettingsField::CustomBatchByRegisters => (on_off(device.batch.custom_by_registers), None),
         SettingsField::FilterPanelsByType => (on_off(device.filter_panels_by_type), None),
         SettingsField::RefreshInterval => (
-            device
-                .refresh_interval_ms
-                .map_or_else(|| "off".to_string(), |n| n.to_string()),
+            match device.refresh_interval_ms {
+                0 => "off".to_string(),
+                n => n.to_string(),
+            },
             None,
         ),
         SettingsField::ReconnectOnTimeout => (on_off(device.reconnect_on_timeout), None),
@@ -319,20 +320,22 @@ fn field_value(
         SettingsField::SkipUnsavedWarning => (on_off(device.skip_unsaved_warning), None),
         SettingsField::ShowMockDevice => (on_off(device.show_mock_device), None),
         SettingsField::ReadOnly => (on_off(device.read_only), None),
+        SettingsField::ApiEnabled => (on_off(device.api.enabled), None),
         SettingsField::ApiPort => (
-            match device.api.port {
-                None => "off".to_string(),
-                Some(0) if app.api_bind_state() == ApiBindState::Failed => {
+            match (device.api.enabled, device.api.port) {
+                (false, 0) => "any".to_string(),
+                (false, n) => n.to_string(),
+                (true, 0) if app.api_bind_state() == ApiBindState::Failed => {
                     "any (bind failed)".to_string()
                 }
-                Some(n) if app.api_bind_state() == ApiBindState::Failed => {
+                (true, n) if app.api_bind_state() == ApiBindState::Failed => {
                     format!("{n} (bind failed)")
                 }
-                Some(0) => match app.api_bound_port() {
+                (true, 0) => match app.api_bound_port() {
                     Some(bound) => format!("any (:{bound})"),
                     None => "any".to_string(),
                 },
-                Some(n) => n.to_string(),
+                (true, n) => n.to_string(),
             },
             None,
         ),
@@ -375,9 +378,10 @@ fn field_value(
         SettingsField::PaddingHorizontal => (device.padding.horizontal.to_string(), None),
         SettingsField::PaddingVertical => (device.padding.vertical.to_string(), None),
         SettingsField::ChangedExpiry => (
-            device
-                .changed_expiry_ms
-                .map_or_else(|| "never".to_string(), |n| n.to_string()),
+            match device.changed_expiry_ms {
+                0 => "never".to_string(),
+                n => n.to_string(),
+            },
             None,
         ),
         SettingsField::ThemePreset => (

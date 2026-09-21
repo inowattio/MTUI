@@ -50,7 +50,7 @@ impl App {
 
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn reconcile_api_server(&mut self) {
-        let desired = self.config.api.port;
+        let desired = self.config.api.desired_port();
         if desired == self.api_server_port {
             self.api_pending_port = desired;
             return;

@@ -18,9 +18,9 @@ pub struct Config {
     pub columns: InterpretorConfig,
     pub batch: BatchConfig,
     pub filter_panels_by_type: bool,
-    pub refresh_interval_ms: Option<u64>,
+    pub refresh_interval_ms: u64,
     pub reconnect_on_timeout: bool,
-    pub changed_expiry_ms: Option<u64>,
+    pub changed_expiry_ms: u64,
     pub graph: GraphConfig,
     pub matrix: MatrixConfig,
     pub read_only: bool,
@@ -106,8 +106,15 @@ pub struct Padding {
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
 #[serde(default)]
 pub struct ApiConfig {
-    pub port: Option<u16>,
+    pub enabled: bool,
+    pub port: u16,
     pub unit_id_override: bool,
+}
+
+impl ApiConfig {
+    pub fn desired_port(&self) -> Option<u16> {
+        self.enabled.then_some(self.port)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -696,9 +703,9 @@ impl Default for Config {
             columns: InterpretorConfig::default(),
             batch: BatchConfig::default(),
             filter_panels_by_type: false,
-            refresh_interval_ms: Some(1000),
+            refresh_interval_ms: 1000,
             reconnect_on_timeout: true,
-            changed_expiry_ms: Some(1000),
+            changed_expiry_ms: 1000,
             graph: GraphConfig::default(),
             matrix: MatrixConfig::default(),
             read_only: false,

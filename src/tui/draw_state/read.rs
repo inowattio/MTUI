@@ -565,7 +565,7 @@ pub fn live_status(app: &App, params: &ReadParams, theme: &Theme) -> Vec<Span<'s
         app.connection,
         ConnectionStatus::Reading | ConnectionStatus::Reconnecting
     );
-    let interval = app.config.refresh_interval_ms.filter(|_| !app.sweep.active);
+    let interval = Some(app.config.refresh_interval_ms).filter(|&ms| ms > 0 && !app.sweep.active);
     let seconds = |s: f64| format!("{s:>3.1}s");
     let text = match interval {
         _ if params.loading => Some(seconds(params.read_started.elapsed().as_secs_f64())),

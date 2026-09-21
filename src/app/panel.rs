@@ -211,8 +211,8 @@ impl App {
             return false;
         };
         match self.config.changed_expiry_ms {
-            None => true,
-            Some(ms) => now.signed_duration_since(at).num_milliseconds() < ms as i64,
+            0 => true,
+            ms => now.signed_duration_since(at).num_milliseconds() < ms as i64,
         }
     }
 

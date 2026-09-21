@@ -848,7 +848,8 @@ settings_fields! {
     }
     Api {
         [
-            ApiPort: Number => "API port", "Port for the HTTP API, 0 picks any free port, off disables it",
+            ApiEnabled: Toggle => "API server", "Serve the HTTP API while the app runs",
+            ApiPort: Number => "API port", "Port for the HTTP API, 0 picks any free port",
             ApiUnitIdOverride: Toggle => "API unit id override", "Let API requests target a unit id other than the configured one",
         ],
     }

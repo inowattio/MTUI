@@ -281,8 +281,9 @@ impl App {
             && matches!(
                 &self.state,
                 State::Read(p)
-                    if self.config.refresh_interval_ms
-                        .is_some_and(|ms| p.refresh_timer.elapsed().as_millis() >= ms as u128)
+                    if self.config.refresh_interval_ms > 0
+                        && p.refresh_timer.elapsed().as_millis()
+                            >= self.config.refresh_interval_ms as u128
             );
 
         if should_refresh {

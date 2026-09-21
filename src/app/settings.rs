@@ -86,10 +86,8 @@ impl App {
     fn numeric_get(&self, field: SettingsField) -> i64 {
         match field {
             SettingsField::BatchSize => self.config.batch.size as i64,
-            SettingsField::RefreshInterval => {
-                self.config.refresh_interval_ms.map_or(0, |n| n as i64)
-            }
-            SettingsField::ChangedExpiry => self.config.changed_expiry_ms.map_or(0, |n| n as i64),
+            SettingsField::RefreshInterval => self.config.refresh_interval_ms as i64,
+            SettingsField::ChangedExpiry => self.config.changed_expiry_ms as i64,
             SettingsField::GraphHistory => self.config.graph.history as i64,
             SettingsField::MatrixColumns => self.config.matrix.columns as i64,
             SettingsField::LabelWidth => self.interpreter.label_width() as i64,
@@ -97,7 +95,7 @@ impl App {
             SettingsField::StartupAddress => self.config.startup.address as i64,
             SettingsField::PaddingHorizontal => self.config.padding.horizontal as i64,
             SettingsField::PaddingVertical => self.config.padding.vertical as i64,
-            SettingsField::ApiPort => self.config.api.port.map_or(-1, |p| p as i64),
+            SettingsField::ApiPort => self.config.api.port as i64,
             _ => 0,
         }
     }
@@ -105,12 +103,8 @@ impl App {
     fn numeric_set(&mut self, field: SettingsField, value: i64) {
         match field {
             SettingsField::BatchSize => self.config.batch.size = value as u16,
-            SettingsField::RefreshInterval => {
-                self.config.refresh_interval_ms = (value > 0).then_some(value as u64)
-            }
-            SettingsField::ChangedExpiry => {
-                self.config.changed_expiry_ms = (value > 0).then_some(value as u64)
-            }
+            SettingsField::RefreshInterval => self.config.refresh_interval_ms = value.max(0) as u64,
+            SettingsField::ChangedExpiry => self.config.changed_expiry_ms = value.max(0) as u64,
             SettingsField::GraphHistory => self.config.graph.history = value as u16,
             SettingsField::MatrixColumns => self.config.matrix.columns = value as u16,
             SettingsField::LabelWidth => {
@@ -124,7 +118,7 @@ impl App {
             SettingsField::StartupAddress => self.config.startup.address = value as u16,
             SettingsField::PaddingHorizontal => self.config.padding.horizontal = value as u16,
             SettingsField::PaddingVertical => self.config.padding.vertical = value as u16,
-            SettingsField::ApiPort => self.config.api.port = (value >= 0).then_some(value as u16),
+            SettingsField::ApiPort => self.config.api.port = value.clamp(0, u16::MAX as i64) as u16,
             _ => {}
         }
     }
@@ -173,6 +167,7 @@ impl App {
             SettingsField::FilterPanelsByType => {
                 self.config.filter_panels_by_type = !self.config.filter_panels_by_type
             }
+            SettingsField::ApiEnabled => self.config.api.enabled = !self.config.api.enabled,
             SettingsField::ApiUnitIdOverride => {
                 self.config.api.unit_id_override = !self.config.api.unit_id_override
             }
