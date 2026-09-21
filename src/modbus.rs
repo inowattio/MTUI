@@ -725,6 +725,7 @@ impl ModbusDevice {
         self.closed.load(Ordering::Relaxed)
     }
 
+    #[allow(clippy::unused_async)]
     async fn connect_context(config: &DeviceConfig) -> Result<Context> {
         let timeout_connect = Duration::from_millis(config.connect_timeout_ms);
         #[cfg(target_arch = "wasm32")]

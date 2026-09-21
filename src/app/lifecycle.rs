@@ -251,7 +251,7 @@ impl App {
         self.read_mut().popup = Some(Popup::Quit);
     }
 
-    pub async fn tick(&mut self) {
+    pub fn tick(&mut self) {
         self.frame = self.frame.wrapping_add(1);
         if self.config.display.ram && (self.ram_bytes.is_none() || self.frame.is_multiple_of(10)) {
             self.ram_bytes = crate::compat::ram_bytes();
@@ -259,7 +259,7 @@ impl App {
         self.sync_api_status();
         #[cfg(not(target_arch = "wasm32"))]
         self.reconcile_api_server();
-        self.complete_background_task().await;
+        self.complete_background_task();
         if self.background_task.is_some() {
             return;
         }
@@ -277,7 +277,7 @@ impl App {
                 let current = self.sweep.current;
                 self.read_mut().position = current;
                 self.scroll_to_cursor();
-                self.refresh().await;
+                self.refresh();
             }
             return;
         }
@@ -293,7 +293,7 @@ impl App {
             );
 
         if should_refresh {
-            self.refresh().await;
+            self.refresh();
         }
     }
 
@@ -483,7 +483,7 @@ impl App {
         custom_words_outside(&self.custom_rules, self.read().register_type, start..=end)
     }
 
-    pub async fn refresh(&mut self) {
+    pub fn refresh(&mut self) {
         if self.background_task.is_some() || !self.is_reading() {
             return;
         }
@@ -666,7 +666,7 @@ impl App {
         }
     }
 
-    pub async fn complete_background_task(&mut self) {
+    pub fn complete_background_task(&mut self) {
         #[cfg(not(target_arch = "wasm32"))]
         self.poll_network_scan();
         #[cfg(not(target_arch = "wasm32"))]
@@ -1163,7 +1163,7 @@ mod tests {
         app.reconnect.link_lost = true;
         app.connection = ConnectionStatus::Error("Input/output error".to_string());
 
-        app.tick().await;
+        app.tick();
         assert!(
             matches!(app.background_task, Some(BackgroundTask::Reconnect(_))),
             "a serial device must be reconnected like a network one"
@@ -1180,14 +1180,14 @@ mod tests {
             "a failed attempt leaves no device behind"
         );
 
-        app.tick().await;
+        app.tick();
         assert!(
             app.background_task.is_none(),
             "no new attempt inside the backoff window"
         );
 
         app.reconnect.next_at = None;
-        app.tick().await;
+        app.tick();
         assert!(
             matches!(app.background_task, Some(BackgroundTask::Reconnect(_))),
             "retry after backoff with no device present"
@@ -1205,7 +1205,7 @@ mod tests {
         app.device = None;
         app.connection = ConnectionStatus::Error("Connection failed".to_string());
 
-        app.tick().await;
+        app.tick();
         assert!(app.background_task.is_none());
     }
 
@@ -1230,7 +1230,7 @@ mod tests {
         let mut app = app_with_silent_device().await;
         assert!(app.config.reconnect_on_timeout);
 
-        app.refresh().await;
+        app.refresh();
         settle(&mut app).await;
 
         assert!(matches!(app.connection, ConnectionStatus::Error(_)));
@@ -1243,12 +1243,12 @@ mod tests {
         let mut app = app_with_silent_device().await;
         app.config.reconnect_on_timeout = false;
 
-        app.refresh().await;
+        app.refresh();
         settle(&mut app).await;
         assert!(matches!(app.connection, ConnectionStatus::Error(_)));
         assert!(!app.reconnect.link_lost);
 
-        app.tick().await;
+        app.tick();
         assert!(
             app.background_task.is_none(),
             "a timeout must not reconnect with the setting off"
@@ -1279,7 +1279,7 @@ mod tests {
         app.config.device = config;
         app.config.reconnect_on_timeout = false;
 
-        app.refresh().await;
+        app.refresh();
         settle(&mut app).await;
 
         assert!(matches!(app.connection, ConnectionStatus::Error(_)));
@@ -1294,12 +1294,12 @@ mod tests {
         app.read_mut().register_type = RegisterType::Holding;
         app.read_mut().position = 600;
 
-        app.refresh().await;
+        app.refresh();
         settle(&mut app).await;
         assert!(matches!(app.connection, ConnectionStatus::Error(_)));
         assert!(!app.reconnect.link_lost);
 
-        app.tick().await;
+        app.tick();
         assert!(
             app.background_task.is_none(),
             "an exception must not trigger a reconnect"
@@ -1309,7 +1309,7 @@ mod tests {
     #[cfg(not(target_arch = "wasm32"))]
     async fn app_with_refresh_in_flight() -> App {
         let mut app = App::boot(Config::default(), String::new()).await;
-        app.refresh().await;
+        app.refresh();
         assert!(
             matches!(app.background_task, Some(BackgroundTask::Refresh(_))),
             "boot must land in a reading view so refresh() spawns a task"

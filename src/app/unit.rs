@@ -41,7 +41,7 @@ impl App {
     async fn apply_unit(&mut self, id: u8) {
         self.set_unit(id).await;
         self.close_popup();
-        self.refresh().await;
+        self.refresh();
     }
 
     async fn set_unit(&mut self, id: u8) {

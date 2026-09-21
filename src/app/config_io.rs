@@ -327,7 +327,7 @@ mod tests {
 
     async fn app_with_refresh_in_flight() -> App {
         let mut app = App::boot(Config::default(), String::new()).await;
-        app.refresh().await;
+        app.refresh();
         assert!(matches!(
             app.background_task,
             Some(BackgroundTask::Refresh(_))

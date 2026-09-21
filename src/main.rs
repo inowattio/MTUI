@@ -46,7 +46,7 @@ mod native {
         let mut tui = Tui::new(terminal, events)?;
 
         while app.running {
-            app.complete_background_task().await;
+            app.complete_background_task();
             tui.draw(&mut app)?;
             tui.process_events(&mut app).await?;
         }
@@ -68,7 +68,7 @@ mod native {
         while app.running {
             tokio::select! {
                 _ = ticker.tick() => {
-                    app.tick().await;
+                    app.tick();
                     if app.api_bind_state() == ApiBindState::Failed {
                         anyhow::bail!("API server could not bind port {port}");
                     }

@@ -61,7 +61,7 @@ where
     pub async fn process_events(&mut self, app: &mut App) -> AppResult<()> {
         for event in self.events.nexts().await? {
             match event {
-                Event::Tick => app.tick().await,
+                Event::Tick => app.tick(),
                 Event::Key(key_event) => handle_key_events(key_event, app).await,
                 Event::Resize(_, _) => {}
                 Event::Paste(data) => handle_paste(data, app),

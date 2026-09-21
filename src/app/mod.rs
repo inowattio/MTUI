@@ -660,7 +660,7 @@ fn load_config(path: &Path, create_if_missing: bool) -> Result<Config, ConfigErr
 #[cfg(all(test, not(target_arch = "wasm32")))]
 pub(crate) async fn settle_until(app: &mut App, done: impl Fn(&App) -> bool, what: &str) {
     for _ in 0..500 {
-        app.complete_background_task().await;
+        app.complete_background_task();
         if done(app) {
             return;
         }

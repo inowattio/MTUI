@@ -22,7 +22,7 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) {
     let kb = app.config.keybinds;
 
     if app.settings().is_some() {
-        handle_settings_key(key_event, app).await;
+        handle_settings_key(key_event, app);
         return;
     }
 
@@ -59,7 +59,7 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) {
     }
 
     if let Some(action) = kb.action_for(key_event.code) {
-        run_action(app, action).await;
+        run_action(app, action);
         return;
     }
 
@@ -125,14 +125,14 @@ fn move_read_cursor(app: &mut App, code: KeyCode) {
     app.scroll_to_cursor();
 }
 
-async fn run_action(app: &mut App, action: KeybindAction) {
+fn run_action(app: &mut App, action: KeybindAction) {
     use KeybindAction::*;
     match action {
         Pin => app.pin(),
         Dump => app.open_dump(),
         Help => app.open_help(),
         About => app.open_about(),
-        Refresh => app.refresh().await,
+        Refresh => app.refresh(),
         KeybindAction::SwitchType => app.toggle_type(),
         Write => app.open_write(),
         KeybindAction::GoTo => app.open_search(),
@@ -178,13 +178,13 @@ async fn run_action(app: &mut App, action: KeybindAction) {
 async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
     let kb = app.config.keybinds;
     match kind {
-        PopupKind::Discovery => handle_discovery_key(key_event, app).await,
+        PopupKind::Discovery => handle_discovery_key(key_event, app),
 
         PopupKind::Help => match key_event.code {
             KeyCode::Esc => app.close_popup(),
             KeyCode::Enter => {
                 if let Some(action) = app.help_commit() {
-                    run_action(app, action).await;
+                    run_action(app, action);
                 }
             }
             KeyCode::Up => app.help_move(false),
@@ -207,7 +207,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
 
         PopupKind::Inspect => match key_event.code {
             c if c == KeyCode::Esc || c == kb.inspect => app.close_popup(),
-            c if c == kb.refresh => app.refresh().await,
+            c if c == kb.refresh => app.refresh(),
             c if c == kb.word_order => app.toggle_word_order(),
             KeyCode::Left => app.inspect_cycle(false),
             KeyCode::Right => app.inspect_cycle(true),
@@ -477,7 +477,7 @@ fn paste_digits(digits: &str, app: &mut App) {
     }
 }
 
-async fn handle_discovery_key(key_event: KeyEvent, app: &mut App) {
+fn handle_discovery_key(key_event: KeyEvent, app: &mut App) {
     let kb = app.config.keybinds;
     let Some(field) = app.discovery().map(DiscoveryParams::current_field) else {
         return;
@@ -607,7 +607,7 @@ fn handle_logs_view_key(key_event: KeyEvent, app: &mut App) {
     }
 }
 
-async fn handle_settings_key(key_event: KeyEvent, app: &mut App) {
+fn handle_settings_key(key_event: KeyEvent, app: &mut App) {
     let kb = app.config.keybinds;
     let capturing = app.settings().is_some_and(|s| s.kb_capturing);
     if !capturing && key_event.code == kb.panel {
@@ -628,7 +628,7 @@ async fn handle_settings_key(key_event: KeyEvent, app: &mut App) {
         {
             handle_keybinds_key(key_event, app)
         }
-        SettingsFocus::Fields => handle_settings_field_key(key_event, app).await,
+        SettingsFocus::Fields => handle_settings_field_key(key_event, app),
     }
 }
 
@@ -670,7 +670,7 @@ fn handle_settings_category_key(key_event: KeyEvent, app: &mut App) {
     }
 }
 
-async fn handle_settings_field_key(key_event: KeyEvent, app: &mut App) {
+fn handle_settings_field_key(key_event: KeyEvent, app: &mut App) {
     let kb = app.config.keybinds;
     let count = app
         .settings()

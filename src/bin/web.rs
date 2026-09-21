@@ -298,7 +298,7 @@ mod web {
 
                 if last_tick.elapsed() >= EVENT_HANDLER_TICKRATE {
                     last_tick = compat::Instant::now();
-                    futures::executor::block_on(app.tick());
+                    app.tick();
                     must_draw = true;
                 }
 
