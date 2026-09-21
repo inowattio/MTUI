@@ -572,23 +572,6 @@ fn build_custom_rule(c: &CustomParams) -> Result<(RegisterCell, CustomRule), Str
     Ok(((c.register_type, c.address), rule))
 }
 
-fn parse_hex_bytes(input: &str) -> Result<Vec<u8>, String> {
-    let cleaned: String = input.chars().filter(|c| !c.is_whitespace()).collect();
-    if cleaned.is_empty() {
-        return Ok(Vec::new());
-    }
-    if !cleaned.len().is_multiple_of(2) {
-        return Err("hex data needs an even number of digits".to_string());
-    }
-    (0..cleaned.len())
-        .step_by(2)
-        .map(|i| {
-            u8::from_str_radix(&cleaned[i..i + 2], 16)
-                .map_err(|_| format!("invalid hex byte '{}'", &cleaned[i..i + 2]))
-        })
-        .collect()
-}
-
 fn create_default_config(path: &Path) -> Config {
     let config = Config::demo();
     let serialized = serde_json::to_string_pretty(&config).expect("serialize default config");

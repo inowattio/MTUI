@@ -1,6 +1,23 @@
-use super::{App, BackgroundTask, RawTaskResult, parse_hex_bytes};
+use super::{App, BackgroundTask, RawTaskResult};
 use crate::compat;
 use crate::state::{Popup, RawField, RawParams, StatusMessage};
+
+fn parse_hex_bytes(input: &str) -> Result<Vec<u8>, String> {
+    let cleaned: String = input.chars().filter(|c| !c.is_whitespace()).collect();
+    if cleaned.is_empty() {
+        return Ok(Vec::new());
+    }
+    if !cleaned.len().is_multiple_of(2) {
+        return Err("hex data needs an even number of digits".to_string());
+    }
+    (0..cleaned.len())
+        .step_by(2)
+        .map(|i| {
+            u8::from_str_radix(&cleaned[i..i + 2], 16)
+                .map_err(|_| format!("invalid hex byte '{}'", &cleaned[i..i + 2]))
+        })
+        .collect()
+}
 
 impl App {
     pub fn open_raw(&mut self) {
