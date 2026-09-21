@@ -196,6 +196,7 @@ impl App {
         {
             d.port_index = index as u16;
             d.custom_path.clear();
+            d.status = None;
             d.focus_connect();
         }
     }
@@ -205,6 +206,7 @@ impl App {
             && let Some(ip) = d.found.get(index).cloned()
         {
             d.ip = ip;
+            d.status = None;
             d.focus_connect();
         }
     }

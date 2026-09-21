@@ -430,6 +430,7 @@ pub fn handle_paste(data: String, app: &mut App) {
         if d.current_field() == DiscoveryField::CustomPath {
             let first_line = trimmed.lines().next().unwrap_or_default();
             d.custom_path.push_str(first_line);
+            d.status = None;
         }
         return;
     }
@@ -489,6 +490,7 @@ async fn handle_discovery_key(key_event: KeyEvent, app: &mut App) {
             DiscoveryField::ScanMethod => {
                 if let Some(d) = app.discovery_mut() {
                     d.cycle_scan_method(true);
+                    d.status = None;
                 }
             }
             DiscoveryField::Port(index) => app.choose_port(index),
@@ -509,6 +511,7 @@ async fn handle_discovery_key(key_event: KeyEvent, app: &mut App) {
             let show_mock_device = app.config.show_mock_device;
             if let Some(d) = app.discovery_mut() {
                 cycle_field(d, field, key_event.code == KeyCode::Right, show_mock_device);
+                d.status = None;
             }
         }
         KeyCode::Backspace => {
@@ -528,6 +531,7 @@ async fn handle_discovery_key(key_event: KeyEvent, app: &mut App) {
                     DiscoveryField::BetweenCommands => digit_remove(&mut d.between_commands_ms),
                     _ => {}
                 }
+                d.status = None;
             }
         }
         KeyCode::Char(c) => {
@@ -556,6 +560,7 @@ async fn handle_discovery_key(key_event: KeyEvent, app: &mut App) {
                     }
                     _ => {}
                 }
+                d.status = None;
             }
         }
         _ => {}
