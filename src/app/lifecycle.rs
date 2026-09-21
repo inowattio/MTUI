@@ -398,7 +398,7 @@ impl App {
             .await
     }
 
-    async fn aquire_data_with(
+    async fn acquire_data_with(
         device: &ModbusDevice,
         amount: u16,
         position: u16,
@@ -413,7 +413,7 @@ impl App {
             .collect())
     }
 
-    async fn aquire_pinned_data_with(
+    async fn acquire_cells_with(
         device: &ModbusDevice,
         regs: &[RegisterCell],
         batch: u16,
@@ -533,53 +533,42 @@ impl App {
 
         self.background_task = Some(BackgroundTask::Refresh(compat::spawn(async move {
             let read_began = Instant::now();
-            let (main_data, pinned_data) = if read_main {
-                let main = Self::aquire_data_with(&device, amount, read_start, register_type)
-                    .await
-                    .map_err(ReadError::from);
-                let extra = if panel_registers.is_empty() {
-                    None
-                } else {
-                    Some(
-                        Self::aquire_pinned_data_with(
-                            &device,
-                            &panel_registers,
-                            amount,
-                            &full_spans,
-                        )
-                        .await
-                        .map_err(ReadError::from),
-                    )
-                };
-                (Some(main), extra)
-            } else {
-                let pinned =
-                    Self::aquire_pinned_data_with(&device, &panel_registers, amount, &full_spans)
-                        .await
-                        .map_err(ReadError::from);
-                (None, Some(pinned))
-            };
+            let mut values = Vec::new();
+            let mut error = None;
+            if read_main {
+                match Self::acquire_data_with(&device, amount, read_start, register_type).await {
+                    Ok(data) => values = data,
+                    Err(e) => error = Some(ReadError::from(e)),
+                }
+            }
+            if error.is_none() && !panel_registers.is_empty() {
+                match Self::acquire_cells_with(&device, &panel_registers, amount, &full_spans).await
+                {
+                    Ok(data) => values.extend(data),
+                    Err(e) => error = Some(ReadError::from(e)),
+                }
+            }
             let read_duration = read_began.elapsed();
 
             RefreshTaskResult {
                 register_type,
-                main_data,
-                pinned_data,
+                main_window: read_main,
+                values,
+                error,
                 read_duration,
             }
         })));
     }
 
     fn apply_refresh_result(&mut self, result: RefreshTaskResult) {
-        match (&result.main_data, &result.pinned_data) {
-            (Some(Err(e)), _) | (_, Some(Err(e))) => self.stats.record_read_error(&e.message),
-            (Some(Ok(_)), _) | (_, Some(Ok(_))) => self.stats.record_read_ok(result.read_duration),
-            _ => {}
+        match &result.error {
+            Some(e) => self.stats.record_read_error(&e.message),
+            None => self.stats.record_read_ok(result.read_duration),
         }
         if !self.is_reading() {
             return;
         }
-        if result.main_data.is_some()
+        if result.main_window
             && !matches!(
                 &self.state,
                 State::Read(params) if params.register_type == result.register_type
@@ -597,34 +586,28 @@ impl App {
             .into();
         let history_cap = (self.config.graph.history as usize).max(1);
 
-        for data in [result.main_data.as_ref(), result.pinned_data.as_ref()]
-            .into_iter()
-            .flatten()
-            .flatten()
-        {
-            for &(cell, value) in data {
-                let entry = ReadEntry {
-                    value,
-                    at: read_at,
-                    time_text: Arc::clone(&time_text),
-                };
-                let previous = self.read_log.insert(cell, entry);
-                if previous.is_some_and(|prev| prev.value != value) {
-                    self.changed.insert(cell, read_at);
-                }
+        for &(cell, value) in &result.values {
+            let entry = ReadEntry {
+                value,
+                at: read_at,
+                time_text: Arc::clone(&time_text),
+            };
+            let previous = self.read_log.insert(cell, entry);
+            if previous.is_some_and(|prev| prev.value != value) {
+                self.changed.insert(cell, read_at);
+            }
 
-                let history = self.value_history.entry(cell).or_default();
-                history.push_back((value, read_at));
-                while history.len() > history_cap {
-                    history.pop_front();
-                }
+            let history = self.value_history.entry(cell).or_default();
+            history.push_back((value, read_at));
+            while history.len() > history_cap {
+                history.pop_front();
             }
         }
 
         self.sync_auto_widths();
 
-        let connection = match (&result.main_data, &result.pinned_data) {
-            (Some(Err(e)), _) | (_, Some(Err(e))) => {
+        let connection = match &result.error {
+            Some(e) => {
                 let link_lost = match e.kind {
                     ReadFailure::Exception => false,
                     ReadFailure::Timeout => self.config.reconnect_on_timeout,
@@ -637,21 +620,16 @@ impl App {
                 }
                 ConnectionStatus::Error(e.message.clone())
             }
-            (Some(Ok(_)), _) | (_, Some(Ok(_))) => {
+            None => {
                 self.reconnect = ReconnectState::default();
                 ConnectionStatus::Connected
             }
-            _ => self.connection.clone(),
         };
         {
             let params = self.read_mut();
             params.read_duration = Some(result.read_duration);
             params.finish_read();
-            match &result.main_data {
-                Some(Err(e)) => params.read_error = Some(e.message.clone()),
-                Some(Ok(_)) => params.read_error = None,
-                None => {}
-            }
+            params.read_error = result.error.as_ref().map(|e| e.message.clone());
         }
 
         if connection != self.logged_connection {
@@ -664,8 +642,8 @@ impl App {
         }
         self.connection = connection;
 
-        if self.sweep.active && result.main_data.is_some() {
-            self.advance_sweep(matches!(&result.main_data, Some(Err(_))));
+        if self.sweep.active && result.main_window {
+            self.advance_sweep(result.error.is_some());
         }
     }
 

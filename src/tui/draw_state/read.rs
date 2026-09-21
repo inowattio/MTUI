@@ -163,10 +163,7 @@ impl TableCtx<'_> {
         }
 
         let mut block = panel_block(theme, ReadPanel::Main, &app.config);
-        if let Some(error) = &params.read_error {
-            block = block
-                .title_bottom(Line::styled(format!("! {error}"), theme.err_style()).left_aligned());
-        } else if let Some(ascii) = ascii {
+        if let Some(ascii) = ascii {
             block = block.title_top(ascii_title(ascii, theme));
         }
 
@@ -435,17 +432,20 @@ pub fn draw(
 
     if let Some(status) = params.active_status() {
         frame.render_widget(theme.status_line(status), info_rows[1]);
+    } else if let Some(error) = &params.read_error {
+        frame.render_widget(
+            Line::styled(format!("! {error}"), theme.err_style()),
+            info_rows[1],
+        );
     }
 
     let header = app.interpreter.header();
 
-    // Tab line + header row; a bottom title (read error, matrix context) takes one more.
-    let matrix_context = params.panel == ReadPanel::Matrix && app.config.matrix.show_context && {
+    // Tab line + header row; a bottom title (matrix context) takes one more.
+    let bottom_row = params.panel == ReadPanel::Matrix && app.config.matrix.show_context && {
         let cell = (params.register_type, params.position);
         app.custom_text(cell).is_some() || app.label(cell).is_some()
     };
-    let bottom_row =
-        (params.panel == ReadPanel::Main && params.read_error.is_some()) || matrix_context;
     let visible = rows[1]
         .height
         .saturating_sub(2 + u16::from(bottom_row))

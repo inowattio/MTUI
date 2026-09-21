@@ -378,8 +378,9 @@ impl From<anyhow::Error> for ReadError {
 #[derive(Debug)]
 struct RefreshTaskResult {
     register_type: RegisterType,
-    main_data: Option<Result<Vec<RegisterCellValue>, ReadError>>,
-    pinned_data: Option<Result<Vec<RegisterCellValue>, ReadError>>,
+    main_window: bool,
+    values: Vec<RegisterCellValue>,
+    error: Option<ReadError>,
     read_duration: Duration,
 }
 
