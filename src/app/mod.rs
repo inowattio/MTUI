@@ -14,6 +14,7 @@ use crate::writes_log::SharedWritesLog;
 use chrono::{DateTime, Utc};
 use std::cell::Cell;
 use std::collections::{BTreeMap, VecDeque};
+use std::io::Write as _;
 use std::path::{Path, PathBuf};
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::atomic::Ordering;
@@ -502,10 +503,29 @@ fn default_config_path() -> PathBuf {
     PathBuf::from(CONFIG_PATH)
 }
 
+fn stage_file(path: &Path, content: &str) -> io::Result<()> {
+    let mut file = fs::File::create(path)?;
+    file.write_all(content.as_bytes())?;
+    file.sync_all()
+}
+
+fn write_atomically(path: &Path, content: &str) -> Result<(), String> {
+    let mut temporary = path.as_os_str().to_os_string();
+    temporary.push(".tmp");
+    let temporary = PathBuf::from(temporary);
+
+    stage_file(&temporary, content)
+        .and_then(|()| fs::rename(&temporary, path))
+        .map_err(|error| {
+            let _ = fs::remove_file(&temporary);
+            error.to_string()
+        })
+}
+
 fn save_config(path: &Path, config: &Config) -> Result<(), String> {
     let content = serde_json::to_string_pretty(config).map_err(|e| e.to_string())?;
     ensure_parent_dir(path)?;
-    fs::write(path, content).map_err(|e| e.to_string())
+    write_atomically(path, &content)
 }
 
 fn build_custom_rule(c: &CustomParams) -> Result<(RegisterCell, CustomRule), String> {
@@ -573,7 +593,7 @@ fn create_default_config(path: &Path) -> Config {
     let serialized = serde_json::to_string_pretty(&config).expect("serialize default config");
 
     let _ = ensure_parent_dir(path);
-    match fs::write(path, serialized) {
+    match write_atomically(path, &serialized) {
         Ok(()) => log::info!(
             "No config found; created a default one at {}",
             path.display()
@@ -680,7 +700,7 @@ mod tests {
         assert_eq!(super::file_name(&["logs", "  ", "x"], "txt"), "logs_x.txt");
     }
 
-    use super::{ConfigError, load_config};
+    use super::{Config, ConfigError, load_config, save_config};
     use std::fs;
     use std::path::PathBuf;
 
@@ -788,6 +808,57 @@ mod tests {
 
         let error = load_config(&path, true).expect_err("a directory cannot be read");
         assert!(matches!(error, ConfigError::Read { .. }));
+    }
+
+    #[test]
+    fn saving_replaces_the_file_and_leaves_no_temporary_behind() {
+        let scratch = Scratch::new("atomic");
+        let path = scratch.path("config.json");
+        let temporary = scratch.path("config.json.tmp");
+
+        let first = Config {
+            name: "first".to_string(),
+            ..Config::default()
+        };
+        save_config(&path, &first).expect("the config is written");
+        assert!(!fs::exists(&temporary).unwrap(), "no leftover temporary");
+        assert_eq!(load_config(&path, false).unwrap().name, "first");
+
+        let second = Config {
+            name: "second".to_string(),
+            ..Config::default()
+        };
+        save_config(&path, &second).expect("the config is replaced");
+        assert!(!fs::exists(&temporary).unwrap(), "no leftover temporary");
+        assert_eq!(load_config(&path, false).unwrap().name, "second");
+    }
+
+    #[test]
+    fn a_stale_temporary_does_not_block_the_next_save() {
+        let scratch = Scratch::new("stale");
+        let path = scratch.path("config.json");
+        let temporary = scratch.path("config.json.tmp");
+        fs::write(&temporary, "half a config").unwrap();
+
+        save_config(&path, &Config::default()).expect("the stale temporary is reused");
+
+        assert!(!fs::exists(&temporary).unwrap());
+        assert_eq!(load_config(&path, false).unwrap().name, "demo");
+    }
+
+    #[test]
+    fn a_failed_save_leaves_the_previous_config_untouched() {
+        let scratch = Scratch::new("kept");
+        let path = scratch.path("config.json");
+        save_config(&path, &Config::default()).expect("the config is written");
+        let saved = fs::read_to_string(&path).unwrap();
+
+        fs::create_dir(scratch.path("config.json.tmp")).unwrap();
+        let error = save_config(&path, &Config::default())
+            .expect_err("staging cannot write over a directory");
+
+        assert!(!error.is_empty(), "the failure is reported");
+        assert_eq!(fs::read_to_string(&path).unwrap(), saved);
     }
 }
 
