@@ -1193,7 +1193,7 @@ mod tests {
         assert_eq!(shown.matches("Illegal").count(), 3);
     }
 
-    fn ctrl(c: char) -> KeyEvent {
+    const fn ctrl(c: char) -> KeyEvent {
         KeyEvent::with_ctrl(KeyCode::Char(c), true)
     }
 
