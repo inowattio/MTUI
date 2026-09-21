@@ -20,7 +20,7 @@ pub(super) fn draw(
             theme.base(),
         )),
         Line::from(Span::styled(
-            " Written as dump_<config>_<date>_<time>.txt",
+            " Written as dump_<config>_<date>_<time>.csv",
             theme.dim_style(),
         )),
         Line::default(),
