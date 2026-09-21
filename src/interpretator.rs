@@ -209,7 +209,7 @@ impl Interpretor {
     }
 
     pub fn move_column(&mut self, column: Column, right: bool) -> bool {
-        let Some(from) = self.order.iter().position(|&c| c == column) else {
+        let Some(from) = self.config.visible.iter().position(|&c| c == column) else {
             return false;
         };
         let to = if right {
@@ -217,12 +217,10 @@ impl Interpretor {
         } else {
             from.wrapping_sub(1)
         };
-        if to >= self.order.len() {
+        if to >= self.config.visible.len() {
             return false;
         }
-        let mut order = self.order.clone();
-        order.swap(from, to);
-        self.config.order = order;
+        self.config.visible.swap(from, to);
         self.rebuild();
         true
     }
@@ -243,18 +241,18 @@ impl Interpretor {
 
     fn rebuild(&mut self) {
         self.order.clear();
-        let configured = self.config.order.iter().copied();
+        let visible = self.config.visible.iter().copied();
         let built_in = COLUMNS.iter().map(|spec| spec.column);
-        for column in configured.chain(built_in) {
+        for column in visible.chain(built_in) {
             if !self.order.contains(&column) {
                 self.order.push(column);
             }
         }
         self.enabled = self
-            .order
+            .config
+            .visible
             .iter()
             .filter_map(|&column| COLUMNS.iter().find(|spec| spec.column == column))
-            .filter(|spec| self.config.get(spec.column))
             .map(|spec| EnabledColumn {
                 spec,
                 width: self.effective_width(spec),
@@ -314,7 +312,7 @@ impl Interpretor {
     }
 
     pub fn is_enabled(&self, column: Column) -> bool {
-        self.config.get(column)
+        self.config.is_visible(column)
     }
 
     pub fn config(&self) -> InterpretorConfig {
@@ -621,16 +619,17 @@ pub(crate) fn f16_to_f32(bits: u16) -> f32 {
 mod tests {
     use super::*;
 
-    fn ordered(order: Vec<Column>) -> Interpretor {
+    fn visible(visible: Vec<Column>) -> Interpretor {
         let config = InterpretorConfig {
-            bits: false,
-            ascii: false,
-            custom: false,
-            time: false,
-            label: false,
-            order,
+            visible,
             ..InterpretorConfig::default()
         };
+        Interpretor::new(config, WordOrder::ABCD)
+    }
+
+    fn without(hidden: &[Column]) -> Interpretor {
+        let mut config = InterpretorConfig::default();
+        config.visible.retain(|c| !hidden.contains(c));
         Interpretor::new(config, WordOrder::ABCD)
     }
 
@@ -643,8 +642,8 @@ mod tests {
     }
 
     #[test]
-    fn the_configured_order_leads_and_the_rest_follows() {
-        let interpretor = ordered(vec![Column::Hex, Column::I16]);
+    fn the_visible_list_is_the_column_order() {
+        let interpretor = visible(vec![Column::Hex, Column::I16, Column::Address, Column::U16]);
         assert_eq!(
             segment_names(&interpretor),
             ["hex", "i16", "address", "u16"]
@@ -652,55 +651,65 @@ mod tests {
     }
 
     #[test]
-    fn an_empty_order_keeps_the_built_in_one() {
-        let interpretor = ordered(Vec::new());
+    fn the_defaults_follow_the_built_in_order() {
+        let interpretor = Interpretor::new(InterpretorConfig::default(), WordOrder::ABCD);
         assert_eq!(
             segment_names(&interpretor),
-            ["address", "u16", "i16", "hex"]
+            [
+                "address", "time", "u16", "i16", "hex", "ascii", "bits", "custom", "label"
+            ]
         );
     }
 
     #[test]
-    fn duplicates_in_the_order_are_ignored() {
-        let interpretor = ordered(vec![Column::Hex, Column::Hex, Column::I16]);
-        assert_eq!(
-            segment_names(&interpretor),
-            ["hex", "i16", "address", "u16"]
-        );
+    fn hidden_columns_trail_the_visible_ones_in_the_full_order() {
+        let interpretor = visible(vec![Column::Hex, Column::Address]);
+        let order = interpretor.ordered_columns();
+        assert_eq!(&order[..2], [Column::Hex, Column::Address]);
+        assert_eq!(order.len(), Column::ALL.len());
+        assert_eq!(segment_names(&interpretor), ["hex", "address"]);
     }
 
     #[test]
-    fn moving_a_column_stops_at_the_edges() {
-        let mut interpretor = ordered(Vec::new());
-        let first = interpretor.ordered_columns()[0];
-        assert_eq!(
-            first,
-            Column::Address,
-            "the address leads the built-in order"
-        );
+    fn moving_a_column_stops_at_the_edges_and_skips_hidden_ones() {
+        let mut interpretor = visible(vec![Column::Address, Column::U16, Column::Hex]);
 
-        assert!(!interpretor.move_column(first, false), "already leftmost");
         assert!(
-            !interpretor.move_column(Column::Label, true),
-            "already last"
+            !interpretor.move_column(Column::Address, false),
+            "already leftmost"
         );
+        assert!(!interpretor.move_column(Column::Hex, true), "already last");
+        assert!(!interpretor.move_column(Column::Label, true), "hidden");
 
-        assert!(interpretor.move_column(first, true));
-        assert_eq!(interpretor.ordered_columns()[1], first);
+        assert!(interpretor.move_column(Column::Address, true));
+        assert_eq!(segment_names(&interpretor), ["u16", "address", "hex"]);
+    }
+
+    #[test]
+    fn toggling_a_column_back_on_restores_its_built_in_position() {
+        let mut interpretor = without(&[Column::Bits, Column::Ascii, Column::Custom]);
+        interpretor.toggle(Column::U16);
+        assert_eq!(
+            segment_names(&interpretor),
+            ["address", "time", "i16", "hex", "label"]
+        );
+        interpretor.toggle(Column::U16);
+        assert_eq!(
+            segment_names(&interpretor),
+            ["address", "time", "u16", "i16", "hex", "label"]
+        );
     }
 
     #[test]
     fn address_time_and_label_can_be_ordered_like_any_column() {
-        let config = InterpretorConfig {
-            bits: false,
-            ascii: false,
-            custom: false,
-            time: true,
-            label: true,
-            order: vec![Column::Label, Column::Hex, Column::Time],
-            ..InterpretorConfig::default()
-        };
-        let interpretor = Interpretor::new(config, WordOrder::ABCD);
+        let interpretor = visible(vec![
+            Column::Label,
+            Column::Hex,
+            Column::Time,
+            Column::Address,
+            Column::U16,
+            Column::I16,
+        ]);
         assert_eq!(
             segment_names(&interpretor),
             ["label", "hex", "time", "address", "u16", "i16"]
@@ -708,10 +717,11 @@ mod tests {
     }
 
     #[test]
-    fn unknown_column_keys_are_dropped_when_loading() {
+    fn unknown_and_duplicate_column_keys_are_dropped_when_loading() {
         let config: InterpretorConfig =
-            serde_json::from_str(r#"{"order":["hex","not_a_column","i16"]}"#).expect("loads");
-        assert_eq!(config.order, vec![Column::Hex, Column::I16]);
+            serde_json::from_str(r#"{"visible":["hex","not_a_column","i16","hex"]}"#)
+                .expect("loads");
+        assert_eq!(config.visible, vec![Column::Hex, Column::I16]);
     }
 
     #[test]
@@ -721,13 +731,15 @@ mod tests {
             (false, false, false),
             (true, false, true),
         ] {
-            let config = InterpretorConfig {
-                address,
-                time,
-                label,
-                ..InterpretorConfig::default()
-            };
-            let interpretor = Interpretor::new(config, WordOrder::ABCD);
+            let hidden: Vec<Column> = [
+                (address, Column::Address),
+                (time, Column::Time),
+                (label, Column::Label),
+            ]
+            .into_iter()
+            .filter_map(|(shown, column)| (!shown).then_some(column))
+            .collect();
+            let interpretor = without(&hidden);
             let header = interpretor.header();
             for segment in interpretor.row_segments() {
                 assert_eq!(
@@ -767,11 +779,7 @@ mod tests {
     }
 
     fn interpretor() -> Interpretor {
-        let config = InterpretorConfig {
-            time: true,
-            ..InterpretorConfig::default()
-        };
-        Interpretor::new(config, WordOrder::ABCD)
+        Interpretor::new(InterpretorConfig::default(), WordOrder::ABCD)
     }
 
     fn row_of(interpretor: &Interpretor) -> String {

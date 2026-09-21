@@ -758,14 +758,15 @@ impl Config {
     }
 }
 
-fn column_order<'de, D: serde::Deserializer<'de>>(
-    deserializer: D,
-) -> Result<Vec<Column>, D::Error> {
+fn column_keys<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Vec<Column>, D::Error> {
     let keys = Vec::<String>::deserialize(deserializer)?;
-    Ok(keys
-        .iter()
-        .filter_map(|key| Column::from_key(key))
-        .collect())
+    let mut columns: Vec<Column> = Vec::new();
+    for column in keys.iter().filter_map(|key| Column::from_key(key)) {
+        if !columns.contains(&column) {
+            columns.push(column);
+        }
+    }
+    Ok(columns)
 }
 
 impl Serialize for Column {
@@ -779,9 +780,8 @@ macro_rules! interpretation_columns {
         #[derive(Clone, Debug, Deserialize, Serialize)]
         #[serde(default)]
         pub struct InterpretorConfig {
-            $(pub $field: bool,)+
-            #[serde(skip_serializing_if = "Vec::is_empty", deserialize_with = "column_order")]
-            pub order: Vec<Column>,
+            #[serde(deserialize_with = "column_keys")]
+            pub visible: Vec<Column>,
             pub time_mode: TimeMode,
             pub address_mode: AddressMode,
             pub label_width: u16,
@@ -791,8 +791,11 @@ macro_rules! interpretation_columns {
         impl Default for InterpretorConfig {
             fn default() -> Self {
                 Self {
-                    $($field: $default,)+
-                    order: Vec::new(),
+                    visible: Column::ALL
+                        .iter()
+                        .copied()
+                        .filter(|column| column.shown_by_default())
+                        .collect(),
                     time_mode: TimeMode::ReadAt,
                     address_mode: AddressMode::Dec,
                     label_width: 20,
@@ -824,46 +827,58 @@ macro_rules! interpretation_columns {
                     $(Column::$variant => $name,)+
                 }
             }
-        }
 
-        impl InterpretorConfig {
-            pub fn get(&self, column: Column) -> bool {
-                match column {
-                    $(Column::$variant => self.$field,)+
-                }
-            }
-
-            pub fn toggle(&mut self, column: Column) {
-                match column {
-                    $(Column::$variant => self.$field = !self.$field,)+
+            fn shown_by_default(self) -> bool {
+                match self {
+                    $(Column::$variant => $default,)+
                 }
             }
         }
     };
 }
 
+impl InterpretorConfig {
+    pub fn is_visible(&self, column: Column) -> bool {
+        self.visible.contains(&column)
+    }
+
+    pub fn toggle(&mut self, column: Column) {
+        if let Some(index) = self.visible.iter().position(|&c| c == column) {
+            self.visible.remove(index);
+            return;
+        }
+        let rank = |c: Column| Column::ALL.iter().position(|&k| k == c).unwrap_or(0);
+        let at = self
+            .visible
+            .iter()
+            .position(|&c| rank(c) > rank(column))
+            .unwrap_or(self.visible.len());
+        self.visible.insert(at, column);
+    }
+}
+
 interpretation_columns! {
     Address => address : "address" = true,
-    U8 => u8 : "u8" = false,
-    I8 => i8 : "i8" = false,
+    Time => time : "time" = true,
     U16 => u16 : "u16" = true,
     I16 => i16 : "i16" = true,
+    U8 => u8 : "u8" = false,
+    I8 => i8 : "i8" = false,
+    Hex => hex : "hex" = true,
+    Hex32 => hex32 : "hex32" = false,
     F16 => f16 : "f16" = false,
+    Bcd => bcd : "bcd" = false,
+    Bcd32 => bcd32 : "bcd32" = false,
     U32 => u32 : "u32" = false,
     I32 => i32 : "i32" = false,
     U32M10K => u32_m10k : "u32 m10k" = false,
     I32M10K => i32_m10k : "i32 m10k" = false,
-    F32 => f32 : "f32" = false,
-    F64 => f64 : "f64" = false,
     U64 => u64 : "u64" = false,
     I64 => i64 : "i64" = false,
-    Hex => hex : "hex" = true,
-    Hex32 => hex32 : "hex32" = false,
-    Bcd => bcd : "bcd" = false,
-    Bcd32 => bcd32 : "bcd32" = false,
-    Bits => bits : "bits" = true,
+    F32 => f32 : "f32" = false,
+    F64 => f64 : "f64" = false,
     Ascii => ascii : "ascii" = true,
+    Bits => bits : "bits" = true,
     Custom => custom : "custom" = true,
-    Time => time : "time" = true,
     Label => label : "label" = true,
 }
