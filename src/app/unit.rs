@@ -2,59 +2,59 @@ use super::{App, BackgroundTask, DeviceIdTaskResult, RawTaskResult, parse_hex_by
 use crate::compat;
 use crate::modbus::DeviceIdAccess;
 use crate::num_ops::{cycle, step_hscroll};
-use crate::state::{DeviceIdParams, Popup, RawField, RawParams, SlaveParams, StatusMessage};
+use crate::state::{DeviceIdParams, Popup, RawField, RawParams, StatusMessage, UnitParams};
 
 impl App {
-    pub fn open_slave(&mut self) {
+    pub fn open_unit(&mut self) {
         let (address, amount) = self.read_window();
         let register_type = self.read().register_type;
-        let id = self.config.device.slave_id;
+        let id = self.config.device.unit_id;
         let endpoint = self.config.device.interface.endpoint();
-        let remembered = match self.slave_scan.take() {
+        let remembered = match self.unit_scan.take() {
             Some((previous, params)) if previous == endpoint => Some(params),
             _ => None,
         };
         let params = remembered
             .unwrap_or_default()
             .resumed(id, register_type, address, amount);
-        self.read_mut().popup = Some(Popup::Slave(params));
+        self.read_mut().popup = Some(Popup::Unit(params));
     }
 
-    pub async fn commit_slave(&mut self) {
-        let id = self.popup_as::<SlaveParams>().map(|p| p.id);
+    pub async fn commit_unit(&mut self) {
+        let id = self.popup_as::<UnitParams>().map(|p| p.id);
         if let Some(id) = id {
-            self.apply_slave(id).await;
+            self.apply_unit(id).await;
         }
     }
 
-    pub async fn commit_slave_hit(&mut self, index: usize) {
+    pub async fn commit_unit_hit(&mut self, index: usize) {
         let id = self
-            .popup_as::<SlaveParams>()
+            .popup_as::<UnitParams>()
             .and_then(|p| p.hits.get(index))
-            .map(|hit| hit.slave_id);
+            .map(|hit| hit.unit_id);
         let Some(id) = id else {
             return;
         };
-        self.set_slave(id).await;
-        if let Some(p) = self.popup_as_mut::<SlaveParams>() {
+        self.set_unit(id).await;
+        if let Some(p) = self.popup_as_mut::<UnitParams>() {
             p.id = id;
         }
     }
 
-    async fn apply_slave(&mut self, id: u8) {
-        self.set_slave(id).await;
+    async fn apply_unit(&mut self, id: u8) {
+        self.set_unit(id).await;
         self.close_popup();
         self.refresh().await;
     }
 
-    async fn set_slave(&mut self, id: u8) {
+    async fn set_unit(&mut self, id: u8) {
         if let Some(device) = &self.device {
-            device.set_slave(id).await;
+            device.set_unit(id).await;
         }
-        self.config.device.slave_id = id;
+        self.config.device.unit_id = id;
         self.refresh_writes_log_state();
         self.refresh_dirty();
-        log::info!("Slave id set to {id}");
+        log::info!("Unit id set to {id}");
     }
 
     pub fn open_device_id(&mut self) {
@@ -305,7 +305,7 @@ mod tests {
     use crate::app::{App, BackgroundTask};
     use crate::config::Config;
     use crate::modbus::DeviceIdAccess;
-    use crate::state::{DeviceIdParams, SlaveParams};
+    use crate::state::{DeviceIdParams, UnitParams};
 
     fn device_id(app: &App) -> &DeviceIdParams {
         app.popup_as().expect("device id popup")
@@ -350,20 +350,20 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn changing_the_slave_id_marks_the_config_dirty() {
+    async fn changing_the_unit_id_marks_the_config_dirty() {
         let mut app = App::boot(Config::default(), String::new()).await;
         assert!(!app.dirty);
-        let original = app.config.device.slave_id;
+        let original = app.config.device.unit_id;
 
-        app.open_slave();
-        app.popup_as_mut::<SlaveParams>().unwrap().id = original.wrapping_add(1);
-        app.commit_slave().await;
-        assert_eq!(app.config.device.slave_id, original.wrapping_add(1));
-        assert!(app.dirty, "a new slave id is an unsaved change");
+        app.open_unit();
+        app.popup_as_mut::<UnitParams>().unwrap().id = original.wrapping_add(1);
+        app.commit_unit().await;
+        assert_eq!(app.config.device.unit_id, original.wrapping_add(1));
+        assert!(app.dirty, "a new unit id is an unsaved change");
 
-        app.open_slave();
-        app.popup_as_mut::<SlaveParams>().unwrap().id = original;
-        app.commit_slave().await;
+        app.open_unit();
+        app.popup_as_mut::<UnitParams>().unwrap().id = original;
+        app.commit_unit().await;
         assert!(!app.dirty, "restoring the saved id is clean again");
     }
 

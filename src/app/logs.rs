@@ -43,11 +43,11 @@ impl App {
     pub fn writes_log_path(&self) -> std::path::PathBuf {
         let kind = match &self.config.device.interface {
             Interface::Mock => "mock",
-            Interface::Wired(_) => "wired",
-            Interface::Network(_) => "network",
+            Interface::Serial(_) => "wired",
+            Interface::Tcp(_) => "network",
             Interface::RtuOverTcp(_) => "rtu-tcp",
         };
-        let name = format!("writes_{kind}_{}.csv", self.config.device.slave_id);
+        let name = format!("writes_{kind}_{}.csv", self.config.device.unit_id);
         #[cfg(not(target_arch = "wasm32"))]
         let dir = std::env::temp_dir();
         #[cfg(target_arch = "wasm32")]
@@ -175,7 +175,7 @@ impl App {
         };
         writes_log::append(
             &self.writes_log,
-            pending.slave,
+            pending.unit,
             pending.address,
             kind,
             pending.previous,

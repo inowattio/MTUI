@@ -51,27 +51,27 @@ impl App {
         let device = &config.device;
         let mut d = DiscoveryParams {
             ip: match &device.interface {
-                Interface::Network(n) | Interface::RtuOverTcp(n) => n.ip.clone(),
+                Interface::Tcp(n) | Interface::RtuOverTcp(n) => n.ip.clone(),
                 _ => local_subnet_prefix().unwrap_or_else(|| "127.0.0.1".to_string()),
             },
-            slave_id: device.slave_id,
-            connect_timeout_ms: device.timeout_connect_ms,
-            command_timeout_ms: device.timeout_command_ms,
-            between_commands_ms: device.time_between_commands_ms,
+            unit_id: device.unit_id,
+            connect_timeout_ms: device.connect_timeout_ms,
+            command_timeout_ms: device.request_timeout_ms,
+            between_commands_ms: device.request_gap_ms,
             word_order: device.word_order,
             ..Default::default()
         };
         match &device.interface {
-            Interface::Wired(w) => {
-                d.interface = InterfaceKind::Wired;
+            Interface::Serial(w) => {
+                d.interface = InterfaceKind::Serial;
                 d.baud_rate = w.baud_rate;
                 d.data_bits = w.data_bits;
                 d.parity = w.parity;
                 d.stop_bits = w.stop_bits;
                 d.custom_path = w.path.clone();
             }
-            Interface::Network(n) => {
-                d.interface = InterfaceKind::Network;
+            Interface::Tcp(n) => {
+                d.interface = InterfaceKind::Tcp;
                 d.net_port = n.port;
             }
             Interface::RtuOverTcp(n) => {
@@ -81,8 +81,8 @@ impl App {
             Interface::Mock => d.interface = InterfaceKind::Mock,
         }
 
-        if !config.show_mock && d.interface == InterfaceKind::Mock {
-            d.interface = InterfaceKind::Wired;
+        if !config.show_mock_device && d.interface == InterfaceKind::Mock {
+            d.interface = InterfaceKind::Serial;
         }
         d
     }
@@ -303,7 +303,7 @@ mod tests {
     use crate::app::App;
     use crate::config::Config;
     use crate::modbus::{
-        DataBits, Interface, InterfaceNetworkParams, InterfaceWiredParams, Parity, StopBits,
+        DataBits, Interface, InterfaceSerialParams, InterfaceTcpParams, Parity, StopBits,
     };
     use crate::state::{DiscoveryColumn, DiscoveryField, DiscoveryParams, InterfaceKind};
 
@@ -312,7 +312,7 @@ mod tests {
             ports: ports.iter().map(ToString::to_string).collect(),
             ..DiscoveryParams::default()
         };
-        d.set_interface(InterfaceKind::Wired);
+        d.set_interface(InterfaceKind::Serial);
         d
     }
 
@@ -326,7 +326,7 @@ mod tests {
         );
 
         d.ports = vec!["/dev/ttyUSB0".to_string(), "/dev/ttyS0".to_string()];
-        d.set_interface(InterfaceKind::Wired);
+        d.set_interface(InterfaceKind::Serial);
         assert_eq!(
             d.side_fields(),
             vec![
@@ -341,7 +341,7 @@ mod tests {
         );
 
         d.set_found(vec!["10.0.0.5".to_string()]);
-        d.set_interface(InterfaceKind::Network);
+        d.set_interface(InterfaceKind::Tcp);
         assert_eq!(
             d.side_fields(),
             vec![Ip, NetPort, ScanMethod, ScanNetwork, Found(0)]
@@ -396,7 +396,7 @@ mod tests {
         assert_eq!(d.serial_path().as_deref(), Some("/dev/ttyAMA0"));
         assert!(matches!(
             d.device_config().interface,
-            Interface::Wired(ref w) if w.path == "/dev/ttyAMA0" && w.baud_rate == 9600
+            Interface::Serial(ref w) if w.path == "/dev/ttyAMA0" && w.baud_rate == 9600
         ));
 
         d.custom_path = "   ".to_string();
@@ -444,7 +444,7 @@ mod tests {
     #[test]
     fn an_unlisted_configured_path_shows_up_as_the_custom_path() {
         let mut config = Config::default();
-        config.device.interface = Interface::Wired(InterfaceWiredParams {
+        config.device.interface = Interface::Serial(InterfaceSerialParams {
             path: "/dev/serial/by-id/usb-not-enumerated-here".to_string(),
             baud_rate: 19200,
             data_bits: DataBits::Eight,
@@ -452,7 +452,7 @@ mod tests {
             stop_bits: StopBits::One,
         });
         let d = App::discovery_params(&config);
-        assert_eq!(d.interface, InterfaceKind::Wired);
+        assert_eq!(d.interface, InterfaceKind::Serial);
         assert_eq!(d.custom_path, "/dev/serial/by-id/usb-not-enumerated-here");
         assert_eq!(
             d.serial_path().as_deref(),
@@ -485,7 +485,7 @@ mod tests {
         ));
 
         let mut config = Config::default();
-        config.device.interface = Interface::RtuOverTcp(InterfaceNetworkParams {
+        config.device.interface = Interface::RtuOverTcp(InterfaceTcpParams {
             ip: "10.0.0.9".to_string(),
             port: 8899,
         });
@@ -507,7 +507,7 @@ mod tests {
     #[test]
     fn a_shrinking_list_keeps_the_cursor_in_range() {
         let mut d = DiscoveryParams::default();
-        d.set_interface(InterfaceKind::Network);
+        d.set_interface(InterfaceKind::Tcp);
         d.set_found(vec!["10.0.0.1".to_string(), "10.0.0.2".to_string()]);
         d.toggle_column();
         d.side_selected = 5; // Found(1)
@@ -550,7 +550,7 @@ mod tests {
         app.open_discovery();
         {
             let d = app.discovery_mut().unwrap();
-            d.set_interface(InterfaceKind::Network);
+            d.set_interface(InterfaceKind::Tcp);
             d.set_found(vec!["10.0.0.5".to_string()]);
         }
 
@@ -564,12 +564,12 @@ mod tests {
     #[test]
     fn configured_network_address_is_shown_as_is() {
         let mut config = Config::default();
-        config.device.interface = Interface::Network(InterfaceNetworkParams {
+        config.device.interface = Interface::Tcp(InterfaceTcpParams {
             ip: "10.1.2.3".to_string(),
             port: 1502,
         });
         let d = App::discovery_params(&config);
-        assert_eq!(d.interface, InterfaceKind::Network);
+        assert_eq!(d.interface, InterfaceKind::Tcp);
         assert_eq!(d.ip, "10.1.2.3");
         assert_eq!(d.net_port, 1502);
     }
@@ -581,7 +581,7 @@ mod tests {
             ports_pending: true,
             ..DiscoveryParams::default()
         };
-        d.set_interface(InterfaceKind::Wired);
+        d.set_interface(InterfaceKind::Serial);
         d.toggle_column();
         d.move_cursor(true);
         assert_eq!(d.current_field(), DiscoveryField::Baud);
@@ -600,7 +600,7 @@ mod tests {
             custom_path: "/dev/serial/by-id/x".to_string(),
             ..DiscoveryParams::default()
         };
-        d.set_interface(InterfaceKind::Wired);
+        d.set_interface(InterfaceKind::Serial);
         d.set_ports(vec!["/dev/ttyUSB0".to_string()]);
         assert_eq!(d.ports.len(), 1);
         assert_eq!(d.serial_path().as_deref(), Some("/dev/serial/by-id/x"));

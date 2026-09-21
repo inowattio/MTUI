@@ -65,8 +65,8 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         .border_style(Style::default().fg(theme.border))
         .borders(Borders::TOP | Borders::BOTTOM)
         .border_type(BorderType::Rounded);
-    if theme.bg != Color::Reset {
-        outer = outer.style(Style::default().bg(theme.bg));
+    if theme.background != Color::Reset {
+        outer = outer.style(Style::default().bg(theme.background));
     }
 
     // h_max_offset is written during the table draw below, so this reads the
@@ -83,15 +83,20 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     let full = frame.area();
     let pad_h = app
         .config
-        .padding_horizontal
+        .padding
+        .horizontal
         .min(full.width.saturating_sub(PADDED_MIN_WIDTH) / 2);
     let pad_v = app
         .config
-        .padding_vertical
+        .padding
+        .vertical
         .min(full.height.saturating_sub(PADDED_MIN_HEIGHT) / 2);
     let area = full.inner(Margin::new(pad_h, pad_v));
     if area != full {
-        frame.render_widget(Block::default().style(Style::default().bg(theme.bg)), full);
+        frame.render_widget(
+            Block::default().style(Style::default().bg(theme.background)),
+            full,
+        );
     }
     let inner = outer.inner(area);
     app.viewport_width = inner.width;

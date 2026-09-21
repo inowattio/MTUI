@@ -4,7 +4,7 @@ use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-pub const HEADER: &str = "timestamp,slave,address,type,previous,value";
+pub const HEADER: &str = "timestamp,unit,address,type,previous,value";
 
 #[derive(Clone, Debug)]
 pub enum WriteKind {
@@ -39,7 +39,7 @@ impl WriteKind {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct WriteEntry {
     pub timestamp: String,
-    pub slave: u8,
+    pub unit: u8,
     pub address: u16,
     pub kind: String,
     pub previous: Option<u64>,
@@ -75,7 +75,7 @@ pub type SharedWritesLog = Arc<Mutex<WritesLogState>>;
 
 pub fn append(
     shared: &SharedWritesLog,
-    slave: u8,
+    unit: u8,
     address: u16,
     kind: WriteKind,
     previous: Option<u64>,
@@ -105,7 +105,7 @@ pub fn append(
     let _ = writeln!(
         file,
         "{}",
-        record(&timestamp, slave, address, &kind, previous)
+        record(&timestamp, unit, address, &kind, previous)
     );
 }
 
@@ -116,14 +116,14 @@ pub fn read_entries(path: &Path) -> std::io::Result<Vec<WriteEntry>> {
 
 fn record(
     timestamp: &str,
-    slave: u8,
+    unit: u8,
     address: u16,
     kind: &WriteKind,
     previous: Option<u64>,
 ) -> String {
     let previous = previous.map(|v| v.to_string()).unwrap_or_default();
     format!(
-        "{timestamp},{slave},{address},{kind},{previous},{}",
+        "{timestamp},{unit},{address},{kind},{previous},{}",
         kind.csv_value()
     )
 }
@@ -131,7 +131,7 @@ fn record(
 fn parse_record(line: &str) -> Option<WriteEntry> {
     let mut fields = line.trim_end().splitn(6, ',');
     let timestamp = fields.next()?;
-    let slave = fields.next()?.parse().ok()?;
+    let unit = fields.next()?.parse().ok()?;
     let address = fields.next()?.parse().ok()?;
     let kind = fields.next()?;
     let previous = match fields.next()? {
@@ -141,7 +141,7 @@ fn parse_record(line: &str) -> Option<WriteEntry> {
     let value = fields.next()?;
     Some(WriteEntry {
         timestamp: timestamp.to_string(),
-        slave,
+        unit,
         address,
         kind: kind.to_string(),
         previous,
@@ -176,7 +176,7 @@ mod tests {
             entry,
             WriteEntry {
                 timestamp: "t".to_string(),
-                slave: 7,
+                unit: 7,
                 address: 40,
                 kind: "dword".to_string(),
                 previous: None,

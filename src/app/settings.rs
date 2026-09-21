@@ -10,7 +10,7 @@ use ratatui::style::Color;
 
 fn theme_field(theme: &mut Theme, field: SettingsField) -> Option<&mut Color> {
     Some(match field {
-        SettingsField::ThemeBg => &mut theme.bg,
+        SettingsField::ThemeBackground => &mut theme.background,
         SettingsField::ThemeBorder => &mut theme.border,
         SettingsField::ThemeAccent => &mut theme.accent,
         SettingsField::ThemeText => &mut theme.text,
@@ -18,10 +18,10 @@ fn theme_field(theme: &mut Theme, field: SettingsField) -> Option<&mut Color> {
         SettingsField::ThemeChanged => &mut theme.changed,
         SettingsField::ThemeZebra => &mut theme.zebra,
         SettingsField::ThemeOk => &mut theme.ok,
-        SettingsField::ThemeWarn => &mut theme.warn,
-        SettingsField::ThemeErr => &mut theme.err,
-        SettingsField::ThemeSelectedFg => &mut theme.selected_fg,
-        SettingsField::ThemeSelectedBg => &mut theme.selected_bg,
+        SettingsField::ThemeWarning => &mut theme.warning,
+        SettingsField::ThemeError => &mut theme.error,
+        SettingsField::ThemeSelectedText => &mut theme.selected_text,
+        SettingsField::ThemeSelectedBackground => &mut theme.selected_background,
         _ => return None,
     })
 }
@@ -67,17 +67,15 @@ impl App {
 
     fn numeric_spec(field: SettingsField) -> Option<(i64, i64, i64)> {
         match field {
-            SettingsField::RegistersBatch | SettingsField::HistoryCap => {
-                Some((1, u16::MAX as i64, 1))
-            }
-            SettingsField::MatrixCols | SettingsField::StartupAddress => {
+            SettingsField::BatchSize | SettingsField::GraphHistory => Some((1, u16::MAX as i64, 1)),
+            SettingsField::MatrixColumns | SettingsField::StartupAddress => {
                 Some((0, u16::MAX as i64, 1))
             }
             SettingsField::PaddingHorizontal | SettingsField::PaddingVertical => Some((0, 50, 1)),
             SettingsField::LabelWidth | SettingsField::CustomWidth => {
                 Some((0, WIDTH_MAX as i64, 1))
             }
-            SettingsField::AutoUpdate | SettingsField::ChangedExpiry => {
+            SettingsField::RefreshInterval | SettingsField::ChangedExpiry => {
                 Some((0, u32::MAX as i64, 100))
             }
             SettingsField::ApiPort => Some((-1, u16::MAX as i64, 1)),
@@ -87,32 +85,34 @@ impl App {
 
     fn numeric_get(&self, field: SettingsField) -> i64 {
         match field {
-            SettingsField::RegistersBatch => self.config.registers_batch as i64,
-            SettingsField::AutoUpdate => self.config.update_interval_ms.map_or(0, |n| n as i64),
+            SettingsField::BatchSize => self.config.batch.size as i64,
+            SettingsField::RefreshInterval => {
+                self.config.refresh_interval_ms.map_or(0, |n| n as i64)
+            }
             SettingsField::ChangedExpiry => self.config.changed_expiry_ms.map_or(0, |n| n as i64),
-            SettingsField::HistoryCap => self.config.graph_history_cap as i64,
-            SettingsField::MatrixCols => self.config.matrix_cols as i64,
+            SettingsField::GraphHistory => self.config.graph.history as i64,
+            SettingsField::MatrixColumns => self.config.matrix.columns as i64,
             SettingsField::LabelWidth => self.interpreter.label_width() as i64,
             SettingsField::CustomWidth => self.interpreter.custom_width() as i64,
             SettingsField::StartupAddress => self.config.startup.address as i64,
-            SettingsField::PaddingHorizontal => self.config.padding_horizontal as i64,
-            SettingsField::PaddingVertical => self.config.padding_vertical as i64,
-            SettingsField::ApiPort => self.config.port.map_or(-1, |p| p as i64),
+            SettingsField::PaddingHorizontal => self.config.padding.horizontal as i64,
+            SettingsField::PaddingVertical => self.config.padding.vertical as i64,
+            SettingsField::ApiPort => self.config.api.port.map_or(-1, |p| p as i64),
             _ => 0,
         }
     }
 
     fn numeric_set(&mut self, field: SettingsField, value: i64) {
         match field {
-            SettingsField::RegistersBatch => self.config.registers_batch = value as u16,
-            SettingsField::AutoUpdate => {
-                self.config.update_interval_ms = (value > 0).then_some(value as u64)
+            SettingsField::BatchSize => self.config.batch.size = value as u16,
+            SettingsField::RefreshInterval => {
+                self.config.refresh_interval_ms = (value > 0).then_some(value as u64)
             }
             SettingsField::ChangedExpiry => {
                 self.config.changed_expiry_ms = (value > 0).then_some(value as u64)
             }
-            SettingsField::HistoryCap => self.config.graph_history_cap = value as u16,
-            SettingsField::MatrixCols => self.config.matrix_cols = value as u16,
+            SettingsField::GraphHistory => self.config.graph.history = value as u16,
+            SettingsField::MatrixColumns => self.config.matrix.columns = value as u16,
             SettingsField::LabelWidth => {
                 self.interpreter.set_label_width(value as u16);
                 self.sync_auto_widths();
@@ -122,9 +122,9 @@ impl App {
                 self.sync_auto_widths();
             }
             SettingsField::StartupAddress => self.config.startup.address = value as u16,
-            SettingsField::PaddingHorizontal => self.config.padding_horizontal = value as u16,
-            SettingsField::PaddingVertical => self.config.padding_vertical = value as u16,
-            SettingsField::ApiPort => self.config.port = (value >= 0).then_some(value as u16),
+            SettingsField::PaddingHorizontal => self.config.padding.horizontal = value as u16,
+            SettingsField::PaddingVertical => self.config.padding.vertical = value as u16,
+            SettingsField::ApiPort => self.config.api.port = (value >= 0).then_some(value as u16),
             _ => {}
         }
     }
@@ -138,11 +138,15 @@ impl App {
             return;
         }
         match field {
-            SettingsField::IgnoreDirty => self.config.ignore_dirty = !self.config.ignore_dirty,
+            SettingsField::SkipUnsavedWarning => {
+                self.config.skip_unsaved_warning = !self.config.skip_unsaved_warning
+            }
             SettingsField::SavePositionOnExit => {
                 self.config.save_position_on_exit = !self.config.save_position_on_exit
             }
-            SettingsField::ShowMock => self.config.show_mock = !self.config.show_mock,
+            SettingsField::ShowMockDevice => {
+                self.config.show_mock_device = !self.config.show_mock_device
+            }
             SettingsField::ReadOnly => self.config.read_only = !self.config.read_only,
             SettingsField::TimeMode => {
                 let next = cycle(&TimeMode::ALL, self.interpreter.time_mode(), delta > 0);
@@ -157,48 +161,50 @@ impl App {
                 self.interpreter.set_address_mode(next);
             }
             SettingsField::BatchAnchor => {
-                self.config.batch_anchor =
-                    cycle(&BatchAnchor::ALL, self.config.batch_anchor, delta > 0);
+                self.config.batch.anchor =
+                    cycle(&BatchAnchor::ALL, self.config.batch.anchor, delta > 0);
             }
             SettingsField::ReadFullCustoms => {
-                self.config.read_full_customs = !self.config.read_full_customs
+                self.config.batch.read_full_customs = !self.config.batch.read_full_customs
             }
-            SettingsField::CustomBatchBySize => {
-                self.config.custom_batch_by_size = !self.config.custom_batch_by_size
+            SettingsField::CustomBatchByRegisters => {
+                self.config.batch.custom_by_registers = !self.config.batch.custom_by_registers
             }
-            SettingsField::PanelTypeFilter => {
-                self.config.panel_type_filter = !self.config.panel_type_filter
+            SettingsField::FilterPanelsByType => {
+                self.config.filter_panels_by_type = !self.config.filter_panels_by_type
             }
-            SettingsField::ApiSlaveOverride => {
-                self.config.allow_api_slave_id = !self.config.allow_api_slave_id
+            SettingsField::ApiUnitIdOverride => {
+                self.config.api.unit_id_override = !self.config.api.unit_id_override
             }
             SettingsField::LogWrites => self.config.log_writes = !self.config.log_writes,
             SettingsField::ReconnectOnTimeout => {
                 self.config.reconnect_on_timeout = !self.config.reconnect_on_timeout
             }
-            SettingsField::ShowContinuation => {
-                self.config.show_continuation = !self.config.show_continuation
+            SettingsField::ShowRuleContinuation => {
+                self.config.show_rule_continuation = !self.config.show_rule_continuation
             }
             SettingsField::ShowClock => self.config.show_clock = !self.config.show_clock,
             SettingsField::ShowFrameTime => {
                 self.config.show_frame_time = !self.config.show_frame_time
             }
             SettingsField::ShowRam => self.config.show_ram = !self.config.show_ram,
-            SettingsField::ShowStatusLabel => {
-                self.config.show_status_label = !self.config.show_status_label
+            SettingsField::ShowConnectionLabel => {
+                self.config.show_connection_label = !self.config.show_connection_label
             }
-            SettingsField::ShowAscii => self.config.show_ascii = !self.config.show_ascii,
+            SettingsField::ShowAsciiStrip => {
+                self.config.show_ascii_strip = !self.config.show_ascii_strip
+            }
             SettingsField::ShowInactiveTabs => {
                 self.config.show_inactive_tabs = !self.config.show_inactive_tabs
             }
             SettingsField::ShowMatrixContext => {
-                self.config.show_matrix_context = !self.config.show_matrix_context;
+                self.config.matrix.show_context = !self.config.matrix.show_context;
             }
             SettingsField::ShowReadWindow => {
                 self.config.show_read_window = !self.config.show_read_window
             }
             SettingsField::GraphTimeAxis => {
-                self.config.graph_time_axis = !self.config.graph_time_axis
+                self.config.graph.time_axis = !self.config.graph.time_axis
             }
             SettingsField::StartupPanel => {
                 self.config.startup.panel =
@@ -216,7 +222,7 @@ impl App {
             | SettingsField::CycleCoils
             | SettingsField::CycleDiscretes => {
                 let rt = field.cycle_register_type().expect("cycle field");
-                self.config.cycle_types.toggle(rt);
+                self.config.cycle_register_types.toggle(rt);
             }
             SettingsField::CyclePinned
             | SettingsField::CycleLabeled
@@ -250,7 +256,7 @@ impl App {
         }
         self.refresh_writes_log_state();
         self.sync_api_read_only();
-        self.sync_api_allow_slave_id();
+        self.sync_api_allow_unit_id();
         self.refresh_dirty();
     }
 

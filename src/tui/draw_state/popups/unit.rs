@@ -1,7 +1,7 @@
 use crate::config::Keybinds;
 use crate::input::KeyCode;
 use crate::interpretator::ascii_words;
-use crate::state::{ScanState, SlaveField, SlaveParams, SlaveScanHit};
+use crate::state::{ScanState, UnitField, UnitParams, UnitScanHit};
 use crate::tui::draw_state::{action_line, dim_line, edit_value, field_row, marker};
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
@@ -23,7 +23,7 @@ pub(super) fn draw(
     area: Rect,
     theme: &Theme,
     kb: &Keybinds,
-    params: &SlaveParams,
+    params: &UnitParams,
     active_id: u8,
 ) {
     let sel = params.current_field();
@@ -33,12 +33,12 @@ pub(super) fn draw(
         .then(|| hit_lines(params, sel, active_id, theme));
 
     let primary = match sel {
-        SlaveField::Id => "Set",
-        SlaveField::Hit(_) => "Use id",
-        SlaveField::Repr if params.ascii => "Values",
-        SlaveField::Repr => "ASCII",
-        SlaveField::Exceptions if params.show_exceptions => "Hide",
-        SlaveField::Exceptions => "Include",
+        UnitField::Id => "Set",
+        UnitField::Hit(_) => "Use id",
+        UnitField::Repr if params.ascii => "Values",
+        UnitField::Repr => "ASCII",
+        UnitField::Exceptions if params.show_exceptions => "Hide",
+        UnitField::Exceptions => "Include",
         _ if params.active() => "Stop scan",
         _ => "Start scan",
     };
@@ -85,9 +85,9 @@ pub(super) fn draw(
 
     frame.render_widget(Clear, rect);
     let block = theme
-        .panel(" Slave")
+        .panel(" Unit")
         .borders(Borders::ALL)
-        .style(Style::default().bg(theme.bg));
+        .style(Style::default().bg(theme.background));
     let inner = block.inner(rect);
     frame.render_widget(block, rect);
 
@@ -115,28 +115,28 @@ pub(super) fn draw(
     frame.render_widget(Paragraph::new(tail), tail_area);
 }
 
-fn form_lines(params: &SlaveParams, sel: SlaveField, theme: &Theme) -> Vec<Line<'static>> {
+fn form_lines(params: &UnitParams, sel: UnitField, theme: &Theme) -> Vec<Line<'static>> {
     let field = |label: &str, value: String, selected: bool| {
         field_row(theme, label, LABEL_W, value, selected)
     };
 
-    let id_val = edit_value(params.id.to_string(), sel == SlaveField::Id, false);
-    let from_val = edit_value(params.from.to_string(), sel == SlaveField::From, false);
-    let to_val = edit_value(params.to.to_string(), sel == SlaveField::To, false);
+    let id_val = edit_value(params.id.to_string(), sel == UnitField::Id, false);
+    let from_val = edit_value(params.from.to_string(), sel == UnitField::From, false);
+    let to_val = edit_value(params.to.to_string(), sel == UnitField::To, false);
     let mode = if params.stop_at_first {
         "stop at first hit"
     } else {
         "full range"
     };
-    let mode_val = edit_value(mode.to_string(), sel == SlaveField::Mode, true);
+    let mode_val = edit_value(mode.to_string(), sel == UnitField::Mode, true);
     let repr = if params.ascii { "ASCII" } else { "values" };
-    let repr_val = edit_value(repr.to_string(), sel == SlaveField::Repr, true);
+    let repr_val = edit_value(repr.to_string(), sel == UnitField::Repr, true);
     let exceptions = if params.show_exceptions {
         "included"
     } else {
         "hidden"
     };
-    let exceptions_val = edit_value(exceptions.to_string(), sel == SlaveField::Exceptions, true);
+    let exceptions_val = edit_value(exceptions.to_string(), sel == UnitField::Exceptions, true);
 
     let scan_label = if params.active() {
         "Stop scan"
@@ -148,17 +148,17 @@ fn form_lines(params: &SlaveParams, sel: SlaveField, theme: &Theme) -> Vec<Line<
     } else {
         theme.ok_style()
     };
-    let scan_line = action_line(theme, scan_label, sel == SlaveField::Scan, scan_style, None);
+    let scan_line = action_line(theme, scan_label, sel == UnitField::Scan, scan_style, None);
 
     vec![
         Line::default(),
-        field("Slave id", id_val, sel == SlaveField::Id),
+        field("Unit id", id_val, sel == UnitField::Id),
         Line::default(),
-        field("Scan from", from_val, sel == SlaveField::From),
-        field("Scan to", to_val, sel == SlaveField::To),
-        field("Mode", mode_val, sel == SlaveField::Mode),
-        field("Show as", repr_val, sel == SlaveField::Repr),
-        field("Exceptions", exceptions_val, sel == SlaveField::Exceptions),
+        field("Scan from", from_val, sel == UnitField::From),
+        field("Scan to", to_val, sel == UnitField::To),
+        field("Mode", mode_val, sel == UnitField::Mode),
+        field("Show as", repr_val, sel == UnitField::Repr),
+        field("Exceptions", exceptions_val, sel == UnitField::Exceptions),
         dim_line(
             theme,
             format!(
@@ -172,7 +172,7 @@ fn form_lines(params: &SlaveParams, sel: SlaveField, theme: &Theme) -> Vec<Line<
     ]
 }
 
-fn title_line(params: &SlaveParams, theme: &Theme) -> Line<'static> {
+fn title_line(params: &UnitParams, theme: &Theme) -> Line<'static> {
     let (phase, style) = match params.scan {
         ScanState::Idle => (String::new(), theme.dim_style()),
         ScanState::Probing => (format!("Probing {}...", params.current), theme.warn_style()),
@@ -192,12 +192,12 @@ fn title_line(params: &SlaveParams, theme: &Theme) -> Line<'static> {
 }
 
 fn hit_lines(
-    params: &SlaveParams,
-    sel: SlaveField,
+    params: &UnitParams,
+    sel: UnitField,
     active_id: u8,
     theme: &Theme,
 ) -> Vec<Line<'static>> {
-    let visible: Vec<(usize, &SlaveScanHit)> = params.visible_hits().collect();
+    let visible: Vec<(usize, &UnitScanHit)> = params.visible_hits().collect();
     let len = visible.len();
     let mut lines = vec![Line::default(), title_line(params, theme)];
 
@@ -213,7 +213,7 @@ fn hit_lines(
 
     // keep the selected hit visible otherwise follow the newest ones.
     let selected_hit = match sel {
-        SlaveField::Hit(i) => Some(i),
+        UnitField::Hit(i) => Some(i),
         _ => None,
     };
     let cursor = visible.iter().position(|&(i, _)| Some(i) == selected_hit);
@@ -229,7 +229,7 @@ fn hit_lines(
     let value_width = (SIDE_W as usize).saturating_sub(PREFIX_W);
     for &(i, hit) in visible.iter().take(end).skip(top) {
         let selected = selected_hit == Some(i);
-        let active = hit.slave_id == active_id;
+        let active = hit.unit_id == active_id;
         let text = match &hit.result {
             Ok(values) if params.ascii => format!("'{}'", ascii_words(values)),
             Ok(values) => values
@@ -254,7 +254,7 @@ fn hit_lines(
         lines.push(Line::from(vec![
             Span::styled(marker(selected), theme.dim_style()),
             Span::styled(format!("{radio} "), radio_style),
-            Span::styled(format!("{:>3}  ", hit.slave_id), theme.dim_style()),
+            Span::styled(format!("{:>3}  ", hit.unit_id), theme.dim_style()),
             Span::styled(shown, style),
         ]));
     }
@@ -270,11 +270,11 @@ mod tests {
     use crate::state::StatusMessage;
     use ScanState::{Done, Failed, Probing, Stopped};
 
-    fn render(params: &SlaveParams) -> Vec<String> {
+    fn render(params: &UnitParams) -> Vec<String> {
         render_with(params, params.id)
     }
 
-    fn render_with(params: &SlaveParams, active_id: u8) -> Vec<String> {
+    fn render_with(params: &UnitParams, active_id: u8) -> Vec<String> {
         let (theme, kb) = (Theme::default(), Keybinds::default());
         crate::tui::test_util::draw_rows(100, 30, |frame| {
             draw(frame, frame.area(), &theme, &kb, params, active_id)
@@ -288,23 +288,23 @@ mod tests {
             .unwrap_or_else(|| panic!("{needle:?} not rendered"))
     }
 
-    fn hit(slave_id: u8, values: &[u16]) -> SlaveScanHit {
-        SlaveScanHit {
-            slave_id,
+    fn hit(unit_id: u8, values: &[u16]) -> UnitScanHit {
+        UnitScanHit {
+            unit_id,
             result: Ok(values.to_vec()),
         }
     }
 
     #[test]
     fn hits_are_listed_beside_the_form() {
-        let params = SlaveParams {
+        let params = UnitParams {
             scan: Done,
             hits: vec![hit(17, &[1, 2, 3])],
-            ..SlaveParams::default()
+            ..UnitParams::default()
         };
         let rows = render(&params);
 
-        let (form_x, form_y) = locate(&rows, "Slave id");
+        let (form_x, form_y) = locate(&rows, "Unit id");
         let (title_x, _) = locate(&rows, "Found 1");
         let (hit_x, hit_y) = locate(&rows, " 17  1 2 3");
         assert!(
@@ -320,10 +320,10 @@ mod tests {
 
     #[test]
     fn the_list_follows_the_newest_hits_and_then_the_cursor() {
-        let mut params = SlaveParams {
+        let mut params = UnitParams {
             scan: Done,
             hits: (1..=10).map(|id| hit(id, &[id as u16])).collect(),
-            ..SlaveParams::default()
+            ..UnitParams::default()
         };
         let rows = render(&params);
         locate(&rows, "  10  10");
@@ -348,7 +348,7 @@ mod tests {
 
     #[test]
     fn the_list_appears_once_a_scan_has_started() {
-        let mut params = SlaveParams::default();
+        let mut params = UnitParams::default();
         let before = render(&params);
         assert!(
             !before.iter().any(|row| row.contains("Found")),
@@ -372,7 +372,7 @@ mod tests {
 
     #[test]
     fn the_hints_share_a_row_only_in_the_wide_popup() {
-        let mut params = SlaveParams::default();
+        let mut params = UnitParams::default();
         let narrow = render(&params);
         let (_, mode_y) = locate(&narrow, "Toggle");
         let (_, close_y) = locate(&narrow, "Close");
@@ -387,10 +387,10 @@ mod tests {
 
     #[test]
     fn hit_data_can_be_shown_as_ascii() {
-        let mut params = SlaveParams {
+        let mut params = UnitParams {
             scan: Done,
             hits: vec![hit(3, &[0x4D54, 0x5549])],
-            ..SlaveParams::default()
+            ..UnitParams::default()
         };
         let rows = render(&params);
         locate(&rows, "  3  19796 21833");
@@ -406,16 +406,16 @@ mod tests {
 
     #[test]
     fn exception_hits_can_be_hidden_from_the_list() {
-        let mut params = SlaveParams {
+        let mut params = UnitParams {
             scan: Done,
             hits: vec![
                 hit(1, &[5]),
-                SlaveScanHit {
-                    slave_id: 2,
+                UnitScanHit {
+                    unit_id: 2,
                     result: Err("IllegalDataAddress".into()),
                 },
             ],
-            ..SlaveParams::default()
+            ..UnitParams::default()
         };
         let rows = render(&params);
         locate(&rows, "Found 2");
@@ -436,19 +436,19 @@ mod tests {
     }
 
     #[test]
-    fn the_active_slave_id_is_marked_in_the_list() {
-        let params = SlaveParams {
+    fn the_active_unit_id_is_marked_in_the_list() {
+        let params = UnitParams {
             scan: Done,
             id: 17,
             hits: vec![
                 hit(1, &[5]),
                 hit(17, &[1, 2, 3]),
-                SlaveScanHit {
-                    slave_id: 9,
+                UnitScanHit {
+                    unit_id: 9,
                     result: Err("IllegalDataAddress".into()),
                 },
             ],
-            ..SlaveParams::default()
+            ..UnitParams::default()
         };
         let rows = render_with(&params, 17);
         locate(&rows, "*  17  1 2 3");
@@ -462,15 +462,15 @@ mod tests {
 
     #[test]
     fn the_scan_state_lives_in_the_list_title() {
-        let mut params = SlaveParams {
+        let mut params = UnitParams {
             scan: Probing,
             current: 17,
             hits: vec![hit(3, &[7])],
-            ..SlaveParams::default()
+            ..UnitParams::default()
         };
         let rows = render(&params);
         let (_, title_y) = locate(&rows, "Found 1 | Probing 17...");
-        let (_, id_y) = locate(&rows, "Slave id");
+        let (_, id_y) = locate(&rows, "Unit id");
         assert_eq!(title_y, id_y, "the title heads the list column");
 
         for (scan, phase) in [(Done, "Done"), (Stopped, "Stopped"), (Failed, "Failed")] {
@@ -481,10 +481,10 @@ mod tests {
 
     #[test]
     fn errors_still_use_the_status_row() {
-        let params = SlaveParams {
+        let params = UnitParams {
             scan: Done,
             status: Some(StatusMessage::err("No device connected")),
-            ..SlaveParams::default()
+            ..UnitParams::default()
         };
         let rows = render(&params);
         let (_, status_y) = locate(&rows, "No device connected");

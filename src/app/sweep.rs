@@ -119,7 +119,7 @@ mod tests {
 
     async fn sweeping(from: u16, to: u16, batch: u16, continuous: bool) -> App {
         let mut app = App::boot(Config::default(), String::new()).await;
-        app.config.registers_batch = batch;
+        app.config.batch.size = batch;
         app.sweep.from = from;
         app.sweep.to = to;
         app.sweep.continuous = continuous;

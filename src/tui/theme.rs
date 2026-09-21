@@ -29,7 +29,7 @@ pub const PALETTE: &[Color] = &[
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(default)]
 pub struct Theme {
-    pub bg: Color,
+    pub background: Color,
     pub border: Color,
     pub accent: Color,
     pub text: Color,
@@ -37,14 +37,14 @@ pub struct Theme {
     pub changed: Color,
     pub zebra: Color,
     pub ok: Color,
-    pub warn: Color,
-    pub err: Color,
-    pub selected_fg: Color,
-    pub selected_bg: Color,
+    pub warning: Color,
+    pub error: Color,
+    pub selected_text: Color,
+    pub selected_background: Color,
 }
 
 const DEFAULT: Theme = Theme {
-    bg: Color::Reset,
+    background: Color::Reset,
     border: Color::LightGreen,
     accent: Color::LightGreen,
     text: Color::White,
@@ -52,14 +52,14 @@ const DEFAULT: Theme = Theme {
     changed: Color::Yellow,
     zebra: Color::Indexed(235),
     ok: Color::LightGreen,
-    warn: Color::Yellow,
-    err: Color::LightRed,
-    selected_fg: Color::Black,
-    selected_bg: Color::LightGreen,
+    warning: Color::Yellow,
+    error: Color::LightRed,
+    selected_text: Color::Black,
+    selected_background: Color::LightGreen,
 };
 
 const LIGHT: Theme = Theme {
-    bg: Color::Indexed(255),
+    background: Color::Indexed(255),
     border: Color::Blue,
     accent: Color::Blue,
     text: Color::Black,
@@ -67,14 +67,14 @@ const LIGHT: Theme = Theme {
     changed: Color::Indexed(166),
     zebra: Color::Indexed(253),
     ok: Color::Green,
-    warn: Color::Indexed(130),
-    err: Color::Red,
-    selected_fg: Color::White,
-    selected_bg: Color::Blue,
+    warning: Color::Indexed(130),
+    error: Color::Red,
+    selected_text: Color::White,
+    selected_background: Color::Blue,
 };
 
 const AMBER: Theme = Theme {
-    bg: Color::Indexed(233),
+    background: Color::Indexed(233),
     border: Color::Indexed(130),
     accent: Color::Indexed(214),
     text: Color::Indexed(223),
@@ -82,10 +82,10 @@ const AMBER: Theme = Theme {
     changed: Color::Indexed(229),
     zebra: Color::Indexed(236),
     ok: Color::Indexed(142),
-    warn: Color::Indexed(208),
-    err: Color::Indexed(196),
-    selected_fg: Color::Black,
-    selected_bg: Color::Indexed(214),
+    warning: Color::Indexed(208),
+    error: Color::Indexed(196),
+    selected_text: Color::Black,
+    selected_background: Color::Indexed(214),
 };
 
 impl Default for Theme {
@@ -118,8 +118,8 @@ impl Theme {
 
     pub fn selected_style(&self) -> Style {
         Style::default()
-            .bg(self.selected_bg)
-            .fg(self.selected_fg)
+            .bg(self.selected_background)
+            .fg(self.selected_text)
             .add_modifier(Modifier::BOLD)
     }
 
@@ -146,11 +146,11 @@ impl Theme {
     }
 
     pub fn err_style(&self) -> Style {
-        Style::default().fg(self.err)
+        Style::default().fg(self.error)
     }
 
     pub fn warn_style(&self) -> Style {
-        Style::default().fg(self.warn)
+        Style::default().fg(self.warning)
     }
 
     pub fn message_style(&self, kind: MessageKind) -> Style {
@@ -241,10 +241,10 @@ pub fn status_parts(
 ) -> (&'static str, &'static str, Style) {
     let (symbol, label, color) = match status {
         ConnectionStatus::Unknown => ("o", "no data", theme.dim),
-        ConnectionStatus::Reading => (":", "reading", theme.warn),
+        ConnectionStatus::Reading => (":", "reading", theme.warning),
         ConnectionStatus::Connected => ("*", "connected", theme.ok),
-        ConnectionStatus::Reconnecting => ("~", "reconnecting", theme.warn),
-        ConnectionStatus::Error(_) => ("!", "error", theme.err),
+        ConnectionStatus::Reconnecting => ("~", "reconnecting", theme.warning),
+        ConnectionStatus::Error(_) => ("!", "error", theme.error),
     };
     (
         symbol,

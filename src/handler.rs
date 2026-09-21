@@ -5,8 +5,8 @@ use crate::modbus::{DataBits, Parity, StopBits, WordOrder};
 use crate::num_ops::{cycle, digit_add, digit_remove, wrap_index};
 use crate::state::{
     CustomParams, DiscoveryField, DiscoveryParams, InterfaceKind, LogsParams, PopupKind, ReadPanel,
-    SettingsCategory, SettingsField, SettingsFocus, SlaveField, SlaveParams, StatusMessage,
-    SweepConfigParams, SweepField,
+    SettingsCategory, SettingsField, SettingsFocus, StatusMessage, SweepConfigParams, SweepField,
+    UnitField, UnitParams,
 };
 
 pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) {
@@ -133,35 +133,35 @@ async fn run_action(app: &mut App, action: KeybindAction) {
         Help => app.open_help(),
         About => app.open_about(),
         Refresh => app.refresh().await,
-        Toggle => app.toggle_type(),
+        KeybindAction::SwitchType => app.toggle_type(),
         Write => app.open_write(),
-        Jump => app.open_search(),
+        KeybindAction::GoTo => app.open_search(),
         Label => app.open_label(),
-        Custom => app.open_custom(),
+        KeybindAction::CustomRule => app.open_custom(),
         Columns => app.open_columns(),
         Pause => app.toggle_pause(),
         WordOrder => app.toggle_word_order(),
-        Slave => app.open_slave(),
+        KeybindAction::UnitId => app.open_unit(),
         Inspect => app.open_inspect(),
         DeviceId => app.open_device_id(),
-        Raw => app.open_raw(),
+        KeybindAction::RawRequest => app.open_raw(),
         Graph => app.toggle_graph(),
-        Discovery => app.open_discovery(),
+        KeybindAction::Device => app.open_discovery(),
         Settings => app.open_settings(),
         CopyColumn => app.copy_column_arm(),
-        Logs => app.open_logs(),
+        KeybindAction::WriteLogs => app.open_logs(),
         AppLogs => app.open_log_view(),
         Stats => app.open_stats(),
         Sweep => app.open_sweep(),
-        Clear => {
+        KeybindAction::ClearSession => {
             if app.read().graph {
                 app.clear_graph_history();
             } else {
                 app.clear_session_data();
             }
         }
-        NextConfig => app.cycle_config(),
-        SwitchView => {
+        KeybindAction::CycleConfig => app.cycle_config(),
+        KeybindAction::Panel => {
             app.toggle_panel();
             let len = app.panel_len();
             let scroll_rows = app.panel_scroll_rows();
@@ -201,7 +201,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
 
         PopupKind::Stats => match key_event.code {
             c if c == KeyCode::Esc || c == kb.stats => app.close_popup(),
-            c if c == kb.clear => app.clear_session_data(),
+            c if c == kb.clear_session => app.clear_session_data(),
             _ => {}
         },
 
@@ -221,7 +221,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
         PopupKind::DeviceId => match key_event.code {
             c if c == KeyCode::Esc || c == kb.device_id => app.close_popup(),
             c if c == kb.refresh => app.device_id_refresh(),
-            c if c == kb.switch_view => app.device_id_cycle(),
+            c if c == kb.panel => app.device_id_cycle(),
             KeyCode::Left => app.device_id_hscroll(false),
             KeyCode::Right => app.device_id_hscroll(true),
             _ => {}
@@ -340,36 +340,33 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
             }
         }
 
-        PopupKind::Slave => {
-            let Some(field) = app
-                .popup_as::<SlaveParams>()
-                .map(SlaveParams::current_field)
-            else {
+        PopupKind::Unit => {
+            let Some(field) = app.popup_as::<UnitParams>().map(UnitParams::current_field) else {
                 return;
             };
             match key_event.code {
-                c if c == KeyCode::Esc || c == kb.slave => app.close_popup(),
+                c if c == KeyCode::Esc || c == kb.unit_id => app.close_popup(),
                 KeyCode::Enter => match field {
-                    SlaveField::Id => app.commit_slave().await,
-                    SlaveField::Hit(index) => app.commit_slave_hit(index).await,
-                    SlaveField::Repr | SlaveField::Exceptions => app.slave_toggle(field),
-                    SlaveField::From | SlaveField::To | SlaveField::Mode | SlaveField::Scan => {
-                        app.slave_scan_action()
+                    UnitField::Id => app.commit_unit().await,
+                    UnitField::Hit(index) => app.commit_unit_hit(index).await,
+                    UnitField::Repr | UnitField::Exceptions => app.unit_toggle(field),
+                    UnitField::From | UnitField::To | UnitField::Mode | UnitField::Scan => {
+                        app.unit_scan_action()
                     }
                 },
-                KeyCode::Up => app.slave_move(false),
-                KeyCode::Down => app.slave_move(true),
-                KeyCode::Tab => app.slave_switch_column(),
-                c if c == kb.pause && field.is_toggle() => app.slave_toggle(field),
-                KeyCode::Left | KeyCode::Right if field.is_toggle() => app.slave_toggle(field),
-                KeyCode::Backspace => app.slave_backspace(field),
-                KeyCode::Char(c) if c.is_ascii_digit() => app.slave_digit(field, c),
+                KeyCode::Up => app.unit_move(false),
+                KeyCode::Down => app.unit_move(true),
+                KeyCode::Tab => app.unit_switch_column(),
+                c if c == kb.pause && field.is_toggle() => app.unit_toggle(field),
+                KeyCode::Left | KeyCode::Right if field.is_toggle() => app.unit_toggle(field),
+                KeyCode::Backspace => app.unit_backspace(field),
+                KeyCode::Char(c) if c.is_ascii_digit() => app.unit_digit(field, c),
                 _ => {}
             }
         }
 
         PopupKind::Logs => match key_event.code {
-            c if c == KeyCode::Esc || c == kb.logs => app.close_popup(),
+            c if c == KeyCode::Esc || c == kb.write_logs => app.close_popup(),
             KeyCode::Up => app.logs_scroll(-1),
             KeyCode::Down => app.logs_scroll(1),
             c if c == kb.page_up => app.logs_scroll(-(LogsParams::VISIBLE as i32)),
@@ -503,15 +500,15 @@ async fn handle_discovery_key(key_event: KeyEvent, app: &mut App) {
                 d.move_cursor(key_event.code == KeyCode::Down);
             }
         }
-        c if c == kb.switch_view => {
+        c if c == kb.panel => {
             if let Some(d) = app.discovery_mut() {
                 d.toggle_column();
             }
         }
         KeyCode::Left | KeyCode::Right => {
-            let show_mock = app.config.show_mock;
+            let show_mock_device = app.config.show_mock_device;
             if let Some(d) = app.discovery_mut() {
-                cycle_field(d, field, key_event.code == KeyCode::Right, show_mock);
+                cycle_field(d, field, key_event.code == KeyCode::Right, show_mock_device);
             }
         }
         KeyCode::Backspace => {
@@ -525,7 +522,7 @@ async fn handle_discovery_key(key_event: KeyEvent, app: &mut App) {
                     }
                     DiscoveryField::Baud => digit_remove(&mut d.baud_rate),
                     DiscoveryField::NetPort => digit_remove(&mut d.net_port),
-                    DiscoveryField::SlaveId => digit_remove(&mut d.slave_id),
+                    DiscoveryField::UnitId => digit_remove(&mut d.unit_id),
                     DiscoveryField::ConnectTimeout => digit_remove(&mut d.connect_timeout_ms),
                     DiscoveryField::CommandTimeout => digit_remove(&mut d.command_timeout_ms),
                     DiscoveryField::BetweenCommands => digit_remove(&mut d.between_commands_ms),
@@ -545,8 +542,8 @@ async fn handle_discovery_key(key_event: KeyEvent, app: &mut App) {
                     DiscoveryField::NetPort if c.is_ascii_digit() => {
                         digit_add(&mut d.net_port, digit)
                     }
-                    DiscoveryField::SlaveId if c.is_ascii_digit() => {
-                        digit_add(&mut d.slave_id, digit)
+                    DiscoveryField::UnitId if c.is_ascii_digit() => {
+                        digit_add(&mut d.unit_id, digit)
                     }
                     DiscoveryField::ConnectTimeout if c.is_ascii_digit() => {
                         digit_add(&mut d.connect_timeout_ms, digit)
@@ -565,10 +562,15 @@ async fn handle_discovery_key(key_event: KeyEvent, app: &mut App) {
     }
 }
 
-fn cycle_field(d: &mut DiscoveryParams, field: DiscoveryField, forward: bool, show_mock: bool) {
+fn cycle_field(
+    d: &mut DiscoveryParams,
+    field: DiscoveryField,
+    forward: bool,
+    show_mock_device: bool,
+) {
     let kinds: Vec<InterfaceKind> = InterfaceKind::ALL
         .into_iter()
-        .filter(|&kind| show_mock || kind != InterfaceKind::Mock)
+        .filter(|&kind| show_mock_device || kind != InterfaceKind::Mock)
         .collect();
 
     match field {
@@ -603,7 +605,7 @@ fn handle_logs_view_key(key_event: KeyEvent, app: &mut App) {
 async fn handle_settings_key(key_event: KeyEvent, app: &mut App) {
     let kb = app.config.keybinds;
     let capturing = app.settings().is_some_and(|s| s.kb_capturing);
-    if !capturing && key_event.code == kb.switch_view {
+    if !capturing && key_event.code == kb.panel {
         if let Some(s) = app.settings_mut() {
             s.cycle_category();
         }
@@ -791,7 +793,7 @@ mod tests {
     use crate::input::{KeyCode, KeyEvent};
     use crate::state::{
         DiscoveryField, DiscoveryParams, InterfaceKind, MessageKind, Popup, PopupKind,
-        SettingsCategory, SettingsField, SettingsFocus, SlaveField, SlaveParams, State,
+        SettingsCategory, SettingsField, SettingsFocus, State, UnitField, UnitParams,
     };
 
     async fn app() -> App {
@@ -808,7 +810,7 @@ mod tests {
                 ports: vec!["/dev/ttyUSB0".to_string()],
                 ..DiscoveryParams::default()
             };
-            d.set_interface(InterfaceKind::Wired);
+            d.set_interface(InterfaceKind::Serial);
             d.toggle_column();
             d.move_cursor(true); // past the single port row onto the custom path
         }
@@ -837,7 +839,7 @@ mod tests {
             let d = app.discovery_mut().unwrap();
 
             *d = DiscoveryParams::default();
-            d.set_interface(InterfaceKind::Wired);
+            d.set_interface(InterfaceKind::Serial);
             d.toggle_column();
             d.move_cursor(true);
         }
@@ -873,8 +875,8 @@ mod tests {
         let kind = |app: &App| app.discovery().unwrap().interface;
         assert_eq!(kind(&app), InterfaceKind::Mock);
         for expected in [
-            InterfaceKind::Wired,
-            InterfaceKind::Network,
+            InterfaceKind::Serial,
+            InterfaceKind::Tcp,
             InterfaceKind::RtuOverTcp,
             InterfaceKind::Mock,
         ] {
@@ -882,14 +884,14 @@ mod tests {
             assert_eq!(kind(&app), expected);
         }
 
-        app.config.show_mock = false;
+        app.config.show_mock_device = false;
         app.discovery_mut()
             .unwrap()
-            .set_interface(InterfaceKind::Wired);
+            .set_interface(InterfaceKind::Serial);
         for expected in [
-            InterfaceKind::Network,
+            InterfaceKind::Tcp,
             InterfaceKind::RtuOverTcp,
-            InterfaceKind::Wired,
+            InterfaceKind::Serial,
         ] {
             handle_key_events(KeyEvent::new(KeyCode::Right), &mut app).await;
             assert_eq!(kind(&app), expected);
@@ -1084,7 +1086,7 @@ mod tests {
         app.open_stats();
         assert_eq!(app.popup_kind(), Some(PopupKind::Stats));
 
-        handle_key_events(KeyEvent::new(app.config.keybinds.clear), &mut app).await;
+        handle_key_events(KeyEvent::new(app.config.keybinds.clear_session), &mut app).await;
         assert_eq!(app.stats.reads_ok, 0);
         assert_eq!(app.stats.latency(), None);
         assert_eq!(
@@ -1095,40 +1097,40 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn the_slave_popup_toggles_ascii_hit_data() {
+    async fn the_unit_popup_toggles_ascii_hit_data() {
         let mut app = app().await;
-        app.open_slave();
+        app.open_unit();
         let kb = app.config.keybinds;
-        let index = SlaveParams::default()
+        let index = UnitParams::default()
             .fields()
             .iter()
-            .position(|&f| f == SlaveField::Repr)
+            .position(|&f| f == UnitField::Repr)
             .unwrap();
         for _ in 0..index {
             handle_key_events(KeyEvent::new(KeyCode::Down), &mut app).await;
         }
-        fn slave(app: &App) -> &SlaveParams {
+        fn unit(app: &App) -> &UnitParams {
             app.popup_as().unwrap()
         }
-        assert_eq!(slave(&app).current_field(), SlaveField::Repr);
+        assert_eq!(unit(&app).current_field(), UnitField::Repr);
 
         handle_key_events(KeyEvent::new(KeyCode::Right), &mut app).await;
-        assert!(slave(&app).ascii, "arrows switch to ASCII");
+        assert!(unit(&app).ascii, "arrows switch to ASCII");
         handle_key_events(KeyEvent::new(KeyCode::Enter), &mut app).await;
-        assert!(!slave(&app).ascii, "enter switches back");
+        assert!(!unit(&app).ascii, "enter switches back");
         assert!(
-            !slave(&app).active(),
+            !unit(&app).active(),
             "enter on this field never starts a scan"
         );
 
         handle_key_events(KeyEvent::new(KeyCode::Down), &mut app).await;
-        assert_eq!(slave(&app).current_field(), SlaveField::Exceptions);
-        assert!(slave(&app).show_exceptions, "listed by default");
+        assert_eq!(unit(&app).current_field(), UnitField::Exceptions);
+        assert!(unit(&app).show_exceptions, "listed by default");
         handle_key_events(KeyEvent::new(kb.pause), &mut app).await;
-        assert!(!slave(&app).show_exceptions, "space hides them");
+        assert!(!unit(&app).show_exceptions, "space hides them");
         handle_key_events(KeyEvent::new(KeyCode::Left), &mut app).await;
-        assert!(slave(&app).show_exceptions);
-        assert!(!slave(&app).active());
+        assert!(unit(&app).show_exceptions);
+        assert!(!unit(&app).active());
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -1141,32 +1143,32 @@ mod tests {
     async fn hiding_exceptions_applies_to_the_list_at_once() {
         use crate::register::RegisterType;
         let mut app = app().await;
-        app.open_slave();
+        app.open_unit();
         {
-            let p = app.popup_as_mut::<SlaveParams>().unwrap();
+            let p = app.popup_as_mut::<UnitParams>().unwrap();
             p.register_type = RegisterType::Input;
             p.address = 38;
             p.amount = 1;
             p.from = 1;
             p.to = 3;
         }
-        app.slave_scan_action();
+        app.unit_scan_action();
         crate::app::settle_until(
             &mut app,
-            |app| !app.popup_as::<SlaveParams>().unwrap().active(),
+            |app| !app.popup_as::<UnitParams>().unwrap().active(),
             "scan",
         )
         .await;
-        assert_eq!(app.popup_as::<SlaveParams>().unwrap().hits.len(), 3);
+        assert_eq!(app.popup_as::<UnitParams>().unwrap().hits.len(), 3);
 
         let before = screen(&mut app);
         assert!(before.contains("Found 3"), "{before}");
         assert_eq!(before.matches("Illegal").count(), 3);
 
-        let index = SlaveParams::default()
+        let index = UnitParams::default()
             .fields()
             .iter()
-            .position(|&f| f == SlaveField::Exceptions)
+            .position(|&f| f == UnitField::Exceptions)
             .unwrap();
         for _ in 0..index {
             handle_key_events(KeyEvent::new(KeyCode::Down), &mut app).await;
@@ -1274,7 +1276,7 @@ mod tests {
     async fn ignore_dirty_skips_the_prompt() {
         let mut app = app().await;
         app.dirty = true;
-        app.config.ignore_dirty = true;
+        app.config.skip_unsaved_warning = true;
         handle_key_events(ctrl('c'), &mut app).await;
         assert!(!app.running);
     }

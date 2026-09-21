@@ -298,29 +298,29 @@ fn field_value(
     let device = &app.config;
     match field {
         SettingsField::Name => (device.name.clone(), None),
-        SettingsField::RegistersBatch => (device.registers_batch.to_string(), None),
-        SettingsField::BatchAnchor => (device.batch_anchor.label().to_string(), None),
+        SettingsField::BatchSize => (device.batch.size.to_string(), None),
+        SettingsField::BatchAnchor => (device.batch.anchor.label().to_string(), None),
         SettingsField::TimeMode => (app.interpreter.time_mode().label().to_string(), None),
         SettingsField::AddressMode => (app.interpreter.address_mode().label().to_string(), None),
         SettingsField::LabelWidth => (auto_width(app.interpreter.label_width()), None),
         SettingsField::CustomWidth => (auto_width(app.interpreter.custom_width()), None),
-        SettingsField::ReadFullCustoms => (on_off(device.read_full_customs), None),
-        SettingsField::CustomBatchBySize => (on_off(device.custom_batch_by_size), None),
-        SettingsField::PanelTypeFilter => (on_off(device.panel_type_filter), None),
-        SettingsField::AutoUpdate => (
+        SettingsField::ReadFullCustoms => (on_off(device.batch.read_full_customs), None),
+        SettingsField::CustomBatchByRegisters => (on_off(device.batch.custom_by_registers), None),
+        SettingsField::FilterPanelsByType => (on_off(device.filter_panels_by_type), None),
+        SettingsField::RefreshInterval => (
             device
-                .update_interval_ms
+                .refresh_interval_ms
                 .map_or_else(|| "off".to_string(), |n| n.to_string()),
             None,
         ),
         SettingsField::ReconnectOnTimeout => (on_off(device.reconnect_on_timeout), None),
-        SettingsField::HistoryCap => (device.graph_history_cap.to_string(), None),
-        SettingsField::MatrixCols => (auto_width(device.matrix_cols), None),
-        SettingsField::IgnoreDirty => (on_off(device.ignore_dirty), None),
-        SettingsField::ShowMock => (on_off(device.show_mock), None),
+        SettingsField::GraphHistory => (device.graph.history.to_string(), None),
+        SettingsField::MatrixColumns => (auto_width(device.matrix.columns), None),
+        SettingsField::SkipUnsavedWarning => (on_off(device.skip_unsaved_warning), None),
+        SettingsField::ShowMockDevice => (on_off(device.show_mock_device), None),
         SettingsField::ReadOnly => (on_off(device.read_only), None),
         SettingsField::ApiPort => (
-            match device.port {
+            match device.api.port {
                 None => "off".to_string(),
                 Some(0) if app.api_bind_state() == ApiBindState::Failed => {
                     "any (bind failed)".to_string()
@@ -336,16 +336,16 @@ fn field_value(
             },
             None,
         ),
-        SettingsField::ApiSlaveOverride => (on_off(device.allow_api_slave_id), None),
+        SettingsField::ApiUnitIdOverride => (on_off(device.api.unit_id_override), None),
         SettingsField::LogWrites => (on_off(device.log_writes), None),
         SettingsField::StartupPanel => (device.startup.panel.name().to_string(), None),
         SettingsField::StartupType => (device.startup.register_type.name().to_string(), None),
         SettingsField::StartupAddress => (device.startup.address.to_string(), None),
         SettingsField::SavePositionOnExit => (on_off(device.save_position_on_exit), None),
-        SettingsField::CycleHoldings => (on_off(device.cycle_types.holdings), None),
-        SettingsField::CycleInputs => (on_off(device.cycle_types.inputs), None),
-        SettingsField::CycleCoils => (on_off(device.cycle_types.coils), None),
-        SettingsField::CycleDiscretes => (on_off(device.cycle_types.discretes), None),
+        SettingsField::CycleHoldings => (on_off(device.cycle_register_types.holdings), None),
+        SettingsField::CycleInputs => (on_off(device.cycle_register_types.inputs), None),
+        SettingsField::CycleCoils => (on_off(device.cycle_register_types.coils), None),
+        SettingsField::CycleDiscretes => (on_off(device.cycle_register_types.discretes), None),
         SettingsField::CyclePinned => (on_off(device.cycle_panels.pinned), None),
         SettingsField::CycleLabeled => (on_off(device.cycle_panels.labeled), None),
         SettingsField::CycleCustom => (on_off(device.cycle_panels.custom), None),
@@ -355,25 +355,25 @@ fn field_value(
         SettingsField::ClearCustom => (format!("{} rules", app.custom_count()), None),
         SettingsField::CopyData => (String::new(), None),
         SettingsField::CopyConfig => (String::new(), None),
-        SettingsField::ShowContinuation => (on_off(device.show_continuation), None),
+        SettingsField::ShowRuleContinuation => (on_off(device.show_rule_continuation), None),
         SettingsField::ShowClock => (on_off(device.show_clock), None),
         SettingsField::ShowFrameTime => (on_off(device.show_frame_time), None),
         SettingsField::ShowRam => (on_off(device.show_ram), None),
-        SettingsField::ShowStatusLabel => (on_off(device.show_status_label), None),
-        SettingsField::ShowAscii => (on_off(device.show_ascii), None),
+        SettingsField::ShowConnectionLabel => (on_off(device.show_connection_label), None),
+        SettingsField::ShowAsciiStrip => (on_off(device.show_ascii_strip), None),
         SettingsField::ShowInactiveTabs => (on_off(device.show_inactive_tabs), None),
         SettingsField::ShowReadWindow => (on_off(device.show_read_window), None),
-        SettingsField::ShowMatrixContext => (on_off(device.show_matrix_context), None),
+        SettingsField::ShowMatrixContext => (on_off(device.matrix.show_context), None),
         SettingsField::GraphTimeAxis => (
-            if device.graph_time_axis {
+            if device.graph.time_axis {
                 "time".to_string()
             } else {
                 "samples".to_string()
             },
             None,
         ),
-        SettingsField::PaddingHorizontal => (device.padding_horizontal.to_string(), None),
-        SettingsField::PaddingVertical => (device.padding_vertical.to_string(), None),
+        SettingsField::PaddingHorizontal => (device.padding.horizontal.to_string(), None),
+        SettingsField::PaddingVertical => (device.padding.vertical.to_string(), None),
         SettingsField::ChangedExpiry => (
             device
                 .changed_expiry_ms
@@ -390,15 +390,15 @@ fn field_value(
         SettingsField::ThemeBorder => color_view(device.theme.border),
         SettingsField::ThemeAccent => color_view(device.theme.accent),
         SettingsField::ThemeText => color_view(device.theme.text),
-        SettingsField::ThemeBg => color_view(device.theme.bg),
+        SettingsField::ThemeBackground => color_view(device.theme.background),
         SettingsField::ThemeDim => color_view(device.theme.dim),
         SettingsField::ThemeChanged => color_view(device.theme.changed),
         SettingsField::ThemeZebra => color_view(device.theme.zebra),
         SettingsField::ThemeOk => color_view(device.theme.ok),
-        SettingsField::ThemeWarn => color_view(device.theme.warn),
-        SettingsField::ThemeErr => color_view(device.theme.err),
-        SettingsField::ThemeSelectedFg => color_view(device.theme.selected_fg),
-        SettingsField::ThemeSelectedBg => color_view(device.theme.selected_bg),
+        SettingsField::ThemeWarning => color_view(device.theme.warning),
+        SettingsField::ThemeError => color_view(device.theme.error),
+        SettingsField::ThemeSelectedText => color_view(device.theme.selected_text),
+        SettingsField::ThemeSelectedBackground => color_view(device.theme.selected_background),
         SettingsField::Save => (app.config_path().display().to_string(), None),
         SettingsField::LoadConfig => (params.load_path.clone(), None),
         SettingsField::NextConfig => (device.next_config.clone(), None),

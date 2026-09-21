@@ -65,7 +65,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App) {
         &mut lines,
         theme,
         [
-            Hint::key(app.config.keybinds.clear, "Clear"),
+            Hint::key(app.config.keybinds.clear_session, "Clear"),
             Hint::key(KeyCode::Esc, "Close"),
         ],
     );

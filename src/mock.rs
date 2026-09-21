@@ -7,20 +7,20 @@ use tokio_modbus::client::{Client, Context};
 use tokio_modbus::prelude::{
     ConformityLevel, DeviceIdObject, ReadCode, ReadDeviceIdentificationResponse,
 };
-use tokio_modbus::slave::SlaveContext;
-use tokio_modbus::{ExceptionCode, Request, Response, Slave, SlaveId};
+use tokio_modbus::slave::{Slave as Unit, SlaveContext, SlaveId as UnitId};
+use tokio_modbus::{ExceptionCode, Request, Response};
 
 /// A simulated RS-485 bus of power meters.
 ///
-/// Slaves 0..=9 respond, each with its own serial number, phase offset and
-/// power scale; any other slave id stays silent until the command times out,
+/// Units 0..=9 respond, each with its own serial number, phase offset and
+/// power scale; any other unit id stays silent until the command times out,
 /// like an absent device on a real bus.
 ///
 /// Holding registers (everything else answers IllegalDataAddress):
 ///   0..=7      ASCII model name
 ///   8          firmware version (BCD)
 ///   9..=10     serial number (u32)
-///   11         slave id
+///   11         unit id
 ///   12..=13    uptime seconds (u32)
 ///   14         register map version, 15 phase count
 ///   50..=199   writable: 50 voltage x10, 51 current x100, 52 ripple x10,
@@ -82,10 +82,10 @@ pub struct MockContext {
     written: HashMap<u16, u16>,
     written_coils: HashMap<u16, bool>,
     write_count: u16,
-    slave_id: SlaveId,
+    unit_id: UnitId,
 }
 
-const KNOWN_SLAVES: RangeInclusive<SlaveId> = 0..=9;
+const KNOWN_UNITS: RangeInclusive<UnitId> = 0..=9;
 const WRITABLE: RangeInclusive<u16> = 50..=199;
 const TAIL_ZONE: RangeInclusive<u16> = 65520..=65535;
 const HOLDING_ZONES: [RangeInclusive<u16>; 3] = [0..=499, 1000..=1199, TAIL_ZONE];
@@ -140,7 +140,7 @@ impl MockContext {
             written: HashMap::new(),
             written_coils: HashMap::new(),
             write_count: 0,
-            slave_id: 0,
+            unit_id: 0,
         });
         client.into()
     }
@@ -164,14 +164,14 @@ impl MockContext {
     }
 
     fn phase(&self) -> f64 {
-        self.slave_id as f64 * 0.7
+        self.unit_id as f64 * 0.7
     }
 
     fn noise(&self, t: f64, addr: u16) -> f64 {
         if self.setpoint(53) == 0 {
             return 0.0;
         }
-        let mut x = (t * 10.0) as u64 ^ ((addr as u64) << 32) ^ ((self.slave_id as u64) << 48);
+        let mut x = (t * 10.0) as u64 ^ ((addr as u64) << 32) ^ ((self.unit_id as u64) << 48);
         x ^= x << 13;
         x ^= x >> 7;
         x ^= x << 17;
@@ -179,13 +179,13 @@ impl MockContext {
     }
 
     fn active_power_kw(&self, t: f64) -> f64 {
-        let base = 3.2 + 0.4 * self.slave_id as f64;
+        let base = 3.2 + 0.4 * self.unit_id as f64;
         base + 0.8 * (t / 7.0 + self.phase()).sin() + 0.1 * self.noise(t, 8)
     }
 
     fn energy_wh(&self, t: f64) -> f64 {
-        let base_kw = 3.2 + 0.4 * self.slave_id as f64;
-        50_000.0 * (1.0 + self.slave_id as f64) + base_kw * 1000.0 * t / 3600.0
+        let base_kw = 3.2 + 0.4 * self.unit_id as f64;
+        50_000.0 * (1.0 + self.unit_id as f64) + base_kw * 1000.0 * t / 3600.0
     }
 
     fn grid_present(&self, t: f64) -> bool {
@@ -224,8 +224,8 @@ impl MockContext {
                 u16::from_be_bytes([MODEL_NAME[i], MODEL_NAME[i + 1]])
             }
             8 => 0x0142, // v1.42 in BCD
-            9 | 10 => word(24_000_000 + 1_111 * self.slave_id as u32, addr - 9),
-            11 => self.slave_id as u16,
+            9 | 10 => word(24_000_000 + 1_111 * self.unit_id as u32, addr - 9),
+            11 => self.unit_id as u16,
             12 | 13 => word(t as u32, addr - 12),
             14 => 3, // register map version
             15 => 3, // phase count
@@ -233,8 +233,8 @@ impl MockContext {
                 let i = (addr - 200) as usize * 2;
                 u16::from_be_bytes([VENDOR_NAME[i], VENDOR_NAME[i + 1]])
             }
-            216..=218 => 10_000 + 7 * self.slave_id as u16 + 13 * (addr - 216),
-            250..=253 => [120, 180, 90, 240][(addr - 250) as usize] + self.slave_id as u16,
+            216..=218 => 10_000 + 7 * self.unit_id as u16 + 13 * (addr - 216),
+            250..=253 => [120, 180, 90, 240][(addr - 250) as usize] + self.unit_id as u16,
             254 => ((t / 30.0) as u16) % 4,
             300..=302 => self
                 .setpoint(50)
@@ -326,10 +326,10 @@ impl MockContext {
             }
             53 => (self.setpoint(51) as f64 * 0.03 + 4.0 * self.noise(t, 53).abs()) as u16,
             60 => {
-                let demand = 3.2 + 0.4 * self.slave_id as f64 + 0.5 * (t / 45.0 + phase).sin();
+                let demand = 3.2 + 0.4 * self.unit_id as f64 + 0.5 * (t / 45.0 + phase).sin();
                 (demand * 100.0) as u16
             }
-            61 => ((3.2 + 0.4 * self.slave_id as f64 + 0.9) * 100.0) as u16,
+            61 => ((3.2 + 0.4 * self.unit_id as f64 + 0.9) * 100.0) as u16,
             62 | 63 => word((t / 2.0) as u32, addr - 62),
             100..=131 => {
                 let k = (addr - 100) as f64 / 32.0;
@@ -351,7 +351,7 @@ impl MockContext {
                 let morning = (1.0 - ((h - 8.0) / 3.0).powi(2)).max(0.0);
                 let evening = (1.0 - ((h - 19.0) / 3.5).powi(2)).max(0.0);
                 let kwh10 =
-                    (25.0 + 70.0 * morning + 110.0 * evening) * (1.0 + 0.1 * self.slave_id as f64);
+                    (25.0 + 70.0 * morning + 110.0 * evening) * (1.0 + 0.1 * self.unit_id as f64);
                 (kwh10 + 2.0 * (t / 30.0 + h).sin()).max(0.0) as u16
             }
             400..=431 => ((t * (addr - 399) as f64 / 4.0) as u32 % 10_000) as u16,
@@ -394,7 +394,7 @@ impl MockContext {
             (0x05, b"MTUI SIMULATOR".to_vec()),
             (
                 0x06,
-                format!("Power Bus Sim Slave {}", self.slave_id).into_bytes(),
+                format!("Power Bus Sim Unit {}", self.unit_id).into_bytes(),
             ),
             (0x07, b" TF2! ".to_vec()),
         ]
@@ -488,8 +488,8 @@ fn check(
 
 #[async_trait]
 impl SlaveContext for MockContext {
-    fn set_slave(&mut self, slave: Slave) {
-        self.slave_id = slave.0
+    fn set_slave(&mut self, unit: Unit) {
+        self.unit_id = unit.0
     }
 }
 
@@ -572,7 +572,7 @@ impl MockContext {
 #[async_trait]
 impl Client for MockContext {
     async fn call(&mut self, request: Request<'_>) -> tokio_modbus::Result<Response> {
-        if !KNOWN_SLAVES.contains(&self.slave_id) || stalls(&request) {
+        if !KNOWN_UNITS.contains(&self.unit_id) || stalls(&request) {
             std::future::pending::<()>().await;
             unreachable!();
         }

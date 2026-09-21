@@ -1,5 +1,5 @@
 use crate::app::{
-    AllowSlaveFlag, ApiBindState, ApiDevice, BindStateFlag, BoundPort, ReadOnlyFlag, StatusFlag,
+    AllowUnitFlag, ApiBindState, ApiDevice, BindStateFlag, BoundPort, ReadOnlyFlag, StatusFlag,
 };
 use crate::modbus::ModbusDevice;
 use crate::register::RegisterType;
@@ -21,7 +21,7 @@ struct ApiState {
     device: ApiDevice,
     writes_log: SharedWritesLog,
     read_only: ReadOnlyFlag,
-    allow_slave_id: AllowSlaveFlag,
+    allow_unit_id: AllowUnitFlag,
     status: StatusFlag,
 }
 
@@ -32,7 +32,7 @@ struct ReadRequest {
     address: u16,
     count: u16,
     #[serde(default)]
-    slave_id: Option<u8>,
+    unit_id: Option<u8>,
 }
 
 #[derive(Serialize)]
@@ -47,7 +47,7 @@ struct WriteRequest {
     address: u16,
     values: Vec<u16>,
     #[serde(default)]
-    slave_id: Option<u8>,
+    unit_id: Option<u8>,
 }
 
 #[derive(Serialize)]
@@ -64,7 +64,7 @@ pub async fn serve(
     bound: BoundPort,
     writes_log: SharedWritesLog,
     read_only: ReadOnlyFlag,
-    allow_slave_id: AllowSlaveFlag,
+    allow_unit_id: AllowUnitFlag,
     status: StatusFlag,
     bind: BindStateFlag,
 ) {
@@ -77,7 +77,7 @@ pub async fn serve(
             device,
             writes_log,
             read_only,
-            allow_slave_id,
+            allow_unit_id,
             status,
         });
 
@@ -114,14 +114,14 @@ async fn log_requests(request: Request, next: Next) -> Response {
 
 async fn read_handler(State(state): State<ApiState>, Json(request): Json<ReadRequest>) -> Response {
     log::info!(
-        "API read {:?}@{}:{} slave={}",
+        "API read {:?}@{}:{} unit={}",
         request.register_type,
         request.address,
         request.count,
-        describe_slave(request.slave_id)
+        describe_unit(request.unit_id)
     );
-    if slave_override_forbidden(&state, request.slave_id) {
-        log::warn!("API read rejected: slave id override is disabled");
+    if unit_override_forbidden(&state, request.unit_id) {
+        log::warn!("API read rejected: unit id override is disabled");
         return StatusCode::FORBIDDEN.into_response();
     }
     let Some(device) = current(&state.device) else {
@@ -129,7 +129,7 @@ async fn read_handler(State(state): State<ApiState>, Json(request): Json<ReadReq
     };
     let result = device
         .read_typed(
-            request.slave_id,
+            request.unit_id,
             request.register_type,
             request.address,
             request.count,
@@ -150,18 +150,18 @@ async fn write_handler(
     Json(request): Json<WriteRequest>,
 ) -> StatusCode {
     log::info!(
-        "API write {:?}@{} slave={} {:?}",
+        "API write {:?}@{} unit={} {:?}",
         request.register_type,
         request.address,
-        describe_slave(request.slave_id),
+        describe_unit(request.unit_id),
         request.values
     );
     if state.read_only.load(Ordering::Relaxed) {
         log::warn!("API write rejected due to read-only mode");
         return StatusCode::FORBIDDEN;
     }
-    if slave_override_forbidden(&state, request.slave_id) {
-        log::warn!("API write rejected: slave id override is disabled");
+    if unit_override_forbidden(&state, request.unit_id) {
+        log::warn!("API write rejected: unit id override is disabled");
         return StatusCode::FORBIDDEN;
     }
     if !request.register_type.is_writable() {
@@ -176,7 +176,7 @@ async fn write_handler(
     };
     let result = device
         .write_typed(
-            request.slave_id,
+            request.unit_id,
             request.register_type,
             request.address,
             &request.values,
@@ -186,7 +186,7 @@ async fn write_handler(
         Ok(()) => {
             writes_log::append(
                 &state.writes_log,
-                request.slave_id.unwrap_or_else(|| device.slave()),
+                request.unit_id.unwrap_or_else(|| device.unit()),
                 request.address,
                 WriteKind::Multiple(request.values),
                 None,
@@ -231,10 +231,10 @@ fn current(device: &ApiDevice) -> Option<ModbusDevice> {
     device.lock().ok().and_then(|guard| guard.clone())
 }
 
-fn describe_slave(slave: Option<u8>) -> String {
-    slave.map_or_else(|| "default".to_string(), |id| id.to_string())
+fn describe_unit(unit: Option<u8>) -> String {
+    unit.map_or_else(|| "default".to_string(), |id| id.to_string())
 }
 
-fn slave_override_forbidden(state: &ApiState, slave: Option<u8>) -> bool {
-    slave.is_some() && !state.allow_slave_id.load(Ordering::Relaxed)
+fn unit_override_forbidden(state: &ApiState, unit: Option<u8>) -> bool {
+    unit.is_some() && !state.allow_unit_id.load(Ordering::Relaxed)
 }

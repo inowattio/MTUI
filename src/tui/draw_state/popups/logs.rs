@@ -9,7 +9,7 @@ use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 
 const TIME_W: usize = 23;
-const SLAVE_W: usize = 5;
+const UNIT_W: usize = 5;
 const ADDR_W: usize = 5;
 const TYPE_W: usize = 8;
 const PREV_W: usize = 10;
@@ -67,7 +67,7 @@ pub(super) fn draw(
 }
 
 fn width() -> u16 {
-    (1 + TIME_W + SLAVE_W + ADDR_W + TYPE_W + PREV_W + VALUE_W + GAP.len() * 5 + 2) as u16
+    (1 + TIME_W + UNIT_W + ADDR_W + TYPE_W + PREV_W + VALUE_W + GAP.len() * 5 + 2) as u16
 }
 
 fn summary_line(theme: &Theme, logs: &LogsParams) -> Line<'static> {
@@ -84,8 +84,8 @@ fn summary_line(theme: &Theme, logs: &LogsParams) -> Line<'static> {
 fn header_line(theme: &Theme) -> Line<'static> {
     Line::from(Span::styled(
         format!(
-            " {:<TIME_W$}{GAP}{:>SLAVE_W$}{GAP}{:>ADDR_W$}{GAP}{:<TYPE_W$}{GAP}{:>PREV_W$}{GAP}{:<VALUE_W$}",
-            "TIME", "SLAVE", "ADDR", "TYPE", "PREVIOUS", "VALUE"
+            " {:<TIME_W$}{GAP}{:>UNIT_W$}{GAP}{:>ADDR_W$}{GAP}{:<TYPE_W$}{GAP}{:>PREV_W$}{GAP}{:<VALUE_W$}",
+            "TIME", "UNIT", "ADDR", "TYPE", "PREVIOUS", "VALUE"
         ),
         theme.header_style(),
     ))
@@ -99,7 +99,7 @@ fn entry_line(theme: &Theme, entry: &WriteEntry, zebra: bool) -> Line<'static> {
             format!(" {:<TIME_W$}{GAP}", super::truncate(&time, TIME_W)),
             row.patch(theme.dim_style()),
         ),
-        Span::styled(format!("{:>SLAVE_W$}{GAP}", entry.slave), row),
+        Span::styled(format!("{:>UNIT_W$}{GAP}", entry.unit), row),
         Span::styled(format!("{:>ADDR_W$}{GAP}", entry.address), row),
         Span::styled(
             format!("{:<TYPE_W$}{GAP}", super::truncate(&entry.kind, TYPE_W)),

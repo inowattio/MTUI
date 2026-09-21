@@ -11,9 +11,9 @@ mod label;
 mod logs;
 mod raw;
 mod search;
-mod slave;
 mod stats;
 mod sweep_config;
+mod unit;
 mod unsaved;
 mod write;
 
@@ -47,8 +47,8 @@ pub fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup
                 app.write_custom_preview(write),
             );
         }
-        Popup::Slave(params) => {
-            slave::draw(frame, area, theme, kb, params, app.config.device.slave_id)
+        Popup::Unit(params) => {
+            unit::draw(frame, area, theme, kb, params, app.config.device.unit_id)
         }
         Popup::SweepConfig(s) => sweep_config::draw(frame, area, theme, s, app.sweep.active),
         Popup::Logs(logs) => logs::draw(frame, area, theme, kb, logs, app.config.log_writes),
@@ -77,7 +77,7 @@ pub(super) fn render(
     frame.render_widget(Clear, rect);
     frame.render_widget(
         Paragraph::new(lines)
-            .style(Style::default().bg(theme.bg))
+            .style(Style::default().bg(theme.background))
             .block(theme.panel(&format!(" {title}")).borders(Borders::ALL)),
         rect,
     );

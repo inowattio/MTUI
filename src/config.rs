@@ -15,40 +15,99 @@ pub struct Config {
     pub device: DeviceConfig,
     pub startup: Startup,
     pub save_position_on_exit: bool,
-    pub interpretations: InterpretorConfig,
-    pub registers_batch: u16,
-    pub batch_anchor: BatchAnchor,
-    pub read_full_customs: bool,
-    pub custom_batch_by_size: bool,
-    pub panel_type_filter: bool,
-    pub update_interval_ms: Option<u64>,
+    pub columns: InterpretorConfig,
+    pub batch: BatchConfig,
+    pub filter_panels_by_type: bool,
+    pub refresh_interval_ms: Option<u64>,
     pub reconnect_on_timeout: bool,
     pub changed_expiry_ms: Option<u64>,
-    pub graph_history_cap: u16,
-    pub matrix_cols: u16,
+    pub graph: GraphConfig,
+    pub matrix: MatrixConfig,
     pub read_only: bool,
     pub log_writes: bool,
-    pub ignore_dirty: bool,
-    pub show_mock: bool,
+    pub skip_unsaved_warning: bool,
+    pub show_mock_device: bool,
     pub show_clock: bool,
     pub show_frame_time: bool,
     pub show_ram: bool,
-    pub show_status_label: bool,
-    pub show_ascii: bool,
+    pub show_connection_label: bool,
+    pub show_ascii_strip: bool,
     pub show_inactive_tabs: bool,
     pub show_read_window: bool,
-    pub show_matrix_context: bool,
-    pub show_continuation: bool,
-    pub graph_time_axis: bool,
-    pub padding_horizontal: u16,
-    pub padding_vertical: u16,
-    pub cycle_types: CycleTypes,
+    pub show_rule_continuation: bool,
+    pub padding: Padding,
+    pub cycle_register_types: CycleTypes,
     pub cycle_panels: CyclePanels,
-    pub port: Option<u16>,
-    pub allow_api_slave_id: bool,
+    pub api: ApiConfig,
     pub registers: Registers,
     pub keybinds: Keybinds,
     pub theme: Theme,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[serde(default)]
+pub struct BatchConfig {
+    pub size: u16,
+    pub anchor: BatchAnchor,
+    pub read_full_customs: bool,
+    pub custom_by_registers: bool,
+}
+
+impl Default for BatchConfig {
+    fn default() -> Self {
+        Self {
+            size: 10,
+            anchor: BatchAnchor::Middle,
+            read_full_customs: false,
+            custom_by_registers: false,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[serde(default)]
+pub struct GraphConfig {
+    pub history: u16,
+    pub time_axis: bool,
+}
+
+impl Default for GraphConfig {
+    fn default() -> Self {
+        Self {
+            history: 180,
+            time_axis: true,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[serde(default)]
+pub struct MatrixConfig {
+    pub columns: u16,
+    pub show_context: bool,
+}
+
+impl Default for MatrixConfig {
+    fn default() -> Self {
+        Self {
+            columns: 0,
+            show_context: true,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
+#[serde(default)]
+pub struct Padding {
+    pub horizontal: u16,
+    pub vertical: u16,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
+#[serde(default)]
+pub struct ApiConfig {
+    pub port: Option<u16>,
+    pub unit_id_override: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -155,33 +214,33 @@ macro_rules! keybinds {
 
 keybinds! {
     About => about : "About" = ABOUT,
-    Pin => pin : "Add/remove pin" = PIN,
+    Pin => pin : "Toggle pin" = PIN,
     Dump => dump : "Dump read data" = DUMP,
     Help => help : "Help" = HELP,
     Refresh => refresh : "Refresh" = REFRESH,
-    Toggle => toggle : "Switch register type" = TOGGLE,
+    SwitchType => register_type : "Switch register type" = REGISTER_TYPE,
     Write => write : "Write register" = WRITE,
-    Jump => jump : "Go to address/label" = JUMP,
+    GoTo => go_to : "Go to address/label" = GO_TO,
     Label => label : "Label register" = LABEL,
-    Custom => custom : "Custom rule" = CUSTOM,
+    CustomRule => custom_rule : "Custom rule" = CUSTOM_RULE,
     Columns => columns : "Toggle columns" = COLUMNS,
-    Pause => pause : "Pause/resume" = PAUSE,
+    Pause => pause : "Toggle pause" = PAUSE,
     WordOrder => word_order : "Cycle word order" = WORD_ORDER,
-    Slave => slave : "Set slave id" = SLAVE,
+    UnitId => unit_id : "Set unit id" = UNIT_ID,
     Inspect => inspect : "Inspect register" = INSPECT,
     DeviceId => device_id : "Device identification" = DEVICE_ID,
-    Raw => raw : "Raw function call" = RAW,
+    RawRequest => raw_request : "Raw request" = RAW_REQUEST,
     Graph => graph : "Value graph" = GRAPH,
-    Discovery => discovery : "Switch device" = DISCOVERY,
+    Device => device : "Switch device" = DEVICE,
     Settings => settings : "Settings" = SETTINGS,
     CopyColumn => copy_column : "Copy column" = COPY_COLUMN,
-    Logs => logs : "View write logs" = LOGS,
+    WriteLogs => write_logs : "Write logs" = WRITE_LOGS,
     AppLogs => app_logs : "App logs" = APP_LOGS,
     Stats => stats : "Statistics" = STATS,
     Sweep => sweep : "Sweep" = SWEEP,
-    Clear => clear : "Clear session data" = CLEAR,
-    NextConfig => next_config : "Cycle config" = NEXT_CONFIG,
-    SwitchView => switch_view : "Cycle panel" = SWITCH_VIEW,
+    ClearSession => clear_session : "Clear session data" = CLEAR_SESSION,
+    CycleConfig => cycle_config : "Cycle config" = CYCLE_CONFIG,
+    Panel => panel : "Cycle panel" = PANEL,
     PageUp => page_up : "Page up" = PAGE_UP,
     PageDown => page_down : "Page down" = PAGE_DOWN,
     BatchDecrease => batch_decrease : "Decrease batch" = BATCH_DECREASE,
@@ -217,7 +276,6 @@ pub struct Registers {
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 pub struct RegisterEntry {
-    #[serde(rename = "a")]
     pub address: u16,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
@@ -423,8 +481,8 @@ impl Config {
     pub fn display_device(&self) -> String {
         match &self.device.interface {
             Interface::Mock => "Mock".to_string(),
-            Interface::Wired(p) => format!("Wired {} ({})", p.path, p.baud_rate),
-            Interface::Network(p) => format!("Network: {}:{}", p.ip, p.port),
+            Interface::Serial(p) => format!("Serial {} ({})", p.path, p.baud_rate),
+            Interface::Tcp(p) => format!("TCP: {}:{}", p.ip, p.port),
             Interface::RtuOverTcp(p) => format!("RTU over TCP: {}:{}", p.ip, p.port),
         }
     }
@@ -492,7 +550,7 @@ fn demo_labels() -> BTreeMap<RegisterCell, String> {
                 (0, "model (ascii)"),
                 (8, "fw version (bcd)"),
                 (9, "serial (u32)"),
-                (11, "slave id"),
+                (11, "unit id"),
                 (12, "uptime (u32 s)"),
                 (50, "set: voltage"),
                 (51, "set: current"),
@@ -632,37 +690,30 @@ impl Default for Config {
                 panel: ReadPanel::Main,
             },
             save_position_on_exit: false,
-            interpretations: InterpretorConfig::default(),
-            registers_batch: 10,
-            batch_anchor: BatchAnchor::Middle,
-            read_full_customs: false,
-            custom_batch_by_size: false,
-            panel_type_filter: false,
-            update_interval_ms: Some(1000),
+            columns: InterpretorConfig::default(),
+            batch: BatchConfig::default(),
+            filter_panels_by_type: false,
+            refresh_interval_ms: Some(1000),
             reconnect_on_timeout: true,
             changed_expiry_ms: Some(1000),
-            graph_history_cap: 180,
-            matrix_cols: 0,
+            graph: GraphConfig::default(),
+            matrix: MatrixConfig::default(),
             read_only: false,
             log_writes: false,
-            ignore_dirty: false,
-            show_mock: true,
+            skip_unsaved_warning: false,
+            show_mock_device: true,
             show_clock: true,
             show_frame_time: false,
             show_ram: false,
-            show_status_label: true,
-            show_ascii: true,
+            show_connection_label: true,
+            show_ascii_strip: true,
             show_inactive_tabs: true,
             show_read_window: true,
-            show_matrix_context: true,
-            show_continuation: false,
-            graph_time_axis: true,
-            padding_horizontal: 0,
-            padding_vertical: 0,
-            cycle_types: CycleTypes::default(),
+            show_rule_continuation: false,
+            padding: Padding::default(),
+            cycle_register_types: CycleTypes::default(),
             cycle_panels: CyclePanels::default(),
-            port: None,
-            allow_api_slave_id: false,
+            api: ApiConfig::default(),
             registers: Registers::default(),
             keybinds: Keybinds::default(),
             theme: Theme::default(),
@@ -674,7 +725,7 @@ impl Config {
     pub fn demo() -> Self {
         Self {
             registers: Registers::from_views(&[], &demo_labels(), &demo_rules()),
-            show_continuation: true,
+            show_rule_continuation: true,
             ..Self::default()
         }
     }
@@ -766,8 +817,8 @@ macro_rules! interpretation_columns {
 
 interpretation_columns! {
     Address => address : "address" = true,
-    U8s => u8s : "u8s" = false,
-    I8s => i8s : "i8s" = false,
+    U8 => u8 : "u8" = false,
+    I8 => i8 : "i8" = false,
     U16 => u16 : "u16" = true,
     I16 => i16 : "i16" = true,
     F16 => f16 : "f16" = false,

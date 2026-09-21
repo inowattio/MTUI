@@ -1,6 +1,5 @@
 use super::{
-    AllowSlaveFlag, ApiBindState, ApiDevice, App, BindStateFlag, BoundPort, ReadOnlyFlag,
-    StatusFlag,
+    AllowUnitFlag, ApiBindState, ApiDevice, App, BindStateFlag, BoundPort, ReadOnlyFlag, StatusFlag,
 };
 use crate::modbus::ModbusDevice;
 use std::sync::atomic::Ordering;
@@ -18,8 +17,8 @@ impl App {
         self.api_read_only.clone()
     }
 
-    pub fn api_allow_slave_id_handle(&self) -> AllowSlaveFlag {
-        self.api_allow_slave_id.clone()
+    pub fn api_allow_unit_id_handle(&self) -> AllowUnitFlag {
+        self.api_allow_unit_id.clone()
     }
 
     pub fn api_status_handle(&self) -> StatusFlag {
@@ -39,9 +38,9 @@ impl App {
             .store(self.config.read_only, Ordering::Relaxed);
     }
 
-    pub(super) fn sync_api_allow_slave_id(&self) {
-        self.api_allow_slave_id
-            .store(self.config.allow_api_slave_id, Ordering::Relaxed);
+    pub(super) fn sync_api_allow_unit_id(&self) {
+        self.api_allow_unit_id
+            .store(self.config.api.unit_id_override, Ordering::Relaxed);
     }
 
     pub(super) fn sync_api_status(&self) {
@@ -51,7 +50,7 @@ impl App {
 
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn reconcile_api_server(&mut self) {
-        let desired = self.config.port;
+        let desired = self.config.api.port;
         if desired == self.api_server_port {
             self.api_pending_port = desired;
             return;
@@ -77,7 +76,7 @@ impl App {
                 self.api_bound_port_handle(),
                 self.writes_log_handle(),
                 self.api_read_only_handle(),
-                self.api_allow_slave_id_handle(),
+                self.api_allow_unit_id_handle(),
                 self.api_status_handle(),
                 self.api_bind_handle(),
             )));

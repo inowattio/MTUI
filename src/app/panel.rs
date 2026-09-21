@@ -11,8 +11,8 @@ use std::collections::{BTreeSet, VecDeque};
 const INSPECT_COLUMNS: &[Column] = &[
     Column::U16,
     Column::I16,
-    Column::U8s,
-    Column::I8s,
+    Column::U8,
+    Column::I8,
     Column::Hex,
     Column::Hex32,
     Column::F16,
@@ -61,7 +61,7 @@ impl App {
     }
 
     fn panel_cells(&self) -> Box<dyn Iterator<Item = RegisterCell> + '_> {
-        if !self.config.panel_type_filter {
+        if !self.config.filter_panels_by_type {
             return self.all_panel_cells();
         }
         let current = self.read().register_type;
@@ -72,7 +72,7 @@ impl App {
     }
 
     pub fn panel_hidden_by_type(&self) -> bool {
-        self.config.panel_type_filter
+        self.config.filter_panels_by_type
             && self.panel_cells().next().is_none()
             && self.all_panel_cells().next().is_some()
     }
@@ -119,27 +119,28 @@ impl App {
         let batch = batch.max(1);
         let pos = same.iter().position(|&c| c == cursor).unwrap_or(0);
 
-        let window = if self.read().panel == ReadPanel::Custom && self.config.custom_batch_by_size {
-            let costs: Vec<usize> = same
-                .iter()
-                .map(|cell| {
-                    self.custom_rules
-                        .get(cell)
-                        .map_or(1, |rule| rule.repr.register_count())
-                })
-                .collect();
-            let (start, end) = sized_window(&costs, pos, batch, self.config.batch_anchor);
-            &same[start..end]
-        } else {
-            let batch = batch.min(same.len());
-            let start = match self.config.batch_anchor {
-                BatchAnchor::Start => pos,
-                BatchAnchor::Middle => pos.saturating_sub(batch / 2),
-                BatchAnchor::End => pos.saturating_sub(batch - 1),
-            }
-            .min(same.len() - batch);
-            &same[start..start + batch]
-        };
+        let window =
+            if self.read().panel == ReadPanel::Custom && self.config.batch.custom_by_registers {
+                let costs: Vec<usize> = same
+                    .iter()
+                    .map(|cell| {
+                        self.custom_rules
+                            .get(cell)
+                            .map_or(1, |rule| rule.repr.register_count())
+                    })
+                    .collect();
+                let (start, end) = sized_window(&costs, pos, batch, self.config.batch.anchor);
+                &same[start..end]
+            } else {
+                let batch = batch.min(same.len());
+                let start = match self.config.batch.anchor {
+                    BatchAnchor::Start => pos,
+                    BatchAnchor::Middle => pos.saturating_sub(batch / 2),
+                    BatchAnchor::End => pos.saturating_sub(batch - 1),
+                }
+                .min(same.len() - batch);
+                &same[start..start + batch]
+            };
 
         let mut cells = BTreeSet::new();
         for &(kind, addr) in window {
@@ -378,7 +379,7 @@ impl App {
     }
 
     pub fn matrix_cols(&self) -> u16 {
-        match self.config.matrix_cols {
+        match self.config.matrix.columns {
             0 => fit_matrix_cols(self.viewport_width),
             n => n,
         }
@@ -466,7 +467,7 @@ mod panel_tests {
         assert_eq!(app.panel_group_breaks(), 1);
         assert!(!app.panel_hidden_by_type());
 
-        app.config.panel_type_filter = true;
+        app.config.filter_panels_by_type = true;
         assert_eq!(app.panel_len(), 2);
         assert_eq!(app.panel_group_breaks(), 0);
         assert_eq!(app.panel_cell_at(1), Some((Holding, 3)));
@@ -478,7 +479,7 @@ mod panel_tests {
     #[tokio::test]
     async fn switching_type_clamps_the_cursor_and_reports_hidden_cells() {
         let mut app = pinned_app().await;
-        app.config.panel_type_filter = true;
+        app.config.filter_panels_by_type = true;
         app.read_mut().pinned_index = 1;
         assert_eq!(app.cursor_cell(), (Holding, 3));
 

@@ -38,7 +38,7 @@ pub fn draw(params: &DiscoveryParams, app: &App, frame: &mut Frame, area: Rect, 
     let (footer_w, footer) = if has_side {
         let items = [
             Hint::pair(KeyCode::Up, KeyCode::Down, "Move"),
-            Hint::key(kb.switch_view, "Section"),
+            Hint::key(kb.panel, "Section"),
             Hint::key(KeyCode::Enter, action),
             Hint::key(KeyCode::Esc, "Back"),
         ];
@@ -71,7 +71,7 @@ pub fn draw(params: &DiscoveryParams, app: &App, frame: &mut Frame, area: Rect, 
     let block = theme
         .panel(" Connection")
         .borders(Borders::ALL)
-        .style(Style::default().bg(theme.bg));
+        .style(Style::default().bg(theme.background));
     let inner = block.inner(rect);
     frame.render_widget(block, rect);
 
@@ -100,12 +100,12 @@ pub fn draw(params: &DiscoveryParams, app: &App, frame: &mut Frame, area: Rect, 
 
 fn blocked_reason(p: &DiscoveryParams) -> Option<&'static str> {
     match p.interface {
-        InterfaceKind::Network | InterfaceKind::RtuOverTcp => {
+        InterfaceKind::Tcp | InterfaceKind::RtuOverTcp => {
             p.ip.parse::<Ipv4Addr>().is_err().then_some("invalid IP")
         }
-        InterfaceKind::Wired if p.serial_path().is_none() => Some("no serial port"),
-        InterfaceKind::Wired if p.baud_rate == 0 => Some("baud rate is 0"),
-        InterfaceKind::Wired => None,
+        InterfaceKind::Serial if p.serial_path().is_none() => Some("no serial port"),
+        InterfaceKind::Serial if p.baud_rate == 0 => Some("baud rate is 0"),
+        InterfaceKind::Serial => None,
         InterfaceKind::Mock => None,
     }
 }
@@ -144,7 +144,7 @@ fn common_lines(
 fn common_view(p: &DiscoveryParams, field: DiscoveryField) -> (&'static str, String, bool) {
     match field {
         DiscoveryField::Interface => ("Interface", p.interface.label().to_string(), true),
-        DiscoveryField::SlaveId => ("Slave id", p.slave_id.to_string(), false),
+        DiscoveryField::UnitId => ("Unit id", p.unit_id.to_string(), false),
         DiscoveryField::ConnectTimeout => (
             "Connect timeout (ms)",
             p.connect_timeout_ms.to_string(),
@@ -182,7 +182,7 @@ fn side_lines(
 
     match p.interface {
         InterfaceKind::Mock => {}
-        InterfaceKind::Wired => {
+        InterfaceKind::Serial => {
             lines.push(section_title(theme, "SERIAL PORTS"));
             if p.ports.is_empty() {
                 let hint = if p.ports_pending {
@@ -242,7 +242,7 @@ fn side_lines(
                 ));
             }
         }
-        InterfaceKind::Network | InterfaceKind::RtuOverTcp => {
+        InterfaceKind::Tcp | InterfaceKind::RtuOverTcp => {
             let title = if p.interface == InterfaceKind::RtuOverTcp {
                 "RTU GATEWAY (TCP)"
             } else {

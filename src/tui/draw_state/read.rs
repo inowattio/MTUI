@@ -191,7 +191,7 @@ impl TableCtx<'_> {
         let now = Utc::now();
         let show_window = app.config.show_read_window;
         let read_cells = show_window.then(|| app.panel_read_cells());
-        let type_marker = !app.config.panel_type_filter;
+        let type_marker = !app.config.filter_panels_by_type;
         let mut header = app.interpreter.header().to_string();
         if type_marker {
             header.insert_str(0, "T ");
@@ -319,7 +319,7 @@ impl TableCtx<'_> {
 
     fn matrix_context_line(&self) -> Option<Line<'static>> {
         let (params, app, theme) = (self.params, self.app, self.theme);
-        if !app.config.show_matrix_context {
+        if !app.config.matrix.show_context {
             return None;
         }
         let cell = (params.register_type, params.position);
@@ -359,7 +359,7 @@ pub fn draw(
         .iter()
         .any(|&(kind, address)| kind == info_type && address == info_addr);
 
-    let show_ascii = app.config.show_ascii && !params.graph;
+    let show_ascii_strip = app.config.show_ascii_strip && !params.graph;
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Length(2), Constraint::Min(0)])
@@ -376,7 +376,7 @@ pub fn draw(
     let mut identity: Vec<Vec<Span>> = vec![
         vec![
             Span::styled("batch ", theme.dim_style()),
-            Span::styled(app.config.registers_batch.to_string(), theme.base()),
+            Span::styled(app.config.batch.size.to_string(), theme.base()),
         ],
         vec![
             Span::styled("order ", theme.dim_style()),
@@ -387,15 +387,15 @@ pub fn draw(
         identity.push(vec![Span::styled("RO", style)]);
     }
     identity.push(vec![
-        Span::styled("slave ", theme.dim_style()),
-        Span::styled(app.config.device.slave_id.to_string(), theme.base()),
+        Span::styled("unit ", theme.dim_style()),
+        Span::styled(app.config.device.unit_id.to_string(), theme.base()),
     ]);
     identity.push(vec![
         Span::styled("device: ", theme.dim_style()),
         Span::styled(device.to_string(), theme.base()),
     ]);
 
-    let cycle = &app.config.cycle_types;
+    let cycle = &app.config.cycle_register_types;
     let types: Vec<RegisterType> = if app.config.show_inactive_tabs {
         RegisterType::ALL
             .into_iter()
@@ -443,7 +443,7 @@ pub fn draw(
     let header = app.interpreter.header();
 
     // Tab line + header row; a bottom title (read error, matrix context) takes one more.
-    let matrix_context = params.panel == ReadPanel::Matrix && app.config.show_matrix_context && {
+    let matrix_context = params.panel == ReadPanel::Matrix && app.config.matrix.show_context && {
         let cell = (params.register_type, params.position);
         app.custom_text(cell).is_some() || app.label(cell).is_some()
     };
@@ -482,7 +482,7 @@ pub fn draw(
 
     match params.panel {
         ReadPanel::Main => {
-            let ascii = show_ascii.then(|| {
+            let ascii = show_ascii_strip.then(|| {
                 app.ascii_string_for(
                     (0..visible)
                         .filter_map(|i| params.window_start.checked_add(i))
@@ -506,7 +506,7 @@ pub fn draw(
                 let (message, hint) = match params.panel {
                     _ if hidden.is_some() => (
                         hidden.as_deref().unwrap_or_default(),
-                        Hint::key(kb.toggle, "switch register type"),
+                        Hint::key(kb.register_type, "switch register type"),
                     ),
                     ReadPanel::Labeled => (
                         "no labeled registers yet -",
@@ -514,7 +514,7 @@ pub fn draw(
                     ),
                     ReadPanel::Custom => (
                         "no custom rules yet -",
-                        Hint::key(kb.custom, "add a rule for the selected register"),
+                        Hint::key(kb.custom_rule, "add a rule for the selected register"),
                     ),
                     _ => (
                         "nothing pinned yet -",
@@ -549,7 +549,7 @@ pub fn draw(
                     prev_kind = Some(kind);
                     used <= visible as usize
                 });
-                let ascii = show_ascii.then(|| app.ascii_string_for(cells.iter().copied()));
+                let ascii = show_ascii_strip.then(|| app.ascii_string_for(cells.iter().copied()));
                 frame.render_widget(ctx.list_table(&cells, top, ascii.as_deref()), rows[1]);
             }
         }
@@ -568,7 +568,7 @@ pub fn live_status(app: &App, params: &ReadParams, theme: &Theme) -> Vec<Span<'s
         app.connection,
         ConnectionStatus::Reading | ConnectionStatus::Reconnecting
     );
-    let interval = app.config.update_interval_ms.filter(|_| !app.sweep.active);
+    let interval = app.config.refresh_interval_ms.filter(|_| !app.sweep.active);
     let seconds = |s: f64| format!("{s:>3.1}s");
     let text = match interval {
         _ if params.loading => Some(seconds(params.read_started.elapsed().as_secs_f64())),
@@ -584,7 +584,7 @@ pub fn live_status(app: &App, params: &ReadParams, theme: &Theme) -> Vec<Span<'s
     match text {
         Some(text) => {
             field.push(Span::styled(text, style));
-            if app.config.show_status_label {
+            if app.config.show_connection_label {
                 field.push(Span::styled(format!(" {label}"), theme.dim_style()));
             }
         }
@@ -804,7 +804,7 @@ fn draw_graph(
         (lo - pad, hi + pad)
     };
 
-    let time_axis = app.config.graph_time_axis;
+    let time_axis = app.config.graph.time_axis;
     let now = Utc::now();
     let rel = |t: DateTime<Utc>| -(now.signed_duration_since(t).num_milliseconds() as f64 / 1000.0);
     let max_len = held

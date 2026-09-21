@@ -165,7 +165,7 @@ impl App {
             ),
         };
         self.pending_write = Some(PendingWrite {
-            slave: self.config.device.slave_id,
+            unit: self.config.device.unit_id,
             address: position,
             write_type,
             previous,
@@ -266,7 +266,7 @@ impl App {
     }
 
     pub(super) fn notify_no_cycle_types(&mut self) {
-        let jump = self.config.keybinds.jump;
+        let jump = self.config.keybinds.go_to;
         let settings = self.config.keybinds.settings;
         self.set_read_status(StatusMessage::warn(format!(
             "No other register type to cycle to - jump to one with [{jump}] or change in settings [{settings}]"
@@ -274,7 +274,7 @@ impl App {
     }
 
     fn next_cycle_type(&self, from: RegisterType) -> RegisterType {
-        let cycle = self.config.cycle_types;
+        let cycle = self.config.cycle_register_types;
         let mut next = from;
         for _ in 0..RegisterType::ALL.len() {
             next.toggle();

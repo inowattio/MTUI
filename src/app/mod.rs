@@ -9,7 +9,7 @@ use crate::modbus::{DeviceConfig, DeviceIdAccess, ModbusDevice};
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::state::ScanMethod;
-use crate::state::{ConnectionStatus, CustomParams, SlaveParams, State};
+use crate::state::{ConnectionStatus, CustomParams, State, UnitParams};
 use crate::writes_log::SharedWritesLog;
 use chrono::{DateTime, Utc};
 use std::cell::Cell;
@@ -26,7 +26,7 @@ use tokio_modbus::ExceptionCode;
 pub type ApiDevice = Arc<Mutex<Option<ModbusDevice>>>;
 pub type BoundPort = Arc<AtomicU16>;
 pub type ReadOnlyFlag = Arc<AtomicBool>;
-pub type AllowSlaveFlag = Arc<AtomicBool>;
+pub type AllowUnitFlag = Arc<AtomicBool>;
 pub type StatusFlag = Arc<AtomicU8>;
 pub type BindStateFlag = Arc<AtomicU8>;
 
@@ -83,21 +83,21 @@ enum BackgroundTask {
     Connect(TaskHandle<ConnectTaskResult>),
     DeviceId(TaskHandle<DeviceIdTaskResult>),
     Raw(TaskHandle<RawTaskResult>),
-    SlaveScan(TaskHandle<SlaveScanTaskResult>),
+    UnitScan(TaskHandle<UnitScanTaskResult>),
     LoadConfig(TaskHandle<LoadConfigTaskResult>),
 }
 
 #[derive(Debug)]
-enum SlaveProbeOutcome {
+enum UnitProbeOutcome {
     Response(Vec<u16>),
     Exception(String),
     Silent,
 }
 
 #[derive(Debug)]
-struct SlaveScanTaskResult {
-    slave_id: u8,
-    outcome: SlaveProbeOutcome,
+struct UnitScanTaskResult {
+    unit_id: u8,
+    outcome: UnitProbeOutcome,
 }
 
 #[derive(Debug)]
@@ -270,7 +270,7 @@ struct WriteOutcome {
 
 #[derive(Debug)]
 struct PendingWrite {
-    slave: u8,
+    unit: u8,
     address: u16,
     write_type: WriteType,
     previous: Option<u64>,
@@ -426,7 +426,7 @@ pub struct App {
     pub search_rows: Cell<u16>,
     background_task: Option<BackgroundTask>,
     network_scan: Option<ScanProgress>,
-    slave_scan: Option<(String, SlaveParams)>,
+    unit_scan: Option<(String, UnitParams)>,
     #[cfg(not(target_arch = "wasm32"))]
     network_scan_task: Option<TaskHandle<Result<Vec<String>, String>>>,
     #[cfg(not(target_arch = "wasm32"))]
@@ -442,7 +442,7 @@ pub struct App {
     api_device: ApiDevice,
     api_bound_port: BoundPort,
     api_read_only: ReadOnlyFlag,
-    api_allow_slave_id: AllowSlaveFlag,
+    api_allow_unit_id: AllowUnitFlag,
     api_status: StatusFlag,
     api_bind: BindStateFlag,
     writes_log: SharedWritesLog,
@@ -747,7 +747,7 @@ mod logs;
 mod panel;
 mod search;
 mod settings;
-mod slave;
-mod slave_scan;
 mod sweep;
+mod unit;
+mod unit_scan;
 mod write;

@@ -217,7 +217,10 @@ mod tests {
             (buf[(0, 1)].fg, buf[(0, 1)].bg),
             (Color::Reset, Color::Blue)
         );
-        assert_eq!((buf[(1, 1)].fg, buf[(1, 1)].bg), (Color::Red, Color::Blue));
+        assert_eq!(
+            (buf[(1, 1)].fg, buf[(1, 1)].bg),
+            (Color::Red, Color::Blue)
+        );
         assert_eq!(
             (buf[(3, 1)].fg, buf[(3, 1)].bg),
             (Color::Reset, Color::Blue)

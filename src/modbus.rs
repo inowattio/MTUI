@@ -16,17 +16,17 @@ use tokio::sync::Mutex;
 use tokio_modbus::client::{Client, Context, Reader, Writer};
 #[cfg(not(target_arch = "wasm32"))]
 use tokio_modbus::client::{rtu, tcp};
-use tokio_modbus::prelude::{ReadCode, ReadDeviceIdentificationResponse, SlaveContext};
-use tokio_modbus::slave::{Slave, SlaveId};
+use tokio_modbus::prelude::{ReadCode, ReadDeviceIdentificationResponse};
+use tokio_modbus::slave::{Slave as Unit, SlaveContext, SlaveId as UnitId};
 use tokio_modbus::{Request, Response};
 #[cfg(not(target_arch = "wasm32"))]
 use tokio_serial::SerialStream;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Interface {
-    Wired(InterfaceWiredParams),
-    Network(InterfaceNetworkParams),
-    RtuOverTcp(InterfaceNetworkParams),
+    Serial(InterfaceSerialParams),
+    Tcp(InterfaceTcpParams),
+    RtuOverTcp(InterfaceTcpParams),
     Mock,
 }
 
@@ -98,15 +98,15 @@ impl Interface {
     pub fn endpoint(&self) -> String {
         match self {
             Interface::Mock => "mock".to_string(),
-            Interface::Wired(p) => format!("wired:{}", p.path),
-            Interface::Network(p) => format!("tcp:{}:{}", p.ip, p.port),
+            Interface::Serial(p) => format!("wired:{}", p.path),
+            Interface::Tcp(p) => format!("tcp:{}:{}", p.ip, p.port),
             Interface::RtuOverTcp(p) => format!("rtu-tcp:{}:{}", p.ip, p.port),
         }
     }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct InterfaceWiredParams {
+pub struct InterfaceSerialParams {
     pub path: String,
     pub baud_rate: u32,
     pub data_bits: DataBits,
@@ -115,7 +115,7 @@ pub struct InterfaceWiredParams {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct InterfaceNetworkParams {
+pub struct InterfaceTcpParams {
     pub ip: String,
     pub port: u16,
 }
@@ -185,7 +185,7 @@ impl WordOrder {
 mod tests {
     use super::WordOrder;
     #[cfg(not(target_arch = "wasm32"))]
-    use super::{DeviceConfig, Interface, InterfaceNetworkParams, ModbusDevice, RegisterType};
+    use super::{DeviceConfig, Interface, InterfaceTcpParams, ModbusDevice, RegisterType};
     #[cfg(not(target_arch = "wasm32"))]
     use std::sync::Arc;
     #[cfg(not(target_arch = "wasm32"))]
@@ -289,14 +289,14 @@ mod tests {
         });
 
         let config = DeviceConfig {
-            interface: Interface::Network(InterfaceNetworkParams {
+            interface: Interface::Tcp(InterfaceTcpParams {
                 ip: "127.0.0.1".to_string(),
                 port: addr.port(),
             }),
-            slave_id: 1,
-            timeout_connect_ms: 500,
-            timeout_command_ms: 100,
-            time_between_commands_ms: 0,
+            unit_id: 1,
+            connect_timeout_ms: 500,
+            request_timeout_ms: 100,
+            request_gap_ms: 0,
             word_order: WordOrder::default(),
         };
 
@@ -356,14 +356,14 @@ mod tests {
             }
         });
         let config = DeviceConfig {
-            interface: Interface::Network(InterfaceNetworkParams {
+            interface: Interface::Tcp(InterfaceTcpParams {
                 ip: "127.0.0.1".to_string(),
                 port: addr.port(),
             }),
-            slave_id: 1,
-            timeout_connect_ms: 500,
-            timeout_command_ms: 100,
-            time_between_commands_ms: 0,
+            unit_id: 1,
+            connect_timeout_ms: 500,
+            request_timeout_ms: 100,
+            request_gap_ms: 0,
             word_order: WordOrder::default(),
         };
         (config, connections)
@@ -421,13 +421,13 @@ mod tests {
     async fn rtu_over_tcp_sends_rtu_frames_down_the_socket() {
         let port = rtu_gateway().await;
         let config = DeviceConfig {
-            interface: Interface::RtuOverTcp(InterfaceNetworkParams {
+            interface: Interface::RtuOverTcp(InterfaceTcpParams {
                 ip: "127.0.0.1".to_string(),
                 port,
             }),
-            slave_id: 7,
-            timeout_connect_ms: 500,
-            timeout_command_ms: 500,
+            unit_id: 7,
+            connect_timeout_ms: 500,
+            request_timeout_ms: 500,
             ..DeviceConfig::default()
         };
         let device = ModbusDevice::new(&config)
@@ -443,7 +443,7 @@ mod tests {
         let other = device
             .read_typed(Some(9), RegisterType::Holding, 5, 1)
             .await
-            .expect("the slave override travels in the RTU address byte");
+            .expect("the unit override travels in the RTU address byte");
         assert_eq!(other, vec![5]);
     }
 
@@ -534,10 +534,10 @@ mod tests {
 #[serde(default)]
 pub struct DeviceConfig {
     pub interface: Interface,
-    pub slave_id: SlaveId,
-    pub timeout_connect_ms: u64,
-    pub timeout_command_ms: u64,
-    pub time_between_commands_ms: u64,
+    pub unit_id: UnitId,
+    pub connect_timeout_ms: u64,
+    pub request_timeout_ms: u64,
+    pub request_gap_ms: u64,
     pub word_order: WordOrder,
 }
 
@@ -545,10 +545,10 @@ impl Default for DeviceConfig {
     fn default() -> Self {
         Self {
             interface: Interface::Mock,
-            slave_id: 1,
-            timeout_connect_ms: 1000,
-            timeout_command_ms: 2000,
-            time_between_commands_ms: 0,
+            unit_id: 1,
+            connect_timeout_ms: 1000,
+            request_timeout_ms: 2000,
+            request_gap_ms: 0,
             word_order: WordOrder::default(),
         }
     }
@@ -566,7 +566,7 @@ where
 }
 
 macro_rules! timeout_as {
-    ($this:ident, $slave:expr, $action:ident, ($($arg:expr),* $(,)?), $desc:expr) => {
+    ($this:ident, $unit:expr, $action:ident, ($($arg:expr),* $(,)?), $desc:expr) => {
         {
             let mut hold = $this.context.lock().await;
 
@@ -579,24 +579,24 @@ macro_rules! timeout_as {
                 log::info!("Reconnecting after timeout");
                 let _ = hold.disconnect().await;
                 let mut fresh = ModbusDevice::connect_context(&$this.config).await?;
-                fresh.set_slave(Slave($this.default_slave.load(Ordering::Relaxed)));
+                fresh.set_slave(Unit($this.default_unit.load(Ordering::Relaxed)));
                 *hold = fresh;
                 $this.poisoned.store(false, Ordering::Relaxed);
             }
 
-            let timeout_command = Duration::from_millis($this.config.timeout_command_ms);
-            let time_between = Duration::from_millis($this.config.time_between_commands_ms);
-            let override_slave = $slave;
-            if let Some(id) = override_slave {
-                hold.set_slave(Slave(id));
+            let timeout_command = Duration::from_millis($this.config.request_timeout_ms);
+            let time_between = Duration::from_millis($this.config.request_gap_ms);
+            let override_unit = $unit;
+            if let Some(id) = override_unit {
+                hold.set_slave(Unit(id));
             }
             let outcome =
                 timeout(hold.$action($($arg),*), timeout_command, time_between).await;
-            if override_slave.is_some() {
-                hold.set_slave(Slave($this.default_slave.load(Ordering::Relaxed)));
+            if override_unit.is_some() {
+                hold.set_slave(Unit($this.default_unit.load(Ordering::Relaxed)));
             }
-            let desc = match override_slave {
-                Some(id) => format!("{} (slave {id})", $desc),
+            let desc = match override_unit {
+                Some(id) => format!("{} (unit {id})", $desc),
                 None => $desc,
             };
             match outcome {
@@ -627,7 +627,7 @@ macro_rules! timeout_as {
 
 macro_rules! timeout {
     ($this:ident, $action:ident, ($($arg:expr),* $(,)?), $desc:expr) => {
-        timeout_as!($this, None::<SlaveId>, $action, ($($arg),*), $desc)
+        timeout_as!($this, None::<UnitId>, $action, ($($arg),*), $desc)
     };
 }
 
@@ -667,7 +667,7 @@ impl DeviceIdAccess {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn socket_addr(interface: &InterfaceNetworkParams) -> Result<SocketAddr> {
+fn socket_addr(interface: &InterfaceTcpParams) -> Result<SocketAddr> {
     Ok(SocketAddr::V4(SocketAddrV4::new(
         Ipv4Addr::from_str(&interface.ip)?,
         interface.port,
@@ -678,7 +678,7 @@ fn socket_addr(interface: &InterfaceNetworkParams) -> Result<SocketAddr> {
 pub struct ModbusDevice {
     context: Arc<Mutex<Context>>,
     config: DeviceConfig,
-    default_slave: Arc<AtomicU8>,
+    default_unit: Arc<AtomicU8>,
     poisoned: Arc<AtomicBool>,
     closed: Arc<AtomicBool>,
 }
@@ -692,11 +692,11 @@ impl Debug for ModbusDevice {
 impl ModbusDevice {
     pub async fn new(config: &DeviceConfig) -> Result<Self> {
         let mut context = Self::connect_context(config).await?;
-        context.set_slave(Slave(config.slave_id));
+        context.set_slave(Unit(config.unit_id));
 
         Ok(Self {
             context: Arc::new(Mutex::new(context)),
-            default_slave: Arc::new(AtomicU8::new(config.slave_id)),
+            default_unit: Arc::new(AtomicU8::new(config.unit_id)),
             poisoned: Arc::new(AtomicBool::new(false)),
             closed: Arc::new(AtomicBool::new(false)),
             config: config.clone(),
@@ -723,13 +723,13 @@ impl ModbusDevice {
     }
 
     async fn connect_context(config: &DeviceConfig) -> Result<Context> {
-        let timeout_connect = Duration::from_millis(config.timeout_connect_ms);
+        let timeout_connect = Duration::from_millis(config.connect_timeout_ms);
         #[cfg(target_arch = "wasm32")]
         let _ = timeout_connect;
 
         #[cfg(not(target_arch = "wasm32"))]
         let context = match &config.interface {
-            Interface::Wired(interface) => {
+            Interface::Serial(interface) => {
                 let builder = tokio_serial::new(&interface.path, interface.baud_rate)
                     .timeout(timeout_connect)
                     .data_bits(interface.data_bits.into())
@@ -737,11 +737,10 @@ impl ModbusDevice {
                     .stop_bits(interface.stop_bits.into());
 
                 let port = SerialStream::open(&builder)?;
-                rtu::attach_slave(port, Slave(config.slave_id))
+                rtu::attach_slave(port, Unit(config.unit_id))
             }
-            Interface::Network(interface) => {
-                let connection =
-                    tcp::connect_slave(socket_addr(interface)?, Slave(config.slave_id));
+            Interface::Tcp(interface) => {
+                let connection = tcp::connect_slave(socket_addr(interface)?, Unit(config.unit_id));
                 timeout(connection, timeout_connect, Duration::default()).await??
             }
             Interface::RtuOverTcp(interface) => {
@@ -749,7 +748,7 @@ impl ModbusDevice {
                 let stream = timeout(connect, timeout_connect, Duration::default()).await??;
 
                 let _ = stream.set_nodelay(true);
-                rtu::attach_slave(stream, Slave(config.slave_id))
+                rtu::attach_slave(stream, Unit(config.unit_id))
             }
             Interface::Mock => MockContext::make(),
         };
@@ -760,13 +759,13 @@ impl ModbusDevice {
         Ok(context)
     }
 
-    pub fn slave(&self) -> SlaveId {
-        self.default_slave.load(Ordering::Relaxed)
+    pub fn unit(&self) -> UnitId {
+        self.default_unit.load(Ordering::Relaxed)
     }
 
-    pub async fn set_slave(&self, slave_id: SlaveId) {
-        self.default_slave.store(slave_id, Ordering::Relaxed);
-        self.context.lock().await.set_slave(Slave(slave_id));
+    pub async fn set_unit(&self, unit_id: UnitId) {
+        self.default_unit.store(unit_id, Ordering::Relaxed);
+        self.context.lock().await.set_slave(Unit(unit_id));
     }
 
     pub fn poison(&self) {
@@ -779,7 +778,7 @@ impl ModbusDevice {
 
     pub async fn read_typed(
         &self,
-        slave: Option<SlaveId>,
+        unit: Option<UnitId>,
         register_type: RegisterType,
         address: u16,
         count: u16,
@@ -788,16 +787,16 @@ impl ModbusDevice {
         let desc = format!("Read {register_type:?} @ {address} with {count} value(s)");
         match register_type {
             RegisterType::Holding => {
-                timeout_as!(self, slave, read_holding_registers, (address, count), desc)
+                timeout_as!(self, unit, read_holding_registers, (address, count), desc)
             }
             RegisterType::Input => {
-                timeout_as!(self, slave, read_input_registers, (address, count), desc)
+                timeout_as!(self, unit, read_input_registers, (address, count), desc)
             }
             RegisterType::Coil => {
-                timeout_as!(self, slave, read_coils, (address, count), desc).map(bits_to_words)
+                timeout_as!(self, unit, read_coils, (address, count), desc).map(bits_to_words)
             }
             RegisterType::Discrete => {
-                timeout_as!(self, slave, read_discrete_inputs, (address, count), desc)
+                timeout_as!(self, unit, read_discrete_inputs, (address, count), desc)
                     .map(bits_to_words)
             }
         }
@@ -805,7 +804,7 @@ impl ModbusDevice {
 
     pub async fn write_typed(
         &self,
-        slave: Option<SlaveId>,
+        unit: Option<UnitId>,
         register_type: RegisterType,
         address: u16,
         values: &[u16],
@@ -814,11 +813,11 @@ impl ModbusDevice {
         match register_type {
             RegisterType::Coil => {
                 let coils: Vec<bool> = values.iter().map(|&v| v != 0).collect();
-                timeout_as!(self, slave, write_multiple_coils, (address, &coils), desc)
+                timeout_as!(self, unit, write_multiple_coils, (address, &coils), desc)
             }
             _ => timeout_as!(
                 self,
-                slave,
+                unit,
                 write_multiple_registers,
                 (address, values),
                 desc

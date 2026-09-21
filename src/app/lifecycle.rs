@@ -1,7 +1,7 @@
 use super::{
     App, BackgroundTask, CommStats, ConfigError, ConnectTaskResult, DeviceIdTaskResult,
     LoadConfigTaskResult, RawTaskResult, ReadEntry, ReadError, ReadFailure, ReconnectState,
-    RefreshTaskResult, SlaveScanTaskResult, SweepState, WriteOutcome, default_config_path,
+    RefreshTaskResult, SweepState, UnitScanTaskResult, WriteOutcome, default_config_path,
     load_config, reconnect_backoff,
 };
 use crate::compat::{self, Instant, TaskPoll};
@@ -69,7 +69,7 @@ impl App {
             search_rows: Cell::new(1),
             background_task: None,
             network_scan: None,
-            slave_scan: None,
+            unit_scan: None,
             #[cfg(not(target_arch = "wasm32"))]
             network_scan_task: None,
             #[cfg(not(target_arch = "wasm32"))]
@@ -83,7 +83,7 @@ impl App {
             api_device: Arc::new(Mutex::new(None)),
             api_bound_port: Arc::new(AtomicU16::new(0)),
             api_read_only: Arc::new(AtomicBool::new(false)),
-            api_allow_slave_id: Arc::new(AtomicBool::new(false)),
+            api_allow_unit_id: Arc::new(AtomicBool::new(false)),
             api_status: Arc::new(AtomicU8::new(0)),
             api_bind: Arc::new(AtomicU8::new(0)),
             writes_log: Arc::new(Mutex::new(WritesLogState::default())),
@@ -99,17 +99,17 @@ impl App {
 
         app.sync_api_device();
         app.sync_api_read_only();
-        app.sync_api_allow_slave_id();
+        app.sync_api_allow_unit_id();
         app.refresh_writes_log_state();
 
         app.sync_auto_widths();
         app.mark_config_saved();
-        app.visible_rows.set(app.config.registers_batch.max(1));
+        app.visible_rows.set(app.config.batch.size.max(1));
 
         if app.device.is_some() {
             app.state = State::Read(app.startup_read_params());
             log::info!("Started | {}", app.config.display_device());
-            if app.config.cycle_types.enabled_count() == 0 {
+            if app.config.cycle_register_types.enabled_count() == 0 {
                 app.notify_no_cycle_types();
             }
         } else {
@@ -117,7 +117,7 @@ impl App {
             read.popup = Some(Popup::Discovery(Self::discovery_params(&app.config)));
             app.state = State::Read(read);
             app.request_ports();
-            log::warn!("Started | no device, opened Discovery");
+            log::warn!("Started | no device, opened the Device popup");
         }
 
         #[cfg(not(target_arch = "wasm32"))]
@@ -128,7 +128,7 @@ impl App {
 
     fn derive_config_views(config: &Config) -> (Interpretor, RegisterViews) {
         (
-            Interpretor::new(config.interpretations.clone(), config.device.word_order),
+            Interpretor::new(config.columns.clone(), config.device.word_order),
             config.registers.clone().into_views(),
         )
     }
@@ -144,7 +144,7 @@ impl App {
 
         self.sync_api_device();
         self.sync_api_read_only();
-        self.sync_api_allow_slave_id();
+        self.sync_api_allow_unit_id();
         self.refresh_writes_log_state();
 
         self.clear_read_accumulation();
@@ -208,9 +208,9 @@ impl App {
     }
 
     pub fn close_popup(&mut self) {
-        if let Some(Popup::Slave(params)) = self.read_mut().popup.take() {
+        if let Some(Popup::Unit(params)) = self.read_mut().popup.take() {
             let endpoint = self.config.device.interface.endpoint();
-            self.slave_scan = Some((endpoint, params.suspended()));
+            self.unit_scan = Some((endpoint, params.suspended()));
         }
     }
 
@@ -223,7 +223,7 @@ impl App {
             self.read_mut().graph = false;
             return;
         }
-        if self.dirty && !self.config.ignore_dirty {
+        if self.dirty && !self.config.skip_unsaved_warning {
             self.read_mut().popup = Some(Popup::Quit);
         } else {
             self.quit();
@@ -235,7 +235,7 @@ impl App {
             &self.state,
             State::Read(p) if p.popup == Some(Popup::Quit)
         );
-        if prompting || !self.dirty || self.config.ignore_dirty {
+        if prompting || !self.dirty || self.config.skip_unsaved_warning {
             self.quit();
             return;
         }
@@ -281,7 +281,7 @@ impl App {
             && matches!(
                 &self.state,
                 State::Read(p)
-                    if self.config.update_interval_ms
+                    if self.config.refresh_interval_ms
                         .is_some_and(|ms| p.refresh_timer.elapsed().as_millis() >= ms as u128)
             );
 
@@ -355,8 +355,8 @@ impl App {
     }
 
     pub fn adjust_batch(&mut self, increase: bool) {
-        let batch = self.config.registers_batch;
-        self.config.registers_batch = if increase {
+        let batch = self.config.batch.size;
+        self.config.batch.size = if increase {
             batch.saturating_add(1)
         } else {
             batch.saturating_sub(1).max(1)
@@ -442,15 +442,15 @@ impl App {
             1
         } else if sweeping {
             let remaining = self.sweep.to.saturating_sub(position).saturating_add(1);
-            self.config.registers_batch.clamp(1, remaining)
+            self.config.batch.size.clamp(1, remaining)
         } else {
-            self.config.registers_batch.max(1)
+            self.config.batch.size.max(1)
         };
         let max_read_start = u16::MAX - (amount - 1);
         let start = if sweeping {
             position
         } else {
-            match self.config.batch_anchor {
+            match self.config.batch.anchor {
                 BatchAnchor::Start => position,
                 BatchAnchor::Middle => position.saturating_sub(amount / 2),
                 BatchAnchor::End => position.saturating_sub(amount - 1),
@@ -458,7 +458,7 @@ impl App {
         }
         .min(max_read_start);
         let main = matches!(self.read().panel, ReadPanel::Main | ReadPanel::Matrix);
-        if sweeping || !main || !self.config.read_full_customs {
+        if sweeping || !main || !self.config.batch.read_full_customs {
             return (start, amount);
         }
         let register_type = self.read().register_type;
@@ -468,7 +468,7 @@ impl App {
     }
 
     pub fn main_extra_cells(&self) -> Vec<RegisterCell> {
-        if self.sweep.active || !self.config.read_full_customs {
+        if self.sweep.active || !self.config.batch.read_full_customs {
             return Vec::new();
         }
         let (start, amount) = self.read_window();
@@ -518,7 +518,7 @@ impl App {
             regs
         };
 
-        let full_spans = if self.config.read_full_customs {
+        let full_spans = if self.config.batch.read_full_customs {
             custom_full_spans(&self.custom_rules)
         } else {
             BTreeMap::new()
@@ -588,7 +588,7 @@ impl App {
             .format("%H:%M:%S.%3f")
             .to_string()
             .into();
-        let history_cap = (self.config.graph_history_cap as usize).max(1);
+        let history_cap = (self.config.graph.history as usize).max(1);
 
         for data in [result.main_data.as_ref(), result.pinned_data.as_ref()]
             .into_iter()
@@ -694,7 +694,7 @@ impl App {
             Connect(Option<ConnectTaskResult>),
             DeviceId(Option<DeviceIdTaskResult>),
             Raw(Option<RawTaskResult>),
-            SlaveScan(Option<SlaveScanTaskResult>),
+            UnitScan(Option<UnitScanTaskResult>),
             LoadConfig(Option<LoadConfigTaskResult>),
         }
 
@@ -716,7 +716,7 @@ impl App {
             Some(BackgroundTask::Connect(handle)) => poll_task!(handle, Done::Connect),
             Some(BackgroundTask::DeviceId(handle)) => poll_task!(handle, Done::DeviceId),
             Some(BackgroundTask::Raw(handle)) => poll_task!(handle, Done::Raw),
-            Some(BackgroundTask::SlaveScan(handle)) => poll_task!(handle, Done::SlaveScan),
+            Some(BackgroundTask::UnitScan(handle)) => poll_task!(handle, Done::UnitScan),
             Some(BackgroundTask::LoadConfig(handle)) => poll_task!(handle, Done::LoadConfig),
         };
         self.background_task = None;
@@ -726,7 +726,7 @@ impl App {
             Done::Connect(result) => self.apply_connect_result(result),
             Done::DeviceId(result) => self.apply_device_id_result(result),
             Done::Raw(result) => self.apply_raw_result(result),
-            Done::SlaveScan(result) => self.apply_slave_scan_result(result),
+            Done::UnitScan(result) => self.apply_unit_scan_result(result),
             Done::LoadConfig(result) => self.apply_load_config_result(result),
             Done::Refresh(Some(result)) => self.apply_refresh_result(result),
             Done::Refresh(None) => {
@@ -887,8 +887,8 @@ mod tests {
     use crate::custom::{CustomRepr, CustomRule};
     #[cfg(not(target_arch = "wasm32"))]
     use crate::modbus::{
-        DataBits, DeviceConfig, Interface, InterfaceNetworkParams, InterfaceWiredParams,
-        ModbusDevice, Parity, StopBits,
+        DataBits, DeviceConfig, Interface, InterfaceSerialParams, InterfaceTcpParams, ModbusDevice,
+        Parity, StopBits,
     };
     use crate::register::{RegisterCell, RegisterType};
     #[cfg(not(target_arch = "wasm32"))]
@@ -992,15 +992,15 @@ mod tests {
     #[tokio::test]
     async fn the_main_read_covers_the_custom_under_the_cursor_when_enabled() {
         let mut app = App::boot(Config::default(), String::new()).await;
-        app.config.registers_batch = 1;
-        app.config.batch_anchor = crate::config::BatchAnchor::Start;
+        app.config.batch.size = 1;
+        app.config.batch.anchor = crate::config::BatchAnchor::Start;
         app.read_mut().register_type = H;
         app.custom_rules = rules(&[(100, CustomRepr::F32, &[]), (520, CustomRepr::F64, &[524])]);
 
         app.read_mut().position = 101;
         assert_eq!(app.read_window(), (101, 1), "off by default");
 
-        app.config.read_full_customs = true;
+        app.config.batch.read_full_customs = true;
         assert_eq!(
             app.read_window(),
             (100, 2),
@@ -1156,7 +1156,7 @@ mod tests {
 
     #[cfg(not(target_arch = "wasm32"))]
     fn missing_serial_port() -> Interface {
-        Interface::Wired(InterfaceWiredParams {
+        Interface::Serial(InterfaceSerialParams {
             path: "/nonexistent/mtui-test-port".to_string(),
             baud_rate: 9600,
             data_bits: DataBits::Eight,
@@ -1228,8 +1228,8 @@ mod tests {
     async fn app_with_silent_device() -> App {
         let mut app = App::boot(Config::default(), String::new()).await;
         let silent = ModbusDevice::new(&DeviceConfig {
-            slave_id: 200,
-            timeout_command_ms: 50,
+            unit_id: 200,
+            request_timeout_ms: 50,
             ..DeviceConfig::default()
         })
         .await
@@ -1281,12 +1281,12 @@ mod tests {
             }
         });
         let config = DeviceConfig {
-            interface: Interface::Network(InterfaceNetworkParams {
+            interface: Interface::Tcp(InterfaceTcpParams {
                 ip: "127.0.0.1".to_string(),
                 port,
             }),
-            timeout_connect_ms: 500,
-            timeout_command_ms: 500,
+            connect_timeout_ms: 500,
+            request_timeout_ms: 500,
             ..DeviceConfig::default()
         };
         let mut app = App::boot(Config::default(), String::new()).await;

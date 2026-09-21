@@ -108,7 +108,7 @@ impl App {
     fn effective_config(&self) -> Config {
         let mut config = self.config.clone();
         config.registers = self.registers();
-        config.interpretations = self.interpreter.config();
+        config.columns = self.interpreter.config();
         config
     }
 
@@ -298,7 +298,7 @@ impl App {
             return;
         };
 
-        if self.dirty && !self.config.ignore_dirty {
+        if self.dirty && !self.config.skip_unsaved_warning {
             self.read_mut().popup = Some(Popup::CycleConfig);
             return;
         }

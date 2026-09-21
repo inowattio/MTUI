@@ -3,8 +3,8 @@ use crate::compat::Instant;
 use crate::config::Column;
 use crate::custom::{BitEntry, CustomOp, CustomRepr, EnumEntry};
 use crate::modbus::{
-    DataBits, DeviceConfig, DeviceIdAccess, Interface, InterfaceNetworkParams,
-    InterfaceWiredParams, Parity, StopBits, WordOrder,
+    DataBits, DeviceConfig, DeviceIdAccess, Interface, InterfaceSerialParams, InterfaceTcpParams,
+    Parity, StopBits, WordOrder,
 };
 use crate::num_ops::wrap_index;
 use crate::register::{RegisterCell, RegisterType};
@@ -75,8 +75,8 @@ field_enum! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub enum InterfaceKind {
         Mock,
-        Wired,
-        Network,
+        Serial,
+        Tcp,
         RtuOverTcp,
     }
 }
@@ -103,21 +103,21 @@ impl InterfaceKind {
     pub fn label(self) -> &'static str {
         match self {
             InterfaceKind::Mock => "Mock",
-            InterfaceKind::Wired => "Wired (serial)",
-            InterfaceKind::Network => "Network (TCP)",
+            InterfaceKind::Serial => "Serial",
+            InterfaceKind::Tcp => "TCP",
             InterfaceKind::RtuOverTcp => "RTU over TCP",
         }
     }
 
     pub fn uses_tcp(self) -> bool {
-        matches!(self, InterfaceKind::Network | InterfaceKind::RtuOverTcp)
+        matches!(self, InterfaceKind::Tcp | InterfaceKind::RtuOverTcp)
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DiscoveryField {
     Interface,
-    SlaveId,
+    UnitId,
     ConnectTimeout,
     CommandTimeout,
     BetweenCommands,
@@ -160,7 +160,7 @@ pub struct DiscoveryParams {
     pub ip: String,
     pub net_port: u16,
     pub scan_method: ScanMethod,
-    pub slave_id: u8,
+    pub unit_id: u8,
     pub connect_timeout_ms: u64,
     pub command_timeout_ms: u64,
     pub between_commands_ms: u64,
@@ -187,7 +187,7 @@ impl Default for DiscoveryParams {
             ip: "127.0.0.1".to_string(),
             net_port: 502,
             scan_method: ScanMethod::default(),
-            slave_id: 1,
+            unit_id: 1,
             connect_timeout_ms: 1000,
             command_timeout_ms: 2000,
             between_commands_ms: 3,
@@ -201,7 +201,7 @@ impl Default for DiscoveryParams {
 impl DiscoveryParams {
     pub const COMMON: [DiscoveryField; 7] = [
         DiscoveryField::Interface,
-        DiscoveryField::SlaveId,
+        DiscoveryField::UnitId,
         DiscoveryField::ConnectTimeout,
         DiscoveryField::CommandTimeout,
         DiscoveryField::BetweenCommands,
@@ -213,11 +213,11 @@ impl DiscoveryParams {
         use DiscoveryField::*;
         match self.interface {
             InterfaceKind::Mock => Vec::new(),
-            InterfaceKind::Wired => (0..self.ports.len())
+            InterfaceKind::Serial => (0..self.ports.len())
                 .map(Port)
                 .chain([CustomPath, Baud, DataBits, Parity, StopBits])
                 .collect(),
-            InterfaceKind::Network | InterfaceKind::RtuOverTcp => {
+            InterfaceKind::Tcp | InterfaceKind::RtuOverTcp => {
                 [Ip, NetPort, ScanMethod, ScanNetwork]
                     .into_iter()
                     .chain((0..self.found.len()).map(Found))
@@ -268,8 +268,8 @@ impl DiscoveryParams {
         self.ports.get(self.port_index as usize).cloned()
     }
 
-    fn network_params(&self) -> InterfaceNetworkParams {
-        InterfaceNetworkParams {
+    fn network_params(&self) -> InterfaceTcpParams {
+        InterfaceTcpParams {
             ip: self.ip.clone(),
             port: self.net_port,
         }
@@ -278,22 +278,22 @@ impl DiscoveryParams {
     pub fn device_config(&self) -> DeviceConfig {
         let interface = match self.interface {
             InterfaceKind::Mock => Interface::Mock,
-            InterfaceKind::Wired => Interface::Wired(InterfaceWiredParams {
+            InterfaceKind::Serial => Interface::Serial(InterfaceSerialParams {
                 path: self.serial_path().unwrap_or_default(),
                 baud_rate: self.baud_rate,
                 data_bits: self.data_bits,
                 parity: self.parity,
                 stop_bits: self.stop_bits,
             }),
-            InterfaceKind::Network => Interface::Network(self.network_params()),
+            InterfaceKind::Tcp => Interface::Tcp(self.network_params()),
             InterfaceKind::RtuOverTcp => Interface::RtuOverTcp(self.network_params()),
         };
         DeviceConfig {
             interface,
-            slave_id: self.slave_id,
-            timeout_connect_ms: self.connect_timeout_ms,
-            timeout_command_ms: self.command_timeout_ms,
-            time_between_commands_ms: self.between_commands_ms,
+            unit_id: self.unit_id,
+            connect_timeout_ms: self.connect_timeout_ms,
+            request_timeout_ms: self.command_timeout_ms,
+            request_gap_ms: self.between_commands_ms,
             word_order: self.word_order,
         }
     }
@@ -343,7 +343,7 @@ impl DiscoveryParams {
     pub fn set_ports(&mut self, ports: Vec<String>) {
         let before = self.ports.len() as u16;
         let after = ports.len() as u16;
-        if self.interface == InterfaceKind::Wired && self.side_selected >= before {
+        if self.interface == InterfaceKind::Serial && self.side_selected >= before {
             self.side_selected = self.side_selected - before + after;
         }
         if let Some(i) = ports.iter().position(|p| p == self.custom_path.trim()) {
@@ -531,7 +531,7 @@ impl SweepConfigParams {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SlaveField {
+pub enum UnitField {
     Id,
     From,
     To,
@@ -542,18 +542,18 @@ pub enum SlaveField {
     Hit(usize),
 }
 
-impl SlaveField {
+impl UnitField {
     pub fn is_toggle(self) -> bool {
         matches!(
             self,
-            SlaveField::Mode | SlaveField::Repr | SlaveField::Exceptions
+            UnitField::Mode | UnitField::Repr | UnitField::Exceptions
         )
     }
 }
 
 #[derive(Debug, PartialEq)]
-pub struct SlaveScanHit {
-    pub slave_id: u8,
+pub struct UnitScanHit {
+    pub unit_id: u8,
     pub result: Result<Vec<u16>, String>,
 }
 
@@ -568,7 +568,7 @@ pub enum ScanState {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct SlaveParams {
+pub struct UnitParams {
     pub id: u8,
     pub selected: u16,
     pub from: u8,
@@ -581,11 +581,11 @@ pub struct SlaveParams {
     pub register_type: RegisterType,
     pub address: u16,
     pub amount: u16,
-    pub hits: Vec<SlaveScanHit>,
+    pub hits: Vec<UnitScanHit>,
     pub status: Option<StatusMessage>,
 }
 
-impl Default for SlaveParams {
+impl Default for UnitParams {
     fn default() -> Self {
         Self {
             id: 0,
@@ -606,38 +606,38 @@ impl Default for SlaveParams {
     }
 }
 
-impl SlaveParams {
-    const FIXED: [SlaveField; 7] = [
-        SlaveField::Id,
-        SlaveField::From,
-        SlaveField::To,
-        SlaveField::Mode,
-        SlaveField::Repr,
-        SlaveField::Exceptions,
-        SlaveField::Scan,
+impl UnitParams {
+    const FIXED: [UnitField; 7] = [
+        UnitField::Id,
+        UnitField::From,
+        UnitField::To,
+        UnitField::Mode,
+        UnitField::Repr,
+        UnitField::Exceptions,
+        UnitField::Scan,
     ];
 
-    pub fn visible_hits(&self) -> impl Iterator<Item = (usize, &SlaveScanHit)> {
+    pub fn visible_hits(&self) -> impl Iterator<Item = (usize, &UnitScanHit)> {
         self.hits
             .iter()
             .enumerate()
             .filter(|(_, hit)| self.show_exceptions || hit.result.is_ok())
     }
 
-    pub fn fields(&self) -> Vec<SlaveField> {
+    pub fn fields(&self) -> Vec<UnitField> {
         let mut fields = Self::FIXED.to_vec();
-        fields.extend(self.visible_hits().map(|(i, _)| SlaveField::Hit(i)));
+        fields.extend(self.visible_hits().map(|(i, _)| UnitField::Hit(i)));
         fields
     }
 
-    pub fn current_field(&self) -> SlaveField {
+    pub fn current_field(&self) -> UnitField {
         let fields = self.fields();
         fields[(self.selected as usize).min(fields.len() - 1)]
     }
 
     pub fn switch_column(&mut self) {
         let first_hit = Self::FIXED.len() as u16;
-        if matches!(self.current_field(), SlaveField::Hit(_)) {
+        if matches!(self.current_field(), UnitField::Hit(_)) {
             self.selected = 0;
         } else if self.fields().len() as u16 > first_hit {
             self.selected = first_hit;
@@ -816,19 +816,20 @@ macro_rules! settings_fields {
 settings_fields! {
     Data {
         [
-            RegistersBatch: Number => "Registers batch", "How many registers each read request fetches around the cursor",
+            BatchSize: Number => "Batch size", "How many registers each read request fetches around the cursor",
             BatchAnchor: Toggle => "Batch anchor", "Where the cursor sits inside the read batch: start, middle or end",
             ReadFullCustoms: Toggle => "Read full custom values", "Also read every register a custom rule spans, even outside the batch",
-            CustomBatchBySize: Toggle => "Custom batch by size", "In the Custom panel, size the batch by registers instead of rules",
+            CustomBatchByRegisters: Toggle => "Custom batch by registers", "In the Custom panel, size the batch by registers instead of rules",
         ],
         [
-            AutoUpdate: Number => "Auto-update (ms)", "Delay between automatic reads, 0 turns auto-refresh off",
+            RefreshInterval: Number => "Auto-refresh (ms)", "Delay between automatic reads, 0 turns auto-refresh off",
             ReconnectOnTimeout: Toggle => "Reconnect on timeout", "Reconnect to the device after a read times out",
             ReadOnly: Toggle => "Read-only", "Refuse all writes from the UI and the API",
+            LogWrites: Toggle => "Log writes to file", "Append every write to a log file",
         ],
         [
-            HistoryCap: Number => "Graph history cap", "Samples kept per register for the value graph",
-            MatrixCols: Number => "Matrix columns", "Registers per row in the Matrix panel, auto fits as many as the screen shows",
+            GraphHistory: Number => "Graph history", "Samples kept per register for the value graph",
+            MatrixColumns: Number => "Matrix columns", "Registers per row in the Matrix panel, auto fits as many as the screen shows",
         ],
         [
             CycleHoldings: CycleType(RegisterType::Holding) => "Cycle holdings", "Include holding registers when cycling register types",
@@ -837,7 +838,7 @@ settings_fields! {
             CycleDiscretes: CycleType(RegisterType::Discrete) => "Cycle discretes", "Include discrete inputs when cycling register types",
         ],
         [
-            ShowMock: Toggle => "Show mock device", "Offer the built-in mock device in Discovery",
+            ShowMockDevice: Toggle => "Show mock device", "Offer the built-in mock device in the Device popup",
             SavePositionOnExit: Toggle => "Save position on exit", "Store the cursor position as the startup position when quitting",
             StartupPanel: Toggle => "Startup panel", "Panel opened on start",
             StartupType: Toggle => "Startup type", "Register type selected on start",
@@ -845,21 +846,20 @@ settings_fields! {
         ],
     }
     Api {
-        [LogWrites: Toggle => "Log writes to file", "Append every write to a log file"],
         [
             ApiPort: Number => "API port", "Port for the HTTP API, 0 picks any free port, off disables it",
-            ApiSlaveOverride: Toggle => "API slave id override", "Let API requests target a slave id other than the configured one",
+            ApiUnitIdOverride: Toggle => "API unit id override", "Let API requests target a unit id other than the configured one",
         ],
     }
     Display {
         [
             ShowClock: Toggle => "Show clock", "Show the current time in the bottom bar",
-            ShowFrameTime: Toggle => "Show frame render time", "Show how long each frame takes to render",
+            ShowFrameTime: Toggle => "Show frame time", "Show how long each frame takes to render",
             ShowRam: Toggle => "Show RAM usage", "Show the memory used by the application",
-            ShowStatusLabel: Toggle => "Show connection label", "Show the connection state as a word next to the refresh countdown",
-            ShowAscii: Toggle => "Show ASCII of all data", "Show the read registers decoded as an ASCII string",
+            ShowConnectionLabel: Toggle => "Show connection label", "Show the connection state as a word next to the refresh countdown",
+            ShowAsciiStrip: Toggle => "Show ASCII strip", "Show the read registers decoded as an ASCII string",
             ShowInactiveTabs: Toggle => "Show inactive tabs", "Show every panel and register type tab, not just the active one",
-            PanelTypeFilter: Toggle => "Filter panels by type", "In Pinned, Labeled and Custom, list only the current register type",
+            FilterPanelsByType: Toggle => "Filter panels by type", "In Pinned, Labeled and Custom, list only the current register type",
         ],
         [
             CyclePinned: CyclePanel(ReadPanel::Pinned) => "Cycle pinned", "Include the Pinned panel when cycling panels",
@@ -868,7 +868,7 @@ settings_fields! {
             CycleMatrix: CyclePanel(ReadPanel::Matrix) => "Cycle matrix", "Include the Matrix panel when cycling panels",
         ],
         [
-            TimeMode: Toggle => "Time column", "Show the read time as a timestamp or as how long ago it was",
+            TimeMode: Toggle => "Time format", "Show the read time as a timestamp or as how long ago it was",
             AddressMode: Toggle => "Address format", "Show addresses in decimal or hexadecimal",
             LabelWidth: Number => "Label width", "Characters the label column takes, auto fits the longest label",
             CustomWidth: Number => "Custom width", "Characters the custom column takes, auto fits the longest value",
@@ -876,9 +876,9 @@ settings_fields! {
         [
             ShowReadWindow: Toggle => "Show read window", "Highlight the address range covered by the current read batch",
             ShowMatrixContext: Toggle => "Show matrix context", "Show the custom value and label of the selected register under the Matrix panel",
-            GraphTimeAxis: Toggle => "Graph X axis", "Plot the graph against time instead of sample count",
+            GraphTimeAxis: Toggle => "Graph time axis", "Plot the graph against time instead of sample count",
             ChangedExpiry: Number => "Changed highlight (ms)", "How long a changed value stays highlighted, 0 never clears it",
-            ShowContinuation: Toggle => "Show \"part of\" marker", "Mark registers that belong to a multi-register custom rule",
+            ShowRuleContinuation: Toggle => "Show \"part of\" marker", "Mark registers that belong to a multi-register custom rule",
         ],
         [
             PaddingHorizontal: Number => "Horizontal padding", "Empty columns kept on both sides of the interface",
@@ -889,30 +889,30 @@ settings_fields! {
         [ThemePreset: Toggle => "Preset", "Switch between the built-in color schemes"],
         [
             ThemeBorder: Color => "Frame border", "Color of the frame borders",
-            ThemeAccent: Color => "Accent / titles", "Color for titles, keys and highlights",
+            ThemeAccent: Color => "Accent", "Color for titles, keys and highlights",
             ThemeText: Color => "Text", "Main text color",
-            ThemeBg: Color => "Background", "Background color",
-            ThemeDim: Color => "Dim / muted", "Color for secondary and muted text",
+            ThemeBackground: Color => "Background", "Background color",
+            ThemeDim: Color => "Muted", "Color for secondary and muted text",
             ThemeChanged: Color => "Changed value", "Color for values that changed recently",
             ThemeZebra: Color => "Zebra stripe", "Background of alternating table rows",
-            ThemeOk: Color => "OK / connected", "Color for success and connected states",
-            ThemeWarn: Color => "Warning", "Color for warnings",
-            ThemeErr: Color => "Error", "Color for errors",
-            ThemeSelectedFg: Color => "Selected text", "Text color of the selected row",
-            ThemeSelectedBg: Color => "Selected bg", "Background color of the selected row",
+            ThemeOk: Color => "Success", "Color for success and connected states",
+            ThemeWarning: Color => "Warning", "Color for warnings",
+            ThemeError: Color => "Error", "Color for errors",
+            ThemeSelectedText: Color => "Selected text", "Text color of the selected row",
+            ThemeSelectedBackground: Color => "Selected background", "Background color of the selected row",
         ],
     }
     Keybinds {}
     Config {
         [
             Name: Text => "Config name", "Name shown in the title bar for this configuration",
-            IgnoreDirty: Toggle => "Ignore unsaved warning", "Quit or switch configuration without asking about unsaved changes",
+            SkipUnsavedWarning: Toggle => "Ignore unsaved warning", "Quit or switch configuration without asking about unsaved changes",
         ],
         [
             ClearPins: Action => "Clear pinned registers", "Remove every pinned register",
             ClearLabels: Action => "Clear labels", "Remove every label",
             ClearCustom: Action => "Clear custom rules", "Remove every custom rule",
-            CopyData: Action => "Copy all", "Copy pins, labels and custom rules as JSON, paste into another MTUI to import",
+            CopyData: Action => "Copy registers", "Copy pins, labels and custom rules as JSON, paste into another MTUI to import",
         ],
         [
             CopyConfig: Action => "Copy configuration", "Copy the whole configuration as JSON, as Save would write it",
@@ -1252,7 +1252,7 @@ popups! {
     Custom(CustomParams),
     Columns(ColumnsParams),
     Write(WriteParams),
-    Slave(SlaveParams),
+    Unit(UnitParams),
     Logs(LogsParams),
     SweepConfig(SweepConfigParams),
     Inspect(InspectMode),
@@ -1432,48 +1432,48 @@ mod tests {
 
     #[test]
     fn hidden_exception_hits_leave_the_field_list_but_keep_their_index() {
-        use super::{SlaveField, SlaveParams, SlaveScanHit};
-        let hit = |id: u8, result: Result<Vec<u16>, String>| SlaveScanHit {
-            slave_id: id,
+        use super::{UnitField, UnitParams, UnitScanHit};
+        let hit = |id: u8, result: Result<Vec<u16>, String>| UnitScanHit {
+            unit_id: id,
             result,
         };
-        let mut params = SlaveParams {
+        let mut params = UnitParams {
             hits: vec![
                 hit(1, Ok(vec![1])),
                 hit(2, Err("IllegalDataAddress".into())),
                 hit(3, Ok(vec![3])),
             ],
-            ..SlaveParams::default()
+            ..UnitParams::default()
         };
-        let hits = |p: &SlaveParams| -> Vec<SlaveField> {
+        let hits = |p: &UnitParams| -> Vec<UnitField> {
             p.fields()
                 .into_iter()
-                .filter(|f| matches!(f, SlaveField::Hit(_)))
+                .filter(|f| matches!(f, UnitField::Hit(_)))
                 .collect()
         };
         assert_eq!(
             hits(&params),
-            vec![SlaveField::Hit(0), SlaveField::Hit(1), SlaveField::Hit(2)]
+            vec![UnitField::Hit(0), UnitField::Hit(1), UnitField::Hit(2)]
         );
 
         params.show_exceptions = false;
-        assert_eq!(hits(&params), vec![SlaveField::Hit(0), SlaveField::Hit(2)]);
+        assert_eq!(hits(&params), vec![UnitField::Hit(0), UnitField::Hit(2)]);
     }
 
     #[test]
     fn a_remembered_scan_keeps_its_hits_but_follows_the_current_request() {
-        use super::{ScanState, SlaveParams, SlaveScanHit, StatusMessage};
+        use super::{ScanState, StatusMessage, UnitParams, UnitScanHit};
         use crate::register::RegisterType;
-        let params = SlaveParams {
+        let params = UnitParams {
             scan: ScanState::Probing,
             from: 3,
             to: 9,
             status: Some(StatusMessage::info("Device is busy.")),
-            hits: vec![SlaveScanHit {
-                slave_id: 5,
+            hits: vec![UnitScanHit {
+                unit_id: 5,
                 result: Ok(vec![1]),
             }],
-            ..SlaveParams::default()
+            ..UnitParams::default()
         };
         let resumed = params.suspended().resumed(7, RegisterType::Input, 40, 2);
         assert_eq!(
@@ -1490,35 +1490,31 @@ mod tests {
             (RegisterType::Input, 40, 2)
         );
 
-        let done = SlaveParams {
+        let done = UnitParams {
             scan: ScanState::Done,
-            ..SlaveParams::default()
+            ..UnitParams::default()
         };
         assert_eq!(done.suspended().scan, ScanState::Done);
     }
 
     #[test]
     fn tab_jumps_between_the_form_and_the_hit_list() {
-        use super::{SlaveField, SlaveParams, SlaveScanHit};
-        let mut params = SlaveParams {
+        use super::{UnitField, UnitParams, UnitScanHit};
+        let mut params = UnitParams {
             selected: 3,
-            ..SlaveParams::default()
+            ..UnitParams::default()
         };
         params.switch_column();
-        assert_eq!(
-            params.current_field(),
-            SlaveField::Mode,
-            "no hits, stay put"
-        );
+        assert_eq!(params.current_field(), UnitField::Mode, "no hits, stay put");
 
-        params.hits.push(SlaveScanHit {
-            slave_id: 5,
+        params.hits.push(UnitScanHit {
+            unit_id: 5,
             result: Ok(vec![1]),
         });
         params.switch_column();
-        assert_eq!(params.current_field(), SlaveField::Hit(0));
+        assert_eq!(params.current_field(), UnitField::Hit(0));
         params.switch_column();
-        assert_eq!(params.current_field(), SlaveField::Id);
+        assert_eq!(params.current_field(), UnitField::Id);
     }
 
     #[test]
@@ -1569,7 +1565,7 @@ mod settings_params_tests {
         assert_eq!(groups[0].1, vec![SettingsField::ShowClock]);
 
         let by_description = SettingsCategory::search("auto-refresh");
-        assert_eq!(by_description[0].1, vec![SettingsField::AutoUpdate]);
+        assert_eq!(by_description[0].1, vec![SettingsField::RefreshInterval]);
 
         let words = SettingsCategory::search("CYCLE panel");
         let fields: Vec<_> = words.iter().flat_map(|(_, f)| f.iter().copied()).collect();

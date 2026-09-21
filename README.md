@@ -11,7 +11,7 @@ Play the GIF to see a quick tour, or better yet, try it in your browser (mock de
 
 ## Features
 - Modbus TCP, RTU, RTU-over-TCP and a built-in mock device for playing around
-- Live register reading with auto-refresh, pause/resume and slave id selection
+- Live register reading with auto-refresh, pause/resume and unit id selection
 - Interpretation columns with configurable word order: u16, i16, hex, binary, ASCII, u32, i32, f32, f64, M10K (and more!)
 - Panels: main view, pinned, labeled, custom rules and an address matrix
 - Pin, label and custom-rule registers; jump to address or label

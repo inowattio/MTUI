@@ -21,7 +21,7 @@ pub(super) fn draw(
 ) {
     let kb = &app.config.keybinds;
     let footer = [
-        Hint::key(kb.switch_view, "Access"),
+        Hint::key(kb.panel, "Access"),
         Hint::pair(KeyCode::Left, KeyCode::Right, "Scroll"),
         Hint::key(kb.refresh, "Reread"),
         Hint::key(KeyCode::Esc, "Close"),

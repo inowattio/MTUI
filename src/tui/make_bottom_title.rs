@@ -22,13 +22,13 @@ pub fn make_bottom_title(theme: &Theme, app: &App) -> Line<'static> {
                     .insert(0, Span::styled(format!(" {name}"), theme.accent_style()));
                 return line;
             }
-            let panel = Hint::key(kb.switch_view, "Panel");
+            let panel = Hint::key(kb.panel, "Panel");
             let read = Hint::key(kb.refresh, "Read");
             let help = Hint::key(kb.help, "Help");
 
             if p.graph {
                 let hold = Hint::key(kb.pin, "Hold");
-                let clear = Hint::key(kb.clear, "Clear");
+                let clear = Hint::key(kb.clear_session, "Clear");
                 if !app.cursor_cell().0.is_bit() && app.graph_cycle_len() > 1 {
                     let cycle = Hint::key(kb.dump, "Cycle");
                     hints::footer(theme, [cycle, hold, clear, read, help])
@@ -36,7 +36,7 @@ pub fn make_bottom_title(theme: &Theme, app: &App) -> Line<'static> {
                     hints::footer(theme, [hold, clear, panel, read, help])
                 }
             } else {
-                let kind = Hint::key(kb.toggle, "Type");
+                let kind = Hint::key(kb.register_type, "Type");
                 hints::footer(
                     theme,
                     [
@@ -59,7 +59,7 @@ pub fn make_bottom_title(theme: &Theme, app: &App) -> Line<'static> {
                 theme,
                 [
                     primary,
-                    Hint::key(kb.switch_view, "Category"),
+                    Hint::key(kb.panel, "Category"),
                     Hint::key(KeyCode::Esc, "Back"),
                 ],
             )
