@@ -11,7 +11,7 @@ pub(super) fn draw(
     frame: &mut Frame,
     area: Rect,
     theme: &Theme,
-    params: &SweepConfigParams,
+    params: SweepConfigParams,
     running: bool,
 ) {
     let sel = params.current_field();

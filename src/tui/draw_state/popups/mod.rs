@@ -50,7 +50,7 @@ pub fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup
         Popup::Unit(params) => {
             unit::draw(frame, area, theme, kb, params, app.config.device.unit_id)
         }
-        Popup::SweepConfig(s) => sweep_config::draw(frame, area, theme, s, app.sweep.active),
+        Popup::SweepConfig(s) => sweep_config::draw(frame, area, theme, *s, app.sweep.active),
         Popup::Logs(logs) => logs::draw(frame, area, theme, kb, logs, app.config.write_log.enabled),
         Popup::Inspect(mode) => inspect::draw(frame, area, theme, app, *mode),
         Popup::About => about::draw(frame, area, theme),
