@@ -544,10 +544,7 @@ pub enum UnitField {
 
 impl UnitField {
     pub const fn is_toggle(self) -> bool {
-        matches!(
-            self,
-            Self::Mode | Self::Repr | Self::Exceptions
-        )
+        matches!(self, Self::Mode | Self::Repr | Self::Exceptions)
     }
 }
 
@@ -950,9 +947,7 @@ impl SettingsField {
     pub const fn is_startup(self) -> bool {
         matches!(
             self,
-            Self::StartupPanel
-                | Self::StartupType
-                | Self::StartupAddress
+            Self::StartupPanel | Self::StartupType | Self::StartupAddress
         )
     }
 
@@ -1040,10 +1035,7 @@ impl SettingsCategory {
     }
 
     pub const fn is_searchable(self) -> bool {
-        !matches!(
-            self,
-            Self::Keybinds | Self::Theme | Self::Search
-        )
+        !matches!(self, Self::Keybinds | Self::Theme | Self::Search)
     }
 }
 

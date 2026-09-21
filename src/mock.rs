@@ -180,7 +180,10 @@ impl MockContext {
 
     fn active_power_kw(&self, t: f64) -> f64 {
         let base = 0.4f64.mul_add(self.unit_id as f64, 3.2);
-        0.1f64.mul_add(self.noise(t, 8), 0.8f64.mul_add((t / 7.0 + self.phase()).sin(), base))
+        0.1f64.mul_add(
+            self.noise(t, 8),
+            0.8f64.mul_add((t / 7.0 + self.phase()).sin(), base),
+        )
     }
 
     fn energy_wh(&self, t: f64) -> f64 {
@@ -265,12 +268,18 @@ impl MockContext {
             0..=2 => {
                 let p = addr as f64 * THIRD_PHASE;
                 let ripple = self.setpoint(52) as f64;
-                let v = 2.0f64.mul_add(self.noise(t, addr), self.setpoint(50) as f64 + ripple * (t / 3.1 + p + phase).sin());
+                let v = 2.0f64.mul_add(
+                    self.noise(t, addr),
+                    self.setpoint(50) as f64 + ripple * (t / 3.1 + p + phase).sin(),
+                );
                 v.max(0.0) as u16
             }
             3..=5 => {
                 let p = (addr - 3) as f64 * THIRD_PHASE;
-                let v = 5.0f64.mul_add(self.noise(t, addr), self.setpoint(51) as f64 * 0.1f64.mul_add((t / 5.3 + p + phase).sin(), 0.9));
+                let v = 5.0f64.mul_add(
+                    self.noise(t, addr),
+                    self.setpoint(51) as f64 * 0.1f64.mul_add((t / 5.3 + p + phase).sin(), 0.9),
+                );
                 v.max(0.0) as u16
             }
             6 => (3.0f64.mul_add((t / 11.0).sin(), 5_000.0) + self.noise(t, 6)) as u16,
@@ -292,12 +301,18 @@ impl MockContext {
             32 => ((t / 5.0) as u64 % 2) as u16,
             33 => ((self.noise(t, 33) + 1.0) * 32_767.5) as u16,
             34 => {
-                let walk = 256.0f64.mul_add(self.noise((t / 4.0).floor() * 4.0, 34), 1_024.0f64.mul_add((t / 17.0 + phase).sin(), 2_048.0));
+                let walk = 256.0f64.mul_add(
+                    self.noise((t / 4.0).floor() * 4.0, 34),
+                    1_024.0f64.mul_add((t / 17.0 + phase).sin(), 2_048.0),
+                );
                 walk as u16
             }
             35..=37 => {
                 let p = (addr - 35) as f64 * THIRD_PHASE;
-                let thd = 20.0f64.mul_add(self.noise(t, addr), 150.0f64.mul_add((t / 9.0 + p + phase).sin(), 250.0));
+                let thd = 20.0f64.mul_add(
+                    self.noise(t, addr),
+                    150.0f64.mul_add((t / 9.0 + p + phase).sin(), 250.0),
+                );
                 thd.max(0.0) as u16
             }
             40..=42 => {
@@ -316,12 +331,16 @@ impl MockContext {
             50..=52 => {
                 let p = (addr - 50) as f64 * THIRD_PHASE;
                 let ripple = self.setpoint(52) as f64;
-                let v = (self.setpoint(50) as f64).mul_add(1.732, ripple * (t / 3.7 + p + phase).sin());
+                let v =
+                    (self.setpoint(50) as f64).mul_add(1.732, ripple * (t / 3.7 + p + phase).sin());
                 v.max(0.0) as u16
             }
             53 => 4.0f64.mul_add(self.noise(t, 53).abs(), self.setpoint(51) as f64 * 0.03) as u16,
             60 => {
-                let demand = 0.5f64.mul_add((t / 45.0 + phase).sin(), 0.4f64.mul_add(self.unit_id as f64, 3.2));
+                let demand = 0.5f64.mul_add(
+                    (t / 45.0 + phase).sin(),
+                    0.4f64.mul_add(self.unit_id as f64, 3.2),
+                );
                 (demand * 100.0) as u16
             }
             61 => ((0.4f64.mul_add(self.unit_id as f64, 3.2) + 0.9) * 100.0) as u16,
@@ -330,7 +349,10 @@ impl MockContext {
                 let k = (addr - 100) as f64 / 32.0;
                 let fundamental = std::f64::consts::TAU.mul_add(k, t).sin();
                 let third = 0.12 * (3.0 * std::f64::consts::TAU.mul_add(k, t)).sin();
-                8.0f64.mul_add(self.noise(t, addr), 1_800.0f64.mul_add(fundamental + third, 2_048.0)) as u16
+                8.0f64.mul_add(
+                    self.noise(t, addr),
+                    1_800.0f64.mul_add(fundamental + third, 2_048.0),
+                ) as u16
             }
             140..=155 => {
                 let n = (addr - 139) as f64;
@@ -344,9 +366,11 @@ impl MockContext {
             200..=223 => {
                 let h = (addr - 200) as f64;
                 let morning = ((h - 8.0) / 3.0).mul_add(-((h - 8.0) / 3.0), 1.0).max(0.0);
-                let evening = ((h - 19.0) / 3.5).mul_add(-((h - 19.0) / 3.5), 1.0).max(0.0);
-                let kwh10 =
-                    110.0f64.mul_add(evening, 70.0f64.mul_add(morning, 25.0)) * 0.1f64.mul_add(self.unit_id as f64, 1.0);
+                let evening = ((h - 19.0) / 3.5)
+                    .mul_add(-((h - 19.0) / 3.5), 1.0)
+                    .max(0.0);
+                let kwh10 = 110.0f64.mul_add(evening, 70.0f64.mul_add(morning, 25.0))
+                    * 0.1f64.mul_add(self.unit_id as f64, 1.0);
                 2.0f64.mul_add((t / 30.0 + h).sin(), kwh10).max(0.0) as u16
             }
             400..=431 => ((t * (addr - 399) as f64 / 4.0) as u32 % 10_000) as u16,

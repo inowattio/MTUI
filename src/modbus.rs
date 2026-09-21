@@ -644,11 +644,7 @@ pub enum DeviceIdAccess {
 }
 
 impl DeviceIdAccess {
-    pub const ALL: [Self; 3] = [
-        Self::Basic,
-        Self::Regular,
-        Self::Extended,
-    ];
+    pub const ALL: [Self; 3] = [Self::Basic, Self::Regular, Self::Extended];
 
     pub const fn label(self) -> &'static str {
         match self {

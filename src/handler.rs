@@ -675,7 +675,10 @@ fn handle_settings_field_key(key_event: KeyEvent, app: &mut App) {
     let count = app
         .settings()
         .map_or(0, |s| s.current_fields().len() as u16);
-    let Some(field) = app.settings().and_then(super::state::SettingsParams::current_field) else {
+    let Some(field) = app
+        .settings()
+        .and_then(super::state::SettingsParams::current_field)
+    else {
         if key_event.code == KeyCode::Esc
             && let Some(s) = app.settings_mut()
         {

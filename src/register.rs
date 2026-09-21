@@ -11,12 +11,7 @@ pub enum RegisterType {
 }
 
 impl RegisterType {
-    pub const ALL: [Self; 4] = [
-        Self::Holding,
-        Self::Input,
-        Self::Coil,
-        Self::Discrete,
-    ];
+    pub const ALL: [Self; 4] = [Self::Holding, Self::Input, Self::Coil, Self::Discrete];
 
     pub const fn toggle(&mut self) {
         *self = match self {
