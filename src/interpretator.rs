@@ -140,15 +140,15 @@ const COLUMNS: &[ColumnSpec] = &[
 
 impl Column {
     fn is_meta(self) -> bool {
-        matches!(self, Column::Address | Column::Time | Column::Label)
+        matches!(self, Self::Address | Self::Time | Self::Label)
     }
 
     pub fn graph_width(self) -> Option<usize> {
         self.custom_repr()
             .map(CustomRepr::register_count)
             .or(match self {
-                Column::Bcd => Some(1),
-                Column::Bcd32 => Some(2),
+                Self::Bcd => Some(1),
+                Self::Bcd32 => Some(2),
                 _ => None,
             })
     }
@@ -158,20 +158,20 @@ impl Column {
     }
 
     pub fn graph_is_float(self) -> bool {
-        matches!(self, Column::F16 | Column::F32 | Column::F64)
+        matches!(self, Self::F16 | Self::F32 | Self::F64)
     }
 
     pub fn custom_repr(self) -> Option<CustomRepr> {
         Some(match self {
-            Column::U16 => CustomRepr::U16,
-            Column::I16 => CustomRepr::I16,
-            Column::F16 => CustomRepr::F16,
-            Column::U32 => CustomRepr::U32,
-            Column::I32 => CustomRepr::I32,
-            Column::F32 => CustomRepr::F32,
-            Column::U64 => CustomRepr::U64,
-            Column::I64 => CustomRepr::I64,
-            Column::F64 => CustomRepr::F64,
+            Self::U16 => CustomRepr::U16,
+            Self::I16 => CustomRepr::I16,
+            Self::F16 => CustomRepr::F16,
+            Self::U32 => CustomRepr::U32,
+            Self::I32 => CustomRepr::I32,
+            Self::F32 => CustomRepr::F32,
+            Self::U64 => CustomRepr::U64,
+            Self::I64 => CustomRepr::I64,
+            Self::F64 => CustomRepr::F64,
             _ => return None,
         })
     }

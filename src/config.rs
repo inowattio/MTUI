@@ -162,13 +162,13 @@ pub enum BatchAnchor {
 }
 
 impl BatchAnchor {
-    pub const ALL: [BatchAnchor; 3] = [BatchAnchor::Start, BatchAnchor::Middle, BatchAnchor::End];
+    pub const ALL: [Self; 3] = [Self::Start, Self::Middle, Self::End];
 
     pub fn label(self) -> &'static str {
         match self {
-            BatchAnchor::Start => "start",
-            BatchAnchor::Middle => "middle",
-            BatchAnchor::End => "end",
+            Self::Start => "start",
+            Self::Middle => "middle",
+            Self::End => "end",
         }
     }
 }
@@ -182,12 +182,12 @@ pub enum TimeMode {
 }
 
 impl TimeMode {
-    pub const ALL: [TimeMode; 2] = [TimeMode::ReadAt, TimeMode::Ago];
+    pub const ALL: [Self; 2] = [Self::ReadAt, Self::Ago];
 
     pub fn label(self) -> &'static str {
         match self {
-            TimeMode::ReadAt => "read at",
-            TimeMode::Ago => "ago",
+            Self::ReadAt => "read at",
+            Self::Ago => "ago",
         }
     }
 }
@@ -201,12 +201,12 @@ pub enum AddressMode {
 }
 
 impl AddressMode {
-    pub const ALL: [AddressMode; 2] = [AddressMode::Dec, AddressMode::Hex];
+    pub const ALL: [Self; 2] = [Self::Dec, Self::Hex];
 
     pub fn label(self) -> &'static str {
         match self {
-            AddressMode::Dec => "decimal",
-            AddressMode::Hex => "hex",
+            Self::Dec => "decimal",
+            Self::Hex => "hex",
         }
     }
 }
@@ -425,7 +425,7 @@ impl Registers {
         for (&cell, rule) in rules {
             entry(&mut merged, cell).custom = Some(rule.clone());
         }
-        let mut registers = Registers::default();
+        let mut registers = Self::default();
         for ((kind, _), entry) in merged {
             registers.section_mut(kind).push(entry);
         }

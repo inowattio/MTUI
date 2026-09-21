@@ -11,45 +11,45 @@ pub enum RegisterType {
 }
 
 impl RegisterType {
-    pub const ALL: [RegisterType; 4] = [
-        RegisterType::Holding,
-        RegisterType::Input,
-        RegisterType::Coil,
-        RegisterType::Discrete,
+    pub const ALL: [Self; 4] = [
+        Self::Holding,
+        Self::Input,
+        Self::Coil,
+        Self::Discrete,
     ];
 
     pub fn toggle(&mut self) {
         *self = match self {
-            RegisterType::Holding => RegisterType::Input,
-            RegisterType::Input => RegisterType::Coil,
-            RegisterType::Coil => RegisterType::Discrete,
-            RegisterType::Discrete => RegisterType::Holding,
+            Self::Holding => Self::Input,
+            Self::Input => Self::Coil,
+            Self::Coil => Self::Discrete,
+            Self::Discrete => Self::Holding,
         };
     }
 
     pub fn is_bit(self) -> bool {
-        matches!(self, RegisterType::Coil | RegisterType::Discrete)
+        matches!(self, Self::Coil | Self::Discrete)
     }
 
     pub fn is_writable(self) -> bool {
-        matches!(self, RegisterType::Holding | RegisterType::Coil)
+        matches!(self, Self::Holding | Self::Coil)
     }
 
     pub fn name(self) -> &'static str {
         match self {
-            RegisterType::Holding => "Holding",
-            RegisterType::Input => "Input",
-            RegisterType::Coil => "Coil",
-            RegisterType::Discrete => "Discrete",
+            Self::Holding => "Holding",
+            Self::Input => "Input",
+            Self::Coil => "Coil",
+            Self::Discrete => "Discrete",
         }
     }
 
     pub fn marker(self) -> &'static str {
         match self {
-            RegisterType::Holding => "H",
-            RegisterType::Input => "I",
-            RegisterType::Coil => "C",
-            RegisterType::Discrete => "D",
+            Self::Holding => "H",
+            Self::Input => "I",
+            Self::Coil => "C",
+            Self::Discrete => "D",
         }
     }
 }

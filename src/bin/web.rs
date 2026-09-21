@@ -112,8 +112,8 @@ mod web {
     impl WebTerminal {
         fn draw(&mut self, app: &mut App) -> io::Result<()> {
             match self {
-                WebTerminal::Gl(terminal) => terminal.draw(|frame| render(app, frame)),
-                WebTerminal::Dom(terminal) => terminal.draw(|frame| render(app, frame)),
+                Self::Gl(terminal) => terminal.draw(|frame| render(app, frame)),
+                Self::Dom(terminal) => terminal.draw(|frame| render(app, frame)),
             }
             .map(|_| ())
         }

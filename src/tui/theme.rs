@@ -95,7 +95,7 @@ impl Default for Theme {
 }
 
 impl Theme {
-    pub const PRESETS: &'static [(&'static str, Theme)] =
+    pub const PRESETS: &'static [(&'static str, Self)] =
         &[("Default", DEFAULT), ("Light", LIGHT), ("Amber", AMBER)];
 
     pub fn base(&self) -> Style {

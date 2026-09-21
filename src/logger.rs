@@ -17,9 +17,9 @@ pub enum LogLevel {
 impl From<Level> for LogLevel {
     fn from(level: Level) -> Self {
         match level {
-            Level::Error => LogLevel::Error,
-            Level::Warn => LogLevel::Warn,
-            _ => LogLevel::Info,
+            Level::Error => Self::Error,
+            Level::Warn => Self::Warn,
+            _ => Self::Info,
         }
     }
 }
@@ -96,9 +96,9 @@ pub fn snapshot() -> Vec<LogEntry> {
 impl LogLevel {
     pub fn tag(self) -> &'static str {
         match self {
-            LogLevel::Info => "INFO",
-            LogLevel::Warn => "WARN",
-            LogLevel::Error => "ERROR",
+            Self::Info => "INFO",
+            Self::Warn => "WARN",
+            Self::Error => "ERROR",
         }
     }
 }

@@ -20,53 +20,53 @@ pub enum CustomRepr {
 }
 
 impl CustomRepr {
-    pub const ALL: [CustomRepr; 9] = [
-        CustomRepr::U16,
-        CustomRepr::I16,
-        CustomRepr::F16,
-        CustomRepr::U32,
-        CustomRepr::I32,
-        CustomRepr::F32,
-        CustomRepr::U64,
-        CustomRepr::I64,
-        CustomRepr::F64,
+    pub const ALL: [Self; 9] = [
+        Self::U16,
+        Self::I16,
+        Self::F16,
+        Self::U32,
+        Self::I32,
+        Self::F32,
+        Self::U64,
+        Self::I64,
+        Self::F64,
     ];
 
     pub const MAX_REGISTERS: usize = 4;
 
     pub fn register_count(self) -> usize {
         match self {
-            CustomRepr::U16 | CustomRepr::I16 | CustomRepr::F16 => 1,
-            CustomRepr::U32 | CustomRepr::I32 | CustomRepr::F32 => 2,
-            CustomRepr::U64 | CustomRepr::I64 | CustomRepr::F64 => 4,
+            Self::U16 | Self::I16 | Self::F16 => 1,
+            Self::U32 | Self::I32 | Self::F32 => 2,
+            Self::U64 | Self::I64 | Self::F64 => 4,
         }
     }
 
     pub fn decode(self, raw: u64) -> f64 {
         match self {
-            CustomRepr::U16 => raw as f64,
-            CustomRepr::I16 => raw as u16 as i16 as f64,
-            CustomRepr::F16 => f16_to_f32(raw as u16) as f64,
-            CustomRepr::U32 => raw as f64,
-            CustomRepr::I32 => raw as u32 as i32 as f64,
-            CustomRepr::F32 => f32::from_bits(raw as u32) as f64,
-            CustomRepr::U64 => raw as f64,
-            CustomRepr::I64 => raw as i64 as f64,
-            CustomRepr::F64 => f64::from_bits(raw),
+            Self::U16 => raw as f64,
+            Self::I16 => raw as u16 as i16 as f64,
+            Self::F16 => f16_to_f32(raw as u16) as f64,
+            Self::U32 => raw as f64,
+            Self::I32 => raw as u32 as i32 as f64,
+            Self::F32 => f32::from_bits(raw as u32) as f64,
+            Self::U64 => raw as f64,
+            Self::I64 => raw as i64 as f64,
+            Self::F64 => f64::from_bits(raw),
         }
     }
 
     pub fn label(self) -> &'static str {
         match self {
-            CustomRepr::U16 => "u16",
-            CustomRepr::I16 => "i16",
-            CustomRepr::F16 => "f16",
-            CustomRepr::U32 => "u32",
-            CustomRepr::I32 => "i32",
-            CustomRepr::F32 => "f32",
-            CustomRepr::U64 => "u64",
-            CustomRepr::I64 => "i64",
-            CustomRepr::F64 => "f64",
+            Self::U16 => "u16",
+            Self::I16 => "i16",
+            Self::F16 => "f16",
+            Self::U32 => "u32",
+            Self::I32 => "i32",
+            Self::F32 => "f32",
+            Self::U64 => "u64",
+            Self::I64 => "i64",
+            Self::F64 => "f64",
         }
     }
 }
@@ -83,21 +83,21 @@ pub enum OpKind {
 impl OpKind {
     pub fn symbol(self) -> char {
         match self {
-            OpKind::Add => '+',
-            OpKind::Sub => '-',
-            OpKind::Mul => '*',
-            OpKind::Div => '/',
-            OpKind::Pow => '^',
+            Self::Add => '+',
+            Self::Sub => '-',
+            Self::Mul => '*',
+            Self::Div => '/',
+            Self::Pow => '^',
         }
     }
 
-    fn from_symbol(c: char) -> Option<OpKind> {
+    fn from_symbol(c: char) -> Option<Self> {
         match c {
-            '+' => Some(OpKind::Add),
-            '-' => Some(OpKind::Sub),
-            '*' | 'x' | 'X' => Some(OpKind::Mul),
-            '/' => Some(OpKind::Div),
-            '^' => Some(OpKind::Pow),
+            '+' => Some(Self::Add),
+            '-' => Some(Self::Sub),
+            '*' | 'x' | 'X' => Some(Self::Mul),
+            '/' => Some(Self::Div),
+            '^' => Some(Self::Pow),
             _ => None,
         }
     }

@@ -41,17 +41,17 @@ pub enum ApiBindState {
 impl ApiBindState {
     pub fn code(self) -> u8 {
         match self {
-            ApiBindState::Pending => 0,
-            ApiBindState::Bound => 1,
-            ApiBindState::Failed => 2,
+            Self::Pending => 0,
+            Self::Bound => 1,
+            Self::Failed => 2,
         }
     }
 
     pub fn from_code(code: u8) -> Self {
         match code {
-            1 => ApiBindState::Bound,
-            2 => ApiBindState::Failed,
-            _ => ApiBindState::Pending,
+            1 => Self::Bound,
+            2 => Self::Failed,
+            _ => Self::Pending,
         }
     }
 }
@@ -67,9 +67,9 @@ pub enum WriteType {
 impl WriteType {
     fn bits(self) -> u16 {
         match self {
-            WriteType::Coil => 1,
-            WriteType::Word => 16,
-            WriteType::DWord => 32,
+            Self::Coil => 1,
+            Self::Word => 16,
+            Self::DWord => 32,
         }
     }
 }
@@ -605,8 +605,8 @@ pub enum ConfigError {
 impl ConfigError {
     pub fn exit_code(&self) -> u8 {
         match self {
-            ConfigError::Read { .. } => 2,
-            ConfigError::Parse { .. } => 3,
+            Self::Read { .. } => 2,
+            Self::Parse { .. } => 3,
         }
     }
 }
@@ -614,8 +614,8 @@ impl ConfigError {
 impl fmt::Display for ConfigError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ConfigError::Read { path, .. } => write!(f, "Could not read config {}", path.display()),
-            ConfigError::Parse { path, .. } => {
+            Self::Read { path, .. } => write!(f, "Could not read config {}", path.display()),
+            Self::Parse { path, .. } => {
                 write!(f, "Could not parse config {}", path.display())
             }
         }
@@ -625,8 +625,8 @@ impl fmt::Display for ConfigError {
 impl std::error::Error for ConfigError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            ConfigError::Read { source, .. } => Some(source),
-            ConfigError::Parse { source, .. } => Some(source),
+            Self::Read { source, .. } => Some(source),
+            Self::Parse { source, .. } => Some(source),
         }
     }
 }

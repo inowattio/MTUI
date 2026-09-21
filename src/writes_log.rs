@@ -17,10 +17,10 @@ pub enum WriteKind {
 impl fmt::Display for WriteKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
-            WriteKind::Word(_) => "word",
-            WriteKind::DWord(_) => "dword",
-            WriteKind::Coil(_) => "coil",
-            WriteKind::Multiple(_) => "multiple",
+            Self::Word(_) => "word",
+            Self::DWord(_) => "dword",
+            Self::Coil(_) => "coil",
+            Self::Multiple(_) => "multiple",
         })
     }
 }
@@ -28,10 +28,10 @@ impl fmt::Display for WriteKind {
 impl WriteKind {
     fn csv_value(&self) -> String {
         match self {
-            WriteKind::Word(w) => w.to_string(),
-            WriteKind::DWord(d) => d.to_string(),
-            WriteKind::Coil(c) => u8::from(*c).to_string(),
-            WriteKind::Multiple(v) => v.iter().map(u16::to_string).collect::<Vec<_>>().join(" "),
+            Self::Word(w) => w.to_string(),
+            Self::DWord(d) => d.to_string(),
+            Self::Coil(c) => u8::from(*c).to_string(),
+            Self::Multiple(v) => v.iter().map(u16::to_string).collect::<Vec<_>>().join(" "),
         }
     }
 }

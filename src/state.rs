@@ -93,8 +93,8 @@ field_enum! {
 impl ScanMethod {
     pub fn label(self) -> &'static str {
         match self {
-            ScanMethod::Ping => "ICMP ping",
-            ScanMethod::Port => "TCP port",
+            Self::Ping => "ICMP ping",
+            Self::Port => "TCP port",
         }
     }
 }
@@ -102,15 +102,15 @@ impl ScanMethod {
 impl InterfaceKind {
     pub fn label(self) -> &'static str {
         match self {
-            InterfaceKind::Mock => "Mock",
-            InterfaceKind::Serial => "Serial",
-            InterfaceKind::Tcp => "TCP",
-            InterfaceKind::RtuOverTcp => "RTU over TCP",
+            Self::Mock => "Mock",
+            Self::Serial => "Serial",
+            Self::Tcp => "TCP",
+            Self::RtuOverTcp => "RTU over TCP",
         }
     }
 
     pub fn uses_tcp(self) -> bool {
-        matches!(self, InterfaceKind::Tcp | InterfaceKind::RtuOverTcp)
+        matches!(self, Self::Tcp | Self::RtuOverTcp)
     }
 }
 
@@ -546,7 +546,7 @@ impl UnitField {
     pub fn is_toggle(self) -> bool {
         matches!(
             self,
-            UnitField::Mode | UnitField::Repr | UnitField::Exceptions
+            Self::Mode | Self::Repr | Self::Exceptions
         )
     }
 }
@@ -759,11 +759,11 @@ field_enum! {
 impl ReadPanel {
     pub fn name(self) -> &'static str {
         match self {
-            ReadPanel::Main => "Main",
-            ReadPanel::Pinned => "Pinned",
-            ReadPanel::Labeled => "Labeled",
-            ReadPanel::Custom => "Custom",
-            ReadPanel::Matrix => "Matrix",
+            Self::Main => "Main",
+            Self::Pinned => "Pinned",
+            Self::Labeled => "Labeled",
+            Self::Custom => "Custom",
+            Self::Matrix => "Matrix",
         }
     }
 }
@@ -950,9 +950,9 @@ impl SettingsField {
     pub fn is_startup(self) -> bool {
         matches!(
             self,
-            SettingsField::StartupPanel
-                | SettingsField::StartupType
-                | SettingsField::StartupAddress
+            Self::StartupPanel
+                | Self::StartupType
+                | Self::StartupAddress
         )
     }
 
@@ -995,13 +995,13 @@ field_enum! {
 impl SettingsCategory {
     pub fn label(self) -> &'static str {
         match self {
-            SettingsCategory::Data => "Data",
-            SettingsCategory::Api => "API",
-            SettingsCategory::Display => "Display",
-            SettingsCategory::Theme => "Theme",
-            SettingsCategory::Keybinds => "Keybinds",
-            SettingsCategory::Config => "Config",
-            SettingsCategory::Search => "Search",
+            Self::Data => "Data",
+            Self::Api => "API",
+            Self::Display => "Display",
+            Self::Theme => "Theme",
+            Self::Keybinds => "Keybinds",
+            Self::Config => "Config",
+            Self::Search => "Search",
         }
     }
 
@@ -1032,17 +1032,17 @@ impl SettingsCategory {
     }
 
     pub fn is_keybinds(self) -> bool {
-        matches!(self, SettingsCategory::Keybinds)
+        matches!(self, Self::Keybinds)
     }
 
     pub fn is_search(self) -> bool {
-        matches!(self, SettingsCategory::Search)
+        matches!(self, Self::Search)
     }
 
     pub fn is_searchable(self) -> bool {
         !matches!(
             self,
-            SettingsCategory::Keybinds | SettingsCategory::Theme | SettingsCategory::Search
+            Self::Keybinds | Self::Theme | Self::Search
         )
     }
 }
@@ -1237,10 +1237,10 @@ field_enum! {
 impl InspectMode {
     pub fn name(self) -> &'static str {
         match self {
-            InspectMode::Now => "now",
-            InspectMode::Min => "min",
-            InspectMode::Max => "max",
-            InspectMode::Avg => "avg",
+            Self::Now => "now",
+            Self::Min => "min",
+            Self::Max => "max",
+            Self::Avg => "avg",
         }
     }
 }
@@ -1368,11 +1368,11 @@ pub enum ConnectionStatus {
 impl ConnectionStatus {
     pub fn code(&self) -> u8 {
         match self {
-            ConnectionStatus::Unknown => 0,
-            ConnectionStatus::Reading => 1,
-            ConnectionStatus::Connected => 2,
-            ConnectionStatus::Reconnecting => 3,
-            ConnectionStatus::Error(_) => 4,
+            Self::Unknown => 0,
+            Self::Reading => 1,
+            Self::Connected => 2,
+            Self::Reconnecting => 3,
+            Self::Error(_) => 4,
         }
     }
 

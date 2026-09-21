@@ -99,10 +99,10 @@ serial_enum!(#[serde(into = "u8", try_from = "u8")] StopBits => tokio_serial::St
 impl Interface {
     pub fn endpoint(&self) -> String {
         match self {
-            Interface::Mock => "mock".to_string(),
-            Interface::Serial(p) => format!("wired:{}", p.path),
-            Interface::Tcp(p) => format!("tcp:{}:{}", p.ip, p.port),
-            Interface::RtuOverTcp(p) => format!("rtu-tcp:{}:{}", p.ip, p.port),
+            Self::Mock => "mock".to_string(),
+            Self::Serial(p) => format!("wired:{}", p.path),
+            Self::Tcp(p) => format!("tcp:{}:{}", p.ip, p.port),
+            Self::RtuOverTcp(p) => format!("rtu-tcp:{}:{}", p.ip, p.port),
         }
     }
 }
@@ -134,7 +134,7 @@ pub enum WordOrder {
 }
 
 impl WordOrder {
-    pub const ALL: [WordOrder; 4] = [Self::ABCD, Self::BADC, Self::CDAB, Self::DCBA];
+    pub const ALL: [Self; 4] = [Self::ABCD, Self::BADC, Self::CDAB, Self::DCBA];
 
     fn swaps(self) -> (bool, bool) {
         match self {
@@ -644,27 +644,27 @@ pub enum DeviceIdAccess {
 }
 
 impl DeviceIdAccess {
-    pub const ALL: [DeviceIdAccess; 3] = [
-        DeviceIdAccess::Basic,
-        DeviceIdAccess::Regular,
-        DeviceIdAccess::Extended,
+    pub const ALL: [Self; 3] = [
+        Self::Basic,
+        Self::Regular,
+        Self::Extended,
     ];
 
     pub fn label(self) -> &'static str {
         match self {
-            DeviceIdAccess::Basic => "Basic",
-            DeviceIdAccess::Regular => "Regular",
-            DeviceIdAccess::Extended => "Extended",
-            DeviceIdAccess::Specific => "Specific",
+            Self::Basic => "Basic",
+            Self::Regular => "Regular",
+            Self::Extended => "Extended",
+            Self::Specific => "Specific",
         }
     }
 
     fn into_read_code(self) -> ReadCode {
         match self {
-            DeviceIdAccess::Basic => ReadCode::Basic,
-            DeviceIdAccess::Regular => ReadCode::Regular,
-            DeviceIdAccess::Extended => ReadCode::Extended,
-            DeviceIdAccess::Specific => ReadCode::Specific,
+            Self::Basic => ReadCode::Basic,
+            Self::Regular => ReadCode::Regular,
+            Self::Extended => ReadCode::Extended,
+            Self::Specific => ReadCode::Specific,
         }
     }
 }

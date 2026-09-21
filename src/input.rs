@@ -57,15 +57,15 @@ named_keys! {
 impl KeyCode {
     pub fn is_reserved(self) -> bool {
         match self {
-            KeyCode::Esc
-            | KeyCode::Enter
-            | KeyCode::Backspace
-            | KeyCode::Delete
-            | KeyCode::Up
-            | KeyCode::Down
-            | KeyCode::Left
-            | KeyCode::Right => true,
-            KeyCode::Char(c) => c.is_ascii_digit(),
+            Self::Esc
+            | Self::Enter
+            | Self::Backspace
+            | Self::Delete
+            | Self::Up
+            | Self::Down
+            | Self::Left
+            | Self::Right => true,
+            Self::Char(c) => c.is_ascii_digit(),
             _ => false,
         }
     }
@@ -79,7 +79,7 @@ impl KeyCode {
         }
         let mut chars = s.chars();
         let c = chars.next()?;
-        chars.next().is_none().then_some(KeyCode::Char(c))
+        chars.next().is_none().then_some(Self::Char(c))
     }
 }
 
@@ -92,7 +92,7 @@ impl Serialize for KeyCode {
 impl<'de> Deserialize<'de> for KeyCode {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let s = String::deserialize(deserializer)?;
-        KeyCode::from_name(&s).ok_or_else(|| de::Error::custom(format!("invalid key: {s:?}")))
+        Self::from_name(&s).ok_or_else(|| de::Error::custom(format!("invalid key: {s:?}")))
     }
 }
 
