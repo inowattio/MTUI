@@ -143,7 +143,7 @@ pub enum DiscoveryColumn {
     Side,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct DiscoveryParams {
     pub interface: InterfaceKind,
     pub column: DiscoveryColumn,
@@ -373,7 +373,7 @@ impl DiscoveryParams {
     }
 }
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct WriteParams {
     pub position: u16,
     pub result: Option<StatusMessage>,
@@ -383,26 +383,26 @@ pub struct WriteParams {
     pub force_multiple: bool,
 }
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct LabelParams {
     pub position: u16,
     pub register_type: RegisterType,
     pub text: String,
 }
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct DumpParams {
     pub result: Option<StatusMessage>,
 }
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct ImportParams {
     pub pins: usize,
     pub labels: usize,
     pub rules: usize,
 }
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct DeviceIdParams {
     pub access: DeviceIdAccess,
     pub objects: Vec<(u8, String)>,
@@ -418,7 +418,7 @@ pub enum RawField {
     Data,
 }
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct RawParams {
     pub code: String,
     pub data: String,
@@ -551,7 +551,7 @@ impl UnitField {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct UnitScanHit {
     pub unit_id: u8,
     pub result: Result<Vec<u16>, String>,
@@ -567,7 +567,7 @@ pub enum ScanState {
     Failed,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct UnitParams {
     pub id: u8,
     pub selected: u16,
@@ -675,7 +675,7 @@ impl UnitParams {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SearchMatch {
     pub cell: RegisterCell,
     pub text: String,
@@ -700,7 +700,7 @@ impl SearchMatch {
     }
 }
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct SearchParams {
     pub query: String,
     pub matches: Vec<SearchMatch>,
@@ -715,13 +715,13 @@ impl SearchParams {
     }
 }
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct HelpParams {
     pub query: String,
     pub selected: u16,
 }
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct ColumnsParams {
     pub query: String,
     pub selected: u16,
@@ -1062,7 +1062,7 @@ pub enum MessageKind {
     Info,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StatusMessage {
     pub text: String,
     pub kind: MessageKind,
@@ -1202,7 +1202,7 @@ impl SettingsParams {
     }
 }
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct LogsParams {
     pub path: String,
     pub entries: Vec<WriteEntry>,
@@ -1355,7 +1355,7 @@ impl ReadParams {
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum ConnectionStatus {
     #[default]
     Unknown,

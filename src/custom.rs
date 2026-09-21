@@ -146,13 +146,13 @@ impl CustomOp {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EnumEntry {
     pub value: i64,
     pub text: String,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BitEntry {
     pub bit: u8,
     pub name: String,

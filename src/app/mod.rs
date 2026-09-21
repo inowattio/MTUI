@@ -56,7 +56,7 @@ impl ApiBindState {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum WriteType {
     #[default]
     Word,

@@ -26,7 +26,7 @@ pub const PALETTE: &[Color] = &[
     Color::White,
 ];
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(default)]
 pub struct Theme {
     pub background: Color,
