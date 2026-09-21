@@ -572,8 +572,8 @@ impl App {
 
     fn apply_refresh_result(&mut self, result: RefreshTaskResult) {
         match (&result.main_data, &result.pinned_data) {
-            (Some(Ok(_)), _) | (_, Some(Ok(_))) => self.stats.record_read_ok(result.read_duration),
             (Some(Err(e)), _) | (_, Some(Err(e))) => self.stats.record_read_error(&e.message),
+            (Some(Ok(_)), _) | (_, Some(Ok(_))) => self.stats.record_read_ok(result.read_duration),
             _ => {}
         }
         if !self.is_reading() {
@@ -624,10 +624,6 @@ impl App {
         self.sync_auto_widths();
 
         let connection = match (&result.main_data, &result.pinned_data) {
-            (Some(Ok(_)), _) | (_, Some(Ok(_))) => {
-                self.reconnect = ReconnectState::default();
-                ConnectionStatus::Connected
-            }
             (Some(Err(e)), _) | (_, Some(Err(e))) => {
                 let link_lost = match e.kind {
                     ReadFailure::Exception => false,
@@ -640,6 +636,10 @@ impl App {
                     self.reconnect = ReconnectState::default();
                 }
                 ConnectionStatus::Error(e.message.clone())
+            }
+            (Some(Ok(_)), _) | (_, Some(Ok(_))) => {
+                self.reconnect = ReconnectState::default();
+                ConnectionStatus::Connected
             }
             _ => self.connection.clone(),
         };
