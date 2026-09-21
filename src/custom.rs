@@ -1,7 +1,8 @@
 use crate::constants::UNINTERPRETABLE;
 use crate::interpretator::f16_to_f32;
 use crate::modbus::WordOrder;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::collections::BTreeMap;
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -145,16 +146,42 @@ impl CustomOp {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct EnumEntry {
     pub value: i64,
     pub text: String,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct BitEntry {
     pub bit: u8,
     pub name: String,
+}
+
+fn serialize_enum<S: Serializer>(entries: &[EnumEntry], serializer: S) -> Result<S::Ok, S::Error> {
+    serializer.collect_map(entries.iter().map(|e| (e.value, &e.text)))
+}
+
+fn deserialize_enum<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Vec<EnumEntry>, D::Error> {
+    let map = BTreeMap::<i64, String>::deserialize(deserializer)?;
+    Ok(map
+        .into_iter()
+        .map(|(value, text)| EnumEntry { value, text })
+        .collect())
+}
+
+fn serialize_bits<S: Serializer>(entries: &[BitEntry], serializer: S) -> Result<S::Ok, S::Error> {
+    serializer.collect_map(entries.iter().map(|e| (e.bit, &e.name)))
+}
+
+fn deserialize_bits<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<BitEntry>, D::Error> {
+    let map = BTreeMap::<u8, String>::deserialize(deserializer)?;
+    Ok(map
+        .into_iter()
+        .map(|(bit, name)| BitEntry { bit, name })
+        .collect())
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
@@ -164,9 +191,20 @@ pub struct CustomRule {
     pub repr: CustomRepr,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ops: Vec<CustomOp>,
-    #[serde(default, rename = "enum", skip_serializing_if = "Vec::is_empty")]
+    #[serde(
+        default,
+        rename = "enum",
+        skip_serializing_if = "Vec::is_empty",
+        serialize_with = "serialize_enum",
+        deserialize_with = "deserialize_enum"
+    )]
     pub enum_map: Vec<EnumEntry>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(
+        default,
+        skip_serializing_if = "Vec::is_empty",
+        serialize_with = "serialize_bits",
+        deserialize_with = "deserialize_bits"
+    )]
     pub bits: Vec<BitEntry>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub next: Vec<u16>,
@@ -669,6 +707,26 @@ mod tests {
             r#"["/10","*0.5","+2"]"#
         );
         assert!(serde_json::from_str::<CustomRule>(r#"{"repr": "u16", "ops": ["10"]}"#).is_err());
+    }
+
+    #[test]
+    fn enums_and_bits_are_maps_keyed_by_value() {
+        let r: CustomRule = serde_json::from_str(
+            r#"{"repr": "u16", "enum": {"1": "on", "-1": "fault", "0": "off"}, "bits": {"15": "beat", "0": "run"}}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            r.enum_map,
+            [(-1, "fault"), (0, "off"), (1, "on")].map(|(value, text)| EnumEntry {
+                value,
+                text: text.into()
+            })
+        );
+        assert_eq!(r.bits, [bit(0, "run"), bit(15, "beat")]);
+        assert_eq!(
+            serde_json::to_string(&r).unwrap(),
+            r#"{"repr":"u16","enum":{"-1":"fault","0":"off","1":"on"},"bits":{"0":"run","15":"beat"}}"#
+        );
     }
 
     #[test]
