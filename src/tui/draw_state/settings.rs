@@ -114,7 +114,7 @@ fn draw_fields(params: &SettingsParams, app: &App, frame: &mut Frame, area: Rect
                 theme.accent_style(),
             )));
         }
-        for &field in group.iter() {
+        for &field in group {
             let selected = focused && index == params.field;
             if selected {
                 selected_line = Some(lines.len());
