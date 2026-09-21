@@ -3,11 +3,11 @@ pub mod popups;
 pub mod read;
 pub mod settings;
 
-pub(crate) fn marker(selected: bool) -> &'static str {
+pub fn marker(selected: bool) -> &'static str {
     if selected { "> " } else { "  " }
 }
 
-pub(crate) fn action_line(
+pub fn action_line(
     theme: &crate::tui::theme::Theme,
     label: &str,
     selected: bool,
@@ -25,11 +25,11 @@ pub(crate) fn action_line(
     Line::from(spans)
 }
 
-pub(crate) fn cyclable(value: &str) -> String {
+pub fn cyclable(value: &str) -> String {
     format!("< {value} >")
 }
 
-pub(crate) fn edit_value(value: String, selected: bool, cyclable_field: bool) -> String {
+pub fn edit_value(value: String, selected: bool, cyclable_field: bool) -> String {
     match (selected, cyclable_field) {
         (true, true) => cyclable(&value),
         (true, false) => format!("{value}_"),
@@ -37,7 +37,7 @@ pub(crate) fn edit_value(value: String, selected: bool, cyclable_field: bool) ->
     }
 }
 
-pub(crate) fn field_row(
+pub fn field_row(
     theme: &crate::tui::theme::Theme,
     label: &str,
     width: usize,
@@ -54,7 +54,7 @@ pub(crate) fn field_row(
     ])
 }
 
-pub(crate) fn dim_line(
+pub fn dim_line(
     theme: &crate::tui::theme::Theme,
     text: impl Into<std::borrow::Cow<'static, str>>,
 ) -> ratatui::text::Line<'static> {
