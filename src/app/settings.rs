@@ -226,15 +226,17 @@ impl App {
             | SettingsField::CycleInputs
             | SettingsField::CycleCoils
             | SettingsField::CycleDiscretes => {
-                let rt = field.cycle_register_type().expect("cycle field");
-                self.config.cycle_register_types.toggle(rt);
+                if let Some(rt) = field.cycle_register_type() {
+                    self.config.cycle_register_types.toggle(rt);
+                }
             }
             SettingsField::CyclePinned
             | SettingsField::CycleLabeled
             | SettingsField::CycleCustom
             | SettingsField::CycleMatrix => {
-                let panel = field.cycle_panel().expect("cycle field");
-                self.config.cycle_panels.toggle(panel);
+                if let Some(panel) = field.cycle_panel() {
+                    self.config.cycle_panels.toggle(panel);
+                }
             }
             SettingsField::ThemePreset => {
                 let presets = Theme::PRESETS;

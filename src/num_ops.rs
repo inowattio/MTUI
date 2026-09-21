@@ -12,7 +12,9 @@ pub fn digit_add<T>(v: &mut T, digit: u8)
 where
     T: Copy + From<u8> + CheckedAdd<Output = T> + CheckedMul<Output = T>,
 {
-    assert!(digit < 10, "digit must be in 0..=9");
+    if digit > 9 {
+        return;
+    }
 
     let ten = T::from(10u8);
     let d = T::from(digit);
