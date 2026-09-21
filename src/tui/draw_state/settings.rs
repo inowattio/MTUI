@@ -12,6 +12,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
 
 const CATEGORY_WIDTH: u16 = 18;
+const LABEL_W: usize = 25;
 
 fn on_off(value: bool) -> String {
     if value { "on" } else { "off" }.to_string()
@@ -123,7 +124,7 @@ fn draw_fields(params: &SettingsParams, app: &App, frame: &mut Frame, area: Rect
             lines.push(render_field(app, params, field, selected, theme));
             if field == SettingsField::WriteLogDirectory {
                 lines.push(Line::from(Span::styled(
-                    format!("  {:<24} {}", "", app.writes_log_path().display()),
+                    format!("  {:<LABEL_W$} {}", "", app.writes_log_path().display()),
                     theme.dim_style(),
                 )));
             }
@@ -259,13 +260,13 @@ fn render_field(
 
     match color {
         Some(color) => color_row(theme, name, value_text, color, selected),
-        None => field_row(theme, name, 24, value_text, selected),
+        None => field_row(theme, name, LABEL_W, value_text, selected),
     }
 }
 
 fn disabled_row(theme: &Theme, label: &str, value: String, selected: bool) -> Line<'static> {
     Line::from(Span::styled(
-        format!("{}{label:<24} {value}", marker(selected)),
+        format!("{}{label:<LABEL_W$} {value}", marker(selected)),
         theme.dim_style(),
     ))
 }
@@ -277,7 +278,7 @@ fn color_row(
     color: Color,
     selected: bool,
 ) -> Line<'static> {
-    let mut line = field_row(theme, label, 24, format!("{value:<18}"), selected);
+    let mut line = field_row(theme, label, LABEL_W, format!("{value:<18}"), selected);
     line.spans
         .push(Span::styled("###", Style::default().fg(color)));
     line
