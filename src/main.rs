@@ -93,9 +93,13 @@ fn main() -> std::process::ExitCode {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             eprintln!("Error: {error:#}");
-            error
-                .downcast_ref::<ConfigError>()
-                .map_or(ExitCode::FAILURE, |e| ExitCode::from(e.exit_code()))
+            let config_error = error.downcast_ref::<ConfigError>();
+            if matches!(config_error, Some(ConfigError::Parse { .. })) {
+                eprintln!(
+                    "Note that the stable 1.0.0 release introduced breaking changes, delete the file and start the app again."
+                );
+            }
+            config_error.map_or(ExitCode::FAILURE, |e| ExitCode::from(e.exit_code()))
         }
     }
 }
