@@ -378,9 +378,10 @@ pub fn draw(
             Span::styled("batch ", theme.dim_style()),
             Span::styled(app.config.batch.size.to_string(), theme.base()),
         ],
-        vec![
-            Span::styled(format!("{:?}", app.config.device.word_order), theme.base()),
-        ],
+        vec![Span::styled(
+            format!("{:?}", app.config.device.word_order),
+            theme.base(),
+        )],
     ];
     if let Some(style) = read_only {
         identity.push(vec![Span::styled("RO", style)]);
@@ -389,9 +390,7 @@ pub fn draw(
         Span::styled("unit ", theme.dim_style()),
         Span::styled(app.config.device.unit_id.to_string(), theme.base()),
     ]);
-    identity.push(vec![
-        Span::styled(device.to_string(), theme.base()),
-    ]);
+    identity.push(vec![Span::styled(device.to_string(), theme.base())]);
 
     let cycle = &app.config.cycle_register_types;
     let types: Vec<RegisterType> = if app.config.show_inactive_tabs {
