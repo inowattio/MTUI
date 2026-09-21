@@ -7,9 +7,12 @@ use crate::tui::theme::Theme;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+pub const CONFIG_VERSION: u32 = 1;
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default)]
 pub struct Config {
+    pub version: u32,
     pub name: String,
     pub next_config: String,
     pub device: DeviceConfig,
@@ -721,6 +724,7 @@ fn demo_rules() -> BTreeMap<RegisterCell, CustomRule> {
 impl Default for Config {
     fn default() -> Self {
         Self {
+            version: CONFIG_VERSION,
             name: "demo".to_string(),
             next_config: String::new(),
             device: DeviceConfig::default(),
@@ -888,4 +892,17 @@ interpretation_columns! {
     Bits => bits : "bits" = true,
     Custom => custom : "custom" = true,
     Label => label : "label" = true,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{CONFIG_VERSION, Config};
+
+    #[test]
+    fn the_version_is_written_first_and_assumed_when_missing() {
+        let json = serde_json::to_string(&Config::default()).unwrap();
+        assert!(json.starts_with(&format!("{{\"version\":{CONFIG_VERSION},")));
+        let loaded: Config = serde_json::from_str("{}").unwrap();
+        assert_eq!(loaded.version, CONFIG_VERSION);
+    }
 }
