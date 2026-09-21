@@ -15,7 +15,14 @@ impl App {
 
         let now = Local::now();
         let read_now = Utc::now();
-        let filename = format!("dump_{}.txt", now.format("%Y%m%d_%H%M%S"));
+        let filename = super::file_name(
+            &[
+                "dump",
+                &self.config.name,
+                &now.format("%Y%m%d_%H%M%S").to_string(),
+            ],
+            "txt",
+        );
 
         let mut out = String::new();
         let mut last_kind = None;

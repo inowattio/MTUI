@@ -456,6 +456,28 @@ pub struct App {
     clipboard: Option<ClipboardHandle>,
 }
 
+pub(super) fn file_name(parts: &[&str], extension: &str) -> String {
+    let stem: Vec<String> = parts
+        .iter()
+        .map(|part| {
+            part.trim()
+                .chars()
+                .map(|c| {
+                    if c.is_alphanumeric() || c == '-' {
+                        c
+                    } else {
+                        '_'
+                    }
+                })
+                .collect::<String>()
+                .trim_matches('_')
+                .to_string()
+        })
+        .filter(|part| !part.is_empty())
+        .collect();
+    format!("{}.{extension}", stem.join("_"))
+}
+
 fn ensure_parent_dir(path: &Path) -> Result<(), String> {
     match path.parent() {
         Some(parent) if !parent.as_os_str().is_empty() => {
@@ -638,6 +660,19 @@ pub(crate) async fn settle_until(app: &mut App, done: impl Fn(&App) -> bool, wha
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn file_names_skip_empty_parts_and_sanitize_the_rest() {
+        assert_eq!(
+            super::file_name(&["dump", "", "20260921"], "txt"),
+            "dump_20260921.txt"
+        );
+        assert_eq!(
+            super::file_name(&["writes", "Plant A / line 2", "tcp", "1"], "csv"),
+            "writes_Plant_A___line_2_tcp_1.csv"
+        );
+        assert_eq!(super::file_name(&["logs", "  ", "x"], "txt"), "logs_x.txt");
+    }
+
     use super::{ConfigError, load_config};
     use std::fs;
     use std::path::PathBuf;

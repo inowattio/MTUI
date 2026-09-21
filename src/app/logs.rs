@@ -43,11 +43,19 @@ impl App {
     pub fn writes_log_path(&self) -> std::path::PathBuf {
         let kind = match &self.config.device.interface {
             Interface::Mock => "mock",
-            Interface::Serial(_) => "wired",
-            Interface::Tcp(_) => "network",
+            Interface::Serial(_) => "serial",
+            Interface::Tcp(_) => "tcp",
             Interface::RtuOverTcp(_) => "rtu-tcp",
         };
-        let name = format!("writes_{kind}_{}.csv", self.config.device.unit_id);
+        let name = super::file_name(
+            &[
+                "writes",
+                &self.config.name,
+                kind,
+                &self.config.device.unit_id.to_string(),
+            ],
+            "csv",
+        );
         #[cfg(not(target_arch = "wasm32"))]
         let dir = std::env::temp_dir();
         #[cfg(target_arch = "wasm32")]
@@ -135,7 +143,14 @@ impl App {
 
     pub fn dump_app_logs(&mut self) {
         let entries = logger::snapshot();
-        let filename = format!("logs_{}.txt", Local::now().format("%Y%m%d_%H%M%S"));
+        let filename = super::file_name(
+            &[
+                "logs",
+                &self.config.name,
+                &Local::now().format("%Y%m%d_%H%M%S").to_string(),
+            ],
+            "txt",
+        );
         match fs::write(&filename, logger::export(&entries)) {
             Ok(()) => log::info!("Saved {} log line(s) to {filename}", entries.len()),
             Err(e) => log::error!("Log dump failed | {e}"),
