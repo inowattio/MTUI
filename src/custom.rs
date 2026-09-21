@@ -162,19 +162,19 @@ pub struct CustomRule {
     #[serde(skip)]
     pub address: u16,
     pub repr: CustomRepr,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ops: Vec<CustomOp>,
-    #[serde(default, rename = "enum")]
+    #[serde(default, rename = "enum", skip_serializing_if = "Vec::is_empty")]
     pub enum_map: Vec<EnumEntry>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub bits: Vec<BitEntry>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub next: Vec<u16>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub decimals: Option<u8>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub prefix: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub suffix: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub word_order: Option<WordOrder>,
@@ -669,6 +669,17 @@ mod tests {
             r#"["/10","*0.5","+2"]"#
         );
         assert!(serde_json::from_str::<CustomRule>(r#"{"repr": "u16", "ops": ["10"]}"#).is_err());
+    }
+
+    #[test]
+    fn empty_fields_are_omitted_when_serializing() {
+        let mut r = rule(CustomRepr::U16);
+        r.ops = vec![parse_op("/10").unwrap()];
+        r.suffix = " V".into();
+        assert_eq!(
+            serde_json::to_string(&r).unwrap(),
+            r#"{"repr":"u16","ops":["/10"],"suffix":" V"}"#
+        );
     }
 
     #[test]
