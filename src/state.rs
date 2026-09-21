@@ -60,7 +60,7 @@ macro_rules! popups {
         }
 
         impl Popup {
-            pub fn kind(&self) -> PopupKind {
+            pub const fn kind(&self) -> PopupKind {
                 match self {
                     $( Popup::$variant { .. } => PopupKind::$variant ),+
                 }
@@ -91,7 +91,7 @@ field_enum! {
 }
 
 impl ScanMethod {
-    pub fn label(self) -> &'static str {
+    pub const fn label(self) -> &'static str {
         match self {
             Self::Ping => "ICMP ping",
             Self::Port => "TCP port",
@@ -100,7 +100,7 @@ impl ScanMethod {
 }
 
 impl InterfaceKind {
-    pub fn label(self) -> &'static str {
+    pub const fn label(self) -> &'static str {
         match self {
             Self::Mock => "Mock",
             Self::Serial => "Serial",
@@ -109,7 +109,7 @@ impl InterfaceKind {
         }
     }
 
-    pub fn uses_tcp(self) -> bool {
+    pub const fn uses_tcp(self) -> bool {
         matches!(self, Self::Tcp | Self::RtuOverTcp)
     }
 }
@@ -543,7 +543,7 @@ pub enum UnitField {
 }
 
 impl UnitField {
-    pub fn is_toggle(self) -> bool {
+    pub const fn is_toggle(self) -> bool {
         matches!(
             self,
             Self::Mode | Self::Repr | Self::Exceptions
@@ -652,7 +652,7 @@ impl UnitParams {
         self
     }
 
-    pub fn resumed(
+    pub const fn resumed(
         mut self,
         id: u8,
         register_type: RegisterType,
@@ -683,7 +683,7 @@ pub struct SearchMatch {
 }
 
 impl SearchMatch {
-    pub fn label(cell: RegisterCell, text: String) -> Self {
+    pub const fn label(cell: RegisterCell, text: String) -> Self {
         Self {
             cell,
             text,
@@ -691,7 +691,7 @@ impl SearchMatch {
         }
     }
 
-    pub fn hint(cell: RegisterCell, text: String) -> Self {
+    pub const fn hint(cell: RegisterCell, text: String) -> Self {
         Self {
             cell,
             text,
@@ -757,7 +757,7 @@ field_enum! {
 }
 
 impl ReadPanel {
-    pub fn name(self) -> &'static str {
+    pub const fn name(self) -> &'static str {
         match self {
             Self::Main => "Main",
             Self::Pinned => "Pinned",
@@ -790,22 +790,22 @@ macro_rules! settings_fields {
         pub enum SettingsField { $( $( $( $field, )+ )* )+ }
 
         impl SettingsField {
-            pub fn label(self) -> &'static str {
+            pub const fn label(self) -> &'static str {
                 match self { $( $( $( SettingsField::$field => $label, )+ )* )+ }
             }
 
-            pub fn description(self) -> &'static str {
+            pub const fn description(self) -> &'static str {
                 match self { $( $( $( SettingsField::$field => $description, )+ )* )+ }
             }
 
-            pub fn kind(self) -> FieldKind {
+            pub const fn kind(self) -> FieldKind {
                 use FieldKind::*;
                 match self { $( $( $( SettingsField::$field => $kind, )+ )* )+ }
             }
         }
 
         impl SettingsCategory {
-            pub fn groups(self) -> &'static [&'static [SettingsField]] {
+            pub const fn groups(self) -> &'static [&'static [SettingsField]] {
                 match self {
                     $( SettingsCategory::$category => &[ $( &[ $( SettingsField::$field ),+ ] ),* ], )+
                 }
@@ -940,14 +940,14 @@ impl SettingsField {
         self.kind() == FieldKind::Text
     }
 
-    pub fn is_toggle(self) -> bool {
+    pub const fn is_toggle(self) -> bool {
         matches!(
             self.kind(),
             FieldKind::Toggle | FieldKind::CycleType(_) | FieldKind::CyclePanel(_)
         )
     }
 
-    pub fn is_startup(self) -> bool {
+    pub const fn is_startup(self) -> bool {
         matches!(
             self,
             Self::StartupPanel
@@ -956,14 +956,14 @@ impl SettingsField {
         )
     }
 
-    pub fn cycle_register_type(self) -> Option<RegisterType> {
+    pub const fn cycle_register_type(self) -> Option<RegisterType> {
         match self.kind() {
             FieldKind::CycleType(register_type) => Some(register_type),
             _ => None,
         }
     }
 
-    pub fn cycle_panel(self) -> Option<ReadPanel> {
+    pub const fn cycle_panel(self) -> Option<ReadPanel> {
         match self.kind() {
             FieldKind::CyclePanel(panel) => Some(panel),
             _ => None,
@@ -993,7 +993,7 @@ field_enum! {
 }
 
 impl SettingsCategory {
-    pub fn label(self) -> &'static str {
+    pub const fn label(self) -> &'static str {
         match self {
             Self::Data => "Data",
             Self::Api => "API",
@@ -1031,15 +1031,15 @@ impl SettingsCategory {
             .collect()
     }
 
-    pub fn is_keybinds(self) -> bool {
+    pub const fn is_keybinds(self) -> bool {
         matches!(self, Self::Keybinds)
     }
 
-    pub fn is_search(self) -> bool {
+    pub const fn is_search(self) -> bool {
         matches!(self, Self::Search)
     }
 
-    pub fn is_searchable(self) -> bool {
+    pub const fn is_searchable(self) -> bool {
         !matches!(
             self,
             Self::Keybinds | Self::Theme | Self::Search
@@ -1125,7 +1125,7 @@ pub struct SettingsParams {
 impl SettingsParams {
     pub const KB_PAGE: u16 = 10;
 
-    pub fn current_category(&self) -> SettingsCategory {
+    pub const fn current_category(&self) -> SettingsCategory {
         SettingsCategory::ALL[self.category as usize]
     }
 
@@ -1235,7 +1235,7 @@ field_enum! {
 }
 
 impl InspectMode {
-    pub fn name(self) -> &'static str {
+    pub const fn name(self) -> &'static str {
         match self {
             Self::Now => "now",
             Self::Min => "min",
@@ -1366,7 +1366,7 @@ pub enum ConnectionStatus {
 }
 
 impl ConnectionStatus {
-    pub fn code(&self) -> u8 {
+    pub const fn code(&self) -> u8 {
         match self {
             Self::Unknown => 0,
             Self::Reading => 1,
@@ -1376,7 +1376,7 @@ impl ConnectionStatus {
         }
     }
 
-    pub fn label_from_code(code: u8) -> &'static str {
+    pub const fn label_from_code(code: u8) -> &'static str {
         match code {
             1 => "reading",
             2 => "connected",
@@ -1386,7 +1386,7 @@ impl ConnectionStatus {
         }
     }
 
-    pub fn code_serving(code: u8) -> bool {
+    pub const fn code_serving(code: u8) -> bool {
         matches!(code, 0..=2)
     }
 }

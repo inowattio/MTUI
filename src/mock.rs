@@ -113,7 +113,7 @@ const MODEL_NAME: &[u8; 16] = b"MTUI SIMULATOR  ";
 const VENDOR_NAME: &[u8; 32] = b"      POWER BUS SIMULATOR!      ";
 const THIRD_PHASE: f64 = 2.0944;
 
-fn word(value: u32, index: u16) -> u16 {
+const fn word(value: u32, index: u16) -> u16 {
     if index == 0 {
         (value >> 16) as u16
     } else {
@@ -121,11 +121,11 @@ fn word(value: u32, index: u16) -> u16 {
     }
 }
 
-fn dword(value: u64, index: u16) -> u16 {
+const fn dword(value: u64, index: u16) -> u16 {
     (value >> (48 - 16 * index)) as u16
 }
 
-fn m10k(value: u32, index: u16) -> u16 {
+const fn m10k(value: u32, index: u16) -> u16 {
     if index == 0 {
         ((value / 10_000) % 10_000) as u16
     } else {
@@ -196,7 +196,7 @@ impl MockContext {
         ((t / 19.0) as u64).is_multiple_of(2)
     }
 
-    fn heartbeat(&self, t: f64) -> bool {
+    const fn heartbeat(&self, t: f64) -> bool {
         (t as u64).is_multiple_of(2)
     }
 

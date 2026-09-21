@@ -58,14 +58,14 @@ impl App {
         }
     }
 
-    pub fn log_view(&self) -> Option<&LogViewParams> {
+    pub const fn log_view(&self) -> Option<&LogViewParams> {
         match &self.state {
             State::Logs(l) => Some(l),
             _ => None,
         }
     }
 
-    pub fn log_view_mut(&mut self) -> Option<&mut LogViewParams> {
+    pub const fn log_view_mut(&mut self) -> Option<&mut LogViewParams> {
         match &mut self.state {
             State::Logs(l) => Some(l),
             _ => None,
@@ -94,7 +94,7 @@ impl App {
         }
     }
 
-    pub fn log_view_toggle_wrap(&mut self) {
+    pub const fn log_view_toggle_wrap(&mut self) {
         if let Some(l) = self.log_view_mut() {
             l.wrap = !l.wrap;
             l.h_offset = 0;

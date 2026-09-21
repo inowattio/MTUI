@@ -89,7 +89,7 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) {
     }
 }
 
-fn step_pos(value: u16, up: bool, step: u16) -> u16 {
+const fn step_pos(value: u16, up: bool, step: u16) -> u16 {
     if up {
         value.saturating_sub(step)
     } else {

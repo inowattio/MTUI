@@ -18,7 +18,7 @@ impl RegisterType {
         Self::Discrete,
     ];
 
-    pub fn toggle(&mut self) {
+    pub const fn toggle(&mut self) {
         *self = match self {
             Self::Holding => Self::Input,
             Self::Input => Self::Coil,
@@ -27,15 +27,15 @@ impl RegisterType {
         };
     }
 
-    pub fn is_bit(self) -> bool {
+    pub const fn is_bit(self) -> bool {
         matches!(self, Self::Coil | Self::Discrete)
     }
 
-    pub fn is_writable(self) -> bool {
+    pub const fn is_writable(self) -> bool {
         matches!(self, Self::Holding | Self::Coil)
     }
 
-    pub fn name(self) -> &'static str {
+    pub const fn name(self) -> &'static str {
         match self {
             Self::Holding => "Holding",
             Self::Input => "Input",
@@ -44,7 +44,7 @@ impl RegisterType {
         }
     }
 
-    pub fn marker(self) -> &'static str {
+    pub const fn marker(self) -> &'static str {
         match self {
             Self::Holding => "H",
             Self::Input => "I",

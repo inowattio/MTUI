@@ -164,7 +164,7 @@ pub enum BatchAnchor {
 impl BatchAnchor {
     pub const ALL: [Self; 3] = [Self::Start, Self::Middle, Self::End];
 
-    pub fn label(self) -> &'static str {
+    pub const fn label(self) -> &'static str {
         match self {
             Self::Start => "start",
             Self::Middle => "middle",
@@ -184,7 +184,7 @@ pub enum TimeMode {
 impl TimeMode {
     pub const ALL: [Self; 2] = [Self::ReadAt, Self::Ago];
 
-    pub fn label(self) -> &'static str {
+    pub const fn label(self) -> &'static str {
         match self {
             Self::ReadAt => "read at",
             Self::Ago => "ago",
@@ -203,7 +203,7 @@ pub enum AddressMode {
 impl AddressMode {
     pub const ALL: [Self; 2] = [Self::Dec, Self::Hex];
 
-    pub fn label(self) -> &'static str {
+    pub const fn label(self) -> &'static str {
         match self {
             Self::Dec => "decimal",
             Self::Hex => "hex",
@@ -227,13 +227,13 @@ macro_rules! keybinds {
         }
 
         impl Keybinds {
-            pub fn get(&self, action: KeybindAction) -> KeyCode {
+            pub const fn get(&self, action: KeybindAction) -> KeyCode {
                 match action {
                     $(KeybindAction::$action => self.$field,)+
                 }
             }
 
-            pub fn set(&mut self, action: KeybindAction, key: KeyCode) {
+            pub const fn set(&mut self, action: KeybindAction, key: KeyCode) {
                 match action {
                     $(KeybindAction::$action => self.$field = key,)+
                 }
@@ -248,7 +248,7 @@ macro_rules! keybinds {
         impl KeybindAction {
             pub const ALL: &'static [KeybindAction] = &[$(KeybindAction::$action),+];
 
-            pub fn label(self) -> &'static str {
+            pub const fn label(self) -> &'static str {
                 match self {
                     $(KeybindAction::$action => $label,)+
                 }
@@ -346,7 +346,7 @@ impl Registers {
         }
     }
 
-    fn section_mut(&mut self, kind: RegisterType) -> &mut Vec<RegisterEntry> {
+    const fn section_mut(&mut self, kind: RegisterType) -> &mut Vec<RegisterEntry> {
         match kind {
             RegisterType::Holding => &mut self.holdings,
             RegisterType::Input => &mut self.inputs,
@@ -454,7 +454,7 @@ impl Default for CycleTypes {
 }
 
 impl CycleTypes {
-    pub fn enabled(&self, register_type: RegisterType) -> bool {
+    pub const fn enabled(&self, register_type: RegisterType) -> bool {
         match register_type {
             RegisterType::Holding => self.holdings,
             RegisterType::Input => self.inputs,
@@ -463,7 +463,7 @@ impl CycleTypes {
         }
     }
 
-    pub fn toggle(&mut self, register_type: RegisterType) {
+    pub const fn toggle(&mut self, register_type: RegisterType) {
         match register_type {
             RegisterType::Holding => self.holdings = !self.holdings,
             RegisterType::Input => self.inputs = !self.inputs,
@@ -501,7 +501,7 @@ impl Default for CyclePanels {
 }
 
 impl CyclePanels {
-    pub fn enabled(&self, panel: ReadPanel) -> bool {
+    pub const fn enabled(&self, panel: ReadPanel) -> bool {
         match panel {
             ReadPanel::Main => true,
             ReadPanel::Pinned => self.pinned,
@@ -511,7 +511,7 @@ impl CyclePanels {
         }
     }
 
-    pub fn toggle(&mut self, panel: ReadPanel) {
+    pub const fn toggle(&mut self, panel: ReadPanel) {
         match panel {
             ReadPanel::Main => {}
             ReadPanel::Pinned => self.pinned = !self.pinned,
@@ -826,7 +826,7 @@ macro_rules! interpretation_columns {
         impl Column {
             pub const ALL: &'static [Column] = &[$(Column::$variant),+];
 
-            pub fn key(self) -> &'static str {
+            pub const fn key(self) -> &'static str {
                 match self {
                     $(Column::$variant => stringify!($field),)+
                 }
@@ -836,13 +836,13 @@ macro_rules! interpretation_columns {
                 Column::ALL.iter().copied().find(|c| c.key() == key)
             }
 
-            pub fn name(self) -> &'static str {
+            pub const fn name(self) -> &'static str {
                 match self {
                     $(Column::$variant => $name,)+
                 }
             }
 
-            fn shown_by_default(self) -> bool {
+            const fn shown_by_default(self) -> bool {
                 match self {
                     $(Column::$variant => $default,)+
                 }

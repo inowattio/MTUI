@@ -55,7 +55,7 @@ named_keys! {
 }
 
 impl KeyCode {
-    pub fn is_reserved(self) -> bool {
+    pub const fn is_reserved(self) -> bool {
         match self {
             Self::Esc
             | Self::Enter
@@ -103,15 +103,15 @@ pub struct KeyEvent {
 }
 
 impl KeyEvent {
-    pub fn new(code: KeyCode) -> Self {
+    pub const fn new(code: KeyCode) -> Self {
         Self { code, ctrl: false }
     }
 
-    pub fn with_ctrl(code: KeyCode, ctrl: bool) -> Self {
+    pub const fn with_ctrl(code: KeyCode, ctrl: bool) -> Self {
         Self { code, ctrl }
     }
 
-    pub fn is_ctrl_c(self) -> bool {
+    pub const fn is_ctrl_c(self) -> bool {
         self.ctrl && matches!(self.code, KeyCode::Char('c' | 'C'))
     }
 }

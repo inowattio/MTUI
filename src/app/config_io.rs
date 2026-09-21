@@ -159,7 +159,7 @@ impl App {
         result
     }
 
-    fn current_position(&self) -> Option<Startup> {
+    const fn current_position(&self) -> Option<Startup> {
         let p = match &self.state {
             State::Read(p) => p,
             State::Settings(s) => &s.previous,

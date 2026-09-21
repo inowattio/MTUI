@@ -66,7 +66,7 @@ pub(super) fn draw(
     super::render(frame, area, theme, "Write logs", width(), lines);
 }
 
-fn width() -> u16 {
+const fn width() -> u16 {
     (1 + TIME_W + UNIT_W + ADDR_W + TYPE_W + PREV_W + VALUE_W + GAP.len() * 5 + 2) as u16
 }
 

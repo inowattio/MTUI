@@ -27,7 +27,7 @@ fn local_subnet_prefix() -> Option<String> {
 }
 
 #[cfg(target_arch = "wasm32")]
-fn local_subnet_prefix() -> Option<String> {
+const fn local_subnet_prefix() -> Option<String> {
     None
 }
 
@@ -94,7 +94,7 @@ impl App {
     }
 
     #[cfg(target_arch = "wasm32")]
-    pub(super) fn request_ports(&self) {}
+    pub(super) const fn request_ports(&self) {}
 
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn request_ports(&mut self) {

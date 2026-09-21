@@ -94,7 +94,7 @@ pub fn snapshot() -> Vec<LogEntry> {
 }
 
 impl LogLevel {
-    pub fn tag(self) -> &'static str {
+    pub const fn tag(self) -> &'static str {
         match self {
             Self::Info => "INFO",
             Self::Warn => "WARN",

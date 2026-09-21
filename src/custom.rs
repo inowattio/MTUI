@@ -34,7 +34,7 @@ impl CustomRepr {
 
     pub const MAX_REGISTERS: usize = 4;
 
-    pub fn register_count(self) -> usize {
+    pub const fn register_count(self) -> usize {
         match self {
             Self::U16 | Self::I16 | Self::F16 => 1,
             Self::U32 | Self::I32 | Self::F32 => 2,
@@ -56,7 +56,7 @@ impl CustomRepr {
         }
     }
 
-    pub fn label(self) -> &'static str {
+    pub const fn label(self) -> &'static str {
         match self {
             Self::U16 => "u16",
             Self::I16 => "i16",
@@ -81,7 +81,7 @@ pub enum OpKind {
 }
 
 impl OpKind {
-    pub fn symbol(self) -> char {
+    pub const fn symbol(self) -> char {
         match self {
             Self::Add => '+',
             Self::Sub => '-',
@@ -91,7 +91,7 @@ impl OpKind {
         }
     }
 
-    fn from_symbol(c: char) -> Option<Self> {
+    const fn from_symbol(c: char) -> Option<Self> {
         match c {
             '+' => Some(Self::Add),
             '-' => Some(Self::Sub),

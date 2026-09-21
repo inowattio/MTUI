@@ -105,4 +105,4 @@ fn main() -> std::process::ExitCode {
 }
 
 #[cfg(target_arch = "wasm32")]
-fn main() {}
+const fn main() {}

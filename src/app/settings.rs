@@ -8,7 +8,7 @@ use crate::state::{ReadPanel, SettingsField, SettingsParams, State, StatusMessag
 use crate::tui::theme::{self, Theme};
 use ratatui::style::Color;
 
-fn theme_field(theme: &mut Theme, field: SettingsField) -> Option<&mut Color> {
+const fn theme_field(theme: &mut Theme, field: SettingsField) -> Option<&mut Color> {
     Some(match field {
         SettingsField::ThemeBackground => &mut theme.background,
         SettingsField::ThemeBorder => &mut theme.border,
@@ -27,14 +27,14 @@ fn theme_field(theme: &mut Theme, field: SettingsField) -> Option<&mut Color> {
 }
 
 impl App {
-    pub fn settings(&self) -> Option<&SettingsParams> {
+    pub const fn settings(&self) -> Option<&SettingsParams> {
         match &self.state {
             State::Settings(s) => Some(s),
             _ => None,
         }
     }
 
-    pub fn settings_mut(&mut self) -> Option<&mut SettingsParams> {
+    pub const fn settings_mut(&mut self) -> Option<&mut SettingsParams> {
         match &mut self.state {
             State::Settings(s) => Some(s),
             _ => None,
@@ -71,7 +71,7 @@ impl App {
         self.set_settings_status(StatusMessage::ok(format!("Cleared {n} {noun}(s)")));
     }
 
-    fn numeric_spec(field: SettingsField) -> Option<(i64, i64, i64)> {
+    const fn numeric_spec(field: SettingsField) -> Option<(i64, i64, i64)> {
         match field {
             SettingsField::BatchSize | SettingsField::GraphHistory => Some((1, u16::MAX as i64, 1)),
             SettingsField::MatrixColumns | SettingsField::StartupAddress => {
@@ -89,7 +89,7 @@ impl App {
         }
     }
 
-    fn numeric_get(&self, field: SettingsField) -> i64 {
+    const fn numeric_get(&self, field: SettingsField) -> i64 {
         match field {
             SettingsField::BatchSize => self.config.batch.size as i64,
             SettingsField::RefreshInterval => self.config.refresh_interval_ms as i64,
@@ -131,7 +131,7 @@ impl App {
         }
     }
 
-    pub fn settings_field_disabled(&self, field: SettingsField) -> bool {
+    pub const fn settings_field_disabled(&self, field: SettingsField) -> bool {
         field.is_startup() && self.config.save_position_on_exit
     }
 

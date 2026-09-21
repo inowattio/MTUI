@@ -231,7 +231,7 @@ impl Theme {
     }
 }
 
-pub fn spinner_frame(frame: u64) -> &'static str {
+pub const fn spinner_frame(frame: u64) -> &'static str {
     SPINNER_FRAMES[(frame as usize) % SPINNER_FRAMES.len()]
 }
 

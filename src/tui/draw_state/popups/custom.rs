@@ -8,7 +8,7 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 
-fn section(field: CustomField) -> &'static str {
+const fn section(field: CustomField) -> &'static str {
     match field {
         CustomField::Repr | CustomField::WordOrder | CustomField::Next => "DECODE",
         CustomField::Ops | CustomField::Enum | CustomField::Bits => "MAP",

@@ -136,7 +136,7 @@ pub enum WordOrder {
 impl WordOrder {
     pub const ALL: [Self; 4] = [Self::ABCD, Self::BADC, Self::CDAB, Self::DCBA];
 
-    fn swaps(self) -> (bool, bool) {
+    const fn swaps(self) -> (bool, bool) {
         match self {
             Self::ABCD => (false, false),
             Self::BADC => (true, false),
@@ -145,7 +145,7 @@ impl WordOrder {
         }
     }
 
-    fn ordered(self, a: u16, b: u16) -> (u16, u16) {
+    const fn ordered(self, a: u16, b: u16) -> (u16, u16) {
         let (byte_swap, word_swap) = self.swaps();
         let (mut high, mut low) = if word_swap { (b, a) } else { (a, b) };
         if byte_swap {
@@ -650,7 +650,7 @@ impl DeviceIdAccess {
         Self::Extended,
     ];
 
-    pub fn label(self) -> &'static str {
+    pub const fn label(self) -> &'static str {
         match self {
             Self::Basic => "Basic",
             Self::Regular => "Regular",
@@ -659,7 +659,7 @@ impl DeviceIdAccess {
         }
     }
 
-    fn into_read_code(self) -> ReadCode {
+    const fn into_read_code(self) -> ReadCode {
         match self {
             Self::Basic => ReadCode::Basic,
             Self::Regular => ReadCode::Regular,
@@ -828,7 +828,7 @@ impl ModbusDevice {
         }
     }
 
-    pub fn set_word_order(&mut self, word_order: WordOrder) {
+    pub const fn set_word_order(&mut self, word_order: WordOrder) {
         self.config.word_order = word_order;
     }
 

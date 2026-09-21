@@ -30,7 +30,7 @@ mod web {
     /// Frames between rebuild attempts while the renderer is down (~1s).
     const FRAMES_BETWEEN_REBUILDS: u32 = 60;
 
-    fn convert_key(event: ratzilla::event::KeyEvent) -> Option<input::KeyEvent> {
+    const fn convert_key(event: ratzilla::event::KeyEvent) -> Option<input::KeyEvent> {
         use ratzilla::event::KeyCode;
         let code = match event.code {
             KeyCode::Char(c) => input::KeyCode::Char(c),

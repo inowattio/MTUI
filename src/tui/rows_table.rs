@@ -28,7 +28,7 @@ pub struct RowsTable {
 }
 
 impl RowsTable {
-    pub fn new(
+    pub const fn new(
         block: Block<'static>,
         header: String,
         header_style: Style,
@@ -44,7 +44,7 @@ impl RowsTable {
         }
     }
 
-    pub fn hscroll(mut self, prefix: u16, offset: u16) -> Self {
+    pub const fn hscroll(mut self, prefix: u16, offset: u16) -> Self {
         self.prefix = prefix;
         self.h_off = offset;
         self

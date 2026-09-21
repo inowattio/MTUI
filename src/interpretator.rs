@@ -48,7 +48,7 @@ impl RowSegment {
             .to_string()
     }
 
-    pub fn end(self) -> usize {
+    pub const fn end(self) -> usize {
         self.start.saturating_add(self.width)
     }
 }
@@ -102,7 +102,7 @@ impl<'a> RowCtx<'a> {
         }
     }
 
-    fn two(&self) -> bool {
+    const fn two(&self) -> bool {
         self.next[0].is_some()
     }
 
@@ -139,7 +139,7 @@ const COLUMNS: &[ColumnSpec] = &[
 ];
 
 impl Column {
-    fn is_meta(self) -> bool {
+    const fn is_meta(self) -> bool {
         matches!(self, Self::Address | Self::Time | Self::Label)
     }
 
@@ -157,11 +157,11 @@ impl Column {
         self.graph_width().is_some()
     }
 
-    pub fn graph_is_float(self) -> bool {
+    pub const fn graph_is_float(self) -> bool {
         matches!(self, Self::F16 | Self::F32 | Self::F64)
     }
 
-    pub fn custom_repr(self) -> Option<CustomRepr> {
+    pub const fn custom_repr(self) -> Option<CustomRepr> {
         Some(match self {
             Self::U16 => CustomRepr::U16,
             Self::I16 => CustomRepr::I16,
@@ -261,7 +261,7 @@ impl Interpretor {
         self.rebuild_header();
     }
 
-    pub fn label_width(&self) -> u16 {
+    pub const fn label_width(&self) -> u16 {
         self.config.label_width
     }
 
@@ -277,7 +277,7 @@ impl Interpretor {
         }
     }
 
-    pub fn custom_width(&self) -> u16 {
+    pub const fn custom_width(&self) -> u16 {
         self.config.custom_width
     }
 
@@ -319,7 +319,7 @@ impl Interpretor {
         self.config.clone()
     }
 
-    pub fn set_word_order(&mut self, word_order: WordOrder) {
+    pub const fn set_word_order(&mut self, word_order: WordOrder) {
         self.word_order = word_order;
     }
 
@@ -334,19 +334,19 @@ impl Interpretor {
         }
     }
 
-    pub fn time_mode(&self) -> TimeMode {
+    pub const fn time_mode(&self) -> TimeMode {
         self.config.time_mode
     }
 
-    pub fn address_mode(&self) -> AddressMode {
+    pub const fn address_mode(&self) -> AddressMode {
         self.config.address_mode
     }
 
-    pub fn set_time_mode(&mut self, mode: TimeMode) {
+    pub const fn set_time_mode(&mut self, mode: TimeMode) {
         self.config.time_mode = mode;
     }
 
-    pub fn set_address_mode(&mut self, mode: AddressMode) {
+    pub const fn set_address_mode(&mut self, mode: AddressMode) {
         self.config.address_mode = mode;
     }
 
@@ -467,7 +467,7 @@ fn float_cell<T: std::fmt::Display + std::fmt::LowerExp>(x: T, width: usize, out
     }
 }
 
-fn glyph(b: u8) -> char {
+const fn glyph(b: u8) -> char {
     let c = b as char;
     if c.is_ascii_graphic() { c } else { '.' }
 }
@@ -581,14 +581,14 @@ fn bcd_to_decimal<T: num_traits::PrimInt>(value: T) -> Option<T> {
     Some(result)
 }
 
-fn m10k_to_u32(value: u32) -> (u16, u16) {
+const fn m10k_to_u32(value: u32) -> (u16, u16) {
     let high = (value >> 16) as u16;
     let low = (value & 0xFFFF) as u16;
 
     (high, low)
 }
 
-fn m10k_to_i32(value: u32) -> (i16, i16) {
+const fn m10k_to_i32(value: u32) -> (i16, i16) {
     let high = (value >> 16) as i16;
     let low = (value & 0xFFFF) as i16;
 

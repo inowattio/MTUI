@@ -174,7 +174,7 @@ fn query_line(params: &SettingsParams, theme: &Theme) -> Line<'static> {
     Line::from(spans)
 }
 
-fn footer_split(area: Rect, rows: u16) -> (Rect, Option<Rect>) {
+const fn footer_split(area: Rect, rows: u16) -> (Rect, Option<Rect>) {
     if rows == 0 || area.height < rows + 2 {
         return (area, None);
     }
@@ -190,7 +190,7 @@ fn footer_split(area: Rect, rows: u16) -> (Rect, Option<Rect>) {
     (list, Some(footer))
 }
 
-fn more_row(list: &mut Rect, has_hint: bool, len: usize) -> Option<Rect> {
+const fn more_row(list: &mut Rect, has_hint: bool, len: usize) -> Option<Rect> {
     if len <= list.height as usize {
         return None;
     }

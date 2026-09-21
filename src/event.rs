@@ -16,7 +16,7 @@ pub enum Event {
     Paste(String),
 }
 
-fn convert_key(code: CrosstermKeyCode) -> Option<input::KeyCode> {
+const fn convert_key(code: CrosstermKeyCode) -> Option<input::KeyCode> {
     Some(match code {
         CrosstermKeyCode::Char(c) => input::KeyCode::Char(c),
         CrosstermKeyCode::Esc => input::KeyCode::Esc,

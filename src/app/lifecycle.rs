@@ -191,7 +191,7 @@ impl App {
         }
     }
 
-    pub(super) fn is_reading(&self) -> bool {
+    pub(super) const fn is_reading(&self) -> bool {
         matches!(self.state, State::Read(_))
     }
 

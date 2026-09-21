@@ -39,7 +39,7 @@ pub enum ApiBindState {
 }
 
 impl ApiBindState {
-    pub fn code(self) -> u8 {
+    pub const fn code(self) -> u8 {
         match self {
             Self::Pending => 0,
             Self::Bound => 1,
@@ -47,7 +47,7 @@ impl ApiBindState {
         }
     }
 
-    pub fn from_code(code: u8) -> Self {
+    pub const fn from_code(code: u8) -> Self {
         match code {
             1 => Self::Bound,
             2 => Self::Failed,
@@ -65,7 +65,7 @@ pub enum WriteType {
 }
 
 impl WriteType {
-    fn bits(self) -> u16 {
+    const fn bits(self) -> u16 {
         match self {
             Self::Coil => 1,
             Self::Word => 16,
@@ -603,7 +603,7 @@ pub enum ConfigError {
 }
 
 impl ConfigError {
-    pub fn exit_code(&self) -> u8 {
+    pub const fn exit_code(&self) -> u8 {
         match self {
             Self::Read { .. } => 2,
             Self::Parse { .. } => 3,

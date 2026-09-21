@@ -3,7 +3,7 @@ pub mod popups;
 pub mod read;
 pub mod settings;
 
-pub fn marker(selected: bool) -> &'static str {
+pub const fn marker(selected: bool) -> &'static str {
     if selected { "> " } else { "  " }
 }
 
