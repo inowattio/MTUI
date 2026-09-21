@@ -19,11 +19,11 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     let mode = make_top_title(&app.state);
     let key_hints = make_bottom_title(&theme, app);
     let mut clock_spans = Vec::new();
-    if app.config.show_clock {
+    if app.config.display.clock {
         let clock = Local::now().format("%H:%M:%S.%3f").to_string();
         clock_spans.push(Span::styled(format!("{clock} "), theme.accent_style()));
     }
-    if app.config.show_ram
+    if app.config.display.ram
         && let Some(bytes) = app.ram_bytes
     {
         clock_spans.push(Span::styled(
@@ -31,7 +31,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
             theme.dim_style(),
         ));
     }
-    if app.config.show_frame_time {
+    if app.config.display.frame_time {
         clock_spans.push(Span::styled(
             format!("{:.2?}ms ", app.last_frame.as_micros() as f64 / 1000.),
             theme.dim_style(),
@@ -83,11 +83,13 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     let full = frame.area();
     let pad_h = app
         .config
+        .display
         .padding
         .horizontal
         .min(full.width.saturating_sub(PADDED_MIN_WIDTH) / 2);
     let pad_v = app
         .config
+        .display
         .padding
         .vertical
         .min(full.height.saturating_sub(PADDED_MIN_HEIGHT) / 2);

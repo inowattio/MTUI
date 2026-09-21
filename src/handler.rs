@@ -508,7 +508,7 @@ async fn handle_discovery_key(key_event: KeyEvent, app: &mut App) {
             }
         }
         KeyCode::Left | KeyCode::Right => {
-            let show_mock_device = app.config.show_mock_device;
+            let show_mock_device = app.config.display.mock_device;
             if let Some(d) = app.discovery_mut() {
                 cycle_field(d, field, key_event.code == KeyCode::Right, show_mock_device);
                 d.status = None;
@@ -889,7 +889,7 @@ mod tests {
             assert_eq!(kind(&app), expected);
         }
 
-        app.config.show_mock_device = false;
+        app.config.display.mock_device = false;
         app.discovery_mut()
             .unwrap()
             .set_interface(InterfaceKind::Serial);
@@ -1037,11 +1037,11 @@ mod tests {
         assert_eq!(s.current_fields(), vec![SettingsField::ShowClock]);
         assert_eq!(s.focus, SettingsFocus::Categories);
 
-        let before = app.config.show_clock;
+        let before = app.config.display.clock;
         handle_key_events(KeyEvent::new(KeyCode::Enter), &mut app).await;
         assert_eq!(app.settings().unwrap().focus, SettingsFocus::Fields);
         handle_key_events(KeyEvent::new(KeyCode::Enter), &mut app).await;
-        assert_ne!(app.config.show_clock, before);
+        assert_ne!(app.config.display.clock, before);
 
         handle_key_events(KeyEvent::new(KeyCode::Esc), &mut app).await;
         handle_key_events(KeyEvent::new(KeyCode::Backspace), &mut app).await;

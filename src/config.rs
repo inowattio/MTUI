@@ -26,16 +26,7 @@ pub struct Config {
     pub read_only: bool,
     pub log_writes: bool,
     pub skip_unsaved_warning: bool,
-    pub show_mock_device: bool,
-    pub show_clock: bool,
-    pub show_frame_time: bool,
-    pub show_ram: bool,
-    pub show_connection_label: bool,
-    pub show_ascii_strip: bool,
-    pub show_inactive_tabs: bool,
-    pub show_read_window: bool,
-    pub show_rule_continuation: bool,
-    pub padding: Padding,
+    pub display: DisplayConfig,
     pub cycle_register_types: CycleTypes,
     pub cycle_panels: CyclePanels,
     pub api: ApiConfig,
@@ -92,6 +83,38 @@ impl Default for MatrixConfig {
         Self {
             columns: 0,
             show_context: true,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[serde(default)]
+pub struct DisplayConfig {
+    pub clock: bool,
+    pub frame_time: bool,
+    pub ram: bool,
+    pub connection_label: bool,
+    pub ascii_strip: bool,
+    pub inactive_tabs: bool,
+    pub read_window: bool,
+    pub rule_continuation: bool,
+    pub mock_device: bool,
+    pub padding: Padding,
+}
+
+impl Default for DisplayConfig {
+    fn default() -> Self {
+        Self {
+            clock: true,
+            frame_time: false,
+            ram: false,
+            connection_label: true,
+            ascii_strip: true,
+            inactive_tabs: true,
+            read_window: true,
+            rule_continuation: false,
+            mock_device: true,
+            padding: Padding::default(),
         }
     }
 }
@@ -711,16 +734,7 @@ impl Default for Config {
             read_only: false,
             log_writes: false,
             skip_unsaved_warning: false,
-            show_mock_device: true,
-            show_clock: true,
-            show_frame_time: false,
-            show_ram: false,
-            show_connection_label: true,
-            show_ascii_strip: true,
-            show_inactive_tabs: true,
-            show_read_window: true,
-            show_rule_continuation: false,
-            padding: Padding::default(),
+            display: DisplayConfig::default(),
             cycle_register_types: CycleTypes::default(),
             cycle_panels: CyclePanels::default(),
             api: ApiConfig::default(),
@@ -735,7 +749,10 @@ impl Config {
     pub fn demo() -> Self {
         Self {
             registers: Registers::from_views(&[], &demo_labels(), &demo_rules()),
-            show_rule_continuation: true,
+            display: DisplayConfig {
+                rule_continuation: true,
+                ..DisplayConfig::default()
+            },
             ..Self::default()
         }
     }

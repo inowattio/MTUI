@@ -93,8 +93,8 @@ impl App {
             SettingsField::LabelWidth => self.interpreter.label_width() as i64,
             SettingsField::CustomWidth => self.interpreter.custom_width() as i64,
             SettingsField::StartupAddress => self.config.startup.address as i64,
-            SettingsField::PaddingHorizontal => self.config.padding.horizontal as i64,
-            SettingsField::PaddingVertical => self.config.padding.vertical as i64,
+            SettingsField::PaddingHorizontal => self.config.display.padding.horizontal as i64,
+            SettingsField::PaddingVertical => self.config.display.padding.vertical as i64,
             SettingsField::ApiPort => self.config.api.port as i64,
             _ => 0,
         }
@@ -116,8 +116,10 @@ impl App {
                 self.sync_auto_widths();
             }
             SettingsField::StartupAddress => self.config.startup.address = value as u16,
-            SettingsField::PaddingHorizontal => self.config.padding.horizontal = value as u16,
-            SettingsField::PaddingVertical => self.config.padding.vertical = value as u16,
+            SettingsField::PaddingHorizontal => {
+                self.config.display.padding.horizontal = value as u16
+            }
+            SettingsField::PaddingVertical => self.config.display.padding.vertical = value as u16,
             SettingsField::ApiPort => self.config.api.port = value.clamp(0, u16::MAX as i64) as u16,
             _ => {}
         }
@@ -139,7 +141,7 @@ impl App {
                 self.config.save_position_on_exit = !self.config.save_position_on_exit
             }
             SettingsField::ShowMockDevice => {
-                self.config.show_mock_device = !self.config.show_mock_device
+                self.config.display.mock_device = !self.config.display.mock_device
             }
             SettingsField::ReadOnly => self.config.read_only = !self.config.read_only,
             SettingsField::TimeMode => {
@@ -176,27 +178,27 @@ impl App {
                 self.config.reconnect_on_timeout = !self.config.reconnect_on_timeout
             }
             SettingsField::ShowRuleContinuation => {
-                self.config.show_rule_continuation = !self.config.show_rule_continuation
+                self.config.display.rule_continuation = !self.config.display.rule_continuation
             }
-            SettingsField::ShowClock => self.config.show_clock = !self.config.show_clock,
+            SettingsField::ShowClock => self.config.display.clock = !self.config.display.clock,
             SettingsField::ShowFrameTime => {
-                self.config.show_frame_time = !self.config.show_frame_time
+                self.config.display.frame_time = !self.config.display.frame_time
             }
-            SettingsField::ShowRam => self.config.show_ram = !self.config.show_ram,
+            SettingsField::ShowRam => self.config.display.ram = !self.config.display.ram,
             SettingsField::ShowConnectionLabel => {
-                self.config.show_connection_label = !self.config.show_connection_label
+                self.config.display.connection_label = !self.config.display.connection_label
             }
             SettingsField::ShowAsciiStrip => {
-                self.config.show_ascii_strip = !self.config.show_ascii_strip
+                self.config.display.ascii_strip = !self.config.display.ascii_strip
             }
             SettingsField::ShowInactiveTabs => {
-                self.config.show_inactive_tabs = !self.config.show_inactive_tabs
+                self.config.display.inactive_tabs = !self.config.display.inactive_tabs
             }
             SettingsField::ShowMatrixContext => {
                 self.config.matrix.show_context = !self.config.matrix.show_context;
             }
             SettingsField::ShowReadWindow => {
-                self.config.show_read_window = !self.config.show_read_window
+                self.config.display.read_window = !self.config.display.read_window
             }
             SettingsField::GraphTimeAxis => {
                 self.config.graph.time_axis = !self.config.graph.time_axis

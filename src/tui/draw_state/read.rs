@@ -19,7 +19,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Axis, Block, Chart, Dataset, GraphType, LegendPosition, Paragraph};
 
 fn panel_block(theme: &Theme, active: ReadPanel, config: &Config) -> Block<'static> {
-    if !config.show_inactive_tabs {
+    if !config.display.inactive_tabs {
         return theme.tabbed_panel(&[active.name()], 0);
     }
     let panels: Vec<ReadPanel> = ReadPanel::ALL
@@ -115,7 +115,7 @@ impl TableCtx<'_> {
         let mut rows: Vec<(String, Style)> = Vec::with_capacity(visible as usize);
         let mut pick_row = None;
 
-        let show_window = app.config.show_read_window;
+        let show_window = app.config.display.read_window;
         let (read_start, read_amount) = app.read_window();
         let read_end = read_start.saturating_add(read_amount - 1);
         let extra = if show_window {
@@ -189,7 +189,7 @@ impl TableCtx<'_> {
     fn list_table(&self, cells: &[RegisterCell], top: usize, ascii: Option<&str>) -> RowsTable {
         let (params, app, theme) = (self.params, self.app, self.theme);
         let now = Utc::now();
-        let show_window = app.config.show_read_window;
+        let show_window = app.config.display.read_window;
         let read_cells = show_window.then(|| app.panel_read_cells());
         let type_marker = !app.config.filter_panels_by_type;
         let mut header = app.interpreter.header().to_string();
@@ -256,7 +256,7 @@ impl TableCtx<'_> {
         let cols = app.matrix_cols();
         let base = params.window_start - (params.window_start % cols);
 
-        let show_window = app.config.show_read_window;
+        let show_window = app.config.display.read_window;
         let (read_start, read_amount) = app.read_window();
         let read_end = read_start.saturating_add(read_amount - 1);
         let extra = if show_window {
@@ -359,7 +359,7 @@ pub fn draw(
         .iter()
         .any(|&(kind, address)| kind == info_type && address == info_addr);
 
-    let show_ascii_strip = app.config.show_ascii_strip && !params.graph;
+    let show_ascii_strip = app.config.display.ascii_strip && !params.graph;
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Length(2), Constraint::Min(0)])
@@ -393,7 +393,7 @@ pub fn draw(
     identity.push(vec![Span::styled(device.to_string(), theme.base())]);
 
     let cycle = &app.config.cycle_register_types;
-    let types: Vec<RegisterType> = if app.config.show_inactive_tabs {
+    let types: Vec<RegisterType> = if app.config.display.inactive_tabs {
         RegisterType::ALL
             .into_iter()
             .filter(|&t| cycle.enabled(t) || t == info_type)
@@ -581,7 +581,7 @@ pub fn live_status(app: &App, params: &ReadParams, theme: &Theme) -> Vec<Span<'s
     match text {
         Some(text) => {
             field.push(Span::styled(text, style));
-            if app.config.show_connection_label {
+            if app.config.display.connection_label {
                 field.push(Span::styled(format!(" {label}"), theme.dim_style()));
             }
         }

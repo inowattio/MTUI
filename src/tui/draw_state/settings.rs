@@ -318,7 +318,7 @@ fn field_value(
         SettingsField::GraphHistory => (device.graph.history.to_string(), None),
         SettingsField::MatrixColumns => (auto_width(device.matrix.columns), None),
         SettingsField::SkipUnsavedWarning => (on_off(device.skip_unsaved_warning), None),
-        SettingsField::ShowMockDevice => (on_off(device.show_mock_device), None),
+        SettingsField::ShowMockDevice => (on_off(device.display.mock_device), None),
         SettingsField::ReadOnly => (on_off(device.read_only), None),
         SettingsField::ApiEnabled => (on_off(device.api.enabled), None),
         SettingsField::ApiPort => (
@@ -358,14 +358,14 @@ fn field_value(
         SettingsField::ClearCustom => (format!("{} rules", app.custom_count()), None),
         SettingsField::CopyData => (String::new(), None),
         SettingsField::CopyConfig => (String::new(), None),
-        SettingsField::ShowRuleContinuation => (on_off(device.show_rule_continuation), None),
-        SettingsField::ShowClock => (on_off(device.show_clock), None),
-        SettingsField::ShowFrameTime => (on_off(device.show_frame_time), None),
-        SettingsField::ShowRam => (on_off(device.show_ram), None),
-        SettingsField::ShowConnectionLabel => (on_off(device.show_connection_label), None),
-        SettingsField::ShowAsciiStrip => (on_off(device.show_ascii_strip), None),
-        SettingsField::ShowInactiveTabs => (on_off(device.show_inactive_tabs), None),
-        SettingsField::ShowReadWindow => (on_off(device.show_read_window), None),
+        SettingsField::ShowRuleContinuation => (on_off(device.display.rule_continuation), None),
+        SettingsField::ShowClock => (on_off(device.display.clock), None),
+        SettingsField::ShowFrameTime => (on_off(device.display.frame_time), None),
+        SettingsField::ShowRam => (on_off(device.display.ram), None),
+        SettingsField::ShowConnectionLabel => (on_off(device.display.connection_label), None),
+        SettingsField::ShowAsciiStrip => (on_off(device.display.ascii_strip), None),
+        SettingsField::ShowInactiveTabs => (on_off(device.display.inactive_tabs), None),
+        SettingsField::ShowReadWindow => (on_off(device.display.read_window), None),
         SettingsField::ShowMatrixContext => (on_off(device.matrix.show_context), None),
         SettingsField::GraphTimeAxis => (
             if device.graph.time_axis {
@@ -375,8 +375,8 @@ fn field_value(
             },
             None,
         ),
-        SettingsField::PaddingHorizontal => (device.padding.horizontal.to_string(), None),
-        SettingsField::PaddingVertical => (device.padding.vertical.to_string(), None),
+        SettingsField::PaddingHorizontal => (device.display.padding.horizontal.to_string(), None),
+        SettingsField::PaddingVertical => (device.display.padding.vertical.to_string(), None),
         SettingsField::ChangedExpiry => (
             match device.changed_expiry_ms {
                 0 => "never".to_string(),

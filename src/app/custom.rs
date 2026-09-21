@@ -237,7 +237,7 @@ impl App {
     ) -> Option<String> {
         let (kind, address) = cell;
         let Some(rule) = self.custom_rules.get(&cell) else {
-            if !self.config.show_rule_continuation {
+            if !self.config.display.rule_continuation {
                 return None;
             }
             return self

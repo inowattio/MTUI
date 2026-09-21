@@ -81,7 +81,7 @@ impl App {
             Interface::Mock => d.interface = InterfaceKind::Mock,
         }
 
-        if !config.show_mock_device && d.interface == InterfaceKind::Mock {
+        if !config.display.mock_device && d.interface == InterfaceKind::Mock {
             d.interface = InterfaceKind::Serial;
         }
         d
