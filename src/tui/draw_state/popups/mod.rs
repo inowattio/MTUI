@@ -48,7 +48,7 @@ pub fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup
             );
         }
         Popup::Unit(params) => {
-            unit::draw(frame, area, theme, kb, params, app.config.device.unit_id)
+            unit::draw(frame, area, theme, kb, params, app.config.device.unit_id);
         }
         Popup::SweepConfig(s) => sweep_config::draw(frame, area, theme, *s, app.sweep.active),
         Popup::Logs(logs) => logs::draw(frame, area, theme, kb, logs, app.config.write_log.enabled),
@@ -59,7 +59,7 @@ pub fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup
         Popup::Raw(params) => raw::draw(frame, area, theme, params),
         Popup::Import(params) => import::draw(frame, area, theme, params),
         Popup::CycleConfig | Popup::Quit => {
-            unsaved::draw(frame, area, theme, matches!(popup, Popup::Quit))
+            unsaved::draw(frame, area, theme, matches!(popup, Popup::Quit));
         }
     }
 }

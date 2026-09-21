@@ -46,6 +46,7 @@ unused_async = "deny"
 needless_continue = "deny"
 checked_conversions = "deny"
 trivially_copy_pass_by_ref = "deny"
+semicolon_if_nothing_returned = "deny"
 
 [dependencies]
 ratatui = { version = "0.30.2", default-features = false, features = ["serde"] }

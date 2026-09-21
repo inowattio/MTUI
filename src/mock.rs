@@ -484,7 +484,7 @@ fn check(
 #[async_trait]
 impl SlaveContext for MockContext {
     fn set_slave(&mut self, unit: Unit) {
-        self.unit_id = unit.0
+        self.unit_id = unit.0;
     }
 }
 

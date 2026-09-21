@@ -277,7 +277,7 @@ mod tests {
     fn render_with(params: &UnitParams, active_id: u8) -> Vec<String> {
         let (theme, kb) = (Theme::default(), Keybinds::default());
         crate::tui::test_util::draw_rows(100, 30, |frame| {
-            draw(frame, frame.area(), &theme, &kb, params, active_id)
+            draw(frame, frame.area(), &theme, &kb, params, active_id);
         })
     }
 

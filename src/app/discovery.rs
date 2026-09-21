@@ -265,7 +265,7 @@ impl App {
             TaskPoll::Pending => {}
             TaskPoll::Finished(result) => self.finish_network_scan(result),
             TaskPoll::Gone => {
-                self.finish_network_scan(Err("scan task stopped unexpectedly".to_string()))
+                self.finish_network_scan(Err("scan task stopped unexpectedly".to_string()));
             }
         }
     }

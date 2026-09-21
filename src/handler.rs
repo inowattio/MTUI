@@ -351,7 +351,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
                     UnitField::Hit(index) => app.commit_unit_hit(index).await,
                     UnitField::Repr | UnitField::Exceptions => app.unit_toggle(field),
                     UnitField::From | UnitField::To | UnitField::Mode | UnitField::Scan => {
-                        app.unit_scan_action()
+                        app.unit_scan_action();
                     }
                 },
                 KeyCode::Up => app.unit_move(false),
@@ -388,7 +388,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
                 KeyCode::Down => app.sweep_config_move(true),
                 c if c == kb.pause && field == SweepField::Mode => app.sweep_config_toggle(),
                 KeyCode::Left | KeyCode::Right if field == SweepField::Mode => {
-                    app.sweep_config_toggle()
+                    app.sweep_config_toggle();
                 }
                 KeyCode::Backspace => app.sweep_config_backspace(field),
                 KeyCode::Char(c) if c.is_ascii_digit() => app.sweep_config_digit(field, c),
@@ -541,22 +541,22 @@ fn handle_discovery_key(key_event: KeyEvent, app: &mut App) {
                     DiscoveryField::Ip if c.is_ascii_digit() || c == '.' => d.ip.push(c),
                     DiscoveryField::CustomPath if !c.is_control() => d.custom_path.push(c),
                     DiscoveryField::Baud if c.is_ascii_digit() => {
-                        digit_add(&mut d.baud_rate, digit)
+                        digit_add(&mut d.baud_rate, digit);
                     }
                     DiscoveryField::NetPort if c.is_ascii_digit() => {
-                        digit_add(&mut d.net_port, digit)
+                        digit_add(&mut d.net_port, digit);
                     }
                     DiscoveryField::UnitId if c.is_ascii_digit() => {
-                        digit_add(&mut d.unit_id, digit)
+                        digit_add(&mut d.unit_id, digit);
                     }
                     DiscoveryField::ConnectTimeout if c.is_ascii_digit() => {
-                        digit_add(&mut d.connect_timeout_ms, digit)
+                        digit_add(&mut d.connect_timeout_ms, digit);
                     }
                     DiscoveryField::CommandTimeout if c.is_ascii_digit() => {
-                        digit_add(&mut d.command_timeout_ms, digit)
+                        digit_add(&mut d.command_timeout_ms, digit);
                     }
                     DiscoveryField::BetweenCommands if c.is_ascii_digit() => {
-                        digit_add(&mut d.between_commands_ms, digit)
+                        digit_add(&mut d.between_commands_ms, digit);
                     }
                     _ => {}
                 }
@@ -626,7 +626,7 @@ fn handle_settings_key(key_event: KeyEvent, app: &mut App) {
                 .settings()
                 .is_some_and(|s| s.current_category().is_keybinds()) =>
         {
-            handle_keybinds_key(key_event, app)
+            handle_keybinds_key(key_event, app);
         }
         SettingsFocus::Fields => handle_settings_field_key(key_event, app),
     }

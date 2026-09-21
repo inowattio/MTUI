@@ -123,7 +123,7 @@ impl App {
             }
             SettingsField::StartupAddress => self.config.startup.address = value as u16,
             SettingsField::PaddingHorizontal => {
-                self.config.display.padding.horizontal = value as u16
+                self.config.display.padding.horizontal = value as u16;
             }
             SettingsField::PaddingVertical => self.config.display.padding.vertical = value as u16,
             SettingsField::ApiPort => self.config.api.port = value.clamp(0, u16::MAX as i64) as u16,
@@ -141,13 +141,13 @@ impl App {
         }
         match field {
             SettingsField::SkipUnsavedWarning => {
-                self.config.skip_unsaved_warning = !self.config.skip_unsaved_warning
+                self.config.skip_unsaved_warning = !self.config.skip_unsaved_warning;
             }
             SettingsField::SavePositionOnExit => {
-                self.config.save_position_on_exit = !self.config.save_position_on_exit
+                self.config.save_position_on_exit = !self.config.save_position_on_exit;
             }
             SettingsField::ShowMockDevice => {
-                self.config.display.mock_device = !self.config.display.mock_device
+                self.config.display.mock_device = !self.config.display.mock_device;
             }
             SettingsField::ReadOnly => self.config.read_only = !self.config.read_only,
             SettingsField::TimeMode => {
@@ -167,49 +167,49 @@ impl App {
                     cycle(&BatchAnchor::ALL, self.config.batch.anchor, delta > 0);
             }
             SettingsField::ReadFullCustoms => {
-                self.config.batch.read_full_customs = !self.config.batch.read_full_customs
+                self.config.batch.read_full_customs = !self.config.batch.read_full_customs;
             }
             SettingsField::CustomBatchByRegisters => {
-                self.config.batch.custom_by_registers = !self.config.batch.custom_by_registers
+                self.config.batch.custom_by_registers = !self.config.batch.custom_by_registers;
             }
             SettingsField::FilterPanelsByType => {
-                self.config.filter_panels_by_type = !self.config.filter_panels_by_type
+                self.config.filter_panels_by_type = !self.config.filter_panels_by_type;
             }
             SettingsField::ApiEnabled => self.config.api.enabled = !self.config.api.enabled,
             SettingsField::ApiUnitIdOverride => {
-                self.config.api.unit_id_override = !self.config.api.unit_id_override
+                self.config.api.unit_id_override = !self.config.api.unit_id_override;
             }
             SettingsField::WriteLogEnabled => {
-                self.config.write_log.enabled = !self.config.write_log.enabled
+                self.config.write_log.enabled = !self.config.write_log.enabled;
             }
             SettingsField::ReconnectOnTimeout => {
-                self.config.reconnect_on_timeout = !self.config.reconnect_on_timeout
+                self.config.reconnect_on_timeout = !self.config.reconnect_on_timeout;
             }
             SettingsField::ShowRuleContinuation => {
-                self.config.display.rule_continuation = !self.config.display.rule_continuation
+                self.config.display.rule_continuation = !self.config.display.rule_continuation;
             }
             SettingsField::ShowClock => self.config.display.clock = !self.config.display.clock,
             SettingsField::ShowFrameTime => {
-                self.config.display.frame_time = !self.config.display.frame_time
+                self.config.display.frame_time = !self.config.display.frame_time;
             }
             SettingsField::ShowRam => self.config.display.ram = !self.config.display.ram,
             SettingsField::ShowConnectionLabel => {
-                self.config.display.connection_label = !self.config.display.connection_label
+                self.config.display.connection_label = !self.config.display.connection_label;
             }
             SettingsField::ShowAsciiStrip => {
-                self.config.display.ascii_strip = !self.config.display.ascii_strip
+                self.config.display.ascii_strip = !self.config.display.ascii_strip;
             }
             SettingsField::ShowInactiveTabs => {
-                self.config.display.inactive_tabs = !self.config.display.inactive_tabs
+                self.config.display.inactive_tabs = !self.config.display.inactive_tabs;
             }
             SettingsField::ShowMatrixContext => {
                 self.config.matrix.show_context = !self.config.matrix.show_context;
             }
             SettingsField::ShowReadWindow => {
-                self.config.display.read_window = !self.config.display.read_window
+                self.config.display.read_window = !self.config.display.read_window;
             }
             SettingsField::GraphTimeAxis => {
-                self.config.graph.time_axis = !self.config.graph.time_axis
+                self.config.graph.time_axis = !self.config.graph.time_axis;
             }
             SettingsField::StartupPanel => {
                 self.config.startup.panel =
