@@ -1,8 +1,9 @@
-use num_traits::{CheckedAdd, CheckedDiv, CheckedMul};
+use num_traits::{CheckedAdd, CheckedMul};
+use std::ops::Div;
 
 pub fn digit_remove<T>(v: &mut T)
 where
-    T: Copy + PartialEq + From<u8> + CheckedDiv<Output = T>,
+    T: Copy + From<u8> + Div<Output = T>,
 {
     let ten = T::from(10u8);
     *v = *v / ten;
