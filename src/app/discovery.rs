@@ -5,6 +5,7 @@ use crate::compat;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::compat::TaskPoll;
 use crate::config::Config;
+use crate::constants::message;
 use crate::modbus::{Interface, ModbusDevice};
 use crate::state::{ConnectionStatus, DiscoveryParams, InterfaceKind, Popup, StatusMessage};
 #[cfg(not(target_arch = "wasm32"))]
@@ -126,14 +127,14 @@ impl App {
 
     pub fn discovery_connect(&mut self) {
         if !self.free_background_slot() {
-            self.set_discovery_status(StatusMessage::info("Device is busy."));
+            self.set_discovery_status(StatusMessage::info(message::DEVICE_BUSY));
             return;
         }
         let Some(device_config) = self.discovery().map(DiscoveryParams::device_config) else {
             return;
         };
 
-        self.set_discovery_status(StatusMessage::warn("Connecting..."));
+        self.set_discovery_status(StatusMessage::warn(message::CONNECTING));
 
         let previous = self.take_device();
         self.background_task = Some(BackgroundTask::Connect(compat::spawn(async move {
@@ -150,9 +151,7 @@ impl App {
     pub(super) fn apply_connect_result(&mut self, result: Option<ConnectTaskResult>) {
         let Some(ConnectTaskResult { config, result }) = result else {
             log::error!("Connect task stopped unexpectedly");
-            self.set_discovery_status(StatusMessage::err(
-                "Connection failed: task stopped unexpectedly",
-            ));
+            self.set_discovery_status(StatusMessage::err(message::CONNECT_TASK_STOPPED));
             return;
         };
         match result {
@@ -223,9 +222,7 @@ impl App {
             return;
         }
         let Some(prefix) = subnet_prefix_from(&d.ip) else {
-            self.set_discovery_status(StatusMessage::err(
-                "Enter an IPv4 address to pick the subnet to scan",
-            ));
+            self.set_discovery_status(StatusMessage::err(message::SCAN_NEEDS_IPV4));
             return;
         };
         let port = d.net_port;
@@ -251,9 +248,7 @@ impl App {
 
     #[cfg(target_arch = "wasm32")]
     pub fn start_network_scan(&mut self) {
-        self.set_discovery_status(StatusMessage::warn(
-            "Network scan isn't available in the web demo",
-        ));
+        self.set_discovery_status(StatusMessage::warn(message::SCAN_UNAVAILABLE_WEB));
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -286,7 +281,7 @@ impl App {
         if let Some(d) = self.discovery_mut() {
             d.set_found(found);
             d.status = Some(if count == 0 {
-                StatusMessage::warn("No devices found on this subnet")
+                StatusMessage::warn(message::SCAN_FOUND_NOTHING)
             } else {
                 StatusMessage::ok(format!("Found {count} device(s)"))
             });

@@ -1,5 +1,6 @@
 use super::{App, BackgroundTask, RawTaskResult};
 use crate::compat;
+use crate::constants::message;
 use crate::state::{Popup, RawField, RawParams, StatusMessage};
 
 fn parse_hex_bytes(input: &str) -> Result<Vec<u8>, String> {
@@ -63,9 +64,7 @@ impl App {
     pub fn raw_send(&mut self) {
         if self.config.read_only {
             if let Some(p) = self.raw_mut() {
-                p.status = Some(StatusMessage::warn(
-                    "Read-only mode is on - custom calls may write and are disabled",
-                ));
+                p.status = Some(StatusMessage::warn(message::RAW_READ_ONLY));
             }
             return;
         }
@@ -79,7 +78,7 @@ impl App {
             Ok(value) if u8::try_from(value).is_ok() => value as u8,
             _ => {
                 if let Some(p) = self.raw_mut() {
-                    p.status = Some(StatusMessage::err("Function code must be 0-255"));
+                    p.status = Some(StatusMessage::err(message::RAW_BAD_FUNCTION_CODE));
                 }
                 return;
             }
@@ -97,20 +96,20 @@ impl App {
 
         let Some(device) = self.device.clone() else {
             if let Some(p) = self.raw_mut() {
-                p.status = Some(StatusMessage::err("No device connected"));
+                p.status = Some(StatusMessage::err(message::NO_DEVICE));
             }
             return;
         };
 
         if !self.free_background_slot() {
             if let Some(p) = self.raw_mut() {
-                p.status = Some(StatusMessage::info("Device is busy."));
+                p.status = Some(StatusMessage::info(message::DEVICE_BUSY));
             }
             return;
         }
 
         if let Some(p) = self.raw_mut() {
-            p.status = Some(StatusMessage::info("Sending..."));
+            p.status = Some(StatusMessage::info(message::SENDING));
         }
 
         let sent = data.len();
@@ -126,7 +125,7 @@ impl App {
             return;
         };
         let Some(RawTaskResult { code, sent, result }) = result else {
-            p.status = Some(StatusMessage::err("Failed: task stopped unexpectedly"));
+            p.status = Some(StatusMessage::err(message::TASK_STOPPED));
             return;
         };
         match result {

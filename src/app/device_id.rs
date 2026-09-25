@@ -1,5 +1,6 @@
 use super::{App, BackgroundTask, DeviceIdTaskResult};
 use crate::compat;
+use crate::constants::message;
 use crate::modbus::DeviceIdAccess;
 use crate::num_ops::{cycle, step_hscroll};
 use crate::state::{DeviceIdParams, Popup, StatusMessage};
@@ -39,7 +40,7 @@ impl App {
     pub fn device_id_refresh(&mut self) {
         if !self.free_background_slot() {
             if let Some(params) = self.device_id_mut() {
-                params.status = Some(StatusMessage::info("Device is busy."));
+                params.status = Some(StatusMessage::info(message::DEVICE_BUSY));
             }
             return;
         }
@@ -47,7 +48,7 @@ impl App {
         let access = match self.device_id_mut() {
             Some(params) => {
                 params.loading = true;
-                params.status = Some(StatusMessage::info("Reading..."));
+                params.status = Some(StatusMessage::info(message::READING));
                 params.access
             }
             None => return,
@@ -57,7 +58,7 @@ impl App {
             if let Some(params) = self.device_id_mut() {
                 params.loading = false;
                 params.objects.clear();
-                params.status = Some(StatusMessage::err("No device connected"));
+                params.status = Some(StatusMessage::err(message::NO_DEVICE));
             }
             return;
         };
@@ -85,7 +86,7 @@ impl App {
         };
         params.loading = false;
         let Some(DeviceIdTaskResult { access, result }) = result else {
-            params.status = Some(StatusMessage::err("Read failed: task stopped unexpectedly"));
+            params.status = Some(StatusMessage::err(message::READ_TASK_STOPPED));
             return;
         };
         match result {
@@ -96,7 +97,7 @@ impl App {
                     objects.len()
                 );
                 params.status = Some(if objects.is_empty() {
-                    StatusMessage::warn("No identification objects returned")
+                    StatusMessage::warn(message::NO_ID_OBJECTS)
                 } else {
                     StatusMessage::ok(format!("Read {} object(s)", objects.len()))
                 });

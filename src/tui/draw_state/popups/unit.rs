@@ -267,6 +267,7 @@ fn hit_lines(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::constants::message;
     use crate::state::StatusMessage;
     use ScanState::{Done, Failed, Probing, Stopped};
 
@@ -483,11 +484,11 @@ mod tests {
     fn errors_still_use_the_status_row() {
         let params = UnitParams {
             scan: Done,
-            status: Some(StatusMessage::err("No device connected")),
+            status: Some(StatusMessage::err(message::NO_DEVICE)),
             ..UnitParams::default()
         };
         let rows = render(&params);
-        let (_, status_y) = locate(&rows, "No device connected");
+        let (_, status_y) = locate(&rows, message::NO_DEVICE);
         let (_, button_y) = locate(&rows, "Start scan");
         assert!(status_y > button_y, "below the form, like the narrow popup");
     }

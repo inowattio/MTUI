@@ -1,6 +1,7 @@
 use super::{App, BackgroundTask, PendingWrite, WriteOutcome, WriteType};
 use crate::compat;
 use crate::constants::UNINTERPRETABLE;
+use crate::constants::message;
 use crate::modbus::WordOrder;
 use crate::num_ops::cycle;
 use crate::register::{RegisterCell, RegisterType};
@@ -9,9 +10,7 @@ use crate::state::{Popup, StatusMessage, WriteParams};
 impl App {
     pub fn open_write(&mut self) {
         if self.config.read_only {
-            self.set_read_status(StatusMessage::warn(
-                "Read-only mode is on (toggle in settings)",
-            ));
+            self.set_read_status(StatusMessage::warn(message::READ_ONLY_ON));
             return;
         }
 
@@ -120,15 +119,15 @@ impl App {
     pub fn commit_write(&mut self) {
         if self.config.read_only {
             if let Some(w) = self.write_mut() {
-                w.result = Some(StatusMessage::info("Read-only mode."));
+                w.result = Some(StatusMessage::info(message::READ_ONLY));
             }
             return;
         }
         if let Some(task) = &self.background_task {
             let message = if matches!(task, BackgroundTask::Refresh(_)) {
-                "Device is currently reading, try again."
+                message::DEVICE_READING
             } else {
-                "Device is busy."
+                message::DEVICE_BUSY
             };
             if let Some(w) = self.write_mut() {
                 w.result = Some(StatusMessage::info(message));
@@ -138,7 +137,7 @@ impl App {
 
         let Some(device) = self.device.clone() else {
             if let Some(w) = self.write_mut() {
-                w.result = Some(StatusMessage::err("No device connected"));
+                w.result = Some(StatusMessage::err(message::NO_DEVICE));
             }
             return;
         };
@@ -148,10 +147,10 @@ impl App {
                 return;
             };
             let Some(number) = w.value else {
-                w.result = Some(StatusMessage::info("Enter a value first."));
+                w.result = Some(StatusMessage::info(message::ENTER_VALUE));
                 return;
             };
-            w.result = Some(StatusMessage::info("Writing..."));
+            w.result = Some(StatusMessage::info(message::WRITING));
             (w.position, number, w.write_type, w.force_multiple)
         };
 
@@ -295,6 +294,7 @@ impl App {
 mod tests {
     use crate::app::{App, BackgroundTask};
     use crate::config::Config;
+    use crate::constants::message;
     use crate::register::RegisterType;
     use crate::state::{MessageKind, WriteParams};
 
@@ -318,7 +318,7 @@ mod tests {
             .and_then(|w| w.result.clone())
             .expect("a status is shown");
         assert_eq!(result.kind, MessageKind::Err);
-        assert_eq!(result.text, "No device connected");
+        assert_eq!(result.text, message::NO_DEVICE);
         assert!(app.background_task.is_none(), "nothing to run");
     }
 
@@ -345,7 +345,7 @@ mod tests {
             .popup_as::<WriteParams>()
             .and_then(|w| w.result.clone())
             .expect("a status is shown");
-        assert_eq!(result.text, "Writing...");
+        assert_eq!(result.text, message::WRITING);
         assert!(matches!(
             app.background_task,
             Some(BackgroundTask::Write(_))
@@ -363,7 +363,7 @@ mod tests {
             .popup_as::<WriteParams>()
             .and_then(|w| w.result.clone())
             .expect("a status is shown");
-        assert_eq!(result.text, "Device is currently reading, try again.");
+        assert_eq!(result.text, message::DEVICE_READING);
         assert!(matches!(
             app.background_task,
             Some(BackgroundTask::Refresh(_))
@@ -381,6 +381,6 @@ mod tests {
             .popup_as::<WriteParams>()
             .and_then(|w| w.result.clone())
             .expect("a status is shown");
-        assert_eq!(result.text, "Device is busy.");
+        assert_eq!(result.text, message::DEVICE_BUSY);
     }
 }

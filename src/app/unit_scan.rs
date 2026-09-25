@@ -1,5 +1,6 @@
 use super::{App, BackgroundTask, UnitProbeOutcome, UnitScanTaskResult};
 use crate::compat;
+use crate::constants::message;
 use crate::num_ops::{digit_add, digit_remove, wrap_index};
 use crate::state::{ScanState, StatusMessage, UnitField, UnitParams, UnitScanHit};
 
@@ -80,13 +81,13 @@ impl App {
 
         if self.device.is_none() {
             if let Some(p) = self.unit_mut() {
-                p.status = Some(StatusMessage::err("No device connected"));
+                p.status = Some(StatusMessage::err(message::NO_DEVICE));
             }
             return;
         }
         if !self.free_background_slot() {
             if let Some(p) = self.unit_mut() {
-                p.status = Some(StatusMessage::info("Device is busy."));
+                p.status = Some(StatusMessage::info(message::DEVICE_BUSY));
             }
             return;
         }

@@ -1,4 +1,5 @@
 use super::App;
+use crate::constants::message;
 use crate::state::{DumpParams, Popup, StatusMessage};
 use chrono::{Local, Utc};
 use std::fs;
@@ -10,7 +11,7 @@ impl App {
 
     fn dump_read_log(&self) -> StatusMessage {
         if self.read_log.is_empty() {
-            return StatusMessage::info("Nothing read yet to dump.");
+            return StatusMessage::info(message::NOTHING_TO_DUMP);
         }
 
         let now = Local::now();

@@ -1,5 +1,6 @@
 use super::{App, fuzzy_rank};
 use crate::config::Column;
+use crate::constants::message;
 use crate::interpretator::RowSegment;
 use crate::num_ops::{step_hscroll, wrap_index};
 use crate::register::RegisterCell;
@@ -187,7 +188,7 @@ impl App {
         } else if self.set_clipboard(text.clone()) {
             StatusMessage::ok(format!("Copied {name} '{text}' to clipboard"))
         } else {
-            StatusMessage::err("Clipboard unavailable")
+            StatusMessage::err(message::CLIPBOARD_UNAVAILABLE)
         };
         self.set_read_status(message);
     }
@@ -204,11 +205,11 @@ impl App {
     fn copy_matrix_cell(&mut self) {
         let cell = self.cursor_cell();
         let message = match self.cell_value(cell) {
-            None => StatusMessage::warn("Nothing read here yet"),
+            None => StatusMessage::warn(message::NOTHING_READ_HERE),
             Some(value) if self.set_clipboard(value.to_string()) => {
                 StatusMessage::ok(format!("Copied {value} to clipboard"))
             }
-            Some(_) => StatusMessage::err("Clipboard unavailable"),
+            Some(_) => StatusMessage::err(message::CLIPBOARD_UNAVAILABLE),
         };
         self.set_read_status(message);
     }
@@ -331,7 +332,7 @@ impl App {
                 let _ = self.value_history.remove(&cell);
             });
         log::info!("Cleared graph history");
-        self.set_read_status(StatusMessage::ok("Cleared graph history"));
+        self.set_read_status(StatusMessage::ok(message::GRAPH_CLEARED));
     }
 
     pub fn cycle_graph_interpretation(&mut self) {

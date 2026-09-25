@@ -1,6 +1,7 @@
 use super::{App, BackgroundTask, LoadConfigTaskResult, save_config};
 use crate::compat;
 use crate::config::{Config, Registers, Startup};
+use crate::constants::message;
 use crate::modbus::ModbusDevice;
 use crate::state::{ConnectionStatus, ImportParams, Outcome, Popup, State, StatusMessage};
 use std::fs;
@@ -25,9 +26,7 @@ impl App {
                 self.pending_import = Some(payload);
                 self.read_mut().popup = Some(Popup::Import(params));
             }
-            None => self.set_read_status(StatusMessage::warn(
-                "Pasted text isn't pinned/labels/custom data",
-            )),
+            None => self.set_read_status(StatusMessage::warn(message::PASTE_NOT_REGISTERS)),
         }
     }
 
@@ -77,7 +76,7 @@ impl App {
                 "Copied {pins} pin(s), {labels} label(s), {rules} rule(s) to clipboard"
             ))
         } else {
-            StatusMessage::err("Clipboard unavailable")
+            StatusMessage::err(message::CLIPBOARD_UNAVAILABLE)
         };
         self.set_settings_status(message);
     }
@@ -94,9 +93,9 @@ impl App {
         let json = self.config_json();
         let message = if self.set_clipboard(json) {
             log::info!("Copied the configuration to clipboard");
-            StatusMessage::ok("Copied the configuration to clipboard")
+            StatusMessage::ok(message::CONFIG_COPIED)
         } else {
-            StatusMessage::err("Clipboard unavailable")
+            StatusMessage::err(message::CLIPBOARD_UNAVAILABLE)
         };
         self.set_settings_status(message);
     }
@@ -201,7 +200,7 @@ impl App {
 
     fn read_config_file(path: &Path) -> Result<Config, String> {
         if path.as_os_str().is_empty() {
-            return Err("Load failed: enter a file name".to_string());
+            return Err(message::LOAD_NEEDS_FILE_NAME.to_string());
         }
         let content = fs::read_to_string(path).map_err(|e| format!("Load failed: {e}"))?;
         serde_json::from_str(&content).map_err(|e| format!("Load failed: {e}"))
@@ -216,10 +215,10 @@ impl App {
             }
         };
         if !self.free_background_slot() {
-            return StatusMessage::info("Device is busy.");
+            return StatusMessage::info(message::DEVICE_BUSY);
         }
         self.spawn_config_load(path, config);
-        StatusMessage::info("Loading...")
+        StatusMessage::info(message::LOADING)
     }
 
     fn spawn_config_load(&mut self, path: PathBuf, config: Config) {
@@ -267,7 +266,7 @@ impl App {
                     Err(format!("Load failed: device: {e}"))
                 }
             },
-            None => Err("Load failed: task stopped unexpectedly".to_string()),
+            None => Err(message::LOAD_TASK_STOPPED.to_string()),
         };
 
         match &outcome {
@@ -294,7 +293,7 @@ impl App {
 
     pub fn cycle_config(&mut self) {
         let Some(target) = self.cycle_target() else {
-            self.set_read_status(StatusMessage::info("No next configuration set"));
+            self.set_read_status(StatusMessage::info(message::NO_NEXT_CONFIG));
             return;
         };
 

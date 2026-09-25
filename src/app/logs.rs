@@ -1,4 +1,5 @@
 use super::{App, WriteType};
+use crate::constants::message;
 use crate::logger;
 use crate::modbus::Interface;
 use crate::num_ops::step_hscroll;
@@ -11,7 +12,7 @@ impl App {
     pub fn clear_session_data(&mut self) {
         self.clear_read_accumulation();
         log::info!("Cleared session read data");
-        self.set_read_status(StatusMessage::ok("Cleared session read data"));
+        self.set_read_status(StatusMessage::ok(message::SESSION_CLEARED));
     }
 
     pub fn writes_log_path(&self) -> std::path::PathBuf {

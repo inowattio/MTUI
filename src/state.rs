@@ -1458,12 +1458,13 @@ mod tests {
     #[test]
     fn a_remembered_scan_keeps_its_hits_but_follows_the_current_request() {
         use super::{ScanState, StatusMessage, UnitParams, UnitScanHit};
+        use crate::constants::message;
         use crate::register::RegisterType;
         let params = UnitParams {
             scan: ScanState::Probing,
             from: 3,
             to: 9,
-            status: Some(StatusMessage::info("Device is busy.")),
+            status: Some(StatusMessage::info(message::DEVICE_BUSY)),
             hits: vec![UnitScanHit {
                 unit_id: 5,
                 result: Ok(vec![1]),
