@@ -124,9 +124,14 @@ impl App {
             }
             return;
         }
-        if self.background_task.is_some() {
+        if let Some(task) = &self.background_task {
+            let message = if matches!(task, BackgroundTask::Refresh(_)) {
+                "Device is currently reading, try again."
+            } else {
+                "Device is busy."
+            };
             if let Some(w) = self.write_mut() {
-                w.result = Some(StatusMessage::info("Device is busy."));
+                w.result = Some(StatusMessage::info(message));
             }
             return;
         }
@@ -345,5 +350,37 @@ mod tests {
             app.background_task,
             Some(BackgroundTask::Write(_))
         ));
+    }
+
+    #[tokio::test]
+    async fn committing_during_a_read_says_the_device_is_reading() {
+        let mut app = write_popup().await;
+        app.refresh();
+
+        app.commit_write();
+
+        let result = app
+            .popup_as::<WriteParams>()
+            .and_then(|w| w.result.clone())
+            .expect("a status is shown");
+        assert_eq!(result.text, "Device is currently reading, try again.");
+        assert!(matches!(
+            app.background_task,
+            Some(BackgroundTask::Refresh(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn committing_during_another_task_says_the_device_is_busy() {
+        let mut app = write_popup().await;
+        app.commit_write();
+
+        app.commit_write();
+
+        let result = app
+            .popup_as::<WriteParams>()
+            .and_then(|w| w.result.clone())
+            .expect("a status is shown");
+        assert_eq!(result.text, "Device is busy.");
     }
 }
