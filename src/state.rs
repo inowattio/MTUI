@@ -900,6 +900,9 @@ settings_fields! {
             ThemeError: Color => "Error", "Color for errors",
             ThemeSelectedText: Color => "Selected text", "Text color of the selected row",
             ThemeSelectedBackground: Color => "Selected background", "Background color of the selected row",
+            ThemeSeries1: Color => "Graph series 1", "Color of the first held series in the value graph",
+            ThemeSeries2: Color => "Graph series 2", "Color of the second held series in the value graph",
+            ThemeSeries3: Color => "Graph series 3", "Color of the third held series in the value graph",
         ],
     }
     Keybinds {}

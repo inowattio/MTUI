@@ -22,6 +22,9 @@ const fn theme_field(theme: &mut Theme, field: SettingsField) -> Option<&mut Col
         SettingsField::ThemeError => &mut theme.error,
         SettingsField::ThemeSelectedText => &mut theme.selected_text,
         SettingsField::ThemeSelectedBackground => &mut theme.selected_background,
+        SettingsField::ThemeSeries1 => &mut theme.series_1,
+        SettingsField::ThemeSeries2 => &mut theme.series_2,
+        SettingsField::ThemeSeries3 => &mut theme.series_3,
         _ => return None,
     })
 }

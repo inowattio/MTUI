@@ -13,7 +13,7 @@ use crate::tui::theme::{Theme, spinner_frame, status_parts};
 use chrono::{DateTime, Utc};
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::symbols;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Axis, Block, Chart, Dataset, GraphType, LegendPosition, Paragraph};
@@ -619,8 +619,6 @@ pub fn live_status(app: &App, params: &ReadParams, theme: &Theme) -> Vec<Span<'s
     spans
 }
 
-const SERIES_COLORS: [Color; 3] = [Color::LightBlue, Color::LightMagenta, Color::LightYellow];
-
 /// A series of (sample time, value) points.
 type Series = Vec<(DateTime<Utc>, f64)>;
 
@@ -905,7 +903,7 @@ fn draw_graph(
 
     let mut datasets: Vec<Dataset> = Vec::new();
     for (i, ((_, segments), name)) in held_segments.iter().zip(names).enumerate() {
-        let style = Style::default().fg(SERIES_COLORS[i % SERIES_COLORS.len()]);
+        let style = theme.series_style(i);
         for (j, segment) in segments.iter().enumerate() {
             let mut dataset = segment_dataset(segment, style);
             if j == 0 {

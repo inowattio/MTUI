@@ -41,6 +41,9 @@ pub struct Theme {
     pub error: Color,
     pub selected_text: Color,
     pub selected_background: Color,
+    pub series_1: Color,
+    pub series_2: Color,
+    pub series_3: Color,
 }
 
 const DEFAULT: Theme = Theme {
@@ -56,6 +59,9 @@ const DEFAULT: Theme = Theme {
     error: Color::LightRed,
     selected_text: Color::Black,
     selected_background: Color::LightGreen,
+    series_1: Color::LightBlue,
+    series_2: Color::LightMagenta,
+    series_3: Color::LightYellow,
 };
 
 const LIGHT: Theme = Theme {
@@ -71,6 +77,9 @@ const LIGHT: Theme = Theme {
     error: Color::Red,
     selected_text: Color::White,
     selected_background: Color::Blue,
+    series_1: Color::Indexed(125),
+    series_2: Color::Indexed(30),
+    series_3: Color::Indexed(94),
 };
 
 const AMBER: Theme = Theme {
@@ -86,6 +95,9 @@ const AMBER: Theme = Theme {
     error: Color::Indexed(196),
     selected_text: Color::Black,
     selected_background: Color::Indexed(214),
+    series_1: Color::Indexed(230),
+    series_2: Color::Indexed(166),
+    series_3: Color::Indexed(143),
 };
 
 impl Default for Theme {
@@ -100,6 +112,11 @@ impl Theme {
 
     pub fn base(&self) -> Style {
         Style::default().fg(self.text)
+    }
+
+    pub fn series_style(&self, index: usize) -> Style {
+        let colors = [self.series_1, self.series_2, self.series_3];
+        Style::default().fg(colors[index % colors.len()])
     }
 
     pub fn dim_style(&self) -> Style {
@@ -256,4 +273,43 @@ pub fn status_parts(
 pub fn status_span(status: &ConnectionStatus, theme: &Theme) -> Span<'static> {
     let (symbol, label, style) = status_parts(status, theme);
     Span::styled(format!("{symbol} {label} "), style)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Theme;
+
+    #[test]
+    fn every_preset_keeps_its_graph_series_apart_from_each_other_and_the_primary() {
+        for (name, theme) in Theme::PRESETS {
+            let series = [theme.series_1, theme.series_2, theme.series_3];
+            for (i, color) in series.iter().enumerate() {
+                assert_ne!(
+                    *color,
+                    theme.accent,
+                    "{name}: series {} blends with the primary",
+                    i + 1
+                );
+                assert_ne!(
+                    *color,
+                    theme.background,
+                    "{name}: series {} is invisible",
+                    i + 1
+                );
+                assert!(
+                    !series[i + 1..].contains(color),
+                    "{name}: series {} repeats a color",
+                    i + 1
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn series_styles_cycle_through_the_theme_colors() {
+        let theme = Theme::default();
+        assert_eq!(theme.series_style(0).fg, Some(theme.series_1));
+        assert_eq!(theme.series_style(2).fg, Some(theme.series_3));
+        assert_eq!(theme.series_style(3).fg, Some(theme.series_1));
+    }
 }
