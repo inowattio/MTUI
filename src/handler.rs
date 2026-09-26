@@ -608,6 +608,13 @@ fn handle_logs_view_key(key_event: KeyEvent, app: &mut App) {
 }
 
 fn handle_settings_key(key_event: KeyEvent, app: &mut App) {
+    dispatch_settings_key(key_event, app);
+    if let Some(s) = app.settings_mut() {
+        s.drop_api_port_draft_if_left();
+    }
+}
+
+fn dispatch_settings_key(key_event: KeyEvent, app: &mut App) {
     let kb = app.config.keybinds;
     let capturing = app.settings().is_some_and(|s| s.kb_capturing);
     if !capturing && key_event.code == kb.panel {
@@ -716,6 +723,7 @@ fn handle_settings_field_key(key_event: KeyEvent, app: &mut App) {
             f if f.is_toggle() || f.is_theme_color() => app.settings_adjust(f, 1),
             SettingsField::Save => app.settings_save(),
             SettingsField::LoadConfig => app.settings_load(),
+            SettingsField::ApiPort => app.apply_api_port(),
             _ => {}
         },
         KeyCode::Backspace => app.settings_backspace(field),

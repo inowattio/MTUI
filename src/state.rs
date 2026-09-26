@@ -1115,6 +1115,7 @@ pub struct SettingsParams {
     pub kb_selected: u16,
     pub kb_capturing: bool,
     pub query: String,
+    pub api_port_draft: Option<u16>,
 }
 
 impl SettingsParams {
@@ -1155,6 +1156,14 @@ impl SettingsParams {
 
     pub fn current_field(&self) -> Option<SettingsField> {
         self.current_fields().get(self.field as usize).copied()
+    }
+
+    pub fn drop_api_port_draft_if_left(&mut self) {
+        let editing = self.focus == SettingsFocus::Fields
+            && self.current_field() == Some(SettingsField::ApiPort);
+        if !editing {
+            self.api_port_draft = None;
+        }
     }
 
     pub fn enter_category(&mut self) {

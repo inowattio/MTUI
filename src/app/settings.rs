@@ -77,9 +77,9 @@ impl App {
     const fn numeric_spec(field: SettingsField) -> Option<(i64, i64, i64)> {
         match field {
             SettingsField::BatchSize | SettingsField::GraphHistory => Some((1, u16::MAX as i64, 1)),
-            SettingsField::MatrixColumns | SettingsField::StartupAddress => {
-                Some((0, u16::MAX as i64, 1))
-            }
+            SettingsField::MatrixColumns
+            | SettingsField::StartupAddress
+            | SettingsField::ApiPort => Some((0, u16::MAX as i64, 1)),
             SettingsField::PaddingHorizontal | SettingsField::PaddingVertical => Some((0, 50, 1)),
             SettingsField::LabelWidth | SettingsField::CustomWidth => {
                 Some((0, WIDTH_MAX as i64, 1))
@@ -87,7 +87,6 @@ impl App {
             SettingsField::RefreshInterval | SettingsField::ChangedExpiry => {
                 Some((0, u32::MAX as i64, 100))
             }
-            SettingsField::ApiPort => Some((-1, u16::MAX as i64, 1)),
             _ => None,
         }
     }
@@ -104,7 +103,13 @@ impl App {
             SettingsField::StartupAddress => self.config.startup.address as i64,
             SettingsField::PaddingHorizontal => self.config.display.padding.horizontal as i64,
             SettingsField::PaddingVertical => self.config.display.padding.vertical as i64,
-            SettingsField::ApiPort => self.config.api.port as i64,
+            SettingsField::ApiPort => match self.settings() {
+                Some(&SettingsParams {
+                    api_port_draft: Some(port),
+                    ..
+                }) => port as i64,
+                _ => self.config.api.port as i64,
+            },
             _ => 0,
         }
     }
@@ -129,7 +134,11 @@ impl App {
                 self.config.display.padding.horizontal = value as u16;
             }
             SettingsField::PaddingVertical => self.config.display.padding.vertical = value as u16,
-            SettingsField::ApiPort => self.config.api.port = value.clamp(0, u16::MAX as i64) as u16,
+            SettingsField::ApiPort => {
+                if let Some(s) = self.settings_mut() {
+                    s.api_port_draft = Some(value as u16);
+                }
+            }
             _ => {}
         }
     }
@@ -289,7 +298,7 @@ impl App {
         let Some((min, max, _)) = Self::numeric_spec(field) else {
             return;
         };
-        let value = (self.numeric_get(field).max(0) * 10 + digit as i64).clamp(min, max);
+        let value = (self.numeric_get(field) * 10 + digit as i64).clamp(min, max);
         self.numeric_set(field, value);
         self.refresh_dirty();
     }

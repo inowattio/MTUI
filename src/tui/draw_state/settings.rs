@@ -322,24 +322,7 @@ fn field_value(
         SettingsField::ShowMockDevice => (on_off(device.display.mock_device), None),
         SettingsField::ReadOnly => (on_off(device.read_only), None),
         SettingsField::ApiEnabled => (on_off(device.api.enabled), None),
-        SettingsField::ApiPort => (
-            match (device.api.enabled, device.api.port) {
-                (false, 0) => "any".to_string(),
-                (false, n) => n.to_string(),
-                (true, 0) if app.api_bind_state() == ApiBindState::Failed => {
-                    "any (bind failed)".to_string()
-                }
-                (true, n) if app.api_bind_state() == ApiBindState::Failed => {
-                    format!("{n} (bind failed)")
-                }
-                (true, 0) => match app.api_bound_port() {
-                    Some(bound) => format!("any (:{bound})"),
-                    None => "any".to_string(),
-                },
-                (true, n) => n.to_string(),
-            },
-            None,
-        ),
+        SettingsField::ApiPort => (api_port_view(params, app), None),
         SettingsField::ApiUnitIdOverride => (on_off(device.api.unit_id_override), None),
         SettingsField::WriteLogEnabled => (on_off(device.write_log.enabled), None),
         SettingsField::StartupPanel => (device.startup.panel.name().to_string(), None),
@@ -475,6 +458,27 @@ fn draw_keybinds(params: &SettingsParams, app: &App, frame: &mut Frame, area: Re
         frame.render_widget(Paragraph::new(more), row);
     }
     render_footer(frame, footer, vec![hint]);
+}
+
+fn api_port_view(params: &SettingsParams, app: &App) -> String {
+    let api = app.config.api;
+    let port = match params.api_port_draft.unwrap_or(api.port) {
+        0 => "any".to_string(),
+        n => n.to_string(),
+    };
+    if params.api_port_draft.is_some() || !api.enabled {
+        return port;
+    }
+    if cfg!(target_arch = "wasm32") {
+        return format!("{port} (not available)");
+    }
+    let state = match (app.api_bind_state(), app.api_bound_port()) {
+        (ApiBindState::Pending, _) => "starting".to_string(),
+        (ApiBindState::Failed, _) => "bind failed".to_string(),
+        (ApiBindState::Bound, Some(bound)) if api.port == 0 => format!("listening on :{bound}"),
+        (ApiBindState::Bound, _) => "listening".to_string(),
+    };
+    format!("{port} ({state})")
 }
 
 #[cfg(test)]

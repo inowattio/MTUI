@@ -453,8 +453,6 @@ pub struct App {
     #[cfg(not(target_arch = "wasm32"))]
     api_server_port: Option<u16>,
     #[cfg(not(target_arch = "wasm32"))]
-    api_pending_port: Option<u16>,
-    #[cfg(not(target_arch = "wasm32"))]
     clipboard: Option<ClipboardHandle>,
 }
 
