@@ -50,14 +50,10 @@ jobs:
       - name: Build release binary
         run: cargo build --release
 
-      - name: Install demo gif dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y fonts-dejavu-core fonts-freefont-ttf imagemagick
-          pip install pyte
-
       - name: Regenerate demo gif
-        run: python3 .github/resources/demo.py
+        uses: charmbracelet/vhs-action@v2
+        with:
+          path: .github/resources/demo.tape
 
       - name: Commit and tag
         id: tag
