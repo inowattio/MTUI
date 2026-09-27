@@ -45,11 +45,13 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     };
 
     let mut mode_spans = Vec::new();
-    if let State::Logs(l) = &app.state {
-        mode_spans.push(Span::styled(
-            format!(" {} |", draw_state::logs::counter(l, app)),
-            theme.dim_style(),
-        ));
+    let counter = match &app.state {
+        State::Logs(l) => Some(draw_state::logs::counter(l, app)),
+        State::Diff(d) => Some(draw_state::diff::summary(d)),
+        _ => None,
+    };
+    if let Some(counter) = counter {
+        mode_spans.push(Span::styled(format!(" {counter} |"), theme.dim_style()));
     }
     mode_spans.push(Span::styled(format!(" {mode}"), theme.base()));
     if !app.config.name.is_empty() {
@@ -71,9 +73,14 @@ pub fn render(app: &mut App, frame: &mut Frame) {
 
     // h_max_offset is written during the table draw below, so this reads the
     // previous frame's value; it settles on the next redraw.
-    if let State::Read(p) = &app.state {
+    let h_offset = match &app.state {
+        State::Read(p) => Some(p.col_offset),
+        State::Diff(d) => Some(d.h_offset),
+        _ => None,
+    };
+    if let Some(offset) = h_offset {
         let max = app.h_max_offset.get();
-        if let Some(hint) = hints::hscroll(&theme, p.col_offset.min(max), max) {
+        if let Some(hint) = hints::hscroll(&theme, offset.min(max), max) {
             outer = outer.title_top(hint.centered());
         }
     }
@@ -108,5 +115,6 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         State::Read(p) => draw_state::read::draw(p, app, frame, inner, &theme, &device),
         State::Settings(s) => draw_state::settings::draw(s, app, frame, inner, &theme),
         State::Logs(l) => draw_state::logs::draw(l, app, frame, inner, &theme),
+        State::Diff(d) => draw_state::diff::draw(d, app, frame, inner, &theme),
     }
 }

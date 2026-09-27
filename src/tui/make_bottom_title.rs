@@ -74,5 +74,13 @@ pub fn make_bottom_title(theme: &Theme, app: &App) -> Line<'static> {
                 Hint::key(KeyCode::Esc, "Close"),
             ],
         ),
+        State::Diff(d) => hints::footer(
+            theme,
+            [
+                Hint::pair(KeyCode::Down, KeyCode::Right, "Scroll"),
+                Hint::key(kb.panel, if d.changed_only { "All" } else { "Changed" }),
+                Hint::key(KeyCode::Esc, "Close"),
+            ],
+        ),
     }
 }

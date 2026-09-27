@@ -8,6 +8,7 @@ use crate::modbus::{
 };
 use crate::num_ops::wrap_index;
 use crate::register::{RegisterCell, RegisterType};
+use crate::snapshot::{Diff, Snapshot};
 use crate::writes_log::WriteEntry;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
@@ -1405,10 +1406,21 @@ pub struct LogViewParams {
 }
 
 #[derive(Debug, PartialEq)]
+pub struct DiffViewParams {
+    pub snapshot: Snapshot,
+    pub diff: Diff,
+    pub top: usize,
+    pub h_offset: u16,
+    pub changed_only: bool,
+    pub previous: ReadParams,
+}
+
+#[derive(Debug, PartialEq)]
 pub enum State {
     Read(ReadParams),
     Settings(SettingsParams),
     Logs(LogViewParams),
+    Diff(DiffViewParams),
 }
 
 #[cfg(test)]

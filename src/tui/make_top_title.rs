@@ -5,5 +5,6 @@ pub const fn make_top_title(state: &State) -> &str {
         State::Read(_) => "Read",
         State::Settings(_) => "Settings",
         State::Logs(_) => "Logs",
+        State::Diff(_) => "Diff",
     }
 }

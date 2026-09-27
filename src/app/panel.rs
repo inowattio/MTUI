@@ -367,7 +367,7 @@ impl App {
             value,
             [1, 2, 3].map(|offset| at(addr.saturating_add(offset))),
             &entry.time_text,
-            now.signed_duration_since(entry.at),
+            Some(now.signed_duration_since(entry.at)),
             custom.as_deref(),
             self.label(cell),
         );

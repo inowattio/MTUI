@@ -18,6 +18,12 @@ impl TableRow {
     }
 }
 
+pub fn max_h_offset(widths: impl Iterator<Item = usize>, prefix: usize, width: usize) -> u16 {
+    let content_rest = widths.max().unwrap_or(0).saturating_sub(prefix);
+    let visible_rest = width.saturating_sub(prefix);
+    content_rest.saturating_sub(visible_rest) as u16
+}
+
 pub struct RowsTable {
     block: Block<'static>,
     header: String,

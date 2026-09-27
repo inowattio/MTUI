@@ -15,6 +15,7 @@ pub mod mock;
 pub mod modbus;
 pub mod num_ops;
 pub mod register;
+pub mod snapshot;
 pub mod state;
 pub mod tui;
 pub mod writes_log;

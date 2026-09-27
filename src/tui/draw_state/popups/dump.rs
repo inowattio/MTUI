@@ -23,6 +23,10 @@ pub(super) fn draw(
             " Written as dump_<config>_<date>_<time>.csv",
             theme.dim_style(),
         )),
+        Line::from(Span::styled(
+            " Paste a dump or drop its file to diff it",
+            theme.dim_style(),
+        )),
         Line::default(),
     ];
 

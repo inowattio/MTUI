@@ -849,7 +849,10 @@ mod columns;
 mod config_io;
 mod custom;
 mod device_id;
+mod diff;
 mod discovery;
+#[cfg(not(target_arch = "wasm32"))]
+mod dropped;
 mod dump;
 mod help;
 mod label;
