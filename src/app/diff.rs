@@ -1,5 +1,7 @@
 use super::App;
-use crate::config::{AddressMode, Column};
+#[cfg(not(target_arch = "wasm32"))]
+use super::dropped::dropped_dump;
+use crate::config::Column;
 use crate::constants::{NO_VALUE, message};
 use crate::interpretator::RowSegment;
 use crate::num_ops::step_hscroll;
@@ -9,17 +11,8 @@ use crate::snapshot::{
 };
 use crate::state::{DiffViewParams, State, StatusMessage};
 use chrono::{DateTime, Utc};
-#[cfg(not(target_arch = "wasm32"))]
-use std::io::{self, Read as _};
-#[cfg(not(target_arch = "wasm32"))]
-use std::path::{Path, PathBuf};
 
-#[cfg(not(target_arch = "wasm32"))]
-const DUMP_HEAD_BYTES: u64 = 4096;
-#[cfg(not(target_arch = "wasm32"))]
-const DUMP_FILE_LIMIT: u64 = 256 * 1024 * 1024;
-
-enum PastedDump {
+pub(super) enum PastedDump {
     Snapshot(Snapshot),
     Invalid(String),
     Other,
@@ -60,13 +53,12 @@ impl App {
                     "Replaced the diff snapshot | {} register(s)",
                     snapshot.len()
                 );
-                let diff = self.diff_of(&snapshot);
                 if let Some(d) = self.diff_view_mut() {
                     d.snapshot = snapshot;
-                    d.diff = diff;
                     d.top = 0;
                     d.h_offset = 0;
                 }
+                self.rediff();
             }
             PastedDump::Invalid(reason) => log::warn!("Paste ignored | {reason}"),
             PastedDump::Other => {}
@@ -211,125 +203,13 @@ impl App {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-fn dropped_dump(text: &str, mode: AddressMode) -> PastedDump {
-    let Some(path) = dropped_path(text) else {
-        return PastedDump::Other;
-    };
-    let name = path.file_name().map_or_else(
-        || path.display().to_string(),
-        |name| name.to_string_lossy().into_owned(),
-    );
-    let parsed = match dump_file_text(&path) {
-        Err(error) => return PastedDump::Invalid(format!("Couldn't read {name}: {error}")),
-        Ok(None) => Err(SnapshotError::NotADump),
-        Ok(Some(content)) => snapshot::parse_dump(&content, mode),
-    };
-    match parsed {
-        Ok(snapshot) => PastedDump::Snapshot(snapshot),
-        Err(error) => PastedDump::Invalid(format!("{name}: {error}")),
-    }
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn dump_file_text(path: &Path) -> io::Result<Option<String>> {
-    let mut file = std::fs::File::open(path)?;
-    let mut bytes = Vec::new();
-    file.by_ref()
-        .take(DUMP_HEAD_BYTES)
-        .read_to_end(&mut bytes)?;
-    if !snapshot::is_dump(&String::from_utf8_lossy(&bytes)) {
-        return Ok(None);
-    }
-    if file.metadata()?.len() > DUMP_FILE_LIMIT {
-        return Err(io::ErrorKind::FileTooLarge.into());
-    }
-    file.read_to_end(&mut bytes)?;
-    String::from_utf8(bytes)
-        .map(Some)
-        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
-}
-
 #[cfg(target_arch = "wasm32")]
-const fn dropped_dump(_: &str, _: AddressMode) -> PastedDump {
+const fn dropped_dump(_: &str, _: crate::config::AddressMode) -> PastedDump {
     PastedDump::Other
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn dropped_path(text: &str) -> Option<PathBuf> {
-    if text.contains(['\n', '\r']) {
-        return None;
-    }
-    path_candidates(text)
-        .into_iter()
-        .find(|path| path.is_file())
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn path_candidates(text: &str) -> Vec<PathBuf> {
-    let text = unquoted(text.trim());
-    if let Some(uri) = text.strip_prefix("file://") {
-        return percent_decoded(uri)
-            .map(PathBuf::from)
-            .into_iter()
-            .collect();
-    }
-    let unescaped = unescaped(text);
-    let mut candidates = vec![PathBuf::from(text)];
-    if unescaped != text {
-        candidates.push(PathBuf::from(unescaped));
-    }
-    candidates
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn unquoted(text: &str) -> &str {
-    ['"', '\'']
-        .into_iter()
-        .find_map(|quote| text.strip_prefix(quote)?.strip_suffix(quote))
-        .unwrap_or(text)
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn unescaped(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    let mut chars = text.chars().peekable();
-    while let Some(c) = chars.next() {
-        match chars.peek() {
-            Some(&next) if c == '\\' && is_shell_escaped(next) => {
-                out.push(next);
-                chars.next();
-            }
-            _ => out.push(c),
-        }
-    }
-    out
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn is_shell_escaped(c: char) -> bool {
-    c.is_whitespace() || "!\"#$&'()*,;<=>?[\\]^`{|}~".contains(c)
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn percent_decoded(text: &str) -> Option<String> {
-    let mut bytes = text.bytes();
-    let mut out = Vec::with_capacity(text.len());
-    while let Some(byte) = bytes.next() {
-        if byte == b'%' {
-            let high = char::from(bytes.next()?).to_digit(16)?;
-            let low = char::from(bytes.next()?).to_digit(16)?;
-            out.push(u8::try_from(high * 16 + low).ok()?);
-        } else {
-            out.push(byte);
-        }
-    }
-    String::from_utf8(out).ok()
 }
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
-    use super::path_candidates;
     use crate::app::{App, settle_until};
     use crate::config::{Column, Config, TimeMode};
     use crate::constants::NO_VALUE;
@@ -341,7 +221,6 @@ mod tests {
     use ratatui::backend::TestBackend;
     use ratatui::buffer::Buffer;
     use ratatui::style::Modifier;
-    use std::path::PathBuf;
 
     const VOLTAGE: RegisterCell = (RegisterType::Input, 0);
     const CURRENT: RegisterCell = (RegisterType::Input, 3);
@@ -697,47 +576,5 @@ mod tests {
             .expect("the before line keeps its lead");
         assert!(before.contains("1234"), "{before}");
         assert!(rows[0].contains("< cols >"), "{}", rows[0]);
-    }
-
-    #[test]
-    fn dropped_paths_are_unquoted_decoded_and_unescaped() {
-        let paths = |text: &str| -> Vec<PathBuf> { path_candidates(text) };
-        assert_eq!(paths("/tmp/dump.csv"), vec![PathBuf::from("/tmp/dump.csv")]);
-        assert_eq!(
-            paths("'/tmp/my dump.csv'"),
-            vec![PathBuf::from("/tmp/my dump.csv")]
-        );
-        assert_eq!(
-            paths("\"/tmp/my dump.csv\""),
-            vec![PathBuf::from("/tmp/my dump.csv")]
-        );
-        assert_eq!(
-            paths("file:///tmp/my%20dump%2Bfinal.csv"),
-            vec![PathBuf::from("/tmp/my dump+final.csv")]
-        );
-        assert!(paths("file:///tmp/broken%2").is_empty());
-        assert_eq!(
-            paths("/tmp/my\\ dump\\(1\\).csv"),
-            vec![
-                PathBuf::from("/tmp/my\\ dump\\(1\\).csv"),
-                PathBuf::from("/tmp/my dump(1).csv"),
-            ],
-            "the literal path is tried first for Windows separators"
-        );
-        assert_eq!(
-            paths("C:\\Users\\me\\my\\ dump\\(1\\).csv"),
-            vec![
-                PathBuf::from("C:\\Users\\me\\my\\ dump\\(1\\).csv"),
-                PathBuf::from("C:\\Users\\me\\my dump(1).csv"),
-            ],
-            "separators before plain names are kept"
-        );
-        assert_eq!(
-            paths("/tmp/back\\\\slash\\ it.csv"),
-            vec![
-                PathBuf::from("/tmp/back\\\\slash\\ it.csv"),
-                PathBuf::from("/tmp/back\\slash it.csv"),
-            ]
-        );
     }
 }

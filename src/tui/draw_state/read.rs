@@ -8,7 +8,7 @@ use crate::register::{RegisterCell, RegisterType};
 use crate::state::ConnectionStatus;
 use crate::state::{ReadPanel, ReadParams};
 use crate::tui::hints::{self, Hint};
-use crate::tui::rows_table::{RowsTable, TableRow};
+use crate::tui::rows_table::{RowsTable, TableRow, max_h_offset};
 use crate::tui::theme::{Theme, spinner_frame, status_parts};
 use chrono::{DateTime, Utc};
 use ratatui::Frame;
@@ -70,16 +70,11 @@ struct TableCtx<'a> {
 
 impl TableCtx<'_> {
     fn horizontal_offset(&self, rows: &[(String, Style)], header: &str, prefix: u16) -> u16 {
-        let prefix = prefix as usize;
-        let content_rest = rows
+        let widths = rows
             .iter()
             .map(|(t, _)| t.chars().count())
-            .chain(std::iter::once(header.chars().count()))
-            .max()
-            .unwrap_or(0)
-            .saturating_sub(prefix);
-        let visible_rest = (self.inner_width as usize).saturating_sub(prefix);
-        let max_offset = content_rest.saturating_sub(visible_rest) as u16;
+            .chain(std::iter::once(header.chars().count()));
+        let max_offset = max_h_offset(widths, prefix as usize, self.inner_width as usize);
         self.app.h_max_offset.set(max_offset);
         self.params.col_offset.min(max_offset)
     }

@@ -620,7 +620,7 @@ impl App {
         }
     }
 
-    const fn read_or_previous_mut(&mut self) -> &mut ReadParams {
+    pub(super) const fn read_or_previous_mut(&mut self) -> &mut ReadParams {
         match &mut self.state {
             State::Read(p) => p,
             State::Settings(s) => &mut s.previous,

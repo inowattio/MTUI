@@ -450,13 +450,9 @@ pub fn handle_paste(data: String, app: &mut App) {
         return;
     }
 
-    match app.popup_kind() {
-        None => app.paste_text(trimmed),
-        Some(PopupKind::Dump) => {
-            app.close_popup();
-            app.paste_text(trimmed);
-        }
-        Some(_) => {}
+    if matches!(app.popup_kind(), None | Some(PopupKind::Dump)) {
+        app.close_popup();
+        app.paste_text(trimmed);
     }
 }
 

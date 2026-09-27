@@ -256,23 +256,6 @@ pub fn parse_dump(text: &str, address_mode: AddressMode) -> Result<Snapshot, Sna
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum DiffKind {
-    Same,
-    Changed,
-    Unread,
-}
-
-impl DiffKind {
-    const fn of(recorded: u16, current: Option<u16>) -> Self {
-        match current {
-            None => Self::Unread,
-            Some(value) if value == recorded => Self::Same,
-            Some(_) => Self::Changed,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DiffMark {
     Same,
     Before,
@@ -330,16 +313,16 @@ impl Diff {
         let mut diff = Self::default();
         for (&cell, entry) in snapshot {
             let row = |mark| DiffRow { cell, mark };
-            match DiffKind::of(entry.value, current(cell)) {
-                DiffKind::Same => {
+            match current(cell) {
+                Some(value) if value == entry.value => {
                     diff.summary.same += 1;
                     diff.all.push(row(DiffMark::Same));
                 }
-                DiffKind::Unread => {
+                None => {
                     diff.summary.unread += 1;
                     diff.all.push(row(DiffMark::Unread));
                 }
-                DiffKind::Changed => {
+                Some(_) => {
                     diff.summary.changed += 1;
                     let pair = [row(DiffMark::Before), row(DiffMark::After)];
                     diff.all.extend(pair);
@@ -652,10 +635,6 @@ mod tests {
 
     #[test]
     fn cells_are_classified_against_the_current_values() {
-        assert_eq!(DiffKind::of(5, Some(5)), DiffKind::Same);
-        assert_eq!(DiffKind::of(5, Some(6)), DiffKind::Changed);
-        assert_eq!(DiffKind::of(5, None), DiffKind::Unread);
-
         let summary = Diff::new(&snapshot_of(&RECORDED), current(&NOW)).summary;
         assert_eq!(
             summary,

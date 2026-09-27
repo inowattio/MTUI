@@ -249,13 +249,7 @@ impl App {
                     self.config_path = path.clone();
                     self.mark_config_saved();
 
-                    let read = self.startup_read_params();
-                    match &mut self.state {
-                        State::Settings(s) => s.previous = read,
-                        State::Logs(l) => l.previous = read,
-                        State::Diff(d) => d.previous = read,
-                        State::Read(p) => *p = read,
-                    }
+                    *self.read_or_previous_mut() = self.startup_read_params();
                     self.rediff();
 
                     Ok(format!("Loaded {}", path.display()))

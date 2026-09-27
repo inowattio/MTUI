@@ -2,7 +2,7 @@ use crate::app::App;
 use crate::snapshot::{DiffLine, DiffMark};
 use crate::state::DiffViewParams;
 use crate::tui::draw_state::dim_line;
-use crate::tui::rows_table::{RowsTable, TableRow};
+use crate::tui::rows_table::{RowsTable, TableRow, max_h_offset};
 use crate::tui::theme::Theme;
 use chrono::Utc;
 use ratatui::Frame;
@@ -76,14 +76,13 @@ fn table_row(line: DiffLine, zebra: bool, theme: &Theme) -> TableRow {
 
 pub fn draw(params: &DiffViewParams, app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
     let rows = params.diff.rows(params.changed_only);
-    let notice = if params.diff.summary.all_unread() {
-        Some(NOTHING_READ)
-    } else if rows.is_empty() {
-        Some(NO_DIFFERENCES)
+    let all_unread = params.diff.summary.all_unread();
+    let footnote = (all_unread && !rows.is_empty()).then_some(NOTHING_READ);
+    let notice = rows.is_empty().then_some(if all_unread {
+        NOTHING_READ
     } else {
-        None
-    };
-    let footnote = notice.filter(|_| !rows.is_empty());
+        NO_DIFFERENCES
+    });
 
     let mut block = theme
         .tabbed_panel(&TABS, usize::from(params.changed_only))
@@ -105,14 +104,11 @@ pub fn draw(params: &DiffViewParams, app: &App, frame: &mut Frame, area: Rect, t
 
     let header = format!("{HEADER_LEAD}{}", app.interpreter.header());
     let prefix = LEAD + app.interpreter.prefix_width() as usize;
-    let widest = lines
+    let widths = lines
         .iter()
         .map(|line| LEAD + line.text.chars().count())
-        .chain(std::iter::once(header.chars().count()))
-        .max()
-        .unwrap_or(0);
-    let visible_rest = (area.width as usize).saturating_sub(prefix);
-    let max_offset = widest.saturating_sub(prefix).saturating_sub(visible_rest) as u16;
+        .chain(std::iter::once(header.chars().count()));
+    let max_offset = max_h_offset(widths, prefix, area.width as usize);
     app.h_max_offset.set(max_offset);
     let h_off = params.h_offset.min(max_offset);
 
