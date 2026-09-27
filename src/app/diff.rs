@@ -293,14 +293,22 @@ fn unquoted(text: &str) -> &str {
 #[cfg(not(target_arch = "wasm32"))]
 fn unescaped(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
-    let mut chars = text.chars();
+    let mut chars = text.chars().peekable();
     while let Some(c) = chars.next() {
-        match c {
-            '\\' => out.extend(chars.next()),
-            c => out.push(c),
+        match chars.peek() {
+            Some(&next) if c == '\\' && is_shell_escaped(next) => {
+                out.push(next);
+                chars.next();
+            }
+            _ => out.push(c),
         }
     }
     out
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn is_shell_escaped(c: char) -> bool {
+    c.is_whitespace() || "!\"#$&'()*,;<=>?[\\]^`{|}~".contains(c)
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -715,6 +723,21 @@ mod tests {
                 PathBuf::from("/tmp/my dump(1).csv"),
             ],
             "the literal path is tried first for Windows separators"
+        );
+        assert_eq!(
+            paths("C:\\Users\\me\\my\\ dump\\(1\\).csv"),
+            vec![
+                PathBuf::from("C:\\Users\\me\\my\\ dump\\(1\\).csv"),
+                PathBuf::from("C:\\Users\\me\\my dump(1).csv"),
+            ],
+            "separators before plain names are kept"
+        );
+        assert_eq!(
+            paths("/tmp/back\\\\slash\\ it.csv"),
+            vec![
+                PathBuf::from("/tmp/back\\\\slash\\ it.csv"),
+                PathBuf::from("/tmp/back\\slash it.csv"),
+            ]
         );
     }
 }
