@@ -246,6 +246,7 @@ impl App {
 
         self.close_settings();
         self.close_log_view();
+        self.close_diff_view();
         self.read_mut().popup = Some(Popup::Quit);
     }
 
@@ -564,6 +565,8 @@ impl App {
             None => self.stats.record_read_ok(result.read_duration),
         }
         if !self.is_reading() {
+            self.read_or_previous_mut().finish_read();
+            self.settle_connection(result.error.as_ref());
             return;
         }
         if result.main_window
@@ -604,7 +607,30 @@ impl App {
 
         self.sync_auto_widths();
 
-        let connection = match &result.error {
+        {
+            let params = self.read_mut();
+            params.read_duration = Some(result.read_duration);
+            params.finish_read();
+            params.read_error = result.error.as_ref().map(|e| e.message.clone());
+        }
+        self.settle_connection(result.error.as_ref());
+
+        if self.sweep.active && result.main_window {
+            self.advance_sweep(result.error.is_some());
+        }
+    }
+
+    const fn read_or_previous_mut(&mut self) -> &mut ReadParams {
+        match &mut self.state {
+            State::Read(p) => p,
+            State::Settings(s) => &mut s.previous,
+            State::Logs(l) => &mut l.previous,
+            State::Diff(d) => &mut d.previous,
+        }
+    }
+
+    fn settle_connection(&mut self, error: Option<&ReadError>) {
+        let connection = match error {
             Some(e) => {
                 let link_lost = match e.kind {
                     ReadFailure::Exception => false,
@@ -623,12 +649,6 @@ impl App {
                 ConnectionStatus::Connected
             }
         };
-        {
-            let params = self.read_mut();
-            params.read_duration = Some(result.read_duration);
-            params.finish_read();
-            params.read_error = result.error.as_ref().map(|e| e.message.clone());
-        }
 
         if connection != self.logged_connection {
             match &connection {
@@ -639,10 +659,6 @@ impl App {
             self.logged_connection = connection.clone();
         }
         self.connection = connection;
-
-        if self.sweep.active && result.main_window {
-            self.advance_sweep(result.error.is_some());
-        }
     }
 
     pub(super) fn free_background_slot(&mut self) -> bool {
@@ -655,9 +671,7 @@ impl App {
                     device.poison();
                 }
                 self.background_task = None;
-                if self.is_reading() {
-                    self.read_mut().finish_read();
-                }
+                self.read_or_previous_mut().finish_read();
                 true
             }
             Some(_) => false,
@@ -715,11 +729,9 @@ impl App {
             Done::Refresh(None) => {
                 let message = "read task stopped unexpectedly".to_string();
                 self.stats.record_read_error(&message);
-                if self.is_reading() {
-                    let params = self.read_mut();
-                    params.read_error = Some(message.clone());
-                    params.finish_read();
-                }
+                let params = self.read_or_previous_mut();
+                params.read_error = Some(message.clone());
+                params.finish_read();
                 log::error!("Read task failed | {message}");
                 self.connection = ConnectionStatus::Error(message);
                 self.reconnect.link_lost = true;

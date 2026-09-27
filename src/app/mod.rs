@@ -849,6 +849,7 @@ mod columns;
 mod config_io;
 mod custom;
 mod device_id;
+mod diff;
 mod discovery;
 mod dump;
 mod help;

@@ -114,7 +114,7 @@ impl<'a> RowCtx<'a> {
 #[rustfmt::skip]
 const COLUMNS: &[ColumnSpec] = &[
     ColumnSpec { column: Column::Address, width: ADDRESS_W, render: |c, w, o| address_cell(c.address, c.address_mode, w, o) },
-    ColumnSpec { column: Column::Time,    width: TIME_W, render: |c, _, o| time_cell(c, o) },
+    ColumnSpec { column: Column::Time,    width: TIME_W, render: |c, w, o| time_cell(c, w, o) },
     ColumnSpec { column: Column::U16,     width: 5,  render: |c, _, o| { let _ = write!(o, "{}", c.value); } },
     ColumnSpec { column: Column::I16,     width: 6,  render: |c, _, o| { let _ = write!(o, "{}", c.value as i16); } },
     ColumnSpec { column: Column::U8,     width: 8,  render: |c, _, o| { let _ = write!(o, "{}/{}", (c.value >> 8) as u8, (c.value & 0xFF) as u8); } },
@@ -396,7 +396,7 @@ impl Interpretor {
         value: u16,
         next: [Option<u16>; 3],
         time_text: &str,
-        elapsed: chrono::Duration,
+        elapsed: Option<chrono::Duration>,
         custom: Option<&str>,
         label: Option<&str>,
     ) -> String {
@@ -410,7 +410,7 @@ impl Interpretor {
                 next,
                 custom,
                 time: time_text,
-                elapsed: Some(elapsed),
+                elapsed,
                 label,
             },
         );
@@ -516,17 +516,30 @@ pub(crate) fn format_ago(elapsed: chrono::Duration) -> String {
     out
 }
 
+const AGO_NOW: &str = "now";
+const AGO_SUFFIX: &str = " ago";
+const AGO_OVER_AN_HOUR: &str = ">1h ago";
+
 fn write_ago(out: &mut String, elapsed: chrono::Duration) {
     let secs = elapsed.num_seconds();
     if secs <= 0 {
-        out.push_str("now");
+        out.push_str(AGO_NOW);
     } else if secs < 60 {
-        let _ = write!(out, "{secs}s ago");
+        let _ = write!(out, "{secs}s{AGO_SUFFIX}");
     } else if secs < 3600 {
-        let _ = write!(out, "{}m ago", secs / 60);
+        let _ = write!(out, "{}m{AGO_SUFFIX}", secs / 60);
     } else {
-        out.push_str(">1h ago");
+        out.push_str(AGO_OVER_AN_HOUR);
     }
+}
+
+pub fn is_age(text: &str) -> bool {
+    text == AGO_NOW
+        || text == AGO_OVER_AN_HOUR
+        || text
+            .strip_suffix(AGO_SUFFIX)
+            .and_then(|rest| rest.strip_suffix(['s', 'm']))
+            .is_some_and(|count| !count.is_empty() && count.bytes().all(|b| b.is_ascii_digit()))
 }
 
 fn address_cell(address: u16, mode: AddressMode, width: usize, out: &mut String) {
@@ -540,11 +553,10 @@ fn address_cell(address: u16, mode: AddressMode, width: usize, out: &mut String)
     }
 }
 
-fn time_cell(ctx: &RowCtx, out: &mut String) {
+fn time_cell(ctx: &RowCtx, width: usize, out: &mut String) {
     match (ctx.time_mode, ctx.elapsed) {
-        (TimeMode::ReadAt, _) => out.push_str(ctx.time),
         (TimeMode::Ago, Some(elapsed)) => write_ago(out, elapsed),
-        (TimeMode::Ago, None) => out.push_str(NO_VALUE),
+        _ => clipped_cell(ctx.time, width, out),
     }
 }
 
@@ -760,7 +772,7 @@ mod tests {
             0x1234,
             [Some(0), Some(0), Some(0)],
             "12:00:00.000",
-            chrono::Duration::zero(),
+            Some(chrono::Duration::zero()),
             None,
             Some("pump"),
         );
@@ -788,7 +800,7 @@ mod tests {
             1,
             [None; 3],
             "12:34:56.789",
-            chrono::Duration::seconds(3),
+            Some(chrono::Duration::seconds(3)),
             None,
             None,
         )
@@ -806,6 +818,28 @@ mod tests {
         interpretor.set_time_mode(TimeMode::Ago);
         let row = row_of(&interpretor);
         assert!(row.starts_with("      5 3s ago       "), "{row:?}");
+    }
+
+    #[test]
+    fn a_row_without_an_age_shows_its_time_text_clipped_in_every_mode() {
+        let mut interpretor = interpretor();
+        let untimed =
+            |i: &Interpretor, time: &str| i.format_row(5, 1, [None; 3], time, None, None, None);
+        for mode in TimeMode::ALL {
+            interpretor.set_time_mode(mode);
+            let row = untimed(&interpretor, "14:02:42.850");
+            assert!(
+                row.starts_with("      5 14:02:42.850 1 "),
+                "{mode:?}: {row:?}"
+            );
+            let row = untimed(&interpretor, "2026-09-27T14:02:42Z");
+            assert_eq!(segment(&interpretor, "time").text(&row), "2026-09-2...");
+            assert_eq!(
+                segment(&interpretor, "u16").text(&row),
+                "1",
+                "still aligned"
+            );
+        }
     }
 
     fn segment(interpretor: &Interpretor, name: &str) -> RowSegment {
@@ -892,7 +926,7 @@ mod tests {
             1,
             [None; 3],
             "12:34:56.789",
-            chrono::Duration::seconds(3),
+            Some(chrono::Duration::seconds(3)),
             None,
             Some("Plant.Line2.Pump"),
         );
@@ -915,7 +949,7 @@ mod tests {
             1,
             [None; 3],
             "12:34:56.789",
-            chrono::Duration::seconds(3),
+            Some(chrono::Duration::seconds(3)),
             None,
             None,
         );
@@ -945,5 +979,16 @@ mod tests {
         assert_eq!(format_ago(chrono::Duration::seconds(59)), "59s ago");
         assert_eq!(format_ago(chrono::Duration::seconds(125)), "2m ago");
         assert_eq!(format_ago(chrono::Duration::seconds(3600)), ">1h ago");
+    }
+
+    #[test]
+    fn every_ago_text_is_recognised_as_an_age() {
+        for secs in [-5, 0, 1, 59, 60, 125, 3599, 3600, 90_000] {
+            let text = format_ago(chrono::Duration::seconds(secs));
+            assert!(is_age(&text), "{text}");
+        }
+        for text in ["12:00:00.000", "-", "", "s ago", "5h ago", "now!"] {
+            assert!(!is_age(text), "{text:?}");
+        }
     }
 }

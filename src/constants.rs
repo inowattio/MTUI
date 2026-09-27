@@ -28,7 +28,11 @@ pub mod message {
     pub const RAW_BAD_FUNCTION_CODE: &str = "Function code must be 0-255";
     pub const SENDING: &str = "Sending...";
     pub const TASK_STOPPED: &str = "Failed: task stopped unexpectedly";
-    pub const PASTE_NOT_REGISTERS: &str = "Pasted text isn't pinned/labels/custom data";
+    pub const PASTE_NOT_REGISTERS: &str = "Pasted text isn't pinned/labels/custom data or a dump";
+    pub const NOT_A_DUMP: &str = "Not a dump";
+    pub const DUMP_NO_ADDRESS: &str = "Dump has no address column";
+    pub const DUMP_NO_RAW_COLUMN: &str = "Dump has no u16, hex, i16 or bits column";
+    pub const DUMP_NO_ROWS: &str = "Dump has no register rows";
     pub const CONFIG_COPIED: &str = "Copied the configuration to clipboard";
     pub const LOADING: &str = "Loading...";
     pub const NO_NEXT_CONFIG: &str = "No next configuration set";

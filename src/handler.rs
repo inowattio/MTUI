@@ -31,6 +31,11 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) {
         return;
     }
 
+    if app.diff_view().is_some() {
+        handle_diff_view_key(key_event, app);
+        return;
+    }
+
     if let Some(kind) = app.popup_kind() {
         handle_popup_key(kind, key_event, app).await;
         return;
@@ -426,6 +431,11 @@ pub fn handle_paste(data: String, app: &mut App) {
         return;
     }
 
+    if app.diff_view().is_some() {
+        app.paste_into_diff_view(trimmed);
+        return;
+    }
+
     if let Some(d) = app.discovery_mut() {
         if d.current_field() == DiscoveryField::CustomPath {
             let first_line = trimmed.lines().next().unwrap_or_default();
@@ -440,8 +450,13 @@ pub fn handle_paste(data: String, app: &mut App) {
         return;
     }
 
-    if app.popup_kind().is_none() {
-        app.paste_import(trimmed);
+    match app.popup_kind() {
+        None => app.paste_text(trimmed),
+        Some(PopupKind::Dump) => {
+            app.close_popup();
+            app.paste_text(trimmed);
+        }
+        Some(_) => {}
     }
 }
 
@@ -603,6 +618,22 @@ fn handle_logs_view_key(key_event: KeyEvent, app: &mut App) {
         c if c == kb.dump => app.dump_app_logs(),
         KeyCode::Left => app.log_view_hscroll(false),
         KeyCode::Right => app.log_view_hscroll(true),
+        _ => {}
+    }
+}
+
+fn handle_diff_view_key(key_event: KeyEvent, app: &mut App) {
+    let kb = app.config.keybinds;
+    let page = app.visible_rows.get() as isize;
+    match key_event.code {
+        KeyCode::Esc => app.close_diff_view(),
+        c if c == kb.panel => app.diff_toggle_changed(),
+        KeyCode::Up => app.diff_scroll(-1),
+        KeyCode::Down => app.diff_scroll(1),
+        c if c == kb.page_up => app.diff_scroll(-page),
+        c if c == kb.page_down => app.diff_scroll(page),
+        KeyCode::Left => app.diff_hscroll(false),
+        KeyCode::Right => app.diff_hscroll(true),
         _ => {}
     }
 }
@@ -1313,5 +1344,250 @@ mod tests {
             Some(PopupKind::Columns),
             "plain c still opens Columns"
         );
+    }
+
+    const DUMP: &str = "type,address,time,u16\ninput,0,12:00:00.000,1\ninput,1,12:00:00.000,2\n";
+
+    fn paste(app: &mut App, text: &str) {
+        super::handle_paste(text.to_string(), app);
+    }
+
+    fn snapshot_len(app: &App) -> Option<usize> {
+        app.diff_view().map(|d| d.snapshot.len())
+    }
+
+    fn warning(app: &App) -> String {
+        let status = app.read().status.as_ref().expect("a status is shown");
+        assert_eq!(status.kind, MessageKind::Warn, "{}", status.text);
+        status.text.clone()
+    }
+
+    struct ScratchDir(std::path::PathBuf);
+
+    impl ScratchDir {
+        fn new(name: &str) -> Self {
+            let dir = std::env::temp_dir().join(format!("mtui-{}-{name}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).expect("scratch dir");
+            Self(dir)
+        }
+
+        fn write(&self, file: &str, content: &str) -> String {
+            let path = self.0.join(file);
+            std::fs::write(&path, content).expect("scratch file");
+            path.to_string_lossy().into_owned()
+        }
+    }
+
+    impl Drop for ScratchDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[tokio::test]
+    async fn pasted_registers_json_still_opens_the_import_popup() {
+        let mut app = app().await;
+        paste(&mut app, r#"{"holdings":[{"address":3,"pinned":true}]}"#);
+        assert_eq!(app.popup_kind(), Some(PopupKind::Import));
+        assert_eq!(snapshot_len(&app), None);
+    }
+
+    #[tokio::test]
+    async fn a_pasted_dump_opens_the_diff_screen_and_escape_returns_unchanged() {
+        let mut app = app().await;
+        {
+            let read = app.read_mut();
+            read.position = 42;
+            read.panel = crate::state::ReadPanel::Pinned;
+        }
+
+        paste(&mut app, DUMP);
+        assert_eq!(snapshot_len(&app), Some(2));
+        assert!(matches!(app.state, State::Diff(_)));
+
+        let kb = app.config.keybinds;
+        handle_key_events(KeyEvent::new(kb.panel), &mut app).await;
+        assert!(
+            app.diff_view().unwrap().changed_only,
+            "the panel key switches tabs"
+        );
+        handle_key_events(KeyEvent::new(KeyCode::Char('w')), &mut app).await;
+        assert!(app.diff_view().is_some(), "read keys do nothing here");
+
+        handle_key_events(KeyEvent::new(KeyCode::Esc), &mut app).await;
+        let read = app.read();
+        assert_eq!(read.position, 42);
+        assert_eq!(read.panel, crate::state::ReadPanel::Pinned);
+        assert_eq!(read.popup, None);
+        assert!(app.running, "escape closes the diff, not the app");
+    }
+
+    #[tokio::test]
+    async fn a_dropped_dump_file_opens_the_diff_screen() {
+        let scratch = ScratchDir::new("dropped-dump");
+        let path = scratch.write("my dump.csv", DUMP);
+        let escaped = path.replace(' ', "\\ ");
+        let uri = format!("file://{}", path.replace(' ', "%20"));
+
+        for pasted in [
+            path.clone(),
+            format!("'{path}'"),
+            format!("\"{path}\""),
+            escaped,
+            uri,
+        ] {
+            let mut app = app().await;
+            paste(&mut app, &format!("{pasted}\n"));
+            assert_eq!(snapshot_len(&app), Some(2), "{pasted}");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_dropped_file_that_is_no_dump_says_so() {
+        let scratch = ScratchDir::new("dropped-other");
+        let notes = scratch.write("notes.txt", "hello");
+        let broken = scratch.write("broken.csv", "type,address,u16\ninput,1\n");
+
+        let mut app = app().await;
+        paste(&mut app, &notes);
+        assert_eq!(
+            warning(&app),
+            format!("notes.txt: {}", crate::constants::message::NOT_A_DUMP)
+        );
+        paste(&mut app, &broken);
+        assert_eq!(warning(&app), "broken.csv: Dump row on line 2 is malformed");
+        paste(&mut app, &format!("{notes}.missing"));
+        assert_eq!(
+            warning(&app),
+            crate::constants::message::PASTE_NOT_REGISTERS
+        );
+        assert_eq!(snapshot_len(&app), None);
+    }
+
+    #[tokio::test]
+    async fn a_huge_dropped_file_is_refused_without_reading_it_all() {
+        const HUGE: u64 = 1 << 30;
+        let scratch = ScratchDir::new("dropped-huge");
+        let huge = |file: &str, content: &str| {
+            let path = scratch.write(file, content);
+            std::fs::File::options()
+                .write(true)
+                .open(&path)
+                .and_then(|file| file.set_len(HUGE))
+                .expect("sparse scratch file");
+            path
+        };
+        let image = huge("disk.img", "hello");
+        let dump = huge("huge.csv", DUMP);
+
+        let mut app = app().await;
+        paste(&mut app, &image);
+        assert_eq!(
+            warning(&app),
+            format!("disk.img: {}", crate::constants::message::NOT_A_DUMP)
+        );
+        paste(&mut app, &dump);
+        let refused = warning(&app);
+        assert!(refused.starts_with("Couldn't read huge.csv: "), "{refused}");
+        assert_eq!(snapshot_len(&app), None);
+    }
+
+    #[tokio::test]
+    async fn a_dump_pasted_over_the_dump_popup_opens_the_diff_screen() {
+        let mut app = app().await;
+        app.open_dump();
+        paste(&mut app, DUMP);
+        assert_eq!(snapshot_len(&app), Some(2));
+        handle_key_events(KeyEvent::new(KeyCode::Esc), &mut app).await;
+        assert_eq!(app.popup_kind(), None, "the dump popup is gone");
+
+        app.open_dump();
+        paste(&mut app, "hello there");
+        assert_eq!(app.popup_kind(), None);
+        assert_eq!(
+            warning(&app),
+            crate::constants::message::PASTE_NOT_REGISTERS
+        );
+
+        app.open_help();
+        paste(&mut app, DUMP);
+        assert_eq!(
+            app.popup_kind(),
+            Some(PopupKind::Help),
+            "other popups ignore it"
+        );
+        assert_eq!(snapshot_len(&app), None);
+    }
+
+    #[tokio::test]
+    async fn unrecognised_or_broken_pastes_warn_instead_of_opening_the_diff() {
+        use crate::constants::message;
+        let mut app = app().await;
+        for (text, expected) in [
+            ("hello there", message::PASTE_NOT_REGISTERS.to_string()),
+            (
+                "type,address,label\ninput,1,x\n",
+                message::DUMP_NO_RAW_COLUMN.to_string(),
+            ),
+            ("type,u16\ninput,1\n", message::DUMP_NO_ADDRESS.to_string()),
+            (
+                "type,address,u16\ninput,1,2\ninput,two,3\n",
+                "Dump row on line 3 is malformed".to_string(),
+            ),
+        ] {
+            paste(&mut app, text);
+            assert_eq!(warning(&app), expected, "{text:?}");
+            assert_eq!(snapshot_len(&app), None);
+        }
+        assert!(message::PASTE_NOT_REGISTERS.contains("dump"));
+    }
+
+    #[tokio::test]
+    async fn a_second_dump_pasted_in_the_diff_screen_replaces_the_snapshot() {
+        let mut app = app().await;
+        paste(&mut app, DUMP);
+        app.diff_view_mut().unwrap().top = 1;
+        app.diff_view_mut().unwrap().h_offset = 8;
+
+        paste(
+            &mut app,
+            "type,address,u16\nholding,1,1\nholding,2,2\nholding,3,3\n",
+        );
+        let d = app.diff_view().unwrap();
+        assert_eq!(d.snapshot.len(), 3);
+        assert_eq!((d.top, d.h_offset), (0, 0), "scrolling starts over");
+
+        for ignored in [
+            "12",
+            "hello",
+            r#"{"holdings":[{"address":3,"pinned":true}]}"#,
+            "type,address,u16\ninput,x,1\n",
+        ] {
+            paste(&mut app, ignored);
+            assert_eq!(snapshot_len(&app), Some(3), "{ignored:?} is ignored");
+        }
+    }
+
+    #[tokio::test]
+    async fn ctrl_c_in_the_diff_screen_returns_to_the_read_view_to_ask() {
+        let mut app = app().await;
+        paste(&mut app, DUMP);
+        app.dirty = true;
+        handle_key_events(ctrl('c'), &mut app).await;
+        assert!(app.running);
+        assert!(matches!(&app.state, State::Read(p) if p.popup == Some(Popup::Quit)));
+    }
+
+    #[tokio::test]
+    async fn the_diff_screen_renders_with_nothing_read() {
+        let mut app = app().await;
+        paste(&mut app, DUMP);
+        let screen = screen(&mut app);
+        assert!(
+            screen.contains("0 changed, 0 same, 2 unread | Diff"),
+            "{screen}"
+        );
+        assert!(screen.contains("[Tab] Changed"), "{screen}");
     }
 }

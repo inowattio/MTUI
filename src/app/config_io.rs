@@ -15,19 +15,18 @@ impl App {
         (registers.total() > 0).then_some(registers)
     }
 
-    pub fn paste_import(&mut self, data: &str) {
-        match Self::parse_import(data) {
-            Some(payload) => {
-                let params = ImportParams {
-                    pins: payload.pins(),
-                    labels: payload.labels(),
-                    rules: payload.rules(),
-                };
-                self.pending_import = Some(payload);
-                self.read_mut().popup = Some(Popup::Import(params));
-            }
-            None => self.set_read_status(StatusMessage::warn(message::PASTE_NOT_REGISTERS)),
-        }
+    pub fn paste_import(&mut self, data: &str) -> bool {
+        let Some(payload) = Self::parse_import(data) else {
+            return false;
+        };
+        let params = ImportParams {
+            pins: payload.pins(),
+            labels: payload.labels(),
+            rules: payload.rules(),
+        };
+        self.pending_import = Some(payload);
+        self.read_mut().popup = Some(Popup::Import(params));
+        true
     }
 
     pub fn cancel_import(&mut self) {
@@ -162,6 +161,7 @@ impl App {
         let p = match &self.state {
             State::Read(p) => p,
             State::Settings(s) => &s.previous,
+            State::Diff(d) => &d.previous,
             State::Logs(_) => return None,
         };
         Some(Startup {
@@ -253,8 +253,10 @@ impl App {
                     match &mut self.state {
                         State::Settings(s) => s.previous = read,
                         State::Logs(l) => l.previous = read,
+                        State::Diff(d) => d.previous = read,
                         State::Read(p) => *p = read,
                     }
+                    self.rediff();
 
                     Ok(format!("Loaded {}", path.display()))
                 }
@@ -277,6 +279,7 @@ impl App {
             State::Read(p) => p.set_status(outcome.into()),
             State::Settings(_) => self.set_settings_status(outcome.into()),
             State::Logs(l) => l.previous.set_status(outcome.into()),
+            State::Diff(d) => d.previous.set_status(outcome.into()),
         }
     }
 
@@ -373,7 +376,7 @@ mod tests {
         assert_eq!(payload.rules(), app.custom_rules.len());
 
         let mut other = App::boot(Config::default(), String::new()).await;
-        other.paste_import(&json);
+        assert!(other.paste_import(&json));
         other.apply_import();
         assert_eq!(other.pinned_registers, app.pinned_registers);
         assert_eq!(other.labels, app.labels);
