@@ -14,6 +14,7 @@ impl ScratchDir {
         self.0.join(file)
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn write(&self, file: &str, content: &str) -> String {
         let path = self.path(file);
         std::fs::write(&path, content).expect("scratch file");
