@@ -887,10 +887,10 @@ mod tests {
     };
     use crate::register::{RegisterCell, RegisterType};
     #[cfg(not(target_arch = "wasm32"))]
+    use crate::scratch::ScratchDir;
+    #[cfg(not(target_arch = "wasm32"))]
     use crate::state::{ConnectionStatus, ReadPanel};
     use std::collections::BTreeMap;
-    #[cfg(not(target_arch = "wasm32"))]
-    use std::path::PathBuf;
     #[cfg(not(target_arch = "wasm32"))]
     use std::time::Duration;
 
@@ -1063,39 +1063,17 @@ mod tests {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    struct ScratchConfig(PathBuf);
-
-    #[cfg(not(target_arch = "wasm32"))]
-    impl ScratchConfig {
-        fn new(name: &str) -> Self {
-            let dir = std::env::temp_dir().join(format!("mtui-{}-{name}", std::process::id()));
-            let _ = std::fs::remove_dir_all(&dir);
-            std::fs::create_dir_all(&dir).expect("scratch dir");
-            Self(dir)
-        }
-
-        fn path(&self) -> PathBuf {
-            self.0.join("config.json")
-        }
-
-        fn saved(&self) -> Config {
-            let content = std::fs::read_to_string(self.path()).expect("config written on exit");
-            serde_json::from_str(&content).expect("valid config")
-        }
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    impl Drop for ScratchConfig {
-        fn drop(&mut self) {
-            let _ = std::fs::remove_dir_all(&self.0);
-        }
+    fn saved(scratch: &ScratchDir) -> Config {
+        let content =
+            std::fs::read_to_string(scratch.path("config.json")).expect("config written on exit");
+        serde_json::from_str(&content).expect("valid config")
     }
 
     #[cfg(not(target_arch = "wasm32"))]
     #[tokio::test]
     async fn quitting_saves_the_position_as_startup_when_enabled() {
-        let scratch = ScratchConfig::new("save-position");
-        let mut app = App::boot(Config::default(), scratch.path()).await;
+        let scratch = ScratchDir::new("save-position");
+        let mut app = App::boot(Config::default(), scratch.path("config.json")).await;
         app.config.save_position_on_exit = true;
         app.config.name = "unsaved".to_string();
         {
@@ -1108,7 +1086,7 @@ mod tests {
         app.quit();
         assert!(!app.running);
 
-        let saved = scratch.saved();
+        let saved = saved(&scratch);
         assert_eq!(saved.startup.address, 42);
         assert_eq!(saved.startup.register_type, RegisterType::Holding);
         assert_eq!(saved.startup.panel, ReadPanel::Pinned);
@@ -1121,30 +1099,30 @@ mod tests {
     #[cfg(not(target_arch = "wasm32"))]
     #[tokio::test]
     async fn quitting_leaves_the_config_alone_when_disabled() {
-        let scratch = ScratchConfig::new("keep-position");
-        let mut app = App::boot(Config::default(), scratch.path()).await;
+        let scratch = ScratchDir::new("keep-position");
+        let mut app = App::boot(Config::default(), scratch.path("config.json")).await;
         assert!(!app.config.save_position_on_exit, "off by default");
         app.read_mut().position = 42;
 
         app.quit();
         assert!(!app.running);
-        assert!(!scratch.path().exists());
+        assert!(!scratch.path("config.json").exists());
     }
 
     #[cfg(not(target_arch = "wasm32"))]
     #[tokio::test]
     async fn a_clean_quit_request_also_saves_the_position() {
-        let scratch = ScratchConfig::new("request-quit-position");
-        let mut app = App::boot(Config::default(), scratch.path()).await;
+        let scratch = ScratchDir::new("request-quit-position");
+        let mut app = App::boot(Config::default(), scratch.path("config.json")).await;
         app.config.save_position_on_exit = true;
         app.mark_config_saved();
         app.read_mut().position = 7;
 
         app.request_quit();
         assert!(!app.running);
-        assert_eq!(scratch.saved().startup.address, 7);
+        assert_eq!(saved(&scratch).startup.address, 7);
         assert!(
-            scratch.saved().save_position_on_exit,
+            saved(&scratch).save_position_on_exit,
             "a saved toggle is kept in the file"
         );
     }

@@ -15,6 +15,8 @@ pub mod mock;
 pub mod modbus;
 pub mod num_ops;
 pub mod register;
+#[cfg(all(test, not(target_arch = "wasm32")))]
+pub(crate) mod scratch;
 pub mod snapshot;
 pub mod state;
 pub mod tui;

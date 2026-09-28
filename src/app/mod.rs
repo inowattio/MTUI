@@ -683,29 +683,8 @@ mod tests {
     }
 
     use super::{Config, ConfigError, load_config, save_config};
+    use crate::scratch::ScratchDir;
     use std::fs;
-    use std::path::PathBuf;
-
-    struct Scratch(PathBuf);
-
-    impl Scratch {
-        fn new(name: &str) -> Self {
-            let dir = std::env::temp_dir().join(format!("mtui-{}-{name}", std::process::id()));
-            let _ = fs::remove_dir_all(&dir);
-            fs::create_dir_all(&dir).expect("scratch dir");
-            Self(dir)
-        }
-
-        fn path(&self, file: &str) -> PathBuf {
-            self.0.join(file)
-        }
-    }
-
-    impl Drop for Scratch {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.0);
-        }
-    }
 
     #[test]
     fn read_failures_are_classified_by_cause() {
@@ -735,7 +714,7 @@ mod tests {
 
     #[test]
     fn missing_file_is_a_read_error_unless_creation_is_allowed() {
-        let scratch = Scratch::new("missing");
+        let scratch = ScratchDir::new("missing");
         let path = scratch.path("config.json");
 
         let error = load_config(&path, false).expect_err("nothing to read");
@@ -753,7 +732,7 @@ mod tests {
 
     #[test]
     fn a_file_without_a_version_is_flagged_as_legacy() {
-        let scratch = Scratch::new("legacy");
+        let scratch = ScratchDir::new("legacy");
         let path = scratch.path("config.json");
         fs::write(&path, r#"{"name": "old"}"#).unwrap();
         assert!(load_config(&path, false).unwrap().legacy);
@@ -767,7 +746,7 @@ mod tests {
 
     #[test]
     fn garbage_is_a_parse_error() {
-        let scratch = Scratch::new("garbage");
+        let scratch = ScratchDir::new("garbage");
         let path = scratch.path("config.json");
         fs::write(&path, "{ not json").unwrap();
 
@@ -784,7 +763,7 @@ mod tests {
 
     #[test]
     fn unreadable_existing_path_is_not_replaced() {
-        let scratch = Scratch::new("dir");
+        let scratch = ScratchDir::new("dir");
         let path = scratch.path("config.json");
         fs::create_dir(&path).unwrap();
 
@@ -794,7 +773,7 @@ mod tests {
 
     #[test]
     fn saving_replaces_the_file_and_leaves_no_temporary_behind() {
-        let scratch = Scratch::new("atomic");
+        let scratch = ScratchDir::new("atomic");
         let path = scratch.path("config.json");
         let temporary = scratch.path("config.json.tmp");
 
@@ -817,7 +796,7 @@ mod tests {
 
     #[test]
     fn a_stale_temporary_does_not_block_the_next_save() {
-        let scratch = Scratch::new("stale");
+        let scratch = ScratchDir::new("stale");
         let path = scratch.path("config.json");
         let temporary = scratch.path("config.json.tmp");
         fs::write(&temporary, "half a config").unwrap();
@@ -830,7 +809,7 @@ mod tests {
 
     #[test]
     fn a_failed_save_leaves_the_previous_config_untouched() {
-        let scratch = Scratch::new("kept");
+        let scratch = ScratchDir::new("kept");
         let path = scratch.path("config.json");
         save_config(&path, &Config::default()).expect("the config is written");
         let saved = fs::read_to_string(&path).unwrap();

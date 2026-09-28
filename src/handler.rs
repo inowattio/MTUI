@@ -834,6 +834,7 @@ mod tests {
     use crate::app::App;
     use crate::config::{Config, KeybindAction};
     use crate::input::{KeyCode, KeyEvent};
+    use crate::scratch::ScratchDir;
     use crate::state::{
         DiscoveryField, DiscoveryParams, InterfaceKind, MessageKind, Popup, PopupKind,
         SettingsCategory, SettingsField, SettingsFocus, State, UnitField, UnitParams,
@@ -1263,8 +1264,8 @@ mod tests {
 
     #[tokio::test]
     async fn s_in_the_quit_prompt_saves_and_quits() {
-        let dir = std::env::temp_dir().join(format!("mtui-quit-{}", std::process::id()));
-        let path = dir.join("config.json");
+        let scratch = ScratchDir::new("quit");
+        let path = scratch.path("config.json");
         let mut app = App::boot(Config::default(), path.clone()).await;
         app.pin();
         assert!(app.dirty);
@@ -1293,7 +1294,6 @@ mod tests {
             saved.startup.address, startup.address,
             "saving does not overwrite the configured startup position"
         );
-        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[tokio::test]
@@ -1356,29 +1356,6 @@ mod tests {
         let status = app.read().status.as_ref().expect("a status is shown");
         assert_eq!(status.kind, MessageKind::Warn, "{}", status.text);
         status.text.clone()
-    }
-
-    struct ScratchDir(std::path::PathBuf);
-
-    impl ScratchDir {
-        fn new(name: &str) -> Self {
-            let dir = std::env::temp_dir().join(format!("mtui-{}-{name}", std::process::id()));
-            let _ = std::fs::remove_dir_all(&dir);
-            std::fs::create_dir_all(&dir).expect("scratch dir");
-            Self(dir)
-        }
-
-        fn write(&self, file: &str, content: &str) -> String {
-            let path = self.0.join(file);
-            std::fs::write(&path, content).expect("scratch file");
-            path.to_string_lossy().into_owned()
-        }
-    }
-
-    impl Drop for ScratchDir {
-        fn drop(&mut self) {
-            let _ = std::fs::remove_dir_all(&self.0);
-        }
     }
 
     #[tokio::test]
