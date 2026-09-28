@@ -314,6 +314,7 @@ mod tests {
         app.config.device.interface = Interface::Tcp(InterfaceTcpParams {
             ip: "10.0.0.1".into(),
             port: 502,
+            tls: false,
         });
         app.open_unit();
         let p = app.popup_as::<UnitParams>().unwrap();

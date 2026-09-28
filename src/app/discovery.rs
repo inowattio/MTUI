@@ -74,10 +74,12 @@ impl App {
             Interface::Tcp(n) => {
                 d.interface = InterfaceKind::Tcp;
                 d.net_port = n.port;
+                d.tls = n.tls;
             }
             Interface::RtuOverTcp(n) => {
                 d.interface = InterfaceKind::RtuOverTcp;
                 d.net_port = n.port;
+                d.tls = n.tls;
             }
             Interface::Mock => d.interface = InterfaceKind::Mock,
         }
@@ -341,7 +343,7 @@ mod tests {
         d.set_interface(InterfaceKind::Tcp);
         assert_eq!(
             d.side_fields(),
-            vec![Ip, NetPort, ScanMethod, ScanNetwork, Found(0)]
+            vec![Ip, NetPort, Tls, ScanMethod, ScanNetwork, Found(0)]
         );
     }
 
@@ -472,6 +474,7 @@ mod tests {
             vec![
                 DiscoveryField::Ip,
                 DiscoveryField::NetPort,
+                DiscoveryField::Tls,
                 DiscoveryField::ScanMethod,
                 DiscoveryField::ScanNetwork
             ]
@@ -485,11 +488,41 @@ mod tests {
         config.device.interface = Interface::RtuOverTcp(InterfaceTcpParams {
             ip: "10.0.0.9".to_string(),
             port: 8899,
+            tls: false,
         });
         let d = App::discovery_params(&config);
         assert_eq!(d.interface, InterfaceKind::RtuOverTcp);
         assert_eq!(d.ip, "10.0.0.9");
         assert_eq!(d.net_port, 8899);
+    }
+
+    #[test]
+    fn tls_round_trips_between_the_popup_and_the_device_config() {
+        let mut d = DiscoveryParams {
+            ip: "192.168.8.1".to_string(),
+            net_port: 6607,
+            tls: true,
+            ..DiscoveryParams::default()
+        };
+        d.set_interface(InterfaceKind::Tcp);
+        assert!(matches!(
+            d.device_config().interface,
+            Interface::Tcp(ref n) if n.tls && n.port == 6607
+        ));
+
+        let mut config = Config::default();
+        config.device.interface = d.device_config().interface;
+        assert_eq!(config.display_device(), "192.168.8.1:6607 (TLS)");
+        assert_eq!(
+            config.device.interface.endpoint(),
+            "tcp+tls:192.168.8.1:6607"
+        );
+        let d = App::discovery_params(&config);
+        assert!(d.tls);
+
+        let plain: InterfaceTcpParams =
+            serde_json::from_str(r#"{"ip":"10.0.0.1","port":502}"#).unwrap();
+        assert!(!plain.tls);
     }
 
     #[test]
@@ -507,7 +540,7 @@ mod tests {
         d.set_interface(InterfaceKind::Tcp);
         d.set_found(vec!["10.0.0.1".to_string(), "10.0.0.2".to_string()]);
         d.toggle_column();
-        d.side_selected = 5; // Found(1)
+        d.side_selected = 6; // Found(1)
         assert_eq!(d.current_field(), DiscoveryField::Found(1));
         d.set_found(Vec::new());
         assert_eq!(d.current_field(), DiscoveryField::ScanNetwork);
@@ -564,6 +597,7 @@ mod tests {
         config.device.interface = Interface::Tcp(InterfaceTcpParams {
             ip: "10.1.2.3".to_string(),
             port: 1502,
+            tls: false,
         });
         let d = App::discovery_params(&config);
         assert_eq!(d.interface, InterfaceKind::Tcp);

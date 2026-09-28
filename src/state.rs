@@ -132,6 +132,7 @@ pub enum DiscoveryField {
     StopBits,
     Ip,
     NetPort,
+    Tls,
     ScanMethod,
     ScanNetwork,
     Found(usize),
@@ -160,6 +161,7 @@ pub struct DiscoveryParams {
     pub stop_bits: StopBits,
     pub ip: String,
     pub net_port: u16,
+    pub tls: bool,
     pub scan_method: ScanMethod,
     pub unit_id: u8,
     pub connect_timeout_ms: u64,
@@ -187,6 +189,7 @@ impl Default for DiscoveryParams {
             stop_bits: StopBits::One,
             ip: "127.0.0.1".to_string(),
             net_port: 502,
+            tls: false,
             scan_method: ScanMethod::default(),
             unit_id: 1,
             connect_timeout_ms: 1000,
@@ -219,7 +222,7 @@ impl DiscoveryParams {
                 .chain([CustomPath, Baud, DataBits, Parity, StopBits])
                 .collect(),
             InterfaceKind::Tcp | InterfaceKind::RtuOverTcp => {
-                [Ip, NetPort, ScanMethod, ScanNetwork]
+                [Ip, NetPort, Tls, ScanMethod, ScanNetwork]
                     .into_iter()
                     .chain((0..self.found.len()).map(Found))
                     .collect()
@@ -273,6 +276,7 @@ impl DiscoveryParams {
         InterfaceTcpParams {
             ip: self.ip.clone(),
             port: self.net_port,
+            tls: self.tls,
         }
     }
 
