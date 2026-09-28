@@ -32,3 +32,7 @@ Multiple options are available:
 ## LLM usage disclosure
 LLM-based tools have been used to develop the project.  
 If LLM(s) are used upon creating PRs/issues, please keep in mind to always check the generated content to be as concise (and short) as possible.
+
+## Usage suggestions
+If you'd want to quickly map a protocol definitions document, one could use any LLM with said document and specify in the context of this repository
+source code to create a JSON file and then copy and paste into a session to import it.
