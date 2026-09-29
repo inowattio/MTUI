@@ -131,7 +131,7 @@ impl TableCtx<'_> {
                 None => (
                     app.interpreter
                         .placeholder(addr, app.label((params.register_type, addr))),
-                    theme.dim_style(),
+                    theme.placeholder_style(zebra),
                 ),
             };
             let style = if selected {
@@ -282,7 +282,7 @@ impl TableCtx<'_> {
                         let style = theme.row_style(zebra, app.cell_changed(cell));
                         (format!("{value: >5}"), style)
                     }
-                    None => (format!("{NO_VALUE: >5}"), theme.dim_style()),
+                    None => (format!("{NO_VALUE: >5}"), theme.placeholder_style(zebra)),
                 };
                 if addr == params.position {
                     style = theme.selected_style();

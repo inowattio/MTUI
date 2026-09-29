@@ -154,6 +154,14 @@ impl Theme {
         }
     }
 
+    pub fn placeholder_style(&self, zebra: bool) -> Style {
+        if zebra {
+            self.dim_style().bg(self.zebra)
+        } else {
+            self.dim_style()
+        }
+    }
+
     pub fn header_style(&self) -> Style {
         Style::default().fg(self.dim).add_modifier(Modifier::BOLD)
     }
