@@ -463,6 +463,7 @@ pub struct CustomParams {
     pub bit_buffer: String,
     pub next_buffer: String,
     pub selected: u16,
+    pub list_index: Option<u16>,
     pub existed: bool,
     pub error: Option<String>,
 }
@@ -504,6 +505,133 @@ impl CustomParams {
             Some(i) => i as u16,
             None => self.selected.min(fields.len() as u16 - 1),
         };
+    }
+
+    pub fn list_len(&self) -> usize {
+        match self.current_field() {
+            CustomField::Enum => self.enum_map.len(),
+            CustomField::Bits => self.bits.len(),
+            _ => 0,
+        }
+    }
+
+    pub fn toggle_list(&mut self) {
+        self.list_index = match (self.list_index, self.list_len()) {
+            (None, len) if len > 0 => Some(len as u16 - 1),
+            _ => None,
+        };
+    }
+
+    pub fn list_move(&mut self, down: bool) -> bool {
+        let Some(i) = self.list_index else {
+            return false;
+        };
+        self.list_index = Some(wrap_index(i, self.list_len() as u16, down));
+        true
+    }
+
+    pub fn list_remove(&mut self) -> bool {
+        let Some(i) = self.list_index else {
+            return false;
+        };
+        let i = (i as usize).min(self.list_len().saturating_sub(1));
+        match self.current_field() {
+            CustomField::Enum if !self.enum_map.is_empty() => {
+                self.enum_map.remove(i);
+            }
+            CustomField::Bits if !self.bits.is_empty() => {
+                self.bits.remove(i);
+            }
+            _ => {}
+        }
+        let len = self.list_len();
+        self.list_index = (len > 0).then(|| (i.min(len - 1)) as u16);
+        true
+    }
+}
+
+#[cfg(test)]
+mod custom_params_tests {
+    use super::{CustomField, CustomParams};
+    use crate::custom::{BitEntry, EnumEntry};
+
+    fn params() -> CustomParams {
+        let mut c = CustomParams {
+            enum_map: (0..3)
+                .map(|i| EnumEntry {
+                    value: i,
+                    text: format!("s{i}"),
+                })
+                .collect(),
+            bits: vec![BitEntry {
+                bit: 0,
+                name: "run".into(),
+            }],
+            ..CustomParams::default()
+        };
+        c.reselect(CustomField::Enum);
+        c
+    }
+
+    #[test]
+    fn tab_enters_the_list_at_its_end_and_leaves_it_again() {
+        let mut c = params();
+        c.toggle_list();
+        assert_eq!(c.list_index, Some(2));
+        c.toggle_list();
+        assert_eq!(c.list_index, None);
+    }
+
+    #[test]
+    fn tab_does_nothing_off_a_list_field_or_on_an_empty_list() {
+        let mut c = params();
+        c.reselect(CustomField::Prefix);
+        c.toggle_list();
+        assert_eq!(c.list_index, None);
+        c.enum_map.clear();
+        c.reselect(CustomField::Enum);
+        c.toggle_list();
+        assert_eq!(c.list_index, None);
+    }
+
+    #[test]
+    fn moving_wraps_inside_the_list_and_is_ignored_outside_it() {
+        let mut c = params();
+        assert!(!c.list_move(true));
+        c.toggle_list();
+        assert!(c.list_move(true));
+        assert_eq!(c.list_index, Some(0));
+        c.list_move(false);
+        assert_eq!(c.list_index, Some(2));
+    }
+
+    #[test]
+    fn removing_drops_the_selected_entry_and_keeps_a_valid_index() {
+        let mut c = params();
+        c.toggle_list();
+        c.list_move(true);
+        c.list_move(true);
+        assert!(c.list_remove());
+        assert_eq!(
+            c.enum_map.iter().map(|e| e.value).collect::<Vec<_>>(),
+            [0, 2]
+        );
+        assert_eq!(c.list_index, Some(1));
+        c.list_remove();
+        assert_eq!(c.list_index, Some(0));
+        c.list_remove();
+        assert!(c.enum_map.is_empty());
+        assert_eq!(c.list_index, None);
+    }
+
+    #[test]
+    fn removing_on_bits_uses_the_bits_list() {
+        let mut c = params();
+        c.reselect(CustomField::Bits);
+        c.toggle_list();
+        c.list_remove();
+        assert!(c.bits.is_empty());
+        assert_eq!(c.enum_map.len(), 3);
     }
 }
 

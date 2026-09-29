@@ -325,13 +325,15 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
         },
 
         PopupKind::Custom => {
-            let Some(field) = app
+            let Some((field, in_list)) = app
                 .popup_as::<CustomParams>()
-                .map(CustomParams::current_field)
+                .map(|c| (c.current_field(), c.list_index.is_some()))
             else {
                 return;
             };
             match key_event.code {
+                KeyCode::Tab => app.custom_toggle_list(),
+                KeyCode::Esc if in_list => app.custom_toggle_list(),
                 KeyCode::Esc => app.close_popup(),
                 KeyCode::Up => app.custom_move(false),
                 KeyCode::Down => app.custom_move(true),
@@ -339,6 +341,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
                 KeyCode::Right => app.custom_cycle(field, true),
                 KeyCode::Delete => app.remove_custom(),
                 KeyCode::Enter => app.custom_enter(field),
+                KeyCode::Backspace if in_list => app.custom_list_remove(),
                 KeyCode::Backspace => app.custom_backspace(field),
                 KeyCode::Char(c) => app.custom_char(field, c),
                 _ => {}

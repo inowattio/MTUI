@@ -1,12 +1,37 @@
 use crate::app::App;
 use crate::input::KeyCode;
 use crate::state::{CustomField, CustomParams};
-use crate::tui::draw_state::{edit_value, field_row};
+use crate::tui::draw_state::{edit_value, field_row, marker};
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
 use ratatui::Frame;
 use ratatui::layout::Rect;
+use ratatui::style::Style;
 use ratatui::text::{Line, Span};
+
+const LIST_ROWS: usize = 5;
+const SIDE_WIDTH: usize = 24;
+const SIDE_LEFT: usize = 40;
+const PREVIEW_WIDTH: usize = 54;
+
+fn more_label(above: usize, below: usize) -> String {
+    let mut parts = Vec::new();
+    if above > 0 {
+        parts.push(format!("^ {above}"));
+    }
+    if below > 0 {
+        parts.push(format!("v {below}"));
+    }
+    format!("  {} more", parts.join(" "))
+}
+
+fn count_label(n: usize) -> String {
+    match n {
+        0 => "(none)".to_string(),
+        1 => "1 entry".to_string(),
+        n => format!("{n} entries"),
+    }
+}
 
 const fn section(field: CustomField) -> &'static str {
     match field {
@@ -16,37 +41,47 @@ const fn section(field: CustomField) -> &'static str {
     }
 }
 
-/// Pack item strings into rows of at most `width` chars (two-space
-/// separated), never splitting an item.
-fn wrap_items(items: Vec<String>, width: usize) -> Vec<String> {
-    let mut rows: Vec<String> = Vec::new();
-    let mut row = String::new();
-    for item in items {
-        if !row.is_empty() {
-            if row.chars().count() + 2 + item.chars().count() > width {
-                rows.push(std::mem::take(&mut row));
-            } else {
-                row.push_str("  ");
-            }
-        }
-        row.push_str(&item);
-    }
-    rows.push(row);
-    rows
-}
-
 pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &CustomParams) {
     let sel = c.current_field();
 
-    let footer = [
-        Hint::pair(KeyCode::Up, KeyCode::Down, "Field"),
-        Hint::pair(KeyCode::Left, KeyCode::Right, "Change"),
-        Hint::key(KeyCode::Enter, "Save"),
-        Hint::key(KeyCode::Delete, "Remove"),
-        Hint::key(KeyCode::Esc, "Close"),
-    ];
-    let width = hints::min_width(56, &footer);
-    let inner = width.saturating_sub(2) as usize;
+    let in_list = c.list_index.is_some();
+    let on_list = matches!(sel, CustomField::Enum | CustomField::Bits);
+    let footer = if in_list {
+        hints::footer(
+            theme,
+            [
+                Hint::pair(KeyCode::Up, KeyCode::Down, "Entry"),
+                Hint::key(KeyCode::Backspace, "Remove"),
+                Hint::key(KeyCode::Tab, "Fields"),
+            ],
+        )
+    } else if on_list {
+        hints::footer(
+            theme,
+            [
+                Hint::pair(KeyCode::Up, KeyCode::Down, "Field"),
+                Hint::pair(KeyCode::Left, KeyCode::Right, "Change"),
+                Hint::key(KeyCode::Tab, "Entries"),
+            ],
+        )
+    } else {
+        hints::footer(
+            theme,
+            [
+                Hint::pair(KeyCode::Up, KeyCode::Down, "Field"),
+                Hint::pair(KeyCode::Left, KeyCode::Right, "Change"),
+            ],
+        )
+    };
+    let footer_more = hints::footer(
+        theme,
+        [
+            Hint::key(KeyCode::Enter, "Save"),
+            Hint::key(KeyCode::Delete, "Remove"),
+            Hint::key(KeyCode::Esc, if in_list { "Back" } else { "Close" }),
+        ],
+    );
+    let inner = PREVIEW_WIDTH;
 
     let mut lines: Vec<Line> = vec![];
 
@@ -89,17 +124,24 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &
         }
     }
 
-    // "> " marker + 12-char label + space, matching field_row's prefix.
-    let value_width = inner.saturating_sub(15).max(8);
     let list_rows =
         |lines: &mut Vec<Line>, label: &str, items: Vec<String>, empty: &str, selected: bool| {
-            let mut rows = if items.is_empty() {
-                vec![empty.to_string()]
-            } else {
-                wrap_items(items, value_width)
-            };
-            lines.push(field_row(theme, label, 12, rows.remove(0), selected));
-            for row in rows {
+            let hidden = items.len().saturating_sub(LIST_ROWS);
+            let mut rows: Vec<(String, bool)> = Vec::new();
+            if hidden > 0 {
+                rows.push((format!("^ {hidden} more"), true));
+            }
+            rows.extend(items.into_iter().skip(hidden).map(|item| (item, false)));
+            if rows.is_empty() {
+                rows.push((empty.to_string(), false));
+            }
+            let (first, dim) = rows.remove(0);
+            let mut head = field_row(theme, label, 12, first, selected);
+            if dim {
+                head.spans[1].style = theme.dim_style();
+            }
+            lines.push(head);
+            for (row, _) in rows {
                 lines.push(Line::from(vec![
                     Span::raw(" ".repeat(15)),
                     Span::styled(row, theme.line_style(selected)),
@@ -113,10 +155,32 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &
             theme.dim_style(),
         )));
         lines.push(Line::from(Span::styled(
-            "    (enter adds | empty enter saves | backspace removes)",
+            "    (enter adds | empty enter saves)",
+            theme.dim_style(),
+        )));
+        lines.push(Line::from(Span::styled(
+            "    (backspace removes)",
             theme.dim_style(),
         )));
     };
+
+    let enum_items: Vec<String> = c
+        .enum_map
+        .iter()
+        .map(|e| format!("{}->{}", e.value, e.text))
+        .collect();
+    let bit_items: Vec<String> = c
+        .bits
+        .iter()
+        .map(|e| format!("{}->{}", e.bit, e.name))
+        .collect();
+    let side = match sel {
+        CustomField::Enum => Some(("Enum", enum_items)),
+        CustomField::Bits => Some(("Bits", bit_items)),
+        _ => None,
+    };
+
+    let body_start = lines.len();
 
     let mut current_section = "";
     for field in c.fields() {
@@ -169,23 +233,15 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &
                 }
             }
             CustomField::Enum => {
-                let items = c
-                    .enum_map
-                    .iter()
-                    .map(|e| format!("{}->{}", e.value, e.text))
-                    .collect();
-                list_rows(&mut lines, "Enum", items, "(none)", selected);
+                let value = count_label(c.enum_map.len());
+                lines.push(field_row(theme, "Enum", 12, value, selected));
                 if selected {
                     entry_hints(&mut lines, &c.enum_buffer, "e.g. 3=Running");
                 }
             }
             CustomField::Bits => {
-                let items = c
-                    .bits
-                    .iter()
-                    .map(|e| format!("{}->{}", e.bit, e.name))
-                    .collect();
-                list_rows(&mut lines, "Bits", items, "(none)", selected);
+                let value = count_label(c.bits.len());
+                lines.push(field_row(theme, "Bits", 12, value, selected));
                 if selected {
                     entry_hints(&mut lines, &c.bit_buffer, "e.g. 0=run");
                 }
@@ -201,7 +257,11 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &
                 lines.push(field_row(theme, "Decimals", 12, value, selected));
                 if selected {
                     lines.push(Line::from(Span::styled(
-                        "    auto; 0 for none; numerical for amount",
+                        "    auto; 0 for none",
+                        theme.dim_style(),
+                    )));
+                    lines.push(Line::from(Span::styled(
+                        "    numerical for amount",
                         theme.dim_style(),
                     )));
                 }
@@ -217,6 +277,68 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &
         }
     }
 
+    if let Some((label, items)) = side {
+        let rows = lines.len().saturating_sub(body_start + 1);
+        let capacity = rows.saturating_sub(1);
+        let overflow = items.len() > capacity;
+        let visible = if overflow {
+            capacity.saturating_sub(1)
+        } else {
+            capacity
+        };
+        let anchor = c
+            .list_index
+            .map_or_else(|| items.len().saturating_sub(1), |i| i as usize);
+        let top = anchor
+            .saturating_sub(visible / 2)
+            .min(items.len().saturating_sub(visible));
+        let below = items.len().saturating_sub(top + visible);
+        let col_w = items
+            .iter()
+            .map(|s| s.chars().count())
+            .max()
+            .unwrap_or(0)
+            .clamp(8, SIDE_WIDTH);
+        let mut col: Vec<(String, Style)> = vec![(label.to_string(), theme.dim_style())];
+        if items.is_empty() {
+            col.push(("  (none)".to_string(), theme.dim_style()));
+        }
+        if overflow {
+            col.push((more_label(top, below), theme.dim_style()));
+        }
+        col.extend(
+            items
+                .into_iter()
+                .enumerate()
+                .skip(top)
+                .take(visible)
+                .map(|(i, item)| {
+                    let picked = c.list_index == Some(i as u16);
+                    (
+                        format!("{}{item}", marker(picked)),
+                        theme.line_style(picked),
+                    )
+                }),
+        );
+        let left_w = lines
+            .iter()
+            .skip(body_start + 1)
+            .map(Line::width)
+            .max()
+            .unwrap_or(0)
+            .max(SIDE_LEFT);
+        for (i, line) in lines.iter_mut().skip(body_start + 1).enumerate() {
+            let pad = left_w.saturating_sub(line.width());
+            line.spans.push(Span::raw(" ".repeat(pad)));
+            line.spans
+                .push(Span::styled(" \u{2502} ", theme.dim_style()));
+            if let Some((text, style)) = col.get(i) {
+                line.spans
+                    .push(Span::styled(super::truncate(text, col_w + 2), *style));
+            }
+        }
+    }
+
     if let Some(err) = &c.error {
         lines.push(Line::default());
         lines.push(Line::from(Span::styled(
@@ -225,8 +347,11 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &
         )));
     }
 
-    super::push_footer(&mut lines, theme, footer);
+    lines.push(Line::default());
+    lines.push(footer);
+    lines.push(footer_more);
 
+    let width = lines.iter().map(Line::width).max().unwrap_or(0) as u16 + 2;
     let title = format!("Custom rule | {:?} @ {}", c.register_type, c.address);
     super::render(frame, area, theme, &title, width, lines);
 }

@@ -44,8 +44,25 @@ impl App {
     pub fn custom_move(&mut self, down: bool) {
         self.with_custom(|c| {
             c.error = None;
+            if c.list_move(down) {
+                return;
+            }
             let n = c.fields().len() as u16;
             c.selected = wrap_index(c.selected, n, down);
+        });
+    }
+
+    pub fn custom_toggle_list(&mut self) {
+        self.with_custom(|c| {
+            c.error = None;
+            c.toggle_list();
+        });
+    }
+
+    pub fn custom_list_remove(&mut self) {
+        self.with_custom(|c| {
+            c.error = None;
+            c.list_remove();
         });
     }
 
@@ -73,6 +90,7 @@ impl App {
     pub fn custom_char(&mut self, field: CustomField, ch: char) {
         self.with_custom(|c| {
             c.error = None;
+            c.list_index = None;
             match field {
                 CustomField::Ops => c.op_buffer.push(ch),
                 CustomField::Enum => c.enum_buffer.push(ch),
