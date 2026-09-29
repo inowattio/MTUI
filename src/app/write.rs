@@ -5,7 +5,7 @@ use crate::constants::message;
 use crate::modbus::WordOrder;
 use crate::num_ops::cycle;
 use crate::register::{RegisterCell, RegisterType};
-use crate::state::{Popup, StatusMessage, WriteParams};
+use crate::state::{Popup, StatusMessage, WriteFunc, WriteParams};
 
 impl App {
     pub fn open_write(&mut self) {
@@ -45,6 +45,11 @@ impl App {
         };
 
         let bit_cursor = write_type.bits() - 1;
+        let func = if write_type == WriteType::DWord {
+            WriteFunc::Multiple
+        } else {
+            WriteFunc::Single
+        };
         let p = self.read_mut();
         p.status = None;
         p.popup = Some(Popup::Write(WriteParams {
@@ -52,6 +57,7 @@ impl App {
             value,
             write_type,
             bit_cursor,
+            func,
             ..Default::default()
         }));
     }
@@ -142,7 +148,7 @@ impl App {
             return;
         };
 
-        let (position, number, write_type, force_multiple) = {
+        let (position, number, write_type, func) = {
             let Some(w) = self.write_mut() else {
                 return;
             };
@@ -151,7 +157,7 @@ impl App {
                 return;
             };
             w.result = Some(StatusMessage::info(message::WRITING));
-            (w.position, number, w.write_type, w.force_multiple)
+            (w.position, number, w.write_type, w.func)
         };
 
         let kind = if write_type == WriteType::Coil {
@@ -172,27 +178,47 @@ impl App {
             unit: self.config.device.unit_id,
             address: position,
             write_type,
+            func,
             previous,
             new_value,
         });
 
+        let word_order = self.config.device.word_order;
         self.background_task = Some(BackgroundTask::Write(compat::spawn(async move {
-            let result = match write_type {
-                WriteType::Word if force_multiple => {
-                    device.write_registers(position, &[number as u16]).await
-                }
-                WriteType::Word => device.write_register(position, number as u16).await,
-                WriteType::DWord => device.write_register_word(position, number as i32).await,
-                WriteType::Coil => device.write_coil(position, number != 0).await,
+            let words = match write_type {
+                WriteType::Word => vec![number as u16],
+                WriteType::DWord => word_order.split_word(number as u32).to_vec(),
+                WriteType::Coil => vec![],
+            };
+            let result = match (write_type, func) {
+                (WriteType::Coil, _) => device
+                    .write_coil(position, number != 0)
+                    .await
+                    .map(|()| Vec::new()),
+                (WriteType::Word, WriteFunc::Single) => device
+                    .write_register(position, number as u16)
+                    .await
+                    .map(|()| Vec::new()),
+                (_, WriteFunc::ReadWrite) => device.read_write_registers(position, &words).await,
+                (_, _) => device
+                    .write_registers(position, &words)
+                    .await
+                    .map(|()| Vec::new()),
             };
             match result {
-                Ok(()) => WriteOutcome {
+                Ok(read) => WriteOutcome {
                     ok: true,
-                    message: "Write OK".to_string(),
+                    message: read_back_message(word_order.assemble(&read), new_value),
+                    read_back: read
+                        .into_iter()
+                        .enumerate()
+                        .map(|(i, value)| ((RegisterType::Holding, position + i as u16), value))
+                        .collect(),
                 },
                 Err(e) => WriteOutcome {
                     ok: false,
                     message: format!("Write failed: {e}"),
+                    read_back: Vec::new(),
                 },
             }
         })));
@@ -204,20 +230,7 @@ impl App {
 
     pub fn write_toggle_type(&mut self) {
         if let Some(w) = self.write_mut() {
-            match (w.write_type, w.force_multiple) {
-                (WriteType::Word, false) => w.force_multiple = true,
-                (WriteType::Word, true) => {
-                    w.write_type = WriteType::DWord;
-                    w.force_multiple = false;
-                }
-                (WriteType::DWord, _) => {
-                    w.write_type = WriteType::Word;
-                    w.force_multiple = false;
-                }
-                (WriteType::Coil, _) => {}
-            }
-            let bits = w.write_type.bits();
-            w.bit_cursor = w.bit_cursor.min(bits - 1);
+            w.cycle_mode();
         }
         self.clamp_write_value();
     }
@@ -290,8 +303,17 @@ impl App {
     }
 }
 
+fn read_back_message(read_back: Option<u64>, written: u64) -> String {
+    match read_back {
+        None => "Write OK".to_string(),
+        Some(value) if value == written => format!("Write OK | read back {value}"),
+        Some(value) => format!("Write OK | read back {value} (differs)"),
+    }
+}
+
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
+    use super::read_back_message;
     use crate::app::{App, BackgroundTask};
     use crate::config::Config;
     use crate::constants::message;
@@ -304,6 +326,16 @@ mod tests {
         app.open_write();
         app.write_mut().expect("write popup").value = Some(1);
         app
+    }
+
+    #[test]
+    fn read_back_message_reports_matching_and_differing_values() {
+        assert_eq!(read_back_message(None, 5), "Write OK");
+        assert_eq!(read_back_message(Some(5), 5), "Write OK | read back 5");
+        assert_eq!(
+            read_back_message(Some(4), 5),
+            "Write OK | read back 4 (differs)"
+        );
     }
 
     #[tokio::test]

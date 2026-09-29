@@ -65,7 +65,7 @@ pub enum WriteType {
 }
 
 impl WriteType {
-    const fn bits(self) -> u16 {
+    pub const fn bits(self) -> u16 {
         match self {
             Self::Coil => 1,
             Self::Word => 16,
@@ -267,6 +267,7 @@ struct ReconnectState {
 struct WriteOutcome {
     ok: bool,
     message: String,
+    read_back: Vec<(RegisterCell, u16)>,
 }
 
 #[derive(Debug)]
@@ -274,6 +275,7 @@ struct PendingWrite {
     unit: u8,
     address: u16,
     write_type: WriteType,
+    func: crate::state::WriteFunc,
     previous: Option<u64>,
     new_value: u64,
 }

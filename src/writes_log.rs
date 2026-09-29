@@ -4,7 +4,7 @@ use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-pub const HEADER: &str = "timestamp,unit,address,type,previous,value";
+pub const HEADER: &str = "timestamp,unit,address,type,previous,value,function";
 
 #[derive(Clone, Debug)]
 pub enum WriteKind {
@@ -44,9 +44,15 @@ pub struct WriteEntry {
     pub kind: String,
     pub previous: Option<u64>,
     pub value: String,
+    pub function: Option<u8>,
 }
 
 impl WriteEntry {
+    pub fn display_function(&self) -> String {
+        self.function
+            .map_or_else(|| "?".to_string(), |f| format!("0x{f:02X}"))
+    }
+
     pub fn display_value(&self) -> String {
         match (self.kind.as_str(), self.value.as_str()) {
             ("coil", "1") => "on".to_string(),
@@ -79,6 +85,7 @@ pub fn append(
     address: u16,
     kind: WriteKind,
     previous: Option<u64>,
+    function: u8,
 ) {
     let (enabled, path) = match shared.lock() {
         Ok(state) => (state.enabled, state.path.clone()),
@@ -108,7 +115,7 @@ pub fn append(
     let _ = writeln!(
         file,
         "{}",
-        record(&timestamp, unit, address, &kind, previous)
+        record(&timestamp, unit, address, &kind, previous, function)
     );
 }
 
@@ -123,16 +130,17 @@ fn record(
     address: u16,
     kind: &WriteKind,
     previous: Option<u64>,
+    function: u8,
 ) -> String {
     let previous = previous.map(|v| v.to_string()).unwrap_or_default();
     format!(
-        "{timestamp},{unit},{address},{kind},{previous},{}",
+        "{timestamp},{unit},{address},{kind},{previous},{},0x{function:02X}",
         kind.csv_value()
     )
 }
 
 fn parse_record(line: &str) -> Option<WriteEntry> {
-    let mut fields = line.trim_end().splitn(6, ',');
+    let mut fields = line.trim_end().splitn(7, ',');
     let timestamp = fields.next()?;
     let unit = fields.next()?.parse().ok()?;
     let address = fields.next()?.parse().ok()?;
@@ -142,6 +150,9 @@ fn parse_record(line: &str) -> Option<WriteEntry> {
         p => Some(p.parse().ok()?),
     };
     let value = fields.next()?;
+    let function = fields
+        .next()
+        .and_then(|f| u8::from_str_radix(f.trim_start_matches("0x"), 16).ok());
     Some(WriteEntry {
         timestamp: timestamp.to_string(),
         unit,
@@ -149,6 +160,7 @@ fn parse_record(line: &str) -> Option<WriteEntry> {
         kind: kind.to_string(),
         previous,
         value: value.to_string(),
+        function,
     })
 }
 
@@ -159,22 +171,23 @@ mod tests {
     #[test]
     fn records_are_comma_separated_with_an_empty_unknown_previous() {
         assert_eq!(
-            record("t", 7, 40, &WriteKind::Word(3), Some(2)),
-            "t,7,40,word,2,3"
+            record("t", 7, 40, &WriteKind::Word(3), Some(2), 0x06),
+            "t,7,40,word,2,3,0x06"
         );
         assert_eq!(
-            record("t", 1, 5, &WriteKind::Coil(true), None),
-            "t,1,5,coil,,1"
+            record("t", 1, 5, &WriteKind::Coil(true), None, 0x05),
+            "t,1,5,coil,,1,0x05"
         );
         assert_eq!(
-            record("t", 250, 0, &WriteKind::Multiple(vec![1, 2]), None),
-            "t,250,0,multiple,,1 2"
+            record("t", 250, 0, &WriteKind::Multiple(vec![1, 2]), None, 0x10),
+            "t,250,0,multiple,,1 2,0x10"
         );
     }
 
     #[test]
     fn records_parse_back_and_the_header_does_not() {
-        let entry = parse_record(&record("t", 7, 40, &WriteKind::DWord(70000), None)).unwrap();
+        let entry =
+            parse_record(&record("t", 7, 40, &WriteKind::DWord(70000), None, 0x17)).unwrap();
         assert_eq!(
             entry,
             WriteEntry {
@@ -184,11 +197,21 @@ mod tests {
                 kind: "dword".to_string(),
                 previous: None,
                 value: "70000".to_string(),
+                function: Some(0x17),
             }
         );
+        assert_eq!(entry.display_function(), "0x17");
         assert_eq!(parse_record(HEADER), None);
         assert_eq!(parse_record(""), None);
         assert_eq!(parse_record("t,7,40,word,x,3"), None);
+    }
+
+    #[test]
+    fn records_without_a_function_still_parse() {
+        let entry = parse_record("t,7,40,word,2,3").unwrap();
+        assert_eq!(entry.function, None);
+        assert_eq!(entry.display_function(), "?");
+        assert_eq!(entry.value, "3");
     }
 
     #[test]

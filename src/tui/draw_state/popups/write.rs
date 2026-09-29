@@ -151,20 +151,9 @@ pub(super) fn draw(
     lines.push(Line::from(bit_spans));
     lines.push(caret_line);
 
-    let dword = write.write_type == WriteType::DWord;
-    let func = if write.force_multiple || dword {
-        "Multiple registers (0x10)"
-    } else {
-        "Single register (0x06)"
-    };
-    let func_style = if dword {
-        theme.dim_style()
-    } else {
-        theme.base()
-    };
     lines.push(Line::from(vec![
         label("Func", theme),
-        Span::styled(func, func_style),
+        Span::styled(write.func.label(), theme.base()),
     ]));
 
     push_result(&mut lines, theme, write);

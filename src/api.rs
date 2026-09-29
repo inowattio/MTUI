@@ -190,6 +190,11 @@ async fn write_handler(
                 request.address,
                 WriteKind::Multiple(request.values),
                 None,
+                if request.register_type == RegisterType::Coil {
+                    0x0F
+                } else {
+                    0x10
+                },
             );
             StatusCode::NO_CONTENT
         }

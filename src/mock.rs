@@ -577,6 +577,20 @@ impl MockContext {
                 Ok(Response::WriteMultipleRegisters(addr, quantity))
             }
 
+            Request::ReadWriteMultipleRegisters(read_addr, read_count, write_addr, values) => {
+                let quantity = values.len() as u16;
+                check(&[WRITABLE], HOLDING_FAULTS, write_addr, quantity)?;
+                check(&HOLDING_ZONES, HOLDING_FAULTS, read_addr, read_count)?;
+                for (i, value) in values.iter().enumerate() {
+                    self.written.insert(write_addr + i as u16, *value);
+                }
+                self.write_count = self.write_count.wrapping_add(1);
+                let regs = (0..read_count)
+                    .map(|i| self.holding_value(read_addr + i, t))
+                    .collect();
+                Ok(Response::ReadWriteMultipleRegisters(regs))
+            }
+
             Request::ReadDeviceIdentification(read_code, object_id) => {
                 self.device_id_response(read_code, object_id)
             }
@@ -638,6 +652,27 @@ mod tests {
         assert_eq!(mock.read_coils(6, 2).await.unwrap(), Err(RESERVED));
         assert_eq!(
             mock.read_discrete_inputs(4, 3).await.unwrap(),
+            Err(RESERVED)
+        );
+    }
+
+    #[tokio::test]
+    async fn read_write_multiple_writes_first_and_reads_the_result_back() {
+        let mut mock = MockContext::make();
+        assert_eq!(
+            mock.read_write_multiple_registers(60, 2, 60, &[7, 9])
+                .await
+                .unwrap(),
+            Ok(vec![7, 9])
+        );
+        assert_eq!(
+            mock.read_holding_registers(60, 2).await.unwrap(),
+            Ok(vec![7, 9])
+        );
+        assert_eq!(
+            mock.read_write_multiple_registers(0, 1, 16, &[1])
+                .await
+                .unwrap(),
             Err(RESERVED)
         );
     }

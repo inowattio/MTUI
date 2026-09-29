@@ -579,6 +579,23 @@ impl App {
             return;
         }
 
+        self.store_values(&result.values);
+        self.sync_auto_widths();
+
+        {
+            let params = self.read_mut();
+            params.read_duration = Some(result.read_duration);
+            params.finish_read();
+            params.read_error = result.error.as_ref().map(|e| e.message.clone());
+        }
+        self.settle_connection(result.error.as_ref());
+
+        if self.sweep.active && result.main_window {
+            self.advance_sweep(result.error.is_some());
+        }
+    }
+
+    fn store_values(&mut self, values: &[(RegisterCell, u16)]) {
         let read_at = Utc::now();
         let time_text: Arc<str> = read_at
             .with_timezone(&Local)
@@ -587,7 +604,7 @@ impl App {
             .into();
         let history_cap = (self.config.graph.history as usize).max(1);
 
-        for &(cell, value) in &result.values {
+        for &(cell, value) in values {
             let entry = ReadEntry {
                 value,
                 at: read_at,
@@ -603,20 +620,6 @@ impl App {
             while history.len() > history_cap {
                 history.pop_front();
             }
-        }
-
-        self.sync_auto_widths();
-
-        {
-            let params = self.read_mut();
-            params.read_duration = Some(result.read_duration);
-            params.finish_read();
-            params.read_error = result.error.as_ref().map(|e| e.message.clone());
-        }
-        self.settle_connection(result.error.as_ref());
-
-        if self.sweep.active && result.main_window {
-            self.advance_sweep(result.error.is_some());
         }
     }
 
@@ -740,8 +743,13 @@ impl App {
                 let outcome = outcome.unwrap_or_else(|| WriteOutcome {
                     ok: false,
                     message: "write task stopped unexpectedly".to_string(),
+                    read_back: Vec::new(),
                 });
                 self.stats.record_write(outcome.ok, &outcome.message);
+                if outcome.ok && !outcome.read_back.is_empty() {
+                    self.store_values(&outcome.read_back);
+                    self.sync_auto_widths();
+                }
                 if let Some(pending) = &self.pending_write {
                     let detail = format!(
                         "@{} = {} (was {})",

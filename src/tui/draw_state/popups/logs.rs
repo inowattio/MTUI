@@ -12,6 +12,7 @@ const TIME_W: usize = 23;
 const UNIT_W: usize = 5;
 const ADDR_W: usize = 5;
 const TYPE_W: usize = 8;
+const FUNC_W: usize = 4;
 const PREV_W: usize = 10;
 const VALUE_W: usize = 24;
 const GAP: &str = "  ";
@@ -67,7 +68,7 @@ pub(super) fn draw(
 }
 
 const fn width() -> u16 {
-    (1 + TIME_W + UNIT_W + ADDR_W + TYPE_W + PREV_W + VALUE_W + GAP.len() * 5 + 2) as u16
+    (1 + TIME_W + UNIT_W + ADDR_W + TYPE_W + FUNC_W + PREV_W + VALUE_W + GAP.len() * 6 + 2) as u16
 }
 
 fn summary_line(theme: &Theme, logs: &LogsParams) -> Line<'static> {
@@ -84,8 +85,8 @@ fn summary_line(theme: &Theme, logs: &LogsParams) -> Line<'static> {
 fn header_line(theme: &Theme) -> Line<'static> {
     Line::from(Span::styled(
         format!(
-            " {:<TIME_W$}{GAP}{:>UNIT_W$}{GAP}{:>ADDR_W$}{GAP}{:<TYPE_W$}{GAP}{:>PREV_W$}{GAP}{:<VALUE_W$}",
-            "TIME", "UNIT", "ADDR", "TYPE", "PREVIOUS", "VALUE"
+            " {:<TIME_W$}{GAP}{:>UNIT_W$}{GAP}{:>ADDR_W$}{GAP}{:<TYPE_W$}{GAP}{:<FUNC_W$}{GAP}{:>PREV_W$}{GAP}{:<VALUE_W$}",
+            "TIME", "UNIT", "ADDR", "TYPE", "FUNC", "PREVIOUS", "VALUE"
         ),
         theme.header_style(),
     ))
@@ -104,6 +105,10 @@ fn entry_line(theme: &Theme, entry: &WriteEntry, zebra: bool) -> Line<'static> {
         Span::styled(
             format!("{:<TYPE_W$}{GAP}", super::truncate(&entry.kind, TYPE_W)),
             row.patch(theme.accent_style()),
+        ),
+        Span::styled(
+            format!("{:<FUNC_W$}{GAP}", entry.display_function()),
+            row.patch(theme.dim_style()),
         ),
         Span::styled(
             format!(

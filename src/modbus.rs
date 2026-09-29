@@ -847,6 +847,15 @@ impl ModbusDevice {
         )
     }
 
+    pub async fn read_write_registers(&self, address: u16, data: &[u16]) -> Result<Vec<u16>> {
+        timeout!(
+            self,
+            read_write_multiple_registers,
+            (address, data.len() as u16, address, data),
+            format!("Read/write Holding @ {address} with values {data:?}")
+        )
+    }
+
     pub async fn write_coil(&self, address: u16, data: bool) -> Result<()> {
         timeout!(
             self,

@@ -173,6 +173,7 @@ impl App {
             pending.address,
             kind,
             pending.previous,
+            pending.func.code(pending.write_type),
         );
     }
 }
