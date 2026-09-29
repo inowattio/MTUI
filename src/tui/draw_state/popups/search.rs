@@ -1,7 +1,6 @@
-use crate::app::App;
 use crate::constants::{ELLIPSIS, SEARCH_POPUP_MAX_HEIGHT_PERCENT, SEARCH_POPUP_MAX_WIDTH_PERCENT};
 use crate::input::KeyCode;
-use crate::state::{SearchMatch, SearchParams};
+use crate::state::{ScreenLayout, SearchMatch, SearchParams};
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
 use ratatui::Frame;
@@ -18,9 +17,15 @@ fn max_rows(area: Rect) -> u16 {
     (budget as u16).saturating_sub(CHROME_ROWS).max(1)
 }
 
-pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, search: &SearchParams) {
+pub(super) fn draw(
+    frame: &mut Frame,
+    area: Rect,
+    theme: &Theme,
+    search: &SearchParams,
+    layout: &mut ScreenLayout,
+) {
     let rows = max_rows(area);
-    app.search_rows.set(rows);
+    layout.search_rows = rows;
 
     let len = search.matches.len();
     let (top, end) = super::window(search.top as usize, rows as usize, len);

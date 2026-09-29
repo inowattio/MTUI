@@ -6,7 +6,7 @@ use crate::input::KeyCode;
 use crate::interpretator::fmt_num;
 use crate::register::{RegisterCell, RegisterType};
 use crate::state::ConnectionStatus;
-use crate::state::{ReadPanel, ReadParams};
+use crate::state::{ReadPanel, ReadParams, ScreenLayout};
 use crate::tui::hints::{self, Hint};
 use crate::tui::rows_table::{RowsTable, TableRow, max_h_offset};
 use crate::tui::theme::{Theme, spinner_frame, status_parts};
@@ -66,21 +66,22 @@ struct TableCtx<'a> {
     app: &'a App,
     theme: &'a Theme,
     inner_width: u16,
+    layout: &'a mut ScreenLayout,
 }
 
 impl TableCtx<'_> {
-    fn horizontal_offset(&self, rows: &[(String, Style)], header: &str, prefix: u16) -> u16 {
+    fn horizontal_offset(&mut self, rows: &[(String, Style)], header: &str, prefix: u16) -> u16 {
         let widths = rows
             .iter()
             .map(|(t, _)| t.chars().count())
             .chain(std::iter::once(header.chars().count()));
         let max_offset = max_h_offset(widths, prefix as usize, self.inner_width as usize);
-        self.app.h_max_offset.set(max_offset);
+        self.layout.h_max_offset = max_offset;
         self.params.col_offset.min(max_offset)
     }
 
     fn scrollable_table(
-        &self,
+        &mut self,
         rows: Vec<(String, Style)>,
         header: &str,
         prefix: u16,
@@ -104,7 +105,7 @@ impl TableCtx<'_> {
         Some((row?, segment.start + lead as usize, segment.width))
     }
 
-    fn main_table(&self, visible: u16, header: &str, ascii: Option<&str>) -> RowsTable {
+    fn main_table(&mut self, visible: u16, header: &str, ascii: Option<&str>) -> RowsTable {
         let (params, app, theme) = (self.params, self.app, self.theme);
         let now = Utc::now();
         let mut rows: Vec<(String, Style)> = Vec::with_capacity(visible as usize);
@@ -178,7 +179,7 @@ impl TableCtx<'_> {
         }
     }
 
-    fn list_table(&self, cells: &[RegisterCell], top: usize, ascii: Option<&str>) -> RowsTable {
+    fn list_table(&mut self, cells: &[RegisterCell], top: usize, ascii: Option<&str>) -> RowsTable {
         let (params, app, theme) = (self.params, self.app, self.theme);
         let now = Utc::now();
         let show_window = app.config.display.read_window;
@@ -344,6 +345,7 @@ pub fn draw(
     area: Rect,
     theme: &Theme,
     device: &str,
+    layout: &mut ScreenLayout,
 ) {
     let (info_type, info_addr) = app.cursor_cell();
     let is_pinned = app
@@ -445,10 +447,10 @@ pub fn draw(
         .height
         .saturating_sub(2 + u16::from(bottom_row))
         .max(1);
-    app.visible_rows.set(visible);
+    layout.visible_rows = visible;
     // Inner table width. Panels without interpretation columns leave the offset at zero.
     let inner_width = rows[1].width;
-    app.h_max_offset.set(0);
+    layout.h_max_offset = 0;
 
     if params.graph {
         draw_graph(
@@ -460,16 +462,17 @@ pub fn draw(
             app.active_graph_column(),
         );
         if let Some(popup) = &params.popup {
-            draw_popup(frame, area, theme, app, popup);
+            draw_popup(frame, area, theme, app, popup, layout);
         }
         return;
     }
 
-    let ctx = TableCtx {
+    let mut ctx = TableCtx {
         params,
         app,
         theme,
         inner_width,
+        layout,
     };
 
     match params.panel {
@@ -548,7 +551,7 @@ pub fn draw(
     }
 
     if let Some(popup) = &params.popup {
-        draw_popup(frame, area, theme, app, popup);
+        draw_popup(frame, area, theme, app, popup, ctx.layout);
     }
 }
 

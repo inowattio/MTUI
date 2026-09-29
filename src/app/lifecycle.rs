@@ -11,11 +11,11 @@ use crate::interpretator::Interpretor;
 use crate::modbus::{Interface, ModbusDevice};
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
 use crate::state::{
-    ConnectionStatus, Popup, PopupKind, PopupPayload, ReadPanel, ReadParams, State, StatusMessage,
+    ConnectionStatus, Popup, PopupKind, PopupPayload, ReadPanel, ReadParams, ScreenLayout, State,
+    StatusMessage,
 };
 use crate::writes_log::WritesLogState;
 use chrono::{Local, Utc};
-use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU16};
@@ -63,10 +63,8 @@ impl App {
             sweep: SweepState::default(),
             stats: CommStats::default(),
             reconnect: ReconnectState::default(),
-            visible_rows: Cell::new(1),
+            layout: ScreenLayout::default(),
             viewport_width: 0,
-            h_max_offset: Cell::new(0),
-            search_rows: Cell::new(1),
             background_task: None,
             network_scan: None,
             unit_scan: None,
@@ -102,7 +100,7 @@ impl App {
 
         app.sync_auto_widths();
         app.mark_config_saved();
-        app.visible_rows.set(app.config.batch.size.max(1));
+        app.layout.visible_rows = app.config.batch.size.max(1);
 
         if app.device.is_some() {
             app.state = State::Read(app.startup_read_params());

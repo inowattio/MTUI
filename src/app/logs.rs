@@ -86,7 +86,7 @@ impl App {
     }
 
     pub fn log_view_hscroll(&mut self, right: bool) {
-        let max = self.h_max_offset.get();
+        let max = self.layout.h_max_offset;
         if let Some(l) = self.log_view_mut() {
             if l.wrap {
                 return;
@@ -138,7 +138,7 @@ impl App {
 
     pub fn log_view_scroll(&mut self, delta: i32) {
         let len = crate::logger::count() as i32;
-        let visible = self.visible_rows.get().max(1) as i32;
+        let visible = self.layout.visible_rows.max(1) as i32;
         let max_top = (len - visible).max(0);
         if let Some(l) = self.log_view_mut() {
             let new = (l.top as i32 + delta).clamp(0, max_top);

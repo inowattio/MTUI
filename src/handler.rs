@@ -103,7 +103,7 @@ const fn step_pos(value: u16, up: bool, step: u16) -> u16 {
 }
 
 fn move_read_cursor(app: &mut App, code: KeyCode) {
-    let rows = app.visible_rows.get();
+    let rows = app.layout.visible_rows;
     let panel_len = app.panel_len();
     let cols = app.matrix_cols();
     let kb = app.config.keybinds;
@@ -610,8 +610,8 @@ fn handle_logs_view_key(key_event: KeyEvent, app: &mut App) {
         c if c == KeyCode::Esc || c == kb.app_logs => app.close_log_view(),
         KeyCode::Up => app.log_view_scroll(-1),
         KeyCode::Down => app.log_view_scroll(1),
-        c if c == kb.page_up => app.log_view_scroll(-(app.visible_rows.get() as i32)),
-        c if c == kb.page_down => app.log_view_scroll(app.visible_rows.get() as i32),
+        c if c == kb.page_up => app.log_view_scroll(-(app.layout.visible_rows as i32)),
+        c if c == kb.page_down => app.log_view_scroll(app.layout.visible_rows as i32),
         c if c == kb.write => app.log_view_toggle_wrap(),
         c if c == kb.copy_column => app.copy_app_logs(),
         c if c == kb.dump => app.dump_app_logs(),
@@ -623,7 +623,7 @@ fn handle_logs_view_key(key_event: KeyEvent, app: &mut App) {
 
 fn handle_diff_view_key(key_event: KeyEvent, app: &mut App) {
     let kb = app.config.keybinds;
-    let page = app.visible_rows.get() as isize;
+    let page = app.layout.visible_rows as isize;
     match key_event.code {
         KeyCode::Esc => app.close_diff_view(),
         c if c == kb.panel => app.diff_toggle_changed(),

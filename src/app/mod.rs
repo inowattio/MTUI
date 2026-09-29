@@ -9,10 +9,9 @@ use crate::modbus::{DeviceConfig, DeviceIdAccess, ModbusDevice};
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::state::ScanMethod;
-use crate::state::{ConnectionStatus, CustomParams, State, UnitParams};
+use crate::state::{ConnectionStatus, CustomParams, ScreenLayout, State, UnitParams};
 use crate::writes_log::SharedWritesLog;
 use chrono::{DateTime, Utc};
-use std::cell::Cell;
 use std::collections::{BTreeMap, VecDeque};
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
@@ -424,10 +423,8 @@ pub struct App {
     pub sweep: SweepState,
     pub stats: CommStats,
     reconnect: ReconnectState,
-    pub visible_rows: Cell<u16>,
+    pub layout: ScreenLayout,
     pub viewport_width: u16,
-    pub h_max_offset: Cell<u16>,
-    pub search_rows: Cell<u16>,
     background_task: Option<BackgroundTask>,
     network_scan: Option<ScanProgress>,
     unit_scan: Option<(String, UnitParams)>,

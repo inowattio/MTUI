@@ -1,6 +1,6 @@
 use crate::app::App;
 use crate::snapshot::{DiffLine, DiffMark};
-use crate::state::DiffViewParams;
+use crate::state::{DiffViewParams, ScreenLayout};
 use crate::tui::draw_state::dim_line;
 use crate::tui::rows_table::{RowsTable, TableRow, max_h_offset};
 use crate::tui::theme::Theme;
@@ -74,7 +74,14 @@ fn table_row(line: DiffLine, zebra: bool, theme: &Theme) -> TableRow {
     TableRow { spans, style }
 }
 
-pub fn draw(params: &DiffViewParams, app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
+pub fn draw(
+    params: &DiffViewParams,
+    app: &App,
+    frame: &mut Frame,
+    area: Rect,
+    theme: &Theme,
+    layout: &mut ScreenLayout,
+) {
     let rows = params.diff.rows(params.changed_only);
     let all_unread = params.diff.summary.all_unread();
     let footnote = (all_unread && !rows.is_empty()).then_some(NOTHING_READ);
@@ -95,7 +102,7 @@ pub fn draw(params: &DiffViewParams, app: &App, frame: &mut Frame, area: Rect, t
         .height
         .saturating_sub(2 + u16::from(footnote.is_some()))
         .max(1);
-    app.visible_rows.set(visible);
+    layout.visible_rows = visible;
 
     let max_top = rows.len().saturating_sub(visible as usize);
     let top = params.top.min(max_top);
@@ -109,7 +116,7 @@ pub fn draw(params: &DiffViewParams, app: &App, frame: &mut Frame, area: Rect, t
         .map(|line| LEAD + line.text.chars().count())
         .chain(std::iter::once(header.chars().count()));
     let max_offset = max_h_offset(widths, prefix, area.width as usize);
-    app.h_max_offset.set(max_offset);
+    layout.h_max_offset = max_offset;
     let h_off = params.h_offset.min(max_offset);
 
     let table_rows = lines

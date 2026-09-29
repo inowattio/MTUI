@@ -237,7 +237,7 @@ impl App {
         } else {
             offset
         };
-        let max = self.h_max_offset.get() as usize;
+        let max = self.layout.h_max_offset as usize;
         self.read_mut().col_offset = next.min(max) as u16;
     }
 
@@ -349,7 +349,7 @@ impl App {
     }
 
     pub fn scroll_columns(&mut self, right: bool) {
-        let max = self.h_max_offset.get();
+        let max = self.layout.h_max_offset;
         let p = self.read_mut();
         p.col_offset = step_hscroll(p.col_offset, max, right);
     }

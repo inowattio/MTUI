@@ -18,7 +18,7 @@ mod unsaved;
 mod write;
 
 use crate::app::App;
-use crate::state::Popup;
+use crate::state::{Popup, ScreenLayout};
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
 use ratatui::Frame;
@@ -27,13 +27,20 @@ use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Borders, Clear, Paragraph};
 
-pub fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup: &Popup) {
+pub fn draw_popup(
+    frame: &mut Frame,
+    area: Rect,
+    theme: &Theme,
+    app: &App,
+    popup: &Popup,
+    layout: &mut ScreenLayout,
+) {
     let kb = &app.config.keybinds;
     match popup {
         Popup::Discovery(d) => discovery::draw(d, app, frame, area, theme),
         Popup::Help(h) => help::draw(frame, area, theme, kb, app, h),
         Popup::Dump(d) => dump::draw(frame, area, theme, app.read_count(), &d.result),
-        Popup::Search(s) => search::draw(frame, area, theme, app, s),
+        Popup::Search(s) => search::draw(frame, area, theme, s, layout),
         Popup::Label(l) => label::draw(frame, area, theme, l),
         Popup::Custom(c) => custom::draw(frame, area, theme, app, c),
         Popup::Columns(params) => columns::draw(frame, area, theme, app, params),
@@ -55,7 +62,7 @@ pub fn draw_popup(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, popup
         Popup::Inspect(mode) => inspect::draw(frame, area, theme, app, *mode),
         Popup::About => about::draw(frame, area, theme),
         Popup::Stats => stats::draw(frame, area, theme, app),
-        Popup::DeviceId(params) => device_id::draw(frame, area, theme, app, params),
+        Popup::DeviceId(params) => device_id::draw(frame, area, theme, app, params, layout),
         Popup::Raw(params) => raw::draw(frame, area, theme, params),
         Popup::Import(params) => import::draw(frame, area, theme, params),
         Popup::CycleConfig | Popup::Quit => {

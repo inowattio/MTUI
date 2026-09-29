@@ -1,7 +1,7 @@
 use crate::app::App;
 use crate::input::KeyCode;
 use crate::modbus::DeviceIdAccess;
-use crate::state::DeviceIdParams;
+use crate::state::{DeviceIdParams, ScreenLayout};
 use crate::tui::draw_state::dim_line;
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
@@ -18,6 +18,7 @@ pub(super) fn draw(
     theme: &Theme,
     app: &App,
     params: &DeviceIdParams,
+    layout: &mut ScreenLayout,
 ) {
     let kb = &app.config.keybinds;
     let footer = [
@@ -37,7 +38,7 @@ pub(super) fn draw(
     let value_width = (width.saturating_sub(2) as usize).saturating_sub(PREFIX_W);
 
     let max_offset = value_max.saturating_sub(value_width) as u16;
-    app.h_max_offset.set(max_offset);
+    layout.h_max_offset = max_offset;
     let offset = params.h_offset.min(max_offset) as usize;
 
     let access_index = DeviceIdAccess::ALL

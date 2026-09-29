@@ -527,6 +527,23 @@ fn clamp_pick<const N: usize, T: Copy>(selected: u16, all: &[T; N]) -> T {
     all[(selected as usize).min(N - 1)]
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ScreenLayout {
+    pub visible_rows: u16,
+    pub h_max_offset: u16,
+    pub search_rows: u16,
+}
+
+impl Default for ScreenLayout {
+    fn default() -> Self {
+        Self {
+            visible_rows: 1,
+            h_max_offset: 0,
+            search_rows: 1,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CustomField {
     Repr,

@@ -27,7 +27,7 @@ impl App {
     }
 
     pub fn search_move(&mut self, down: bool) {
-        let rows = self.search_rows.get();
+        let rows = self.layout.search_rows;
         if let Some(s) = self.search_mut() {
             s.selected = if down {
                 s.selected.saturating_add(1)
@@ -112,7 +112,7 @@ impl App {
                 .map(|(_, cell, text)| SearchMatch::label(cell, text)),
         );
 
-        let rows = self.search_rows.get();
+        let rows = self.layout.search_rows;
         if let Some(s) = self.search_mut() {
             s.matches = matches;
             s.selected = 0;

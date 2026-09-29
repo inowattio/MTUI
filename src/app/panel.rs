@@ -78,7 +78,7 @@ impl App {
     }
 
     pub fn scroll_to_cursor(&mut self) {
-        let rows = self.visible_rows.get();
+        let rows = self.layout.visible_rows;
         let cols = self.matrix_cols();
         self.read_mut().scroll_to_cursor(rows, cols);
     }
@@ -167,8 +167,8 @@ impl App {
     }
 
     pub fn panel_scroll_rows(&self) -> u16 {
-        self.visible_rows
-            .get()
+        self.layout
+            .visible_rows
             .saturating_sub(self.panel_group_breaks())
             .max(1)
     }

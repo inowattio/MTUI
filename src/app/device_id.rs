@@ -31,7 +31,7 @@ impl App {
     }
 
     pub fn device_id_hscroll(&mut self, right: bool) {
-        let max = self.h_max_offset.get();
+        let max = self.layout.h_max_offset;
         if let Some(params) = self.device_id_mut() {
             params.h_offset = step_hscroll(params.h_offset, max, right);
         }

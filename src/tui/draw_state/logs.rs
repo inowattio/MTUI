@@ -1,6 +1,6 @@
 use crate::app::App;
 use crate::logger::{self, LogEntry, LogLevel};
-use crate::state::LogViewParams;
+use crate::state::{LogViewParams, ScreenLayout};
 use crate::tui::draw_state::dim_line;
 use crate::tui::theme::Theme;
 use ratatui::Frame;
@@ -62,7 +62,7 @@ fn entry_rows(
 /// published by the previous draw, like the other status cells.
 pub fn counter(params: &LogViewParams, app: &App) -> String {
     let len = logger::count();
-    let visible = app.visible_rows.get().max(1) as usize;
+    let visible = app.layout.visible_rows.max(1) as usize;
     let max_top = len.saturating_sub(visible);
     let top = if params.follow {
         max_top
@@ -77,12 +77,18 @@ pub fn counter(params: &LogViewParams, app: &App) -> String {
     format!("{shown}/{len} events")
 }
 
-pub fn draw(params: &LogViewParams, app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
+pub fn draw(
+    params: &LogViewParams,
+    frame: &mut Frame,
+    area: Rect,
+    theme: &Theme,
+    layout: &mut ScreenLayout,
+) {
     let entries = logger::snapshot();
     let len = entries.len();
 
     let visible = area.height.max(1);
-    app.visible_rows.set(visible);
+    layout.visible_rows = visible;
     let visible = visible as usize;
 
     let max_top = len.saturating_sub(visible);
@@ -106,7 +112,7 @@ pub fn draw(params: &LogViewParams, app: &App, frame: &mut Frame, area: Rect, th
             .unwrap_or(0)
             .saturating_sub(msg_width) as u16
     };
-    app.h_max_offset.set(h_max);
+    layout.h_max_offset = h_max;
     let h_off = params.h_offset.min(h_max) as usize;
 
     let mut lines: Vec<Line> = Vec::new();

@@ -116,7 +116,7 @@ impl App {
     }
 
     pub fn diff_scroll(&mut self, delta: isize) {
-        let visible = self.visible_rows.get().max(1) as usize;
+        let visible = self.layout.visible_rows.max(1) as usize;
         if let Some(d) = self.diff_view_mut() {
             let max_top = d.diff.rows(d.changed_only).len().saturating_sub(visible);
             d.top = d.top.min(max_top).saturating_add_signed(delta).min(max_top);
@@ -124,7 +124,7 @@ impl App {
     }
 
     pub fn diff_hscroll(&mut self, right: bool) {
-        let max = self.h_max_offset.get();
+        let max = self.layout.h_max_offset;
         if let Some(d) = self.diff_view_mut() {
             d.h_offset = step_hscroll(d.h_offset, max, right);
         }
@@ -393,7 +393,7 @@ mod tests {
         let snapshot = snapshot_with_changes(&app);
         let len = app.diff_of(&snapshot).rows(false).len();
         app.open_diff_view(snapshot);
-        app.visible_rows.set(4);
+        app.layout.visible_rows = 4;
 
         app.diff_scroll(-3);
         assert_eq!(app.diff_view().unwrap().top, 0);
@@ -558,7 +558,7 @@ mod tests {
 
         narrow(&mut app);
         assert!(
-            app.h_max_offset.get() > 0,
+            app.layout.h_max_offset > 0,
             "the rows are wider than the screen"
         );
         app.diff_hscroll(true);
