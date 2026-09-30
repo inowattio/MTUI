@@ -31,15 +31,18 @@ impl App {
             ],
             "csv",
         );
+        self.writes_log_dir().join(name)
+    }
+
+    pub fn writes_log_dir(&self) -> std::path::PathBuf {
         let directory = self.config.write_log.directory.trim();
-        let dir = if directory.is_empty() {
+        if directory.is_empty() {
             self.config_path
                 .parent()
                 .map_or_else(std::path::PathBuf::new, std::path::Path::to_path_buf)
         } else {
             std::path::PathBuf::from(directory)
-        };
-        dir.join(name)
+        }
     }
 
     pub fn open_logs(&mut self) {
