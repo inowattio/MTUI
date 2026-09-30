@@ -259,7 +259,7 @@ fn render_field(
             format!(
                 "{}{}",
                 if selected { " " } else { "" },
-                app.writes_log_dir().display()
+                app.writes_log_path().display()
             ),
             theme.dim_style(),
         ));
