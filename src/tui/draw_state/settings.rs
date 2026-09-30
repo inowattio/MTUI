@@ -122,7 +122,9 @@ fn draw_fields(params: &SettingsParams, app: &App, frame: &mut Frame, area: Rect
             }
             field_lines.push(lines.len());
             lines.push(render_field(app, params, field, selected, theme));
-            if field == SettingsField::WriteLogDirectory {
+            if field == SettingsField::WriteLogDirectory
+                && !app.config.write_log.directory.trim().is_empty()
+            {
                 lines.push(Line::from(Span::styled(
                     format!("  {:<LABEL_W$} {}", "", app.writes_log_path().display()),
                     theme.dim_style(),
@@ -248,6 +250,20 @@ fn render_field(
 
     if app.settings_field_disabled(field) {
         return disabled_row(theme, name, value, selected);
+    }
+
+    if field == SettingsField::WriteLogDirectory && value.trim().is_empty() {
+        let cursor = if selected { "_" } else { "" };
+        let mut line = field_row(theme, name, LABEL_W, cursor.to_string(), selected);
+        line.spans.push(Span::styled(
+            format!(
+                "{}{}",
+                if selected { " " } else { "" },
+                app.writes_log_dir().display()
+            ),
+            theme.dim_style(),
+        ));
+        return line;
     }
 
     let value_text = if selected && field.is_action() && value.is_empty() {
