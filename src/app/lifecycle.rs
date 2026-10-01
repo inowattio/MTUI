@@ -615,9 +615,7 @@ impl App {
 
             let history = self.value_history.entry(cell).or_default();
             history.push_back((value, read_at));
-            while history.len() > history_cap {
-                history.pop_front();
-            }
+            history.retain_back(history_cap);
         }
     }
 

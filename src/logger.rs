@@ -64,9 +64,7 @@ impl Log for TuiLogger {
                 level: record.level().into(),
                 message,
             });
-            while entries.len() > CAP {
-                entries.pop_front();
-            }
+            entries.retain_back(CAP);
         }
     }
 
