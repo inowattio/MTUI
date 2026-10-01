@@ -270,7 +270,7 @@ impl MockContext {
                 let ripple = self.setpoint(52) as f64;
                 let v = 2.0f64.mul_add(
                     self.noise(t, addr),
-                    self.setpoint(50) as f64 + ripple * (t / 3.1 + p + phase).sin(),
+                    ripple.mul_add((t / 3.1 + p + phase).sin(), self.setpoint(50) as f64),
                 );
                 v.max(0.0) as u16
             }
