@@ -293,6 +293,16 @@ fn side_lines(
                 on,
                 None,
             ));
+            let on = selected(DiscoveryField::Tls);
+            let tls = if p.tls { "on" } else { "off" };
+            lines.push(row(
+                theme,
+                "TLS",
+                SIDE_LABEL,
+                edit_value(tls.to_string(), on, true),
+                on,
+                None,
+            ));
             lines.push(Line::default());
             let on = selected(DiscoveryField::ScanMethod);
             lines.push(row(

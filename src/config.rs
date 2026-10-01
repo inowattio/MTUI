@@ -527,8 +527,10 @@ impl Config {
         match &self.device.interface {
             Interface::Mock => "Mock".to_string(),
             Interface::Serial(p) => format!("{} ({})", p.path, p.baud_rate),
-            Interface::Tcp(p) => format!("{}:{}", p.ip, p.port),
-            Interface::RtuOverTcp(p) => format!("{}:{}", p.ip, p.port),
+            Interface::Tcp(p) | Interface::RtuOverTcp(p) => {
+                let suffix = if p.tls { " (TLS)" } else { "" };
+                format!("{}:{}{suffix}", p.ip, p.port)
+            }
         }
     }
 }
