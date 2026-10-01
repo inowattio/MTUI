@@ -2,7 +2,7 @@
 name = "mtui"
 version = "1.0.0"
 edition = "2024"
-rust-version = "1.98.1"
+rust-version = "1.99.0"
 license = "GPL-2.0-only"
 description = "An extensive Modbus client for your terminal."
 repository = "https://github.com/inowattio/mtui"
