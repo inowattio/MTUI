@@ -38,8 +38,6 @@ impl CustomRepr {
         Self::F128,
     ];
 
-    pub const MAX_REGISTERS: usize = 8;
-
     pub const fn register_count(self) -> usize {
         match self {
             Self::U16 | Self::I16 | Self::F16 => 1,
@@ -628,16 +626,6 @@ mod tests {
         r.address = 7;
         r.next = vec![99];
         assert_eq!(r.word_addresses().collect::<Vec<_>>(), vec![7]);
-    }
-
-    #[test]
-    fn max_registers_covers_all_reprs() {
-        let widest = CustomRepr::ALL
-            .iter()
-            .map(|r| r.register_count())
-            .max()
-            .unwrap();
-        assert_eq!(widest, CustomRepr::MAX_REGISTERS);
     }
 
     #[test]
