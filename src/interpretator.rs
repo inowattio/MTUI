@@ -106,16 +106,8 @@ impl<'a> RowCtx<'a> {
         }
     }
 
-    const fn two(&self) -> bool {
-        self.next[0].is_some()
-    }
-
-    fn four(&self) -> bool {
-        self.next[..3].iter().all(Option::is_some)
-    }
-
-    fn eight(&self) -> bool {
-        self.next.iter().all(Option::is_some)
+    fn has_next(&self, n: usize) -> bool {
+        self.next[..n].iter().all(Option::is_some)
     }
 }
 
@@ -128,21 +120,21 @@ const COLUMNS: &[ColumnSpec] = &[
     ColumnSpec { column: Column::U8,     width: 8,  render: |c, _, o| { let _ = write!(o, "{}/{}", (c.value >> 8) as u8, (c.value & 0xFF) as u8); } },
     ColumnSpec { column: Column::I8,     width: 9,  render: |c, _, o| { let _ = write!(o, "{}/{}", (c.value >> 8) as u8 as i8, (c.value & 0xFF) as u8 as i8); } },
     ColumnSpec { column: Column::Hex,     width: 4,  render: |c, _, o| { let _ = write!(o, "{:04X}", c.value); } },
-    ColumnSpec { column: Column::Hex32,   width: 9,  render: |c, _, o| if c.two() { let _ = write!(o, "{:08X}", c.word); } else { o.push_str(UNINTERPRETABLE); } },
+    ColumnSpec { column: Column::Hex32,   width: 9,  render: |c, _, o| if c.has_next(1) { let _ = write!(o, "{:08X}", c.word); } else { o.push_str(UNINTERPRETABLE); } },
     ColumnSpec { column: Column::F16,     width: 10, render: |c, w, o| float_cell(f16_to_f32(c.value), w, o) },
     ColumnSpec { column: Column::Bcd,     width: 6,  render: |c, _, o| match bcd_to_decimal(c.value) { Some(n) => { let _ = write!(o, "{n}"); } None => o.push_str(UNINTERPRETABLE) } },
-    ColumnSpec { column: Column::Bcd32,   width: 10, render: |c, _, o| if c.two() { match bcd_to_decimal(c.word) { Some(n) => { let _ = write!(o, "{n}"); } None => o.push_str(UNINTERPRETABLE) } } else { o.push_str(UNINTERPRETABLE); } },
-    ColumnSpec { column: Column::U32,     width: 10, render: |c, _, o| if c.two() { let _ = write!(o, "{}", c.word); } else { o.push_str(UNINTERPRETABLE); } },
-    ColumnSpec { column: Column::I32,     width: 11, render: |c, _, o| if c.two() { let _ = write!(o, "{}", c.word as i32); } else { o.push_str(UNINTERPRETABLE); } },
-    ColumnSpec { column: Column::U32M10K, width: 11, render: |c, _, o| if c.two() { let (h, l) = m10k_to_u32(c.word); let _ = write!(o, "{h}/{l}"); } else { o.push_str(UNINTERPRETABLE); } },
-    ColumnSpec { column: Column::I32M10K, width: 14, render: |c, _, o| if c.two() { let (h, l) = m10k_to_i32(c.word); let _ = write!(o, "{h}/{l}"); } else { o.push_str(UNINTERPRETABLE); } },
-    ColumnSpec { column: Column::U64,     width: 20, render: |c, _, o| if c.four() { let _ = write!(o, "{}", c.dword); } else { o.push_str(UNINTERPRETABLE); } },
-    ColumnSpec { column: Column::I64,     width: 21, render: |c, _, o| if c.four() { let _ = write!(o, "{}", c.dword as i64); } else { o.push_str(UNINTERPRETABLE); } },
-    ColumnSpec { column: Column::U128,    width: 39, render: |c, _, o| if c.eight() { let _ = write!(o, "{}", c.qword); } else { o.push_str(UNINTERPRETABLE); } },
-    ColumnSpec { column: Column::I128,    width: 40, render: |c, _, o| if c.eight() { let _ = write!(o, "{}", c.qword as i128); } else { o.push_str(UNINTERPRETABLE); } },
-    ColumnSpec { column: Column::F32,     width: 10, render: |c, w, o| if c.two() { float_cell(f32::from_bits(c.word), w, o) } else { o.push_str(UNINTERPRETABLE); } },
-    ColumnSpec { column: Column::F64,     width: 12, render: |c, w, o| if c.four() { float_cell(f64::from_bits(c.dword), w, o) } else { o.push_str(UNINTERPRETABLE); } },
-    ColumnSpec { column: Column::F128,    width: 12, render: |c, w, o| if c.eight() { float_cell(f128_to_f64(c.qword), w, o) } else { o.push_str(UNINTERPRETABLE); } },
+    ColumnSpec { column: Column::Bcd32,   width: 10, render: |c, _, o| if c.has_next(1) { match bcd_to_decimal(c.word) { Some(n) => { let _ = write!(o, "{n}"); } None => o.push_str(UNINTERPRETABLE) } } else { o.push_str(UNINTERPRETABLE); } },
+    ColumnSpec { column: Column::U32,     width: 10, render: |c, _, o| if c.has_next(1) { let _ = write!(o, "{}", c.word); } else { o.push_str(UNINTERPRETABLE); } },
+    ColumnSpec { column: Column::I32,     width: 11, render: |c, _, o| if c.has_next(1) { let _ = write!(o, "{}", c.word as i32); } else { o.push_str(UNINTERPRETABLE); } },
+    ColumnSpec { column: Column::U32M10K, width: 11, render: |c, _, o| if c.has_next(1) { let (h, l) = m10k_to_u32(c.word); let _ = write!(o, "{h}/{l}"); } else { o.push_str(UNINTERPRETABLE); } },
+    ColumnSpec { column: Column::I32M10K, width: 14, render: |c, _, o| if c.has_next(1) { let (h, l) = m10k_to_i32(c.word); let _ = write!(o, "{h}/{l}"); } else { o.push_str(UNINTERPRETABLE); } },
+    ColumnSpec { column: Column::U64,     width: 20, render: |c, _, o| if c.has_next(3) { let _ = write!(o, "{}", c.dword); } else { o.push_str(UNINTERPRETABLE); } },
+    ColumnSpec { column: Column::I64,     width: 21, render: |c, _, o| if c.has_next(3) { let _ = write!(o, "{}", c.dword as i64); } else { o.push_str(UNINTERPRETABLE); } },
+    ColumnSpec { column: Column::U128,    width: 39, render: |c, _, o| if c.has_next(7) { let _ = write!(o, "{}", c.qword); } else { o.push_str(UNINTERPRETABLE); } },
+    ColumnSpec { column: Column::I128,    width: 40, render: |c, _, o| if c.has_next(7) { let _ = write!(o, "{}", c.qword as i128); } else { o.push_str(UNINTERPRETABLE); } },
+    ColumnSpec { column: Column::F32,     width: 10, render: |c, w, o| if c.has_next(1) { float_cell(f32::from_bits(c.word), w, o) } else { o.push_str(UNINTERPRETABLE); } },
+    ColumnSpec { column: Column::F64,     width: 12, render: |c, w, o| if c.has_next(3) { float_cell(f64::from_bits(c.dword), w, o) } else { o.push_str(UNINTERPRETABLE); } },
+    ColumnSpec { column: Column::F128,    width: 12, render: |c, w, o| if c.has_next(7) { float_cell(f128_to_f64(c.qword), w, o) } else { o.push_str(UNINTERPRETABLE); } },
     ColumnSpec { column: Column::Ascii,   width: 5,  render: |c, _, o| ascii_cell(c.value, c.next[0].unwrap_or_default(), o) },
     ColumnSpec { column: Column::Bits,    width: 19, render: |c, _, o| bits_cell(c.value, o) },
     ColumnSpec { column: Column::Custom,  width: CONFIGURED, render: |c, w, o| clipped_cell(c.custom, w, o) },
