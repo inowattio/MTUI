@@ -3,7 +3,7 @@ use super::App;
 use super::dropped::dropped_dump;
 use crate::config::Column;
 use crate::constants::{NO_VALUE, message};
-use crate::interpretator::RowSegment;
+use crate::interpretator::{RowSegment, following};
 use crate::num_ops::step_hscroll;
 use crate::register::RegisterCell;
 use crate::snapshot::{
@@ -184,7 +184,7 @@ impl App {
         self.interpreter.format_row(
             addr,
             entry.value,
-            std::array::from_fn(|i| at(addr.saturating_add(i as u16 + 1))),
+            following(addr, self.interpreter.lookahead(), at),
             entry.time.as_deref().unwrap_or(NO_VALUE),
             None,
             custom.as_deref(),

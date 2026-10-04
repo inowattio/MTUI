@@ -1,7 +1,7 @@
 use super::App;
 use crate::config::{BatchAnchor, Column};
 use crate::constants::NO_VALUE;
-use crate::interpretator::{ascii_words, fmt_num, graph_value};
+use crate::interpretator::{LOOKAHEAD, ascii_words, fmt_num, following, graph_value};
 use crate::num_ops::cycle;
 use crate::register::{RegisterCell, RegisterType};
 use crate::state::{InspectMode, Popup, ReadPanel};
@@ -235,7 +235,7 @@ impl App {
         self.interpreter.interpret_all(
             addr,
             value,
-            std::array::from_fn(|i| at(addr.saturating_add(i as u16 + 1))),
+            following(addr, LOOKAHEAD, at),
             &entry.time_text,
             Utc::now().signed_duration_since(entry.at),
             custom.as_deref(),
@@ -368,7 +368,7 @@ impl App {
         let row = self.interpreter.format_row(
             addr,
             value,
-            std::array::from_fn(|i| at(addr.saturating_add(i as u16 + 1))),
+            following(addr, self.interpreter.lookahead(), at),
             &entry.time_text,
             Some(now.signed_duration_since(entry.at)),
             custom.as_deref(),

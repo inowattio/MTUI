@@ -11,6 +11,7 @@ pub struct Interpretor {
     header: String,
     order: Vec<Column>,
     enabled: Vec<EnabledColumn>,
+    lookahead: usize,
     label_auto: usize,
     custom_auto: usize,
 }
@@ -146,14 +147,19 @@ impl Column {
         matches!(self, Self::Address | Self::Time | Self::Label)
     }
 
+    pub const fn words(self) -> usize {
+        match self.custom_repr() {
+            Some(repr) => repr.register_count(),
+            None => match self {
+                Self::Hex32 | Self::Bcd32 | Self::U32M10K | Self::I32M10K | Self::Ascii => 2,
+                _ => 1,
+            },
+        }
+    }
+
     pub fn graph_width(self) -> Option<usize> {
-        self.custom_repr()
-            .map(CustomRepr::register_count)
-            .or(match self {
-                Self::Bcd => Some(1),
-                Self::Bcd32 => Some(2),
-                _ => None,
-            })
+        (self.custom_repr().is_some() || matches!(self, Self::Bcd | Self::Bcd32))
+            .then(|| self.words())
     }
 
     pub fn is_graphable(self) -> bool {
@@ -183,6 +189,14 @@ impl Column {
     }
 }
 
+pub fn following(address: u16, count: usize, at: impl Fn(u16) -> Option<u16>) -> Lookahead {
+    std::array::from_fn(|i| {
+        (i < count)
+            .then(|| at(address.saturating_add(i as u16 + 1)))
+            .flatten()
+    })
+}
+
 pub fn graph_value(column: Column, order: WordOrder, regs: &[u16]) -> Option<f64> {
     if let Some(repr) = column.custom_repr() {
         let raw = order.assemble(regs.get(..repr.register_count())?)?;
@@ -203,6 +217,7 @@ impl Interpretor {
             header: String::new(),
             order: Vec::new(),
             enabled: Vec::new(),
+            lookahead: 0,
             label_auto: 0,
             custom_auto: 0,
         };
@@ -264,7 +279,17 @@ impl Interpretor {
                 width: self.effective_width(spec),
             })
             .collect();
+        self.lookahead = self
+            .enabled
+            .iter()
+            .map(|col| col.spec.column.words() - 1)
+            .max()
+            .unwrap_or(0);
         self.rebuild_header();
+    }
+
+    pub const fn lookahead(&self) -> usize {
+        self.lookahead
     }
 
     pub const fn label_width(&self) -> u16 {
@@ -1044,6 +1069,36 @@ mod tests {
         assert_eq!(f128_to_f64(tiny), f64::MIN_POSITIVE);
         let smaller = 0x3BCD_u128 << 112;
         assert_eq!(f128_to_f64(smaller), 5e-324, "lands in f64 subnormals");
+    }
+
+    #[test]
+    fn the_lookahead_follows_the_widest_visible_column() {
+        assert_eq!(visible(vec![Column::U16, Column::Hex]).lookahead(), 0);
+        assert_eq!(interpretor().lookahead(), 1, "ascii reads one word ahead");
+        assert_eq!(visible(vec![Column::U16, Column::F64]).lookahead(), 3);
+        assert_eq!(visible(vec![Column::I128, Column::F64]).lookahead(), 7);
+
+        let mut interpretor = visible(vec![Column::U16]);
+        interpretor.toggle(Column::U64);
+        assert_eq!(interpretor.lookahead(), 3);
+        interpretor.toggle(Column::U64);
+        assert_eq!(interpretor.lookahead(), 0);
+    }
+
+    #[test]
+    fn following_fills_only_the_requested_slots() {
+        let at = |address: u16| Some(address);
+        assert_eq!(following(10, 0, at), [None; LOOKAHEAD]);
+        assert_eq!(
+            following(10, 2, at),
+            [Some(11), Some(12), None, None, None, None, None]
+        );
+        assert_eq!(
+            following(u16::MAX, 2, at),
+            [Some(u16::MAX), Some(u16::MAX), None, None, None, None, None],
+            "saturates at the top of the address space"
+        );
+        assert!(following(0, LOOKAHEAD, at).iter().all(Option::is_some));
     }
 
     #[test]
