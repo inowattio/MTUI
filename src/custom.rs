@@ -1,5 +1,5 @@
 use crate::constants::UNINTERPRETABLE;
-use crate::interpretator::f16_to_f32;
+use crate::interpretator::{f16_to_f32, f128_to_f64};
 use crate::modbus::WordOrder;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::BTreeMap;
@@ -17,10 +17,13 @@ pub enum CustomRepr {
     U64,
     I64,
     F64,
+    U128,
+    I128,
+    F128,
 }
 
 impl CustomRepr {
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 12] = [
         Self::U16,
         Self::I16,
         Self::F16,
@@ -30,19 +33,23 @@ impl CustomRepr {
         Self::U64,
         Self::I64,
         Self::F64,
+        Self::U128,
+        Self::I128,
+        Self::F128,
     ];
 
-    pub const MAX_REGISTERS: usize = 4;
+    pub const MAX_REGISTERS: usize = 8;
 
     pub const fn register_count(self) -> usize {
         match self {
             Self::U16 | Self::I16 | Self::F16 => 1,
             Self::U32 | Self::I32 | Self::F32 => 2,
             Self::U64 | Self::I64 | Self::F64 => 4,
+            Self::U128 | Self::I128 | Self::F128 => 8,
         }
     }
 
-    pub fn decode(self, raw: u64) -> f64 {
+    pub fn decode(self, raw: u128) -> f64 {
         match self {
             Self::U16 => raw as f64,
             Self::I16 => raw as u16 as i16 as f64,
@@ -52,7 +59,10 @@ impl CustomRepr {
             Self::F32 => f32::from_bits(raw as u32) as f64,
             Self::U64 => raw as f64,
             Self::I64 => raw as i64 as f64,
-            Self::F64 => f64::from_bits(raw),
+            Self::F64 => f64::from_bits(raw as u64),
+            Self::U128 => raw as f64,
+            Self::I128 => raw as i128 as f64,
+            Self::F128 => f128_to_f64(raw),
         }
     }
 
@@ -67,6 +77,9 @@ impl CustomRepr {
             Self::U64 => "u64",
             Self::I64 => "i64",
             Self::F64 => "f64",
+            Self::U128 => "u128",
+            Self::I128 => "i128",
+            Self::F128 => "f128",
         }
     }
 }
@@ -234,7 +247,7 @@ impl CustomRule {
         })
     }
 
-    pub fn raw(&self, words: &[u16], order: WordOrder) -> Option<u64> {
+    pub fn raw(&self, words: &[u16], order: WordOrder) -> Option<u128> {
         let order = self.word_order.unwrap_or(order);
         order.assemble(words.get(..self.repr.register_count())?)
     }
@@ -243,11 +256,11 @@ impl CustomRule {
         Some(self.repr.decode(self.raw(words, order)?))
     }
 
-    fn bit_names(&self, raw: u64) -> String {
+    fn bit_names(&self, raw: u128) -> String {
         let names: Vec<&str> = self
             .bits
             .iter()
-            .filter(|e| e.bit < 64 && raw >> e.bit & 1 == 1)
+            .filter(|e| e.bit < 128 && raw >> e.bit & 1 == 1)
             .map(|e| e.name.as_str())
             .collect();
         if names.is_empty() {
@@ -300,7 +313,7 @@ impl CustomRule {
 
 enum Resolved<'a> {
     Enum(&'a str),
-    Bits(u64),
+    Bits(u128),
     Number(f64),
 }
 
@@ -350,8 +363,8 @@ pub fn parse_enum(input: &str) -> Result<EnumEntry, &'static str> {
 pub fn parse_bit(input: &str) -> Result<BitEntry, &'static str> {
     let (bit, name) = input.split_once('=').ok_or("use bit=name")?;
     let bit: u8 = bit.trim().parse().map_err(|_| "invalid bit")?;
-    if bit > 63 {
-        return Err("bit must be 0-63");
+    if bit > 127 {
+        return Err("bit must be 0-127");
     }
     let name = name.trim();
     if name.is_empty() {
@@ -422,6 +435,63 @@ mod tests {
         assert_eq!(r.evaluate(&[0xF03F, 0, 0, 0], WordOrder::BADC), "1");
         assert_eq!(r.evaluate(&[0, 0, 0, 0x3FF0], WordOrder::CDAB), "1");
         assert_eq!(r.evaluate(&[0, 0, 0, 0xF03F], WordOrder::DCBA), "1");
+    }
+
+    #[test]
+    fn qword_needs_eight_words() {
+        let r = rule(CustomRepr::U128);
+        assert_eq!(r.evaluate(&[0; 7], WordOrder::ABCD), "");
+        assert_eq!(
+            r.evaluate(&[0, 0, 0, 1, 0, 0, 0, 0], WordOrder::ABCD),
+            "1.845e19"
+        );
+        assert_eq!(r.evaluate(&[0; 8], WordOrder::ABCD), "0");
+    }
+
+    #[test]
+    fn i128_is_signed() {
+        let r = rule(CustomRepr::I128);
+        assert_eq!(r.evaluate(&[0xFFFF; 8], WordOrder::ABCD), "-1");
+        assert_eq!(r.numeric(&[0xFFFF; 8], WordOrder::DCBA), Some(-1.0));
+        assert_eq!(
+            rule(CustomRepr::U128).numeric(&[0xFFFF; 8], WordOrder::ABCD),
+            Some(u128::MAX as f64)
+        );
+    }
+
+    #[test]
+    fn f128_with_word_order() {
+        let r = rule(CustomRepr::F128);
+        assert_eq!(
+            r.evaluate(&[0x3FFF, 0, 0, 0, 0, 0, 0, 0], WordOrder::ABCD),
+            "1"
+        );
+        assert_eq!(
+            r.evaluate(&[0xFF3F, 0, 0, 0, 0, 0, 0, 0], WordOrder::BADC),
+            "1"
+        );
+        assert_eq!(
+            r.evaluate(&[0, 0, 0, 0, 0, 0, 0, 0x3FFF], WordOrder::CDAB),
+            "1"
+        );
+        assert_eq!(
+            r.evaluate(&[0, 0, 0, 0, 0, 0, 0, 0xFF3F], WordOrder::DCBA),
+            "1"
+        );
+        assert_eq!(
+            r.evaluate(&[0xC000, 0x9000, 0, 0, 0, 0, 0, 0], WordOrder::ABCD),
+            "-3.125"
+        );
+    }
+
+    #[test]
+    fn bits_reach_the_top_of_a_qword() {
+        let mut r = rule(CustomRepr::U128);
+        r.bits = vec![bit(127, "sign"), bit(0, "lsb")];
+        assert_eq!(
+            r.evaluate(&[0x8000, 0, 0, 0, 0, 0, 0, 1], WordOrder::ABCD),
+            "sign|lsb"
+        );
     }
 
     #[test]
@@ -514,7 +584,8 @@ mod tests {
         assert_eq!(parse_bit("0=run").unwrap(), bit(0, "run"));
         assert_eq!(parse_bit(" 15 = heartbeat ").unwrap(), bit(15, "heartbeat"));
         assert!(parse_bit("run").is_err());
-        assert!(parse_bit("64=x").is_err());
+        assert!(parse_bit("127=x").is_ok());
+        assert!(parse_bit("128=x").is_err());
         assert!(parse_bit("a=x").is_err());
         assert!(parse_bit("3=").is_err());
     }

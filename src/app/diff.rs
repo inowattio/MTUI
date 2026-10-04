@@ -184,7 +184,7 @@ impl App {
         self.interpreter.format_row(
             addr,
             entry.value,
-            [1, 2, 3].map(|offset| at(addr.saturating_add(offset))),
+            std::array::from_fn(|i| at(addr.saturating_add(i as u16 + 1))),
             entry.time.as_deref().unwrap_or(NO_VALUE),
             None,
             custom.as_deref(),

@@ -303,10 +303,10 @@ impl App {
     }
 }
 
-fn read_back_message(read_back: Option<u64>, written: u64) -> String {
+fn read_back_message(read_back: Option<u128>, written: u64) -> String {
     match read_back {
         None => "Write OK".to_string(),
-        Some(value) if value == written => format!("Write OK | read back {value}"),
+        Some(value) if value == u128::from(written) => format!("Write OK | read back {value}"),
         Some(value) => format!("Write OK | read back {value} (differs)"),
     }
 }

@@ -26,6 +26,8 @@ const TIME_W: usize = 12;
 const INSPECT_W: usize = 21;
 const CONFIGURED: usize = 0;
 pub const WIDTH_MAX: usize = 64;
+pub const LOOKAHEAD: usize = 7;
+pub type Lookahead = [Option<u16>; LOOKAHEAD];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RowSegment {
@@ -62,9 +64,10 @@ struct ColumnSpec {
 
 struct RowCtx<'a> {
     value: u16,
-    next: [Option<u16>; 3],
+    next: Lookahead,
     word: u32,
     dword: u64,
+    qword: u128,
     custom: &'a str,
     time: &'a str,
     elapsed: Option<chrono::Duration>,
@@ -77,7 +80,7 @@ struct RowCtx<'a> {
 struct RowData<'a> {
     address: u16,
     value: u16,
-    next: [Option<u16>; 3],
+    next: Lookahead,
     custom: Option<&'a str>,
     time: &'a str,
     elapsed: Option<chrono::Duration>,
@@ -86,12 +89,13 @@ struct RowData<'a> {
 
 impl<'a> RowCtx<'a> {
     fn new(config: &InterpretorConfig, order: WordOrder, data: RowData<'a>) -> Self {
-        let [b, c, d] = data.next.map(Option::unwrap_or_default);
+        let [b, c, d, e, f, g, h] = data.next.map(Option::unwrap_or_default);
         Self {
             value: data.value,
             next: data.next,
             word: order.make_word(data.value, b),
             dword: order.make_dword([data.value, b, c, d]),
+            qword: order.make_qword([data.value, b, c, d, e, f, g, h]),
             custom: data.custom.unwrap_or(NO_VALUE),
             time: data.time,
             elapsed: data.elapsed,
@@ -107,6 +111,10 @@ impl<'a> RowCtx<'a> {
     }
 
     fn four(&self) -> bool {
+        self.next[..3].iter().all(Option::is_some)
+    }
+
+    fn eight(&self) -> bool {
         self.next.iter().all(Option::is_some)
     }
 }
@@ -130,8 +138,11 @@ const COLUMNS: &[ColumnSpec] = &[
     ColumnSpec { column: Column::I32M10K, width: 14, render: |c, _, o| if c.two() { let (h, l) = m10k_to_i32(c.word); let _ = write!(o, "{h}/{l}"); } else { o.push_str(UNINTERPRETABLE); } },
     ColumnSpec { column: Column::U64,     width: 20, render: |c, _, o| if c.four() { let _ = write!(o, "{}", c.dword); } else { o.push_str(UNINTERPRETABLE); } },
     ColumnSpec { column: Column::I64,     width: 21, render: |c, _, o| if c.four() { let _ = write!(o, "{}", c.dword as i64); } else { o.push_str(UNINTERPRETABLE); } },
+    ColumnSpec { column: Column::U128,    width: 39, render: |c, _, o| if c.eight() { let _ = write!(o, "{}", c.qword); } else { o.push_str(UNINTERPRETABLE); } },
+    ColumnSpec { column: Column::I128,    width: 40, render: |c, _, o| if c.eight() { let _ = write!(o, "{}", c.qword as i128); } else { o.push_str(UNINTERPRETABLE); } },
     ColumnSpec { column: Column::F32,     width: 10, render: |c, w, o| if c.two() { float_cell(f32::from_bits(c.word), w, o) } else { o.push_str(UNINTERPRETABLE); } },
     ColumnSpec { column: Column::F64,     width: 12, render: |c, w, o| if c.four() { float_cell(f64::from_bits(c.dword), w, o) } else { o.push_str(UNINTERPRETABLE); } },
+    ColumnSpec { column: Column::F128,    width: 12, render: |c, w, o| if c.eight() { float_cell(f128_to_f64(c.qword), w, o) } else { o.push_str(UNINTERPRETABLE); } },
     ColumnSpec { column: Column::Ascii,   width: 5,  render: |c, _, o| ascii_cell(c.value, c.next[0].unwrap_or_default(), o) },
     ColumnSpec { column: Column::Bits,    width: 19, render: |c, _, o| bits_cell(c.value, o) },
     ColumnSpec { column: Column::Custom,  width: CONFIGURED, render: |c, w, o| clipped_cell(c.custom, w, o) },
@@ -158,7 +169,7 @@ impl Column {
     }
 
     pub const fn graph_is_float(self) -> bool {
-        matches!(self, Self::F16 | Self::F32 | Self::F64)
+        matches!(self, Self::F16 | Self::F32 | Self::F64 | Self::F128)
     }
 
     pub const fn custom_repr(self) -> Option<CustomRepr> {
@@ -172,6 +183,9 @@ impl Column {
             Self::U64 => CustomRepr::U64,
             Self::I64 => CustomRepr::I64,
             Self::F64 => CustomRepr::F64,
+            Self::U128 => CustomRepr::U128,
+            Self::I128 => CustomRepr::I128,
+            Self::F128 => CustomRepr::F128,
             _ => return None,
         })
     }
@@ -368,7 +382,7 @@ impl Interpretor {
             RowData {
                 address,
                 value: 0,
-                next: [None; 3],
+                next: [None; LOOKAHEAD],
                 custom: None,
                 time: NO_VALUE,
                 elapsed: None,
@@ -394,7 +408,7 @@ impl Interpretor {
         &self,
         address: u16,
         value: u16,
-        next: [Option<u16>; 3],
+        next: Lookahead,
         time_text: &str,
         elapsed: Option<chrono::Duration>,
         custom: Option<&str>,
@@ -428,7 +442,7 @@ impl Interpretor {
         &self,
         address: u16,
         value: u16,
-        next: [Option<u16>; 3],
+        next: Lookahead,
         time: &str,
         elapsed: chrono::Duration,
         custom: Option<&str>,
@@ -607,6 +621,46 @@ const fn m10k_to_i32(value: u32) -> (i16, i16) {
     (high, low)
 }
 
+pub(crate) fn f128_to_f64(bits: u128) -> f64 {
+    const MANTISSA_BITS: u32 = 112;
+    const BIAS: i32 = 16383;
+    let negative = bits >> 127 != 0;
+    let exponent = ((bits >> MANTISSA_BITS) & 0x7FFF) as i32;
+    let mantissa = bits & ((1u128 << MANTISSA_BITS) - 1);
+
+    let magnitude = match exponent {
+        0 => 0.0,
+        0x7FFF => {
+            if mantissa == 0 {
+                f64::INFINITY
+            } else {
+                f64::NAN
+            }
+        }
+        _ => {
+            let shift = MANTISSA_BITS - 52;
+            let significand = (1u128 << MANTISSA_BITS) | mantissa;
+            let mut top = (significand >> shift) as u64;
+            let rest = significand & ((1u128 << shift) - 1);
+            let half = 1u128 << (shift - 1);
+            if rest > half || (rest == half && top & 1 == 1) {
+                top += 1;
+            }
+            scale_pow2(top as f64, exponent - BIAS - 52)
+        }
+    };
+
+    if negative { -magnitude } else { magnitude }
+}
+
+fn scale_pow2(x: f64, exponent: i32) -> f64 {
+    match exponent {
+        e if e > 1023 => x * f64::INFINITY,
+        e if e < -1022 => x * 2f64.powi(-1022) * 2f64.powi((e + 1022).max(-1022)),
+        e => x * 2f64.powi(e),
+    }
+}
+
 pub(crate) fn f16_to_f32(bits: u16) -> f32 {
     let sign = if bits & 0x8000 != 0 { -1.0 } else { 1.0 };
     let exponent = (bits >> 10) & 0x1f;
@@ -770,7 +824,7 @@ mod tests {
         let row = interpretor.format_row(
             42,
             0x1234,
-            [Some(0), Some(0), Some(0)],
+            [Some(0); LOOKAHEAD],
             "12:00:00.000",
             Some(chrono::Duration::zero()),
             None,
@@ -798,7 +852,7 @@ mod tests {
         interpretor.format_row(
             5,
             1,
-            [None; 3],
+            [None; LOOKAHEAD],
             "12:34:56.789",
             Some(chrono::Duration::seconds(3)),
             None,
@@ -823,8 +877,9 @@ mod tests {
     #[test]
     fn a_row_without_an_age_shows_its_time_text_clipped_in_every_mode() {
         let mut interpretor = interpretor();
-        let untimed =
-            |i: &Interpretor, time: &str| i.format_row(5, 1, [None; 3], time, None, None, None);
+        let untimed = |i: &Interpretor, time: &str| {
+            i.format_row(5, 1, [None; LOOKAHEAD], time, None, None, None)
+        };
         for mode in TimeMode::ALL {
             interpretor.set_time_mode(mode);
             let row = untimed(&interpretor, "14:02:42.850");
@@ -857,7 +912,7 @@ mod tests {
             i.interpret_all(
                 4660,
                 1,
-                [None; 3],
+                [None; LOOKAHEAD],
                 "12:34:56.789",
                 chrono::Duration::seconds(3),
                 None,
@@ -924,7 +979,7 @@ mod tests {
         let row = interpretor.format_row(
             5,
             1,
-            [None; 3],
+            [None; LOOKAHEAD],
             "12:34:56.789",
             Some(chrono::Duration::seconds(3)),
             None,
@@ -947,7 +1002,7 @@ mod tests {
         let row = interpretor.format_row(
             255,
             1,
-            [None; 3],
+            [None; LOOKAHEAD],
             "12:34:56.789",
             Some(chrono::Duration::seconds(3)),
             None,
@@ -971,6 +1026,32 @@ mod tests {
         };
         assert_eq!(named("label"), "pump", "the label survives with no read");
         assert_eq!(named("u16"), NO_VALUE, "value columns have nothing to show");
+    }
+
+    #[test]
+    fn f128_decodes_the_binary128_layout() {
+        let one = 0x3FFF_u128 << 112;
+        assert_eq!(f128_to_f64(one), 1.0);
+        assert_eq!(f128_to_f64(one | 1 << 127), -1.0);
+        assert_eq!(f128_to_f64(0), 0.0);
+        assert_eq!(f128_to_f64(0x4000_9000_u128 << 96), 3.125);
+        assert_eq!(f128_to_f64(0x7FFF_u128 << 112), f64::INFINITY);
+        assert_eq!(f128_to_f64(0xFFFF_u128 << 112), f64::NEG_INFINITY);
+        assert!(f128_to_f64((0x7FFF_u128 << 112) | 1).is_nan());
+
+        let pi = 0x4000_921F_B544_42D1_8469_898C_C517_01B8_u128;
+        assert_eq!(f128_to_f64(pi), std::f64::consts::PI);
+
+        let subnormal = 1_u128 << 100;
+        assert_eq!(f128_to_f64(subnormal), 0.0, "below the f64 range");
+        let huge = 0x43FF_u128 << 112;
+        assert_eq!(f128_to_f64(huge), f64::INFINITY, "2^1024 overflows");
+        let max = 0x43FE_u128 << 112 | ((1u128 << 112) - 1);
+        assert_eq!(f128_to_f64(max), f64::INFINITY, "rounds up past f64::MAX");
+        let tiny = 0x3C01_u128 << 112;
+        assert_eq!(f128_to_f64(tiny), f64::MIN_POSITIVE);
+        let smaller = 0x3BCD_u128 << 112;
+        assert_eq!(f128_to_f64(smaller), 5e-324, "lands in f64 subnormals");
     }
 
     #[test]
