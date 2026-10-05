@@ -53,7 +53,7 @@ impl Default for BatchConfig {
     fn default() -> Self {
         Self {
             size: 10,
-            anchor: BatchAnchor::Middle,
+            anchor: BatchAnchor::default(),
             read_full_customs: false,
             custom_by_registers: false,
         }
@@ -155,8 +155,8 @@ impl ApiConfig {
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum BatchAnchor {
-    Start,
     #[default]
+    Start,
     Middle,
     End,
 }
