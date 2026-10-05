@@ -732,7 +732,7 @@ impl Default for Config {
             next_config: String::new(),
             device: DeviceConfig::default(),
             startup: Startup {
-                address: 5,
+                address: 0,
                 register_type: RegisterType::Input,
                 panel: ReadPanel::Main,
             },
