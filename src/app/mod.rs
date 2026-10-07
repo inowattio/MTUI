@@ -270,6 +270,14 @@ struct WriteOutcome {
 }
 
 #[derive(Debug)]
+struct QueuedWrite {
+    position: u16,
+    number: i64,
+    write_type: WriteType,
+    func: crate::state::WriteFunc,
+}
+
+#[derive(Debug)]
 struct PendingWrite {
     unit: u8,
     address: u16,
@@ -438,6 +446,7 @@ pub struct App {
     labels: BTreeMap<RegisterCell, String>,
     custom_rules: BTreeMap<RegisterCell, CustomRule>,
     pending_write: Option<PendingWrite>,
+    queued_write: Option<QueuedWrite>,
     pending_import: Option<Registers>,
     logged_connection: ConnectionStatus,
     api_device: ApiDevice,

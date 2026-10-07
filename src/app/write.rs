@@ -1,4 +1,4 @@
-use super::{App, BackgroundTask, PendingWrite, WriteOutcome, WriteType};
+use super::{App, BackgroundTask, PendingWrite, QueuedWrite, WriteOutcome, WriteType};
 use crate::compat;
 use crate::constants::UNINTERPRETABLE;
 use crate::constants::message;
@@ -129,26 +129,8 @@ impl App {
             }
             return;
         }
-        if let Some(task) = &self.background_task {
-            let message = if matches!(task, BackgroundTask::Refresh(_)) {
-                message::DEVICE_READING
-            } else {
-                message::DEVICE_BUSY
-            };
-            if let Some(w) = self.write_mut() {
-                w.result = Some(StatusMessage::info(message));
-            }
-            return;
-        }
 
-        let Some(device) = self.device.clone() else {
-            if let Some(w) = self.write_mut() {
-                w.result = Some(StatusMessage::err(message::NO_DEVICE));
-            }
-            return;
-        };
-
-        let (position, number, write_type, func) = {
+        let queued = {
             let Some(w) = self.write_mut() else {
                 return;
             };
@@ -156,10 +138,50 @@ impl App {
                 w.result = Some(StatusMessage::info(message::ENTER_VALUE));
                 return;
             };
-            w.result = Some(StatusMessage::info(message::WRITING));
-            (w.position, number, w.write_type, w.func)
+            QueuedWrite {
+                position: w.position,
+                number,
+                write_type: w.write_type,
+                func: w.func,
+            }
         };
 
+        if let Some(task) = &self.background_task {
+            let reading = matches!(task, BackgroundTask::Refresh(_));
+            let text = if reading && self.config.write_waits_for_read {
+                self.queued_write = Some(queued);
+                message::WRITE_QUEUED
+            } else if reading {
+                message::DEVICE_READING
+            } else {
+                message::DEVICE_BUSY
+            };
+            if let Some(w) = self.write_mut() {
+                w.result = Some(StatusMessage::info(text));
+            }
+            return;
+        }
+
+        self.start_write(queued);
+    }
+
+    pub(super) fn start_write(&mut self, queued: QueuedWrite) {
+        let Some(device) = self.device.clone() else {
+            if let Some(w) = self.write_mut() {
+                w.result = Some(StatusMessage::err(message::NO_DEVICE));
+            }
+            return;
+        };
+        if let Some(w) = self.write_mut() {
+            w.result = Some(StatusMessage::info(message::WRITING));
+        }
+
+        let QueuedWrite {
+            position,
+            number,
+            write_type,
+            func,
+        } = queued;
         let kind = if write_type == WriteType::Coil {
             RegisterType::Coil
         } else {
@@ -385,8 +407,58 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn committing_during_a_read_queues_the_write_until_the_read_finishes() {
+        let mut app = write_popup().await;
+        app.refresh();
+
+        app.commit_write();
+
+        let result = app
+            .popup_as::<WriteParams>()
+            .and_then(|w| w.result.clone())
+            .expect("a status is shown");
+        assert_eq!(result.text, message::WRITE_QUEUED);
+        assert!(app.queued_write.is_some());
+        assert!(matches!(
+            app.background_task,
+            Some(BackgroundTask::Refresh(_))
+        ));
+
+        for _ in 0..200 {
+            app.complete_background_task();
+            if matches!(app.background_task, Some(BackgroundTask::Write(_))) {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        }
+        assert!(
+            matches!(app.background_task, Some(BackgroundTask::Write(_))),
+            "the queued write must start once the read is done"
+        );
+        assert!(app.queued_write.is_none());
+        let result = app
+            .popup_as::<WriteParams>()
+            .and_then(|w| w.result.clone())
+            .expect("a status is shown");
+        assert_eq!(result.text, message::WRITING);
+    }
+
+    #[tokio::test]
+    async fn closing_the_popup_drops_the_queued_write() {
+        let mut app = write_popup().await;
+        app.refresh();
+        app.commit_write();
+        assert!(app.queued_write.is_some());
+
+        app.close_popup();
+
+        assert!(app.queued_write.is_none());
+    }
+
+    #[tokio::test]
     async fn committing_during_a_read_says_the_device_is_reading() {
         let mut app = write_popup().await;
+        app.config.write_waits_for_read = false;
         app.refresh();
 
         app.commit_write();

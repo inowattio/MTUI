@@ -16,6 +16,7 @@ pub const SEARCH_POPUP_MAX_WIDTH_PERCENT: u16 = 50;
 pub mod message {
     pub const DEVICE_BUSY: &str = "Device is busy.";
     pub const DEVICE_READING: &str = "Device is currently reading, try again.";
+    pub const WRITE_QUEUED: &str = "Waiting for the current read to finish...";
     pub const NO_DEVICE: &str = "No device connected";
     pub const CLIPBOARD_UNAVAILABLE: &str = "Clipboard unavailable";
     pub const CONNECTING: &str = "Connecting...";

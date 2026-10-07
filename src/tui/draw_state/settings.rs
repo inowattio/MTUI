@@ -337,6 +337,7 @@ fn field_value(
         SettingsField::SkipUnsavedWarning => (on_off(device.skip_unsaved_warning), None),
         SettingsField::ShowMockDevice => (on_off(device.display.mock_device), None),
         SettingsField::ReadOnly => (on_off(device.read_only), None),
+        SettingsField::WriteWaitsForRead => (on_off(device.write_waits_for_read), None),
         SettingsField::ApiEnabled => (on_off(device.api.enabled), None),
         SettingsField::ApiPort => (api_port_view(params, app), None),
         SettingsField::ApiUnitIdOverride => (on_off(device.api.unit_id_override), None),

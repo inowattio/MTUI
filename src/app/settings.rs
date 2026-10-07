@@ -162,6 +162,9 @@ impl App {
                 self.config.display.mock_device = !self.config.display.mock_device;
             }
             SettingsField::ReadOnly => self.config.read_only = !self.config.read_only,
+            SettingsField::WriteWaitsForRead => {
+                self.config.write_waits_for_read = !self.config.write_waits_for_read;
+            }
             SettingsField::TimeMode => {
                 let next = cycle(&TimeMode::ALL, self.interpreter.time_mode(), delta > 0);
                 self.interpreter.set_time_mode(next);

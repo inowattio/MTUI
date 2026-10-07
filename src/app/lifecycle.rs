@@ -76,6 +76,7 @@ impl App {
             read_log: BTreeMap::new(),
             value_history: BTreeMap::new(),
             pending_write: None,
+            queued_write: None,
             pending_import: None,
             logged_connection: ConnectionStatus::Unknown,
             api_device: Arc::new(Mutex::new(None)),
@@ -210,6 +211,7 @@ impl App {
     }
 
     pub fn close_popup(&mut self) {
+        self.queued_write = None;
         if let Some(Popup::Unit(params)) = self.read_mut().popup.take() {
             let endpoint = self.config.device.interface.endpoint();
             self.unit_scan = Some((endpoint, params.suspended()));
@@ -773,6 +775,10 @@ impl App {
                     });
                 }
             }
+        }
+
+        if let Some(queued) = self.queued_write.take() {
+            self.start_write(queued);
         }
     }
 }
