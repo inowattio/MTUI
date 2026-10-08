@@ -69,6 +69,7 @@ impl App {
                 d.data_bits = w.data_bits;
                 d.parity = w.parity;
                 d.stop_bits = w.stop_bits;
+                d.local_echo = w.local_echo;
                 d.custom_path = w.path.clone();
             }
             Interface::Tcp(n) => {
@@ -333,7 +334,8 @@ mod tests {
                 Baud,
                 DataBits,
                 Parity,
-                StopBits
+                StopBits,
+                LocalEcho
             ]
         );
 
@@ -368,7 +370,7 @@ mod tests {
         d.move_cursor(false);
         assert_eq!(
             d.current_field(),
-            DiscoveryField::StopBits,
+            DiscoveryField::LocalEcho,
             "wraps within the column"
         );
 
@@ -447,6 +449,7 @@ mod tests {
             data_bits: DataBits::Eight,
             parity: Parity::None,
             stop_bits: StopBits::One,
+            local_echo: false,
         });
         let d = App::discovery_params(&config);
         assert_eq!(d.interface, InterfaceKind::Serial);
