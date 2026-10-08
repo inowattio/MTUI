@@ -254,6 +254,11 @@ fn side_lines(
                     "Stop bits",
                     format!("{:?}", p.stop_bits),
                 ),
+                (
+                    DiscoveryField::LocalEcho,
+                    "Local echo",
+                    if p.local_echo { "on" } else { "off" }.to_string(),
+                ),
             ];
             for (field, label, value) in serial {
                 let on = selected(field);

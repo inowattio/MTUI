@@ -6,6 +6,8 @@ pub mod config;
 pub mod constants;
 pub mod custom;
 #[cfg(not(target_arch = "wasm32"))]
+pub mod echo;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod event;
 pub mod handler;
 pub mod input;

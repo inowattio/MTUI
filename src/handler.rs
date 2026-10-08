@@ -507,6 +507,12 @@ fn handle_discovery_key(key_event: KeyEvent, app: &mut App) {
                     d.status = None;
                 }
             }
+            DiscoveryField::LocalEcho => {
+                if let Some(d) = app.discovery_mut() {
+                    d.local_echo = !d.local_echo;
+                    d.status = None;
+                }
+            }
             DiscoveryField::Port(index) => app.choose_port(index),
             DiscoveryField::Found(index) => app.use_found_ip(index),
             _ => app.discovery_connect(),
@@ -599,6 +605,7 @@ fn cycle_field(
         DiscoveryField::DataBits => d.data_bits = cycle(&DataBits::ALL, d.data_bits, forward),
         DiscoveryField::Parity => d.parity = cycle(&Parity::ALL, d.parity, forward),
         DiscoveryField::StopBits => d.stop_bits = cycle(&StopBits::ALL, d.stop_bits, forward),
+        DiscoveryField::LocalEcho => d.local_echo = !d.local_echo,
         DiscoveryField::WordOrder => d.word_order = cycle(&WordOrder::ALL, d.word_order, forward),
         _ => {}
     }

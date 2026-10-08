@@ -130,6 +130,7 @@ pub enum DiscoveryField {
     DataBits,
     Parity,
     StopBits,
+    LocalEcho,
     Ip,
     NetPort,
     ScanMethod,
@@ -158,6 +159,7 @@ pub struct DiscoveryParams {
     pub data_bits: DataBits,
     pub parity: Parity,
     pub stop_bits: StopBits,
+    pub local_echo: bool,
     pub ip: String,
     pub net_port: u16,
     pub scan_method: ScanMethod,
@@ -185,6 +187,7 @@ impl Default for DiscoveryParams {
             data_bits: DataBits::Eight,
             parity: Parity::None,
             stop_bits: StopBits::One,
+            local_echo: false,
             ip: "127.0.0.1".to_string(),
             net_port: 502,
             scan_method: ScanMethod::default(),
@@ -216,7 +219,7 @@ impl DiscoveryParams {
             InterfaceKind::Mock => Vec::new(),
             InterfaceKind::Serial => (0..self.ports.len())
                 .map(Port)
-                .chain([CustomPath, Baud, DataBits, Parity, StopBits])
+                .chain([CustomPath, Baud, DataBits, Parity, StopBits, LocalEcho])
                 .collect(),
             InterfaceKind::Tcp | InterfaceKind::RtuOverTcp => {
                 [Ip, NetPort, ScanMethod, ScanNetwork]
@@ -285,6 +288,7 @@ impl DiscoveryParams {
                 data_bits: self.data_bits,
                 parity: self.parity,
                 stop_bits: self.stop_bits,
+                local_echo: self.local_echo,
             }),
             InterfaceKind::Tcp => Interface::Tcp(self.network_params()),
             InterfaceKind::RtuOverTcp => Interface::RtuOverTcp(self.network_params()),
