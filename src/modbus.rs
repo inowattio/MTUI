@@ -115,6 +115,8 @@ pub struct InterfaceSerialParams {
     pub data_bits: DataBits,
     pub parity: Parity,
     pub stop_bits: StopBits,
+    #[serde(default)]
+    pub local_echo: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -874,7 +876,14 @@ impl ModbusDevice {
                     .stop_bits(interface.stop_bits.into());
 
                 let port = SerialStream::open(&builder)?;
-                rtu::attach_slave(Tap(port, Framing::Rtu), Unit(config.unit_id))
+                if interface.local_echo {
+                    rtu::attach_slave(
+                        Tap(crate::echo::EchoCancel::new(port), Framing::Rtu),
+                        Unit(config.unit_id),
+                    )
+                } else {
+                    rtu::attach_slave(Tap(port, Framing::Rtu), Unit(config.unit_id))
+                }
             }
             Interface::Tcp(interface) => {
                 let connect = tokio::net::TcpStream::connect(socket_addr(interface)?);
