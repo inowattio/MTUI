@@ -101,8 +101,8 @@ impl Interface {
         match self {
             Self::Mock => "mock".to_string(),
             Self::Serial(p) => format!("wired:{}", p.path),
-            Self::Tcp(p) => format!("tcp:{}:{}", p.ip, p.port),
-            Self::RtuOverTcp(p) => format!("rtu-tcp:{}:{}", p.ip, p.port),
+            Self::Tcp(p) => format!("{}:{}:{}", p.scheme("tcp"), p.ip, p.port),
+            Self::RtuOverTcp(p) => format!("{}:{}:{}", p.scheme("rtu-tcp"), p.ip, p.port),
         }
     }
 }
@@ -120,6 +120,18 @@ pub struct InterfaceSerialParams {
 pub struct InterfaceTcpParams {
     pub ip: String,
     pub port: u16,
+    #[serde(default)]
+    pub tls: bool,
+}
+
+impl InterfaceTcpParams {
+    pub fn scheme(&self, plain: &str) -> String {
+        if self.tls {
+            format!("{plain}+tls")
+        } else {
+            plain.to_string()
+        }
+    }
 }
 
 #[allow(clippy::upper_case_acronyms)]
@@ -338,6 +350,7 @@ mod tests {
             interface: Interface::Tcp(InterfaceTcpParams {
                 ip: "127.0.0.1".to_string(),
                 port: addr.port(),
+                tls: false,
             }),
             unit_id: 1,
             connect_timeout_ms: 500,
@@ -405,6 +418,7 @@ mod tests {
             interface: Interface::Tcp(InterfaceTcpParams {
                 ip: "127.0.0.1".to_string(),
                 port: addr.port(),
+                tls: false,
             }),
             unit_id: 1,
             connect_timeout_ms: 500,
@@ -470,6 +484,7 @@ mod tests {
             interface: Interface::RtuOverTcp(InterfaceTcpParams {
                 ip: "127.0.0.1".to_string(),
                 port,
+                tls: false,
             }),
             unit_id: 7,
             connect_timeout_ms: 500,
@@ -716,6 +731,84 @@ fn socket_addr(interface: &InterfaceTcpParams) -> Result<SocketAddr> {
     )))
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+mod tls {
+    use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
+    use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
+    use rustls::{ClientConfig, DigitallySignedStruct, Error, SignatureScheme};
+    use std::sync::Arc;
+    use tokio_rustls::TlsConnector;
+
+    #[derive(Debug)]
+    struct AcceptAny(Arc<rustls::crypto::CryptoProvider>);
+
+    impl ServerCertVerifier for AcceptAny {
+        fn verify_server_cert(
+            &self,
+            _end_entity: &CertificateDer<'_>,
+            _intermediates: &[CertificateDer<'_>],
+            _server_name: &ServerName<'_>,
+            _ocsp_response: &[u8],
+            _now: UnixTime,
+        ) -> Result<ServerCertVerified, Error> {
+            Ok(ServerCertVerified::assertion())
+        }
+
+        fn verify_tls12_signature(
+            &self,
+            message: &[u8],
+            cert: &CertificateDer<'_>,
+            dss: &DigitallySignedStruct,
+        ) -> Result<HandshakeSignatureValid, Error> {
+            rustls::crypto::verify_tls12_signature(
+                message,
+                cert,
+                dss,
+                &self.0.signature_verification_algorithms,
+            )
+        }
+
+        fn verify_tls13_signature(
+            &self,
+            message: &[u8],
+            cert: &CertificateDer<'_>,
+            dss: &DigitallySignedStruct,
+        ) -> Result<HandshakeSignatureValid, Error> {
+            rustls::crypto::verify_tls13_signature(
+                message,
+                cert,
+                dss,
+                &self.0.signature_verification_algorithms,
+            )
+        }
+
+        fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+            self.0.signature_verification_algorithms.supported_schemes()
+        }
+    }
+
+    pub fn connector() -> TlsConnector {
+        let provider = Arc::new(rustls::crypto::ring::default_provider());
+        let config = ClientConfig::builder_with_provider(Arc::clone(&provider))
+            .with_safe_default_protocol_versions()
+            .expect("ring provider supports the default protocol versions")
+            .dangerous()
+            .with_custom_certificate_verifier(Arc::new(AcceptAny(provider)))
+            .with_no_client_auth();
+        TlsConnector::from(Arc::new(config))
+    }
+
+    pub fn server_name(ip: std::net::Ipv4Addr) -> ServerName<'static> {
+        ServerName::IpAddress(std::net::IpAddr::V4(ip).into())
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+enum TcpTransport {
+    Plain(tokio::net::TcpStream),
+    Tls(Box<tokio_rustls::client::TlsStream<tokio::net::TcpStream>>),
+}
+
 #[derive(Clone)]
 pub struct ModbusDevice {
     context: Arc<Mutex<Context>>,
@@ -783,15 +876,18 @@ impl ModbusDevice {
                 rtu::attach_slave(port, Unit(config.unit_id))
             }
             Interface::Tcp(interface) => {
-                let connection = tcp::connect_slave(socket_addr(interface)?, Unit(config.unit_id));
-                timeout(connection, timeout_connect, Duration::default()).await??
+                let stream = Self::connect_tcp(interface, timeout_connect).await?;
+                match stream {
+                    TcpTransport::Plain(stream) => tcp::attach_slave(stream, Unit(config.unit_id)),
+                    TcpTransport::Tls(stream) => tcp::attach_slave(stream, Unit(config.unit_id)),
+                }
             }
             Interface::RtuOverTcp(interface) => {
-                let connect = tokio::net::TcpStream::connect(socket_addr(interface)?);
-                let stream = timeout(connect, timeout_connect, Duration::default()).await??;
-
-                let _ = stream.set_nodelay(true);
-                rtu::attach_slave(stream, Unit(config.unit_id))
+                let stream = Self::connect_tcp(interface, timeout_connect).await?;
+                match stream {
+                    TcpTransport::Plain(stream) => rtu::attach_slave(stream, Unit(config.unit_id)),
+                    TcpTransport::Tls(stream) => rtu::attach_slave(stream, Unit(config.unit_id)),
+                }
             }
             Interface::Mock => MockContext::make(),
         };
@@ -800,6 +896,26 @@ impl ModbusDevice {
         let context = MockContext::make();
 
         Ok(context)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    async fn connect_tcp(
+        interface: &InterfaceTcpParams,
+        timeout_connect: Duration,
+    ) -> Result<TcpTransport> {
+        let address = socket_addr(interface)?;
+        let connect = tokio::net::TcpStream::connect(address);
+        let stream = timeout(connect, timeout_connect, Duration::default()).await??;
+        let _ = stream.set_nodelay(true);
+
+        if !interface.tls {
+            return Ok(TcpTransport::Plain(stream));
+        }
+
+        let name = tls::server_name(Ipv4Addr::from_str(&interface.ip)?);
+        let handshake = tls::connector().connect(name, stream);
+        let stream = timeout(handshake, timeout_connect, Duration::default()).await??;
+        Ok(TcpTransport::Tls(Box::new(stream)))
     }
 
     pub fn unit(&self) -> UnitId {

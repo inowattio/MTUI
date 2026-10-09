@@ -1267,6 +1267,7 @@ mod tests {
             interface: Interface::Tcp(InterfaceTcpParams {
                 ip: "127.0.0.1".to_string(),
                 port,
+                tls: false,
             }),
             connect_timeout_ms: 500,
             request_timeout_ms: 500,
