@@ -28,6 +28,7 @@ pub mod message {
     pub const SCAN_NEEDS_IPV4: &str = "Enter an IPv4 address to pick the subnet to scan";
     pub const SCAN_UNAVAILABLE_WEB: &str = "Network scan isn't available in the web demo";
     pub const SCAN_FOUND_NOTHING: &str = "No devices found on this subnet";
+    pub const SCAN_STOPPED: &str = "Scan stopped";
     pub const RAW_READ_ONLY: &str =
         "Read-only mode is on - custom calls may write and are disabled";
     pub const RAW_BAD_FUNCTION_CODE: &str = "Function code must be 0-255";

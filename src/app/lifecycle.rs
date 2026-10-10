@@ -212,6 +212,7 @@ impl App {
 
     pub fn close_popup(&mut self) {
         self.queued_write = None;
+        self.cancel_network_scan();
         if let Some(Popup::Unit(params)) = self.read_mut().popup.take() {
             let endpoint = self.config.device.interface.endpoint();
             self.unit_scan = Some((endpoint, params.suspended()));

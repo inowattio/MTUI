@@ -30,7 +30,9 @@ pub fn draw(params: &DiscoveryParams, app: &App, frame: &mut Frame, area: Rect, 
     let left = common_lines(params, field, blocked, params.status.as_ref(), theme);
     let right = side_lines(params, field, app, theme);
 
+    let scanning = app.scan_progress().is_some();
     let action = match field {
+        DiscoveryField::ScanNetwork if scanning => "Stop",
         DiscoveryField::ScanNetwork => "Scan",
         DiscoveryField::ScanMethod => "Toggle",
         DiscoveryField::Port(_) => "Use port",
@@ -326,9 +328,14 @@ fn side_lines(
                     theme.dim_style(),
                 ))
             };
+            let label = if app.scan_progress().is_some() {
+                "Stop scan"
+            } else {
+                "Scan network"
+            };
             lines.push(button_line(
                 theme,
-                "Scan network",
+                label,
                 selected(DiscoveryField::ScanNetwork),
                 false,
                 suffix,

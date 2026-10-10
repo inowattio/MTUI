@@ -248,8 +248,21 @@ impl App {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
+    pub fn cancel_network_scan(&mut self) {
+        self.network_scan_task = None;
+        self.network_scan = None;
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub fn cancel_network_scan(&mut self) {
+        self.network_scan = None;
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn start_network_scan(&mut self) {
         if self.network_scan.is_some() {
+            self.cancel_network_scan();
+            self.set_discovery_status(StatusMessage::warn(message::SCAN_STOPPED));
             return;
         }
         let Some(d) = self.discovery() else {
@@ -549,6 +562,41 @@ mod tests {
         assert_eq!(d.current_field(), DiscoveryField::Found(1));
         d.set_found(Vec::new());
         assert_eq!(d.current_field(), DiscoveryField::ScanNetwork);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn closing_the_popup_or_pressing_scan_again_stops_a_running_scan() {
+        use crate::app::ScanProgress;
+        use crate::constants::message;
+        use std::sync::Arc;
+        use std::sync::atomic::AtomicUsize;
+
+        let running = || ScanProgress {
+            done: Arc::new(AtomicUsize::new(0)),
+            total: 254,
+        };
+
+        let mut app = App::boot(Config::default(), String::new()).await;
+        app.open_discovery();
+        app.discovery_mut()
+            .unwrap()
+            .set_interface(InterfaceKind::Tcp);
+        app.network_scan = Some(running());
+        app.start_network_scan();
+        assert!(app.scan_progress().is_none());
+        assert_eq!(
+            app.discovery()
+                .unwrap()
+                .status
+                .as_ref()
+                .map(|s| s.text.as_str()),
+            Some(message::SCAN_STOPPED)
+        );
+
+        app.network_scan = Some(running());
+        app.close_popup();
+        assert!(app.scan_progress().is_none());
     }
 
     #[cfg(not(target_arch = "wasm32"))]
