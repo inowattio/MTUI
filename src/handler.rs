@@ -596,6 +596,7 @@ fn cycle_field(
         DiscoveryField::Interface => d.set_interface(cycle(&kinds, d.interface, forward)),
         DiscoveryField::Baud => d.cycle_baud(forward),
         DiscoveryField::ScanMethod => d.cycle_scan_method(forward),
+        DiscoveryField::ScanPrefix => d.step_scan_prefix(forward),
         DiscoveryField::DataBits => d.data_bits = cycle(&DataBits::ALL, d.data_bits, forward),
         DiscoveryField::Parity => d.parity = cycle(&Parity::ALL, d.parity, forward),
         DiscoveryField::StopBits => d.stop_bits = cycle(&StopBits::ALL, d.stop_bits, forward),

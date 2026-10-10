@@ -1,11 +1,11 @@
 use super::{App, BackgroundTask, ConnectTaskResult, ReconnectState};
 #[cfg(not(target_arch = "wasm32"))]
-use super::{ScanProgress, scan_subnet, subnet_prefix_from};
+use super::{ScanProgress, ScanRange, scan_subnet};
 use crate::compat;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::compat::TaskPoll;
 use crate::config::Config;
-use crate::constants::message;
+use crate::constants::{DEFAULT_SCAN_PREFIX, message};
 use crate::modbus::{Interface, ModbusDevice};
 use crate::state::{ConnectionStatus, DiscoveryParams, InterfaceKind, Popup, StatusMessage};
 #[cfg(not(target_arch = "wasm32"))]
@@ -17,19 +17,53 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 #[cfg(not(target_arch = "wasm32"))]
-fn local_subnet_prefix() -> Option<String> {
+fn local_ipv4() -> Option<std::net::Ipv4Addr> {
     match local_ip_address::local_ip().ok()? {
-        std::net::IpAddr::V4(ip) if !ip.is_loopback() => {
-            let [a, b, c, _] = ip.octets();
-            Some(format!("{a}.{b}.{c}."))
-        }
+        std::net::IpAddr::V4(ip) if !ip.is_loopback() => Some(ip),
         _ => None,
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+fn local_prefix_len(ip: std::net::Ipv4Addr) -> Option<u8> {
+    if_addrs::get_if_addrs()
+        .ok()?
+        .into_iter()
+        .find_map(|interface| match interface.addr {
+            if_addrs::IfAddr::V4(v4) if v4.ip == ip => Some(v4.prefixlen),
+            _ => None,
+        })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn subnet_defaults(configured_ip: Option<&str>) -> (String, u8) {
+    let local = local_ipv4();
+    let ip = match configured_ip {
+        Some(ip) => ip.to_string(),
+        None => local.map_or_else(
+            || "127.0.0.1".to_string(),
+            |ip| {
+                let [a, b, c, _] = ip.octets();
+                format!("{a}.{b}.{c}.")
+            },
+        ),
+    };
+    let prefix = local
+        .and_then(|local_ip| {
+            let prefix = local_prefix_len(local_ip)?;
+            let here = ScanRange::parse(&local_ip.to_string(), prefix)?;
+            (ScanRange::parse(&ip, prefix) == Some(here)).then_some(prefix)
+        })
+        .unwrap_or(DEFAULT_SCAN_PREFIX);
+    (ip, prefix)
+}
+
 #[cfg(target_arch = "wasm32")]
-const fn local_subnet_prefix() -> Option<String> {
-    None
+fn subnet_defaults(configured_ip: Option<&str>) -> (String, u8) {
+    (
+        configured_ip.unwrap_or("127.0.0.1").to_string(),
+        DEFAULT_SCAN_PREFIX,
+    )
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -50,11 +84,14 @@ impl App {
 
     pub(super) fn discovery_params(config: &Config) -> DiscoveryParams {
         let device = &config.device;
+        let configured_ip = match &device.interface {
+            Interface::Tcp(n) | Interface::RtuOverTcp(n) => Some(n.ip.as_str()),
+            _ => None,
+        };
+        let (ip, scan_prefix) = subnet_defaults(configured_ip);
         let mut d = DiscoveryParams {
-            ip: match &device.interface {
-                Interface::Tcp(n) | Interface::RtuOverTcp(n) => n.ip.clone(),
-                _ => local_subnet_prefix().unwrap_or_else(|| "127.0.0.1".to_string()),
-            },
+            ip,
+            scan_prefix,
             unit_id: device.unit_id,
             connect_timeout_ms: device.connect_timeout_ms,
             command_timeout_ms: device.request_timeout_ms,
@@ -221,14 +258,14 @@ impl App {
         if !d.interface.uses_tcp() {
             return;
         }
-        let Some(prefix) = subnet_prefix_from(&d.ip) else {
+        let Some(range) = ScanRange::parse(&d.ip, d.scan_prefix) else {
             self.set_discovery_status(StatusMessage::err(message::SCAN_NEEDS_IPV4));
             return;
         };
         let port = d.net_port;
         let method = d.scan_method;
         let per_host = Duration::from_millis(d.connect_timeout_ms.clamp(100, 2_000));
-        let total = 254;
+        let total = range.host_count();
         let done = Arc::new(AtomicUsize::new(0));
         self.network_scan = Some(ScanProgress {
             done: done.clone(),
@@ -237,12 +274,12 @@ impl App {
         if let Some(d) = self.discovery_mut() {
             d.set_found(Vec::new());
             d.status = Some(StatusMessage::warn(format!(
-                "Scanning {prefix}0/24 by {}...",
+                "Scanning {range} by {}...",
                 method.label()
             )));
         }
         self.network_scan_task = Some(compat::spawn(scan_subnet(
-            prefix, port, method, per_host, done,
+            range, port, method, per_host, done,
         )));
     }
 
@@ -341,7 +378,7 @@ mod tests {
         d.set_interface(InterfaceKind::Tcp);
         assert_eq!(
             d.side_fields(),
-            vec![Ip, NetPort, ScanMethod, ScanNetwork, Found(0)]
+            vec![Ip, NetPort, ScanMethod, ScanPrefix, ScanNetwork, Found(0)]
         );
     }
 
@@ -473,6 +510,7 @@ mod tests {
                 DiscoveryField::Ip,
                 DiscoveryField::NetPort,
                 DiscoveryField::ScanMethod,
+                DiscoveryField::ScanPrefix,
                 DiscoveryField::ScanNetwork
             ]
         );
@@ -507,7 +545,7 @@ mod tests {
         d.set_interface(InterfaceKind::Tcp);
         d.set_found(vec!["10.0.0.1".to_string(), "10.0.0.2".to_string()]);
         d.toggle_column();
-        d.side_selected = 5; // Found(1)
+        d.side_selected = 6; // Found(1)
         assert_eq!(d.current_field(), DiscoveryField::Found(1));
         d.set_found(Vec::new());
         assert_eq!(d.current_field(), DiscoveryField::ScanNetwork);
@@ -611,5 +649,23 @@ mod tests {
             "unexpected prefill: {}",
             d.ip
         );
+        assert!(
+            crate::constants::SCAN_PREFIX_RANGE.contains(&d.scan_prefix),
+            "unexpected prefix: {}",
+            d.scan_prefix
+        );
+    }
+
+    #[test]
+    fn the_scan_prefix_steps_within_its_range() {
+        let mut d = DiscoveryParams::default();
+        d.step_scan_prefix(true);
+        assert_eq!(d.scan_prefix, 25);
+        d.scan_prefix = 30;
+        d.step_scan_prefix(true);
+        assert_eq!(d.scan_prefix, 30);
+        d.scan_prefix = 16;
+        d.step_scan_prefix(false);
+        assert_eq!(d.scan_prefix, 16);
     }
 }

@@ -303,6 +303,15 @@ fn side_lines(
                 on,
                 None,
             ));
+            let on = selected(DiscoveryField::ScanPrefix);
+            lines.push(row(
+                theme,
+                "Subnet",
+                SIDE_LABEL,
+                edit_value(format!("/{}", p.scan_prefix), on, true),
+                on,
+                None,
+            ));
 
             let suffix = if let Some((done, total)) = app.scan_progress() {
                 Some(Span::styled(

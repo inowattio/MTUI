@@ -1,3 +1,4 @@
+use std::ops::RangeInclusive;
 use std::time::Duration;
 
 pub const CONFIG_PATH: &str = "config.json";
@@ -7,6 +8,9 @@ pub const NO_VALUE: &str = "-";
 pub const UNINTERPRETABLE: &str = "?";
 
 pub const ELLIPSIS: &str = "...";
+
+pub const SCAN_PREFIX_RANGE: RangeInclusive<u8> = 16..=30;
+pub const DEFAULT_SCAN_PREFIX: u8 = 24;
 
 pub const EVENT_HANDLER_TICKRATE: Duration = Duration::from_millis(100);
 

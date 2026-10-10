@@ -1,6 +1,7 @@
 use crate::app::WriteType;
 use crate::compat::Instant;
 use crate::config::Column;
+use crate::constants::{DEFAULT_SCAN_PREFIX, SCAN_PREFIX_RANGE};
 use crate::custom::{BitEntry, CustomOp, CustomRepr, EnumEntry};
 use crate::modbus::{
     DataBits, DeviceConfig, DeviceIdAccess, Interface, InterfaceSerialParams, InterfaceTcpParams,
@@ -133,6 +134,7 @@ pub enum DiscoveryField {
     Ip,
     NetPort,
     ScanMethod,
+    ScanPrefix,
     ScanNetwork,
     Found(usize),
 }
@@ -161,6 +163,7 @@ pub struct DiscoveryParams {
     pub ip: String,
     pub net_port: u16,
     pub scan_method: ScanMethod,
+    pub scan_prefix: u8,
     pub unit_id: u8,
     pub connect_timeout_ms: u64,
     pub command_timeout_ms: u64,
@@ -188,6 +191,7 @@ impl Default for DiscoveryParams {
             ip: "127.0.0.1".to_string(),
             net_port: 502,
             scan_method: ScanMethod::default(),
+            scan_prefix: DEFAULT_SCAN_PREFIX,
             unit_id: 1,
             connect_timeout_ms: 1000,
             command_timeout_ms: 2000,
@@ -219,7 +223,7 @@ impl DiscoveryParams {
                 .chain([CustomPath, Baud, DataBits, Parity, StopBits])
                 .collect(),
             InterfaceKind::Tcp | InterfaceKind::RtuOverTcp => {
-                [Ip, NetPort, ScanMethod, ScanNetwork]
+                [Ip, NetPort, ScanMethod, ScanPrefix, ScanNetwork]
                     .into_iter()
                     .chain((0..self.found.len()).map(Found))
                     .collect()
@@ -241,6 +245,15 @@ impl DiscoveryParams {
 
     pub fn cycle_scan_method(&mut self, forward: bool) {
         self.scan_method = crate::num_ops::cycle(&ScanMethod::ALL, self.scan_method, forward);
+    }
+
+    pub fn step_scan_prefix(&mut self, forward: bool) {
+        let next = if forward {
+            self.scan_prefix.saturating_add(1)
+        } else {
+            self.scan_prefix.saturating_sub(1)
+        };
+        self.scan_prefix = next.clamp(*SCAN_PREFIX_RANGE.start(), *SCAN_PREFIX_RANGE.end());
     }
 
     pub fn cycle_baud(&mut self, forward: bool) {

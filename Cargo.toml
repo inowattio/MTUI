@@ -78,6 +78,7 @@ clap = { version = "4.6.7", features = ["derive"] }
 directories = "6"
 memory-stats = "1"
 surge-ping = "0.9.1"
+if-addrs = "0.15.0"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 ratzilla = "0.3.1"

@@ -3,6 +3,8 @@ use crate::compat;
 use crate::compat::{Instant, TaskHandle};
 use crate::config::{Config, Registers};
 use crate::constants::CONFIG_PATH;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::constants::SCAN_PREFIX_RANGE;
 use crate::custom::CustomRule;
 use crate::interpretator::Interpretor;
 use crate::modbus::{DeviceConfig, DeviceIdAccess, ModbusDevice};
@@ -14,6 +16,8 @@ use crate::writes_log::SharedWritesLog;
 use chrono::{DateTime, Utc};
 use std::collections::{BTreeMap, VecDeque};
 use std::io::Write as _;
+#[cfg(not(target_arch = "wasm32"))]
+use std::net::{IpAddr, Ipv4Addr};
 use std::path::{Path, PathBuf};
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::atomic::Ordering;
@@ -133,18 +137,56 @@ struct ScanProgress {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn subnet_prefix_from(ip: &str) -> Option<String> {
-    let octets: Vec<&str> = ip.split('.').take(3).collect();
-    if octets.len() == 3 && octets.iter().all(|o| o.parse::<u8>().is_ok()) {
-        Some(format!("{}.{}.{}.", octets[0], octets[1], octets[2]))
-    } else {
-        None
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct ScanRange {
+    network: Ipv4Addr,
+    prefix: u8,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl ScanRange {
+    fn parse(ip: &str, prefix: u8) -> Option<Self> {
+        if !SCAN_PREFIX_RANGE.contains(&prefix) {
+            return None;
+        }
+        let parts: Vec<&str> = ip.split('.').collect();
+        if parts.len() != 4 {
+            return None;
+        }
+        let mut octets = [0u8; 4];
+        for (i, (slot, part)) in octets.iter_mut().zip(parts).enumerate() {
+            *slot = match part {
+                "" if i == 3 => 0,
+                part => part.parse().ok()?,
+            };
+        }
+        let mask = u32::MAX << (32 - prefix);
+        Some(Self {
+            network: Ipv4Addr::from(u32::from(Ipv4Addr::from(octets)) & mask),
+            prefix,
+        })
+    }
+
+    const fn host_count(self) -> usize {
+        (1usize << (32 - self.prefix)) - 2
+    }
+
+    fn hosts(self) -> impl Iterator<Item = Ipv4Addr> {
+        let base = u32::from(self.network);
+        (1..=self.host_count() as u32).map(move |offset| Ipv4Addr::from(base + offset))
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl fmt::Display for ScanRange {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}/{}", self.network, self.prefix)
     }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 async fn scan_subnet(
-    prefix: String,
+    range: ScanRange,
     port: u16,
     method: ScanMethod,
     per_host: Duration,
@@ -161,18 +203,17 @@ async fn scan_subnet(
     };
     let ident = surge_ping::PingIdentifier(std::process::id() as u16);
 
-    let mut found: Vec<(u16, String)> = stream::iter(1u16..=254)
-        .map(|host| {
-            let ip = format!("{prefix}{host}");
+    let mut found: Vec<(usize, Ipv4Addr)> = stream::iter(range.hosts().enumerate())
+        .map(|(index, host)| {
             let done = done.clone();
             let pinger = pinger.clone();
             async move {
                 let alive = match &pinger {
-                    Some(client) => ping_host(client, &ip, ident, host, per_host).await,
-                    None => probe_port(&ip, port, per_host).await,
+                    Some(client) => ping_host(client, host, ident, index as u16, per_host).await,
+                    None => probe_port(host, port, per_host).await,
                 };
                 done.fetch_add(1, Ordering::Relaxed);
-                alive.then_some((host, ip))
+                alive.then_some((index, host))
             }
         })
         .buffer_unordered(256)
@@ -180,22 +221,19 @@ async fn scan_subnet(
         .collect()
         .await;
 
-    found.sort_by_key(|(host, _)| *host);
-    Ok(found.into_iter().map(|(_, ip)| ip).collect())
+    found.sort_by_key(|(index, _)| *index);
+    Ok(found.into_iter().map(|(_, ip)| ip.to_string()).collect())
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 async fn ping_host(
     client: &surge_ping::Client,
-    ip: &str,
+    ip: Ipv4Addr,
     ident: surge_ping::PingIdentifier,
     seq: u16,
     per_host: Duration,
 ) -> bool {
-    let Ok(address) = ip.parse::<std::net::IpAddr>() else {
-        return false;
-    };
-    let mut pinger = client.pinger(address, ident).await;
+    let mut pinger = client.pinger(IpAddr::V4(ip), ident).await;
     pinger.timeout(per_host);
     pinger
         .ping(surge_ping::PingSequence(seq), &[0u8; 8])
@@ -204,7 +242,7 @@ async fn ping_host(
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-async fn probe_port(ip: &str, port: u16, per_host: Duration) -> bool {
+async fn probe_port(ip: Ipv4Addr, port: u16, per_host: Duration) -> bool {
     matches!(
         compat::timeout(per_host, tokio::net::TcpStream::connect((ip, port))).await,
         Ok(Ok(_))
@@ -693,6 +731,31 @@ mod tests {
     use super::{Config, ConfigError, load_config, save_config};
     use crate::scratch::ScratchDir;
     use std::fs;
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn scan_ranges_mask_the_address_and_skip_network_and_broadcast() {
+        use super::ScanRange;
+        use std::net::Ipv4Addr;
+
+        let range = ScanRange::parse("192.168.1.37", 22).unwrap();
+        assert_eq!(range.to_string(), "192.168.0.0/22");
+        assert_eq!(range.host_count(), 1022);
+        let hosts: Vec<Ipv4Addr> = range.hosts().collect();
+        assert_eq!(hosts.len(), 1022);
+        assert_eq!(hosts.first().copied(), Some(Ipv4Addr::new(192, 168, 0, 1)));
+        assert_eq!(hosts.last().copied(), Some(Ipv4Addr::new(192, 168, 3, 254)));
+
+        let prefill = ScanRange::parse("10.0.0.", 24).unwrap();
+        assert_eq!(prefill.to_string(), "10.0.0.0/24");
+        assert_eq!(prefill.host_count(), 254);
+
+        assert!(ScanRange::parse("10.0.0", 24).is_none());
+        assert!(ScanRange::parse("10..0.1", 24).is_none());
+        assert!(ScanRange::parse("300.0.0.1", 24).is_none());
+        assert!(ScanRange::parse("10.0.0.1", 8).is_none());
+        assert!(ScanRange::parse("10.0.0.1", 31).is_none());
+    }
 
     #[test]
     fn read_failures_are_classified_by_cause() {
