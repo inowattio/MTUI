@@ -66,9 +66,11 @@ use tokio_modbus::{ExceptionCode, Request, Response};
 /// Faulty addresses, answering with an exception like reserved or broken
 /// registers on a real device (a request touching one fails as a whole):
 ///   holdings   16..=19 reserved (IllegalDataAddress),
-///              1102..=1103 diagnostics block (ServerDeviceFailure)
+///              1102..=1103 diagnostics block (ServerDeviceFailure),
+///              1108..=1109 vendor-locked block (Custom 0x20)
 ///   inputs     38..=39 reserved (IllegalDataAddress),
-///              64..=67 faulted sensor block (ServerDeviceFailure)
+///              64..=67 faulted sensor block (ServerDeviceFailure),
+///              76..=77 vendor-locked block (Custom 0xA5)
 ///   coils      6..=7 reserved (IllegalDataAddress, reads and writes)
 ///   discretes  4..=6 reserved (IllegalDataAddress)
 ///
@@ -98,10 +100,12 @@ type Faults = [(RangeInclusive<u16>, ExceptionCode)];
 const HOLDING_FAULTS: &Faults = &[
     (16..=19, ExceptionCode::IllegalDataAddress),
     (1102..=1103, ExceptionCode::ServerDeviceFailure),
+    (1108..=1109, ExceptionCode::Custom(0x20)),
 ];
 const INPUT_FAULTS: &Faults = &[
     (38..=39, ExceptionCode::IllegalDataAddress),
     (64..=67, ExceptionCode::ServerDeviceFailure),
+    (76..=77, ExceptionCode::Custom(0xA5)),
 ];
 const COIL_FAULTS: &Faults = &[(6..=7, ExceptionCode::IllegalDataAddress)];
 const DISCRETE_FAULTS: &Faults = &[(4..=6, ExceptionCode::IllegalDataAddress)];
@@ -642,12 +646,20 @@ mod tests {
             Err(FAULTED)
         );
         assert_eq!(
+            mock.read_holding_registers(1108, 2).await.unwrap(),
+            Err(ExceptionCode::Custom(0x20))
+        );
+        assert_eq!(
             mock.read_input_registers(39, 1).await.unwrap(),
             Err(RESERVED)
         );
         assert_eq!(
             mock.read_input_registers(64, 4).await.unwrap(),
             Err(FAULTED)
+        );
+        assert_eq!(
+            mock.read_input_registers(77, 1).await.unwrap(),
+            Err(ExceptionCode::Custom(0xA5))
         );
         assert_eq!(mock.read_coils(6, 2).await.unwrap(), Err(RESERVED));
         assert_eq!(
@@ -743,8 +755,11 @@ mod tests {
         ok(mock.read_holding_registers(6, 10).await, 10);
         ok(mock.read_holding_registers(20, 10).await, 10);
         ok(mock.read_holding_registers(1100, 2).await, 2);
+        ok(mock.read_holding_registers(1110, 4).await, 4);
         ok(mock.read_input_registers(30, 8).await, 8);
         ok(mock.read_input_registers(40, 24).await, 24);
+        ok(mock.read_input_registers(70, 6).await, 6);
+        ok(mock.read_input_registers(78, 4).await, 4);
         assert!(mock.read_coils(0, 6).await.unwrap().is_ok());
         assert!(mock.read_coils(8, 8).await.unwrap().is_ok());
         assert!(mock.read_discrete_inputs(0, 4).await.unwrap().is_ok());
