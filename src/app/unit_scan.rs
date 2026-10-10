@@ -135,7 +135,7 @@ impl App {
                 Ok(values) => UnitProbeOutcome::Response(values),
                 Err(e) => e
                     .downcast_ref::<tokio_modbus::ExceptionCode>()
-                    .map(|code| UnitProbeOutcome::Exception(code.to_string()))
+                    .map(|_| UnitProbeOutcome::Exception(e.to_string()))
                     .unwrap_or_else(|| UnitProbeOutcome::Silent),
             };
             UnitScanTaskResult { unit_id, outcome }

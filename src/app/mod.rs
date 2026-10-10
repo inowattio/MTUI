@@ -705,6 +705,10 @@ mod tests {
             ReadFailure::Exception
         );
         assert_eq!(
+            kind(crate::modbus::exception_error(ExceptionCode::Custom(0x20))),
+            ReadFailure::Exception
+        );
+        assert_eq!(
             kind(anyhow::Error::from(crate::compat::Elapsed)),
             ReadFailure::Timeout
         );

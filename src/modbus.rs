@@ -18,7 +18,7 @@ use tokio_modbus::client::{Client, Context, Reader, Writer};
 use tokio_modbus::client::{rtu, tcp};
 use tokio_modbus::prelude::{ReadCode, ReadDeviceIdentificationResponse};
 use tokio_modbus::slave::{Slave as Unit, SlaveContext, SlaveId as UnitId};
-use tokio_modbus::{Request, Response};
+use tokio_modbus::{ExceptionCode, Request, Response};
 #[cfg(not(target_arch = "wasm32"))]
 use tokio_serial::SerialStream;
 
@@ -281,6 +281,26 @@ mod tests {
             let word = order.make_word(0x0102, 0x0304);
             assert_eq!(order.split_word(word), [0x0102, 0x0304], "{order:?}");
         }
+    }
+
+    #[test]
+    fn exception_errors_keep_the_code_and_name_custom_numbers() {
+        use super::exception_error;
+        use tokio_modbus::ExceptionCode;
+
+        let custom = exception_error(ExceptionCode::Custom(0x20));
+        assert_eq!(custom.to_string(), "Custom exception 0x20 (32)");
+        assert_eq!(
+            custom.downcast_ref::<ExceptionCode>(),
+            Some(&ExceptionCode::Custom(0x20))
+        );
+
+        let known = exception_error(ExceptionCode::IllegalDataAddress);
+        assert_eq!(known.to_string(), "Illegal data address");
+        assert_eq!(
+            known.downcast_ref::<ExceptionCode>(),
+            Some(&ExceptionCode::IllegalDataAddress)
+        );
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -653,9 +673,10 @@ macro_rules! timeout_as {
                     }
                     Ok(value)
                 }
-                Ok(Ok(Err(error))) => {
+                Ok(Ok(Err(code))) => {
+                    let error = exception_error(code);
                     log::warn!("{desc} | {error}");
-                    Err(anyhow::Error::from(error))
+                    Err(error)
                 }
                 Ok(Err(error)) => {
                     log::warn!("{desc} | {error}");
@@ -675,6 +696,14 @@ macro_rules! timeout {
     ($this:ident, $action:ident, ($($arg:expr),* $(,)?), $desc:expr) => {
         timeout_as!($this, None::<UnitId>, $action, ($($arg),*), $desc)
     };
+}
+
+pub fn exception_error(code: ExceptionCode) -> anyhow::Error {
+    let message = match code {
+        ExceptionCode::Custom(value) => format!("Custom exception 0x{value:02X} ({value})"),
+        known => known.to_string(),
+    };
+    anyhow::Error::from(code).context(message)
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
