@@ -1101,9 +1101,9 @@ settings_fields! {
     }
     Api {
         [
-            ApiEnabled: Toggle => "API server", "Serve the HTTP API while the app runs",
-            ApiPort: Number => "API port", "Port for the HTTP API, 0 tries 26127 then any free port",
-            ApiUnitIdOverride: Toggle => "API unit id override", "Let API requests target a unit id other than the configured one",
+            ApiEnabled: Toggle => "Server", "Serve the HTTP API while the app runs",
+            ApiPort: Number => "Port", "Port for the HTTP API, 0 tries 26127 then any free port",
+            ApiUnitIdOverride: Toggle => "Unit ID set", "Let API requests target a unit id other than the configured one",
         ],
     }
     Display {
