@@ -16,6 +16,8 @@ use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::atomic::Ordering;
 use tokio::net::{TcpListener, TcpSocket};
 
+pub const DEFAULT_PORT: u16 = 26127;
+
 #[derive(Clone)]
 struct ApiState {
     device: ApiDevice,
@@ -81,7 +83,7 @@ pub async fn serve(
             status,
         });
 
-    let listener = match bind_reusable(SocketAddr::from((Ipv4Addr::UNSPECIFIED, port))) {
+    let listener = match bind_requested(port) {
         Ok(listener) => listener,
         Err(e) => {
             log::error!("API server failed to bind port {port}: {e}");
@@ -223,6 +225,21 @@ async fn health_handler(State(state): State<ApiState>) -> Response {
         StatusCode::SERVICE_UNAVAILABLE
     };
     (http, body).into_response()
+}
+
+fn bind_requested(port: u16) -> std::io::Result<TcpListener> {
+    if port != 0 {
+        return bind_reusable(SocketAddr::from((Ipv4Addr::UNSPECIFIED, port)));
+    }
+    match bind_reusable(SocketAddr::from((Ipv4Addr::UNSPECIFIED, DEFAULT_PORT))) {
+        Ok(listener) => Ok(listener),
+        Err(e) => {
+            log::warn!(
+                "API server could not bind default port {DEFAULT_PORT}: {e}; picking any free port"
+            );
+            bind_reusable(SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0)))
+        }
+    }
 }
 
 fn bind_reusable(addr: SocketAddr) -> std::io::Result<TcpListener> {
