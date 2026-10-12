@@ -54,6 +54,7 @@ struct WriteRequest {
 
 #[derive(Serialize)]
 struct HealthResponse {
+    version: &'static str,
     status: &'static str,
     device_present: bool,
     read_only: bool,
@@ -214,6 +215,7 @@ async fn health_handler(State(state): State<ApiState>) -> Response {
     let read_only = state.read_only.load(Ordering::Relaxed);
 
     let body = Json(HealthResponse {
+        version: env!("CARGO_PKG_VERSION"),
         status: ConnectionStatus::label_from_code(code),
         device_present,
         read_only,

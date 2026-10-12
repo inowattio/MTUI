@@ -285,8 +285,11 @@ components:
 
     HealthResponse:
       type: object
-      required: [status, device_present, read_only]
+      required: [version, status, device_present, read_only]
       properties:
+        version:
+          type: string
+          description: MTUI version serving the API.
         status:
           type: string
           description: Connection status label.
