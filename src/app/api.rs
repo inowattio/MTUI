@@ -44,6 +44,9 @@ impl App {
     }
 
     pub(super) fn sync_api_status(&self) {
+        if self.headless {
+            return;
+        }
         self.api_status
             .store(self.connection.code(), Ordering::Relaxed);
     }

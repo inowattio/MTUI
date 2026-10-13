@@ -139,10 +139,14 @@ async fn read_handler(State(state): State<ApiState>, Json(request): Json<ReadReq
         )
         .await;
     match result {
-        Ok(values) => Json(ReadResponse { values }).into_response(),
+        Ok(values) => {
+            record_outcome(&state, true);
+            Json(ReadResponse { values }).into_response()
+        }
         Err(_) if device.is_closed() => StatusCode::SERVICE_UNAVAILABLE.into_response(),
         Err(e) => {
             log::error!("API read failed: {e}");
+            record_outcome(&state, false);
             StatusCode::BAD_GATEWAY.into_response()
         }
     }
@@ -187,6 +191,7 @@ async fn write_handler(
         .await;
     match result {
         Ok(()) => {
+            record_outcome(&state, true);
             writes_log::append(
                 &state.writes_log,
                 request.unit_id.unwrap_or_else(|| device.unit()),
@@ -204,6 +209,7 @@ async fn write_handler(
         Err(_) if device.is_closed() => StatusCode::SERVICE_UNAVAILABLE,
         Err(e) => {
             log::error!("API write failed: {e}");
+            record_outcome(&state, false);
             StatusCode::BAD_GATEWAY
         }
     }
@@ -257,6 +263,15 @@ fn current(device: &ApiDevice) -> Option<ModbusDevice> {
 
 fn describe_unit(unit: Option<u8>) -> String {
     unit.map_or_else(|| "default".to_string(), |id| id.to_string())
+}
+
+fn record_outcome(state: &ApiState, ok: bool) {
+    let status = if ok {
+        ConnectionStatus::Connected
+    } else {
+        ConnectionStatus::Error(String::new())
+    };
+    state.status.store(status.code(), Ordering::Relaxed);
 }
 
 fn unit_override_forbidden(state: &ApiState, unit: Option<u8>) -> bool {

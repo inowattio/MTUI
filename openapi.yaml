@@ -160,6 +160,11 @@ paths:
         Reports server health. Returns `200` only when a device is present and
         its connection status is serving (`unknown`, `reading`, or
         `connected`); otherwise `503` with the same body.
+
+        In the TUI the status follows the app's own device polling. In
+        `--headless` mode nothing polls the device, so the status starts as
+        `unknown` and then reflects the outcome of the latest API read or
+        write.
       operationId: health
       responses:
         "200":
