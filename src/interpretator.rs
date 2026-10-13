@@ -516,14 +516,13 @@ fn ascii_cell(a: u16, b: u16, out: &mut String) {
 }
 
 fn bits_cell(value: u16, out: &mut String) {
-    let b = format!("{value:016b}");
     let _ = write!(
         out,
-        "{} {} {} {}",
-        &b[0..4],
-        &b[4..8],
-        &b[8..12],
-        &b[12..16]
+        "{:04b} {:04b} {:04b} {:04b}",
+        value >> 12,
+        (value >> 8) & 0xF,
+        (value >> 4) & 0xF,
+        value & 0xF
     );
 }
 
@@ -701,6 +700,16 @@ pub(crate) fn f16_to_f32(bits: u16) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bits_cell_groups_nibbles_from_the_high_end() {
+        let mut out = String::new();
+        bits_cell(0b1010_0000_1111_0001, &mut out);
+        assert_eq!(out, "1010 0000 1111 0001");
+        out.clear();
+        bits_cell(0, &mut out);
+        assert_eq!(out, "0000 0000 0000 0000");
+    }
 
     fn visible(visible: Vec<Column>) -> Interpretor {
         let config = InterpretorConfig {
