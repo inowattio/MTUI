@@ -266,7 +266,7 @@ impl App {
                     Some(if address == owner.wrapping_add(position + 1) {
                         "part of ^".to_string()
                     } else {
-                        format!("part of {owner}")
+                        format!("part of {}", self.interpreter.address_mode().display(owner))
                     })
                 });
         };
@@ -286,12 +286,15 @@ impl App {
         let mut words = Vec::with_capacity(rule.repr.register_count());
         let mut sources = Vec::with_capacity(rule.repr.register_count());
         for word_address in rule.word_addresses() {
+            let addr = self.interpreter.address_mode().display(word_address);
             match self.read_log.get(&(cell.0, word_address)) {
                 Some(entry) => {
                     words.push(entry.value);
-                    sources.push(format!("{word_address}:{}", entry.value));
+                    sources.push(format!("{addr}:{}", entry.value));
                 }
-                None => return Err(format!("waiting for register {word_address}")),
+                None => {
+                    return Err(format!("waiting for register {addr}"));
+                }
             }
         }
 

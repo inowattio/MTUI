@@ -39,6 +39,7 @@ impl App {
 
         let (kind, addr) = selection;
         let verb = if pinned { "Pinned" } else { "Unpinned" };
+        let addr = self.interpreter.address_mode().display(addr);
         self.set_read_status(StatusMessage::ok(format!("{verb} {kind:?} @{addr}")));
     }
 }

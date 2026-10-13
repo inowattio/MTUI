@@ -1,3 +1,4 @@
+use crate::config::AddressMode;
 use crate::config::Keybinds;
 use crate::input::KeyCode;
 use crate::state::LogsParams;
@@ -24,6 +25,7 @@ pub(super) fn draw(
     kb: &Keybinds,
     logs: &LogsParams,
     logging: bool,
+    address_mode: AddressMode,
 ) {
     let visible = LogsParams::VISIBLE as usize;
     let len = logs.entries.len();
@@ -47,7 +49,7 @@ pub(super) fn draw(
         }
     } else {
         for (i, entry) in logs.entries[top..end].iter().enumerate() {
-            lines.push(entry_line(theme, entry, (top + i) % 2 == 1));
+            lines.push(entry_line(theme, entry, (top + i) % 2 == 1, address_mode));
         }
         for _ in end..top + visible {
             lines.push(Line::default());
@@ -92,7 +94,12 @@ fn header_line(theme: &Theme) -> Line<'static> {
     ))
 }
 
-fn entry_line(theme: &Theme, entry: &WriteEntry, zebra: bool) -> Line<'static> {
+fn entry_line(
+    theme: &Theme,
+    entry: &WriteEntry,
+    zebra: bool,
+    address_mode: AddressMode,
+) -> Line<'static> {
     let row = theme.row_style(zebra, false);
     let time = entry.timestamp.replacen('T', " ", 1);
     Line::from(vec![
@@ -101,7 +108,10 @@ fn entry_line(theme: &Theme, entry: &WriteEntry, zebra: bool) -> Line<'static> {
             row.patch(theme.dim_style()),
         ),
         Span::styled(format!("{:>UNIT_W$}{GAP}", entry.unit), row),
-        Span::styled(format!("{:>ADDR_W$}{GAP}", entry.address), row),
+        Span::styled(
+            format!("{:>ADDR_W$}{GAP}", address_mode.display(entry.address)),
+            row,
+        ),
         Span::styled(
             format!("{:<TYPE_W$}{GAP}", super::truncate(&entry.kind, TYPE_W)),
             row.patch(theme.accent_style()),

@@ -1,4 +1,4 @@
-use crate::config::Keybinds;
+use crate::config::{AddressMode, Keybinds};
 use crate::input::KeyCode;
 use crate::interpretator::ascii_words;
 use crate::state::{ScanState, UnitField, UnitParams, UnitScanHit};
@@ -25,9 +25,10 @@ pub(super) fn draw(
     kb: &Keybinds,
     params: &UnitParams,
     active_id: u8,
+    address_mode: AddressMode,
 ) {
     let sel = params.current_field();
-    let left = form_lines(params, sel, theme);
+    let left = form_lines(params, sel, theme, address_mode);
     let right = params
         .scanned()
         .then(|| hit_lines(params, sel, active_id, theme));
@@ -115,7 +116,12 @@ pub(super) fn draw(
     frame.render_widget(Paragraph::new(tail), tail_area);
 }
 
-fn form_lines(params: &UnitParams, sel: UnitField, theme: &Theme) -> Vec<Line<'static>> {
+fn form_lines(
+    params: &UnitParams,
+    sel: UnitField,
+    theme: &Theme,
+    address_mode: AddressMode,
+) -> Vec<Line<'static>> {
     let field = |label: &str, value: String, selected: bool| {
         field_row(theme, label, LABEL_W, value, selected)
     };
@@ -164,7 +170,7 @@ fn form_lines(params: &UnitParams, sel: UnitField, theme: &Theme) -> Vec<Line<'s
             format!(
                 "   Request      {} @ {} x{}",
                 params.register_type.name(),
-                params.address,
+                address_mode.display(params.address),
                 params.amount
             ),
         ),
@@ -278,7 +284,15 @@ mod tests {
     fn render_with(params: &UnitParams, active_id: u8) -> Vec<String> {
         let (theme, kb) = (Theme::default(), Keybinds::default());
         crate::tui::test_util::draw_rows(100, 30, |frame| {
-            draw(frame, frame.area(), &theme, &kb, params, active_id);
+            draw(
+                frame,
+                frame.area(),
+                &theme,
+                &kb,
+                params,
+                active_id,
+                AddressMode::Dec,
+            );
         })
     }
 

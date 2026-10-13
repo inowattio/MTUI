@@ -36,11 +36,12 @@ pub fn draw_popup(
     layout: &mut ScreenLayout,
 ) {
     let kb = &app.config.keybinds;
+    let address_mode = app.interpreter.address_mode();
     match popup {
         Popup::Discovery(d) => discovery::draw(d, app, frame, area, theme),
         Popup::Help(h) => help::draw(frame, area, theme, kb, app, h),
         Popup::Dump(d) => dump::draw(frame, area, theme, app.read_count(), &d.result),
-        Popup::Search(s) => search::draw(frame, area, theme, s, layout),
+        Popup::Search(s) => search::draw(frame, area, theme, s, layout, address_mode),
         Popup::Label(l) => label::draw(frame, area, theme, l),
         Popup::Custom(c) => custom::draw(frame, area, theme, app, c),
         Popup::Columns(params) => columns::draw(frame, area, theme, app, params),
@@ -52,13 +53,30 @@ pub fn draw_popup(
                 kb,
                 write,
                 app.write_custom_preview(write),
+                address_mode,
             );
         }
         Popup::Unit(params) => {
-            unit::draw(frame, area, theme, kb, params, app.config.device.unit_id);
+            unit::draw(
+                frame,
+                area,
+                theme,
+                kb,
+                params,
+                app.config.device.unit_id,
+                address_mode,
+            );
         }
         Popup::SweepConfig(s) => sweep_config::draw(frame, area, theme, *s, app.sweep.active),
-        Popup::Logs(logs) => logs::draw(frame, area, theme, kb, logs, app.config.write_log.enabled),
+        Popup::Logs(logs) => logs::draw(
+            frame,
+            area,
+            theme,
+            kb,
+            logs,
+            app.config.write_log.enabled,
+            address_mode,
+        ),
         Popup::Inspect(mode) => inspect::draw(frame, area, theme, app, *mode),
         Popup::About => about::draw(frame, area, theme),
         Popup::Stats => stats::draw(frame, area, theme, app),

@@ -5,7 +5,7 @@ use super::{
     load_config, reconnect_backoff,
 };
 use crate::compat::{self, Instant, TaskPoll};
-use crate::config::{BatchAnchor, Config, RegisterViews};
+use crate::config::{AddressMode, BatchAnchor, Config, RegisterViews};
 use crate::custom::CustomRule;
 use crate::interpretator::Interpretor;
 use crate::modbus::{Interface, ModbusDevice};
@@ -418,6 +418,7 @@ impl App {
         regs: &[RegisterCell],
         batch: u16,
         full_spans: &BTreeMap<RegisterCell, u16>,
+        address_mode: AddressMode,
     ) -> Result<Vec<RegisterCellValue>, anyhow::Error> {
         let batch = batch.max(1) as usize;
         let mut collection = Vec::with_capacity(regs.len());
@@ -430,7 +431,8 @@ impl App {
             let values = Self::read_words(device, kind, start_addr, run_len as u16).await?;
             anyhow::ensure!(
                 values.len() == run_len,
-                "Expected {run_len} value(s) at {start_addr}, got {}",
+                "Expected {run_len} value(s) at {}, got {}",
+                address_mode.display(start_addr),
                 values.len()
             );
 
@@ -531,6 +533,7 @@ impl App {
             BTreeMap::new()
         };
 
+        let address_mode = self.interpreter.address_mode();
         self.background_task = Some(BackgroundTask::Refresh(compat::spawn(async move {
             let read_began = Instant::now();
             let mut values = Vec::new();
@@ -542,7 +545,14 @@ impl App {
                 }
             }
             if error.is_none() && !panel_registers.is_empty() {
-                match Self::acquire_cells_with(&device, &panel_registers, amount, &full_spans).await
+                match Self::acquire_cells_with(
+                    &device,
+                    &panel_registers,
+                    amount,
+                    &full_spans,
+                    address_mode,
+                )
+                .await
                 {
                     Ok(data) => values.extend(data),
                     Err(e) => error = Some(ReadError::from(e)),

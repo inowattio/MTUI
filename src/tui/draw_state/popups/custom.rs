@@ -219,7 +219,11 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &
                 ));
             }
             CustomField::Next => {
-                let items = c.next.iter().map(u16::to_string).collect();
+                let items = c
+                    .next
+                    .iter()
+                    .map(|&a| app.interpreter.address_mode().display(a).to_string())
+                    .collect();
                 list_rows(&mut lines, "Next words", items, "(contiguous)", selected);
                 if selected {
                     entry_hints(&mut lines, &c.next_buffer, "address of word 2 (then 3, 4)");
@@ -352,6 +356,10 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &
     lines.push(footer_more);
 
     let width = lines.iter().map(Line::width).max().unwrap_or(0) as u16 + 2;
-    let title = format!("Custom rule | {:?} @ {}", c.register_type, c.address);
+    let title = format!(
+        "Custom rule | {:?} @ {}",
+        c.register_type,
+        app.interpreter.address_mode().display(c.address)
+    );
     super::render(frame, area, theme, &title, width, lines);
 }

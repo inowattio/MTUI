@@ -116,9 +116,13 @@ impl App {
     pub fn graph_hold_series(&mut self) {
         const MAX_HELD: usize = 3;
         let cell = self.cursor_cell();
-        let name = self
-            .label_text(cell.0, cell.1)
-            .unwrap_or_else(|| format!("{}{}", cell.0.marker(), cell.1));
+        let name = self.label_text(cell.0, cell.1).unwrap_or_else(|| {
+            format!(
+                "{}{}",
+                cell.0.marker(),
+                self.interpreter.address_mode().display(cell.1)
+            )
+        });
 
         let p = self.read_mut();
         let message = if let Some(i) = p.graph_series.iter().position(|&c| c == cell) {

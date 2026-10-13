@@ -1,3 +1,4 @@
+use crate::config::AddressMode;
 use crate::constants::{ELLIPSIS, SEARCH_POPUP_MAX_HEIGHT_PERCENT, SEARCH_POPUP_MAX_WIDTH_PERCENT};
 use crate::input::KeyCode;
 use crate::state::{ScreenLayout, SearchMatch, SearchParams};
@@ -23,6 +24,7 @@ pub(super) fn draw(
     theme: &Theme,
     search: &SearchParams,
     layout: &mut ScreenLayout,
+    address_mode: AddressMode,
 ) {
     let rows = max_rows(area);
     layout.search_rows = rows;
@@ -63,6 +65,7 @@ pub(super) fn draw(
                 &search.query,
                 label_w,
                 i as u16 == search.selected,
+                address_mode,
             ));
         }
     }
@@ -94,12 +97,16 @@ fn row(
     query: &str,
     label_w: usize,
     selected: bool,
+    address_mode: AddressMode,
 ) -> Line<'static> {
     let style = |s: Style| if selected { theme.selected_style() } else { s };
     let (kind, address) = m.cell;
 
     let mut spans = vec![
-        Span::styled(format!(" {address:>5}  "), style(theme.accent_style())),
+        Span::styled(
+            format!(" {:>5}  ", address_mode.display(address)),
+            style(theme.accent_style()),
+        ),
         Span::styled(
             format!("{:<10}", format!("{kind:?}")),
             style(theme.dim_style()),

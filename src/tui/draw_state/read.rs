@@ -258,9 +258,10 @@ impl TableCtx<'_> {
             Vec::new()
         };
 
+        let address_mode = app.interpreter.address_mode();
         let mut header = format!("{: >5}  ", "");
         for c in 0..cols {
-            header.push_str(&format!("{: >5} ", format!("+{c}")));
+            header.push_str(&format!("{: >5} ", format!("+{}", address_mode.display(c))));
         }
 
         let mut table_rows: Vec<TableRow> = Vec::with_capacity(visible as usize);
@@ -272,7 +273,10 @@ impl TableCtx<'_> {
             let row_base = row_base as u16;
             let zebra = r % 2 == 1;
 
-            let mut spans = vec![Span::styled(format!("{row_base: >5}: "), theme.dim_style())];
+            let mut spans = vec![Span::styled(
+                format!("{: >5}: ", address_mode.display(row_base)),
+                theme.dim_style(),
+            )];
             for c in 0..cols {
                 let Some(addr) = row_base.checked_add(c) else {
                     break;
@@ -402,7 +406,11 @@ pub fn draw(
         .enumerate()
         .map(|(i, t)| {
             if i == active {
-                format!("{} @ {info_addr}", t.name())
+                format!(
+                    "{} @ {}",
+                    t.name(),
+                    app.interpreter.address_mode().display(info_addr)
+                )
             } else {
                 t.marker().to_string()
             }
@@ -604,8 +612,8 @@ pub fn live_status(app: &App, params: &ReadParams, theme: &Theme) -> Vec<Span<'s
                 " {}{} {}->{} ({:>2}%)",
                 spinner_frame(app.frame),
                 mode,
-                app.sweep.from,
-                app.sweep.to,
+                app.interpreter.address_mode().display(app.sweep.from),
+                app.interpreter.address_mode().display(app.sweep.to),
                 percent.min(99),
             ),
             theme.accent_style(),
@@ -869,8 +877,13 @@ fn draw_graph(
             .collect::<Vec<_>>()
     };
     let series_name = |c: RegisterCell| {
-        app.label_text(c.0, c.1)
-            .unwrap_or_else(|| format!("{}{}", c.0.marker(), c.1))
+        app.label_text(c.0, c.1).unwrap_or_else(|| {
+            format!(
+                "{}{}",
+                c.0.marker(),
+                app.interpreter.address_mode().display(c.1)
+            )
+        })
     };
 
     let primary_segments = series_segments(cell, &primary);

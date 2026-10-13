@@ -6,6 +6,7 @@ use crate::state::ReadPanel;
 use crate::tui::theme::Theme;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::fmt;
 
 pub const CONFIG_VERSION: u32 = 1;
 
@@ -208,6 +209,28 @@ impl AddressMode {
         match self {
             Self::Dec => "decimal",
             Self::Hex => "hex",
+        }
+    }
+
+    pub const fn display(self, address: u16) -> AddressDisplay {
+        AddressDisplay {
+            mode: self,
+            address,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct AddressDisplay {
+    mode: AddressMode,
+    address: u16,
+}
+
+impl fmt::Display for AddressDisplay {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.mode {
+            AddressMode::Dec => fmt::Display::fmt(&self.address, f),
+            AddressMode::Hex => fmt::UpperHex::fmt(&self.address, f),
         }
     }
 }
@@ -904,7 +927,18 @@ interpretation_columns! {
 
 #[cfg(test)]
 mod tests {
-    use super::{CONFIG_VERSION, Config};
+    use super::{AddressMode, CONFIG_VERSION, Config};
+
+    #[test]
+    fn address_mode_displays_decimal_or_uppercase_hex() {
+        assert_eq!(AddressMode::Dec.display(255).to_string(), "255");
+        assert_eq!(AddressMode::Hex.display(255).to_string(), "FF");
+        assert_eq!(AddressMode::Hex.display(0).to_string(), "0");
+        assert_eq!(
+            format!("{:>5}|", AddressMode::Hex.display(u16::MAX)),
+            " FFFF|"
+        );
+    }
 
     #[test]
     fn the_version_is_written_first_and_assumed_when_missing() {

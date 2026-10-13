@@ -1,4 +1,5 @@
 use crate::app::WriteType;
+use crate::config::AddressMode;
 use crate::config::Keybinds;
 use crate::input::KeyCode;
 use crate::state::WriteParams;
@@ -38,12 +39,13 @@ pub(super) fn draw(
     kb: &Keybinds,
     write: &WriteParams,
     custom: Option<String>,
+    address_mode: AddressMode,
 ) {
     let bits: u16 = match write.write_type {
         WriteType::Word => 16,
         WriteType::DWord => 32,
         WriteType::Coil => {
-            draw_coil(frame, area, theme, kb, write, custom);
+            draw_coil(frame, area, theme, kb, write, custom, address_mode);
             return;
         }
     };
@@ -161,7 +163,11 @@ pub(super) fn draw(
     super::push_footer(&mut lines, theme, footer1);
     lines.push(hints::footer(theme, footer2));
 
-    let title = format!("Write [{:?}] @ {}", write.write_type, write.position);
+    let title = format!(
+        "Write [{:?}] @ {}",
+        write.write_type,
+        address_mode.display(write.position)
+    );
     super::render(frame, area, theme, &title, width, lines);
 }
 
@@ -182,6 +188,7 @@ fn draw_coil(
     kb: &Keybinds,
     write: &WriteParams,
     custom: Option<String>,
+    address_mode: AddressMode,
 ) {
     let on = write.value.unwrap_or(0) != 0;
     let (state, state_style) = if on {
@@ -214,6 +221,6 @@ fn draw_coil(
     let width = hints::min_width(44, &footer);
     super::push_footer(&mut lines, theme, footer);
 
-    let title = format!("Write coil @ {}", write.position);
+    let title = format!("Write coil @ {}", address_mode.display(write.position));
     super::render(frame, area, theme, &title, width, lines);
 }
