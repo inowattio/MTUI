@@ -1,8 +1,13 @@
 name: mtui
+title: MTUI
 base: core24
 adopt-info: mtui
 summary: Extensive Modbus client for your terminal (TCP, RTU & mock)
 license: GPL-2.0-only
+website: https://inowattio.github.io/MTUI/
+source-code: https://github.com/inowattio/mtui
+issues: https://github.com/inowattio/mtui/issues
+contact: cosmin.patrinjan@inowattio.com
 description: |
   MTUI is an extensive Modbus client that runs in pretty much any terminal,
   written in pure safe Rust on top of tokio-modbus and ratatui.
