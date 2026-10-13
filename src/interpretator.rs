@@ -391,8 +391,17 @@ impl Interpretor {
         segments
     }
 
+    pub fn row_buffer(&self) -> String {
+        String::with_capacity(self.header.len() + 32)
+    }
+
     pub fn placeholder(&self, address: u16, label: Option<&str>) -> String {
-        let mut row = String::with_capacity(self.header.len() + 32);
+        let mut row = self.row_buffer();
+        self.placeholder_into(&mut row, address, label);
+        row
+    }
+
+    pub fn placeholder_into(&self, row: &mut String, address: u16, label: Option<&str>) {
         let ctx = RowCtx::new(
             &self.config,
             self.word_order,
@@ -410,14 +419,12 @@ impl Interpretor {
         for col in self.enabled_columns() {
             let mark = row.len();
             if col.spec.column.is_meta() {
-                (col.spec.render)(&ctx, col.width, &mut row);
+                (col.spec.render)(&ctx, col.width, row);
             } else {
                 row.push_str(NO_VALUE);
             }
-            pad_to(&mut row, mark, col.width);
+            pad_to(row, mark, col.width);
         }
-
-        row
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -431,7 +438,25 @@ impl Interpretor {
         custom: Option<&str>,
         label: Option<&str>,
     ) -> String {
-        let mut row = String::with_capacity(self.header.len() + 32);
+        let mut row = self.row_buffer();
+        self.format_row_into(
+            &mut row, address, value, next, time_text, elapsed, custom, label,
+        );
+        row
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn format_row_into(
+        &self,
+        row: &mut String,
+        address: u16,
+        value: u16,
+        next: Lookahead,
+        time_text: &str,
+        elapsed: Option<chrono::Duration>,
+        custom: Option<&str>,
+        label: Option<&str>,
+    ) {
         let ctx = RowCtx::new(
             &self.config,
             self.word_order,
@@ -447,11 +472,9 @@ impl Interpretor {
         );
         for col in self.enabled_columns() {
             let mark = row.len();
-            (col.spec.render)(&ctx, col.width, &mut row);
-            pad_to(&mut row, mark, col.width);
+            (col.spec.render)(&ctx, col.width, row);
+            pad_to(row, mark, col.width);
         }
-
-        row
     }
 
     #[allow(clippy::too_many_arguments)]

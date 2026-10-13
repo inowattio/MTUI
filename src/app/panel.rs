@@ -360,12 +360,24 @@ impl App {
     }
 
     pub fn cell_row(&self, cell: RegisterCell, now: DateTime<Utc>) -> Option<(String, bool)> {
+        let mut row = self.interpreter.row_buffer();
+        let changed = self.cell_row_into(&mut row, cell, now)?;
+        Some((row, changed))
+    }
+
+    pub fn cell_row_into(
+        &self,
+        row: &mut String,
+        cell: RegisterCell,
+        now: DateTime<Utc>,
+    ) -> Option<bool> {
         let (kind, addr) = cell;
         let entry = self.read_log.get(&cell)?;
         let value = entry.value;
         let at = |address: u16| self.read_log.get(&(kind, address)).map(|e| e.value);
         let custom = self.custom_value(cell, value, &at);
-        let row = self.interpreter.format_row(
+        self.interpreter.format_row_into(
+            row,
             addr,
             value,
             following(addr, self.interpreter.lookahead(), at),
@@ -374,7 +386,7 @@ impl App {
             custom.as_deref(),
             self.label(cell),
         );
-        Some((row, self.changed_since(cell, now)))
+        Some(self.changed_since(cell, now))
     }
 
     pub fn matrix_cols(&self) -> u16 {

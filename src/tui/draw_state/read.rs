@@ -17,6 +17,7 @@ use ratatui::style::{Modifier, Style};
 use ratatui::symbols;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Axis, Block, Chart, Dataset, GraphType, LegendPosition, Paragraph};
+use std::fmt::Write as _;
 
 fn panel_block(theme: &Theme, active: ReadPanel, config: &Config) -> Block<'static> {
     if !config.display.inactive_tabs {
@@ -126,14 +127,20 @@ impl TableCtx<'_> {
             };
             let selected = addr == params.position;
             let zebra = i % 2 == 1;
+            let cell = (params.register_type, addr);
 
-            let (text, base_style) = match app.cell_row((params.register_type, addr), now) {
-                Some((text, changed)) => (text, theme.row_style(zebra, changed)),
-                None => (
+            let mut text = app.interpreter.row_buffer();
+            if show_window {
+                let in_window = (read_start..=read_end).contains(&addr) || extra.contains(&cell);
+                text.push(if in_window { '|' } else { ' ' });
+            }
+            let base_style = match app.cell_row_into(&mut text, cell, now) {
+                Some(changed) => theme.row_style(zebra, changed),
+                None => {
                     app.interpreter
-                        .placeholder(addr, app.label((params.register_type, addr))),
-                    theme.placeholder_style(zebra),
-                ),
+                        .placeholder_into(&mut text, addr, app.label(cell));
+                    theme.placeholder_style(zebra)
+                }
             };
             let style = if selected {
                 theme.selected_style()
@@ -144,18 +151,7 @@ impl TableCtx<'_> {
             if selected {
                 pick_row = Some(rows.len());
             }
-            if show_window {
-                let marker = if (read_start..=read_end).contains(&addr)
-                    || extra.contains(&(params.register_type, addr))
-                {
-                    "|"
-                } else {
-                    " "
-                };
-                rows.push((format!("{marker}{text}"), style));
-            } else {
-                rows.push((text, style));
-            }
+            rows.push((text, style));
         }
 
         let mut block = panel_block(theme, ReadPanel::Main, &app.config);
@@ -202,27 +198,29 @@ impl TableCtx<'_> {
             }
             prev_kind = Some(kind);
 
-            let (text, changed) = match app.cell_row((kind, address), now) {
-                Some(row) => row,
-                None => (
-                    app.interpreter
-                        .placeholder(address, app.label((kind, address))),
-                    false,
-                ),
-            };
-
-            let mut text = text;
-            if type_marker {
-                text.insert_str(0, &format!("{:<2}", kind.marker()));
-            }
+            let mut text = app.interpreter.row_buffer();
             if let Some(read_cells) = &read_cells {
                 let marker = if read_cells.contains(&(kind, address)) {
                     '|'
                 } else {
                     ' '
                 };
-                text.insert(0, marker);
+                text.push(marker);
             }
+            if type_marker {
+                let _ = write!(text, "{:<2}", kind.marker());
+            }
+            let changed = match app.cell_row_into(&mut text, (kind, address), now) {
+                Some(changed) => changed,
+                None => {
+                    app.interpreter.placeholder_into(
+                        &mut text,
+                        address,
+                        app.label((kind, address)),
+                    );
+                    false
+                }
+            };
 
             let style = if (top + ord) as u16 == params.pinned_index {
                 pick_row = Some(rows.len());
