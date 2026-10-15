@@ -43,18 +43,6 @@ jobs:
       - name: Bump version
         run: sed -i "0,/^version = /s/^version = .*/version = \"${{ inputs.version }}\"/" Cargo.toml
 
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Build release binary
-        run: cargo build --release
-
-      - name: Regenerate demo gif
-        uses: charmbracelet/vhs-action@v2
-        with:
-          path: .github/resources/demo.tape
-
       - name: Commit and tag
         id: tag
         run: |
@@ -79,10 +67,24 @@ jobs:
           ref: ${{ env.TAG }}
           fetch-depth: 0
 
-      - name: Collect commits since previous tag
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Record presentation gif
+        uses: charmbracelet/vhs-action@v2
+        with:
+          path: .github/resources/demo.tape
+
+      - name: Write release body
         run: |
           PREV=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || true)
           {
+            echo "![Presentation](https://github.com/${{ github.repository }}/releases/download/$TAG/presentation.gif)"
+            echo
             echo "## Commits"
             git log ${PREV:+$PREV..}HEAD --invert-grep --grep="^chore: release" --pretty="- %s (%h)"
           } > changelog.md
@@ -93,6 +95,7 @@ jobs:
           draft: true
           body_path: changelog.md
           generate_release_notes: true
+          files: target/presentation.gif
 
   build:
     name: Build ${{ matrix.target }}

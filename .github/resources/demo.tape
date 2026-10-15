@@ -1,9 +1,9 @@
-# Records the README demo gif with VHS (https://github.com/charmbracelet/vhs).
+# Records the release presentation gif with VHS (https://github.com/charmbracelet/vhs).
 #
 #   cargo build --release
 #   vhs .github/resources/demo.tape
 
-Output .github/resources/demo.gif
+Output target/presentation.gif
 
 Require bash
 

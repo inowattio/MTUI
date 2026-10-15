@@ -3,7 +3,7 @@ A keyboard-driven Modbus client for your terminal, built for speed and customiza
 
 Made in pure safe Rust, based on [tokio-modbus](https://crates.io/crates/tokio-modbus) and [ratatui](https://crates.io/crates/ratatui) (with [ratzilla](https://crates.io/crates/ratzilla) for the web demo).
 
-![Demo](https://raw.githubusercontent.com/inowattio/MTUI/main/.github/resources/demo.gif)
+![Demo](https://github.com/inowattio/MTUI/releases/latest/download/presentation.gif)
 
 Play the GIF to see a quick tour, or better yet, try it in your browser (mock device only): **<https://inowattio.github.io/MTUI/>**
 
