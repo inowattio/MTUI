@@ -303,6 +303,29 @@ mod tests {
         );
     }
 
+    #[test]
+    fn raw_exception_messages_only_carry_the_code() {
+        use super::exception_message;
+        use tokio_modbus::ExceptionCode;
+
+        assert_eq!(
+            exception_message(ExceptionCode::Custom(0x8F), true),
+            "Exception 0x8F (143)"
+        );
+        assert_eq!(
+            exception_message(ExceptionCode::IllegalDataAddress, true),
+            "Exception 0x02 (2)"
+        );
+        assert_eq!(
+            exception_message(ExceptionCode::IllegalDataAddress, false),
+            "Illegal data address"
+        );
+        assert_eq!(
+            exception_message(ExceptionCode::Custom(0x8F), false),
+            "Custom exception 0x8F (143)"
+        );
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     async fn wait_for(counter: &AtomicUsize, target: usize) {
         for _ in 0..200 {
@@ -698,11 +721,21 @@ macro_rules! timeout {
     };
 }
 
-pub fn exception_error(code: ExceptionCode) -> anyhow::Error {
-    let message = match code {
+pub static RAW_EXCEPTIONS: AtomicBool = AtomicBool::new(false);
+
+pub fn exception_message(code: ExceptionCode, raw: bool) -> String {
+    match code {
+        _ if raw => {
+            let value = u8::from(code);
+            format!("Exception 0x{value:02X} ({value})")
+        }
         ExceptionCode::Custom(value) => format!("Custom exception 0x{value:02X} ({value})"),
         known => known.to_string(),
-    };
+    }
+}
+
+pub fn exception_error(code: ExceptionCode) -> anyhow::Error {
+    let message = exception_message(code, RAW_EXCEPTIONS.load(Ordering::Relaxed));
     anyhow::Error::from(code).context(message)
 }
 

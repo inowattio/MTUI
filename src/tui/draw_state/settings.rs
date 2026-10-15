@@ -332,6 +332,7 @@ fn field_value(
             None,
         ),
         SettingsField::ReconnectOnTimeout => (on_off(device.reconnect_on_timeout), None),
+        SettingsField::RawExceptions => (on_off(device.raw_exceptions), None),
         SettingsField::GraphHistory => (device.graph.history.to_string(), None),
         SettingsField::MatrixColumns => (auto_width(device.matrix.columns), None),
         SettingsField::SkipUnsavedWarning => (on_off(device.skip_unsaved_warning), None),

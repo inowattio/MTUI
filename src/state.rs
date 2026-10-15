@@ -1076,6 +1076,7 @@ settings_fields! {
         [
             RefreshInterval: Number => "Auto-refresh (ms)", "Delay between automatic reads, 0 turns auto-refresh off",
             ReconnectOnTimeout: Toggle => "Reconnect on timeout", "Reconnect to the device after a read times out",
+            RawExceptions: Toggle => "Raw exception codes", "Show every Modbus exception as its code, Exception 0x8F (143), instead of its name",
             ReadOnly: Toggle => "Read-only", "Refuse all writes from the UI and the API",
             WriteWaitsForRead: Toggle => "Write waits for read", "Queue a write until the read in progress finishes instead of refusing it",
             WriteLogEnabled: Toggle => "Log writes to file", "Append every write to a log file",

@@ -200,6 +200,10 @@ impl App {
             SettingsField::ReconnectOnTimeout => {
                 self.config.reconnect_on_timeout = !self.config.reconnect_on_timeout;
             }
+            SettingsField::RawExceptions => {
+                self.config.raw_exceptions = !self.config.raw_exceptions;
+                self.sync_raw_exceptions();
+            }
             SettingsField::ShowRuleContinuation => {
                 self.config.display.rule_continuation = !self.config.display.rule_continuation;
             }

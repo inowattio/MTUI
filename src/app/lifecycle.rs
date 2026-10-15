@@ -8,7 +8,7 @@ use crate::compat::{self, Instant, TaskPoll};
 use crate::config::{AddressMode, BatchAnchor, Config, RegisterViews};
 use crate::custom::CustomRule;
 use crate::interpretator::Interpretor;
-use crate::modbus::{Interface, ModbusDevice};
+use crate::modbus::{self, Interface, ModbusDevice};
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
 use crate::state::{
     ConnectionStatus, Popup, PopupKind, PopupPayload, ReadPanel, ReadParams, ScreenLayout, State,
@@ -18,7 +18,7 @@ use crate::writes_log::WritesLogState;
 use chrono::{Local, Utc};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU16};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU16, Ordering};
 use std::sync::{Arc, Mutex};
 
 impl App {
@@ -94,6 +94,7 @@ impl App {
             clipboard: None,
         };
 
+        app.sync_raw_exceptions();
         app.sync_api_device();
         app.sync_api_read_only();
         app.sync_api_allow_unit_id();
@@ -136,6 +137,10 @@ impl App {
         )
     }
 
+    pub(super) fn sync_raw_exceptions(&self) {
+        modbus::RAW_EXCEPTIONS.store(self.config.raw_exceptions, Ordering::Relaxed);
+    }
+
     pub(super) fn apply_config(&mut self, config: Config, device: Option<ModbusDevice>) {
         (
             self.interpreter,
@@ -145,6 +150,7 @@ impl App {
         self.config = config;
         self.sweep.active = false;
 
+        self.sync_raw_exceptions();
         self.sync_api_device();
         self.sync_api_read_only();
         self.sync_api_allow_unit_id();
