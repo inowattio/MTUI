@@ -31,6 +31,7 @@ pub type ApiDevice = Arc<Mutex<Option<ModbusDevice>>>;
 pub type BoundPort = Arc<AtomicU16>;
 pub type ReadOnlyFlag = Arc<AtomicBool>;
 pub type AllowUnitFlag = Arc<AtomicBool>;
+pub type AllowRawFlag = Arc<AtomicBool>;
 pub type StatusFlag = Arc<AtomicU8>;
 pub type BindStateFlag = Arc<AtomicU8>;
 
@@ -491,6 +492,7 @@ pub struct App {
     api_bound_port: BoundPort,
     api_read_only: ReadOnlyFlag,
     api_allow_unit_id: AllowUnitFlag,
+    api_allow_raw: AllowRawFlag,
     api_status: StatusFlag,
     api_bind: BindStateFlag,
     writes_log: SharedWritesLog,

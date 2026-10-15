@@ -1,5 +1,6 @@
 use super::{
-    AllowUnitFlag, ApiBindState, ApiDevice, App, BindStateFlag, BoundPort, ReadOnlyFlag, StatusFlag,
+    AllowRawFlag, AllowUnitFlag, ApiBindState, ApiDevice, App, BindStateFlag, BoundPort,
+    ReadOnlyFlag, StatusFlag,
 };
 use crate::modbus::ModbusDevice;
 use std::sync::atomic::Ordering;
@@ -19,6 +20,10 @@ impl App {
 
     pub fn api_allow_unit_id_handle(&self) -> AllowUnitFlag {
         self.api_allow_unit_id.clone()
+    }
+
+    pub fn api_allow_raw_handle(&self) -> AllowRawFlag {
+        self.api_allow_raw.clone()
     }
 
     pub fn api_status_handle(&self) -> StatusFlag {
@@ -41,6 +46,11 @@ impl App {
     pub(super) fn sync_api_allow_unit_id(&self) {
         self.api_allow_unit_id
             .store(self.config.api.unit_id_override, Ordering::Relaxed);
+    }
+
+    pub(super) fn sync_api_allow_raw(&self) {
+        self.api_allow_raw
+            .store(self.config.api.raw_function, Ordering::Relaxed);
     }
 
     pub(super) fn sync_api_status(&self) {
@@ -75,6 +85,7 @@ impl App {
                 self.writes_log_handle(),
                 self.api_read_only_handle(),
                 self.api_allow_unit_id_handle(),
+                self.api_allow_raw_handle(),
                 self.api_status_handle(),
                 self.api_bind_handle(),
             )));

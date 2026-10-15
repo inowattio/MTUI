@@ -114,7 +114,10 @@ impl App {
 
         let sent = data.len();
         self.background_task = Some(BackgroundTask::Raw(compat::spawn(async move {
-            let result = device.custom(code, &data).await.map_err(|e| e.to_string());
+            let result = device
+                .custom(None, code, &data)
+                .await
+                .map_err(|e| e.to_string());
             RawTaskResult { code, sent, result }
         })));
     }

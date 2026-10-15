@@ -342,6 +342,7 @@ fn field_value(
         SettingsField::ApiEnabled => (on_off(device.api.enabled), None),
         SettingsField::ApiPort => (api_port_view(params, app), None),
         SettingsField::ApiUnitIdOverride => (on_off(device.api.unit_id_override), None),
+        SettingsField::ApiRawFunction => (on_off(device.api.raw_function), None),
         SettingsField::WriteLogEnabled => (on_off(device.write_log.enabled), None),
         SettingsField::StartupPanel => (device.startup.panel.name().to_string(), None),
         SettingsField::StartupType => (device.startup.register_type.name().to_string(), None),

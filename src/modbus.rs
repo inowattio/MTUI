@@ -1022,9 +1022,10 @@ impl ModbusDevice {
         Ok(objects)
     }
 
-    pub async fn custom(&self, code: u8, data: &[u8]) -> Result<Vec<u8>> {
-        let response = timeout!(
+    pub async fn custom(&self, unit: Option<UnitId>, code: u8, data: &[u8]) -> Result<Vec<u8>> {
+        let response = timeout_as!(
             self,
+            unit,
             call,
             (Request::Custom(code, data.into())),
             format!("Raw function 0x{code:02X} with data {data:?}")

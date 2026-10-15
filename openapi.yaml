@@ -3,7 +3,8 @@ info:
   title: MTUI HTTP API
   description: |
     HTTP API exposed by MTUI for reading and writing Modbus
-    registers on the currently connected device, plus a health probe.
+    registers on the currently connected device, sending raw function
+    codes, plus a health probe.
 
     The server binds to `0.0.0.0` on a configurable port and proxies requests
     to the live Modbus device backing the TUI. When no device is connected,
@@ -156,6 +157,73 @@ paths:
           description: No device is currently connected
         "502":
           description: The device write failed (Modbus / transport error)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FailureResponse"
+
+  /raw:
+    post:
+      summary: Send a raw Modbus function
+      description: |
+        Sends an arbitrary function `code` with `data` as the request bytes
+        and returns the bytes the device answered with. Nothing is
+        interpreted on either side.
+
+        The endpoint is disabled by default and every request is rejected
+        with `501` until the "API raw function" setting is enabled. Read-only
+        mode does not apply here: the server cannot tell whether a raw
+        function writes, so enabling the setting is the opt-in.
+
+        An optional `unit_id` targets a specific Modbus unit for this
+        request only; the device's configured unit is restored afterwards.
+        When omitted, the configured unit is used. Specifying `unit_id`
+        requires the "API unit id override" setting to be enabled; otherwise
+        the request is rejected with `422`.
+      operationId: rawFunction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RawRequest"
+            examples:
+              diagnostics:
+                summary: Diagnostics (0x08) return query data
+                value:
+                  code: 8
+                  data: [0, 0, 18, 52]
+              report_server_id:
+                summary: Report server id (0x11) without data
+                value:
+                  code: 17
+              unit:
+                summary: Diagnostics (0x08) sent to unit 5
+                value:
+                  code: 8
+                  data: [0, 0, 18, 52]
+                  unit_id: 5
+      responses:
+        "200":
+          description: The device answered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RawResponse"
+              examples:
+                echo:
+                  value:
+                    data: [0, 0, 18, 52]
+        "422":
+          description: |
+            A `unit_id` was specified but the "API unit id override" setting
+            is disabled.
+        "501":
+          description: The "API raw function" setting is disabled
+        "503":
+          description: No device is currently connected
+        "502":
+          description: The device call failed (Modbus / transport error)
           content:
             application/json:
               schema:
@@ -314,6 +382,48 @@ components:
             the device's configured unit when omitted. Requires the "API unit
             id override" setting to be enabled; a request that sets this while
             the setting is disabled is rejected with `403`.
+
+    RawRequest:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: integer
+          format: uint8
+          minimum: 0
+          maximum: 255
+          description: Modbus function code to send.
+        data:
+          type: array
+          description: Request bytes sent after the function code. Defaults to none.
+          items:
+            type: integer
+            format: uint8
+            minimum: 0
+            maximum: 255
+        unit_id:
+          type: integer
+          format: uint8
+          minimum: 0
+          maximum: 255
+          description: |
+            Modbus unit id to target for this request only. Defaults to
+            the device's configured unit when omitted. Requires the "API unit
+            id override" setting to be enabled; a request that sets this while
+            the setting is disabled is rejected with `422`.
+
+    RawResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          description: Response bytes the device answered after the function code.
+          items:
+            type: integer
+            format: uint8
+            minimum: 0
+            maximum: 255
 
     HealthResponse:
       type: object

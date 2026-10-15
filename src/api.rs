@@ -1,5 +1,6 @@
 use crate::app::{
-    AllowUnitFlag, ApiBindState, ApiDevice, BindStateFlag, BoundPort, ReadOnlyFlag, StatusFlag,
+    AllowRawFlag, AllowUnitFlag, ApiBindState, ApiDevice, BindStateFlag, BoundPort, ReadOnlyFlag,
+    StatusFlag,
 };
 use crate::compat::Elapsed;
 use crate::modbus::ModbusDevice;
@@ -26,6 +27,7 @@ struct ApiState {
     writes_log: SharedWritesLog,
     read_only: ReadOnlyFlag,
     allow_unit_id: AllowUnitFlag,
+    allow_raw: AllowRawFlag,
     status: StatusFlag,
 }
 
@@ -79,6 +81,20 @@ struct WriteRequest {
     unit_id: Option<u8>,
 }
 
+#[derive(Deserialize)]
+struct RawRequest {
+    code: u8,
+    #[serde(default)]
+    data: Vec<u8>,
+    #[serde(default)]
+    unit_id: Option<u8>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct RawResponse {
+    data: Vec<u8>,
+}
+
 #[derive(Serialize)]
 struct HealthResponse {
     version: &'static str,
@@ -95,12 +111,14 @@ pub async fn serve(
     writes_log: SharedWritesLog,
     read_only: ReadOnlyFlag,
     allow_unit_id: AllowUnitFlag,
+    allow_raw: AllowRawFlag,
     status: StatusFlag,
     bind: BindStateFlag,
 ) {
     let router = Router::new()
         .route("/read", post(read_handler))
         .route("/write", post(write_handler))
+        .route("/raw", post(raw_handler))
         .route("/health", get(health_handler))
         .layer(middleware::from_fn(log_requests))
         .with_state(ApiState {
@@ -108,6 +126,7 @@ pub async fn serve(
             writes_log,
             read_only,
             allow_unit_id,
+            allow_raw,
             status,
         });
 
@@ -242,6 +261,41 @@ async fn write_handler(
     }
 }
 
+async fn raw_handler(State(state): State<ApiState>, Json(request): Json<RawRequest>) -> Response {
+    log::info!(
+        "API raw {:#04X} unit={} {} byte(s)",
+        request.code,
+        describe_unit(request.unit_id),
+        request.data.len()
+    );
+    if !state.allow_raw.load(Ordering::Relaxed) {
+        log::warn!("API raw rejected: raw function is disabled");
+        return StatusCode::NOT_IMPLEMENTED.into_response();
+    }
+    if unit_override_forbidden(&state, request.unit_id) {
+        log::warn!("API raw rejected: unit id override is disabled");
+        return StatusCode::UNPROCESSABLE_ENTITY.into_response();
+    }
+    let Some(device) = current(&state.device) else {
+        return StatusCode::SERVICE_UNAVAILABLE.into_response();
+    };
+    let result = device
+        .custom(request.unit_id, request.code, &request.data)
+        .await;
+    match result {
+        Ok(data) => {
+            record_outcome(&state, true);
+            Json(RawResponse { data }).into_response()
+        }
+        Err(_) if device.is_closed() => StatusCode::SERVICE_UNAVAILABLE.into_response(),
+        Err(e) => {
+            log::error!("API raw failed: {e}");
+            record_outcome(&state, false);
+            failure(&e)
+        }
+    }
+}
+
 async fn health_handler(State(state): State<ApiState>) -> Response {
     let device_present = current(&state.device).is_some();
     let code = state.status.load(Ordering::Relaxed);
@@ -307,10 +361,81 @@ fn unit_override_forbidden(state: &ApiState, unit: Option<u8>) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::FailureResponse;
+    use super::{ApiState, FailureResponse, RawRequest, RawResponse, raw_handler};
     use crate::compat::Elapsed;
-    use crate::modbus::exception_error;
+    use crate::modbus::{DeviceConfig, ModbusDevice, exception_error};
+    use crate::writes_log::WritesLogState;
+    use axum::extract::State;
+    use axum::http::StatusCode;
+    use axum::{Json, body};
+    use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+    use std::sync::{Arc, Mutex};
     use tokio_modbus::ExceptionCode;
+
+    async fn mock_state() -> ApiState {
+        let device = ModbusDevice::new(&DeviceConfig::default()).await.unwrap();
+        ApiState {
+            device: Arc::new(Mutex::new(Some(device))),
+            writes_log: Arc::new(Mutex::new(WritesLogState::default())),
+            read_only: Arc::new(AtomicBool::new(false)),
+            allow_unit_id: Arc::new(AtomicBool::new(false)),
+            allow_raw: Arc::new(AtomicBool::new(false)),
+            status: Arc::new(AtomicU8::new(0)),
+        }
+    }
+
+    fn raw(code: u8, data: &[u8], unit_id: Option<u8>) -> Json<RawRequest> {
+        Json(RawRequest {
+            code,
+            data: data.to_vec(),
+            unit_id,
+        })
+    }
+
+    #[tokio::test]
+    async fn raw_is_not_implemented_until_the_setting_is_on() {
+        let state = mock_state().await;
+        let response = raw_handler(State(state.clone()), raw(0x08, &[0, 0], None)).await;
+        assert_eq!(response.status(), StatusCode::NOT_IMPLEMENTED);
+
+        state.allow_raw.store(true, Ordering::Relaxed);
+        let response = raw_handler(State(state), raw(0x08, &[0, 0], None)).await;
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn raw_echoes_the_mock_payload() {
+        let state = mock_state().await;
+        state.allow_raw.store(true, Ordering::Relaxed);
+        let response = raw_handler(State(state), raw(0x08, &[0x12, 0x34], None)).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let parsed: RawResponse = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(parsed.data, vec![0x12, 0x34]);
+    }
+
+    #[tokio::test]
+    async fn raw_needs_the_unit_override_for_a_unit_id_but_ignores_read_only() {
+        let state = mock_state().await;
+        state.allow_raw.store(true, Ordering::Relaxed);
+
+        let response = raw_handler(State(state.clone()), raw(0x08, &[], Some(5))).await;
+        assert_eq!(
+            response.status(),
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "unit override off"
+        );
+
+        state.allow_unit_id.store(true, Ordering::Relaxed);
+        let response = raw_handler(State(state.clone()), raw(0x08, &[], Some(5))).await;
+        assert_eq!(response.status(), StatusCode::OK, "unit override on");
+
+        state.read_only.store(true, Ordering::Relaxed);
+        let response = raw_handler(State(state), raw(0x08, &[], None)).await;
+        assert_eq!(response.status(), StatusCode::OK, "read-only is ignored");
+    }
 
     #[test]
     fn failures_expose_the_exception_number_when_there_is_one() {

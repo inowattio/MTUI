@@ -83,6 +83,7 @@ impl App {
             api_bound_port: Arc::new(AtomicU16::new(0)),
             api_read_only: Arc::new(AtomicBool::new(false)),
             api_allow_unit_id: Arc::new(AtomicBool::new(false)),
+            api_allow_raw: Arc::new(AtomicBool::new(false)),
             api_status: Arc::new(AtomicU8::new(0)),
             api_bind: Arc::new(AtomicU8::new(0)),
             writes_log: Arc::new(Mutex::new(WritesLogState::default())),
@@ -98,6 +99,7 @@ impl App {
         app.sync_api_device();
         app.sync_api_read_only();
         app.sync_api_allow_unit_id();
+        app.sync_api_allow_raw();
         app.refresh_writes_log_state();
 
         app.sync_auto_widths();
@@ -154,6 +156,7 @@ impl App {
         self.sync_api_device();
         self.sync_api_read_only();
         self.sync_api_allow_unit_id();
+        self.sync_api_allow_raw();
         self.refresh_writes_log_state();
 
         self.clear_read_accumulation();

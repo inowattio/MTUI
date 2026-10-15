@@ -1105,6 +1105,7 @@ settings_fields! {
             ApiEnabled: Toggle => "Server", "Serve the HTTP API while the app runs",
             ApiPort: Number => "Port", "Port for the HTTP API, 0 tries 26127 then any free port",
             ApiUnitIdOverride: Toggle => "Unit ID set", "Let API requests target a unit id other than the configured one",
+            ApiRawFunction: Toggle => "Raw function", "Let the API send any function code with raw bytes through POST /raw",
         ],
     }
     Display {

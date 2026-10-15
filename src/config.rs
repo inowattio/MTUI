@@ -147,6 +147,7 @@ pub struct ApiConfig {
     pub enabled: bool,
     pub port: u16,
     pub unit_id_override: bool,
+    pub raw_function: bool,
 }
 
 impl ApiConfig {
