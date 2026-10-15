@@ -88,6 +88,10 @@ paths:
           description: No device is currently connected
         "502":
           description: The device read failed (Modbus / transport error)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FailureResponse"
 
   /write:
     post:
@@ -152,6 +156,10 @@ paths:
           description: No device is currently connected
         "502":
           description: The device write failed (Modbus / transport error)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FailureResponse"
 
   /health:
     get:
@@ -235,6 +243,25 @@ components:
             the device's configured unit when omitted. Requires the "API unit
             id override" setting to be enabled; a request that sets this while
             the setting is disabled is rejected with `403`.
+
+    FailureResponse:
+      type: object
+      required: [exception, timed_out]
+      properties:
+        exception:
+          type: integer
+          format: uint8
+          minimum: 0
+          maximum: 255
+          nullable: true
+          description: |
+            Modbus exception code answered by the device, or `null` when the
+            failure was not a Modbus exception (timeout, transport error).
+        timed_out:
+          type: boolean
+          description: |
+            `true` when the device did not answer within the configured
+            timeout, `false` otherwise.
 
     ReadResponse:
       type: object

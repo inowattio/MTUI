@@ -1,6 +1,7 @@
 use crate::app::{
     AllowUnitFlag, ApiBindState, ApiDevice, BindStateFlag, BoundPort, ReadOnlyFlag, StatusFlag,
 };
+use crate::compat::Elapsed;
 use crate::modbus::ModbusDevice;
 use crate::register::RegisterType;
 use crate::state::ConnectionStatus;
@@ -15,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::atomic::Ordering;
 use tokio::net::{TcpListener, TcpSocket};
+use tokio_modbus::ExceptionCode;
 
 pub const DEFAULT_PORT: u16 = 26127;
 
@@ -40,6 +42,31 @@ struct ReadRequest {
 #[derive(Serialize)]
 struct ReadResponse {
     values: Vec<u16>,
+}
+
+#[derive(Serialize)]
+struct FailureResponse {
+    exception: Option<u8>,
+    timed_out: bool,
+}
+
+impl FailureResponse {
+    fn from_error(error: &anyhow::Error) -> Self {
+        Self {
+            exception: error
+                .downcast_ref::<ExceptionCode>()
+                .map(|&code| code.into()),
+            timed_out: error.downcast_ref::<Elapsed>().is_some(),
+        }
+    }
+}
+
+fn failure(error: &anyhow::Error) -> Response {
+    (
+        StatusCode::BAD_GATEWAY,
+        Json(FailureResponse::from_error(error)),
+    )
+        .into_response()
 }
 
 #[derive(Deserialize)]
@@ -147,7 +174,7 @@ async fn read_handler(State(state): State<ApiState>, Json(request): Json<ReadReq
         Err(e) => {
             log::error!("API read failed: {e}");
             record_outcome(&state, false);
-            StatusCode::BAD_GATEWAY.into_response()
+            failure(&e)
         }
     }
 }
@@ -155,7 +182,7 @@ async fn read_handler(State(state): State<ApiState>, Json(request): Json<ReadReq
 async fn write_handler(
     State(state): State<ApiState>,
     Json(request): Json<WriteRequest>,
-) -> StatusCode {
+) -> Response {
     log::info!(
         "API write {:?}@{} unit={} {:?}",
         request.register_type,
@@ -165,21 +192,21 @@ async fn write_handler(
     );
     if state.read_only.load(Ordering::Relaxed) {
         log::warn!("API write rejected due to read-only mode");
-        return StatusCode::FORBIDDEN;
+        return StatusCode::FORBIDDEN.into_response();
     }
     if unit_override_forbidden(&state, request.unit_id) {
         log::warn!("API write rejected: unit id override is disabled");
-        return StatusCode::FORBIDDEN;
+        return StatusCode::FORBIDDEN.into_response();
     }
     if !request.register_type.is_writable() {
         log::warn!(
             "API write rejected: {:?} is read-only",
             request.register_type
         );
-        return StatusCode::BAD_REQUEST;
+        return StatusCode::BAD_REQUEST.into_response();
     }
     let Some(device) = current(&state.device) else {
-        return StatusCode::SERVICE_UNAVAILABLE;
+        return StatusCode::SERVICE_UNAVAILABLE.into_response();
     };
     let result = device
         .write_typed(
@@ -204,13 +231,13 @@ async fn write_handler(
                     0x10
                 },
             );
-            StatusCode::NO_CONTENT
+            StatusCode::NO_CONTENT.into_response()
         }
-        Err(_) if device.is_closed() => StatusCode::SERVICE_UNAVAILABLE,
+        Err(_) if device.is_closed() => StatusCode::SERVICE_UNAVAILABLE.into_response(),
         Err(e) => {
             log::error!("API write failed: {e}");
             record_outcome(&state, false);
-            StatusCode::BAD_GATEWAY
+            failure(&e)
         }
     }
 }
@@ -276,4 +303,34 @@ fn record_outcome(state: &ApiState, ok: bool) {
 
 fn unit_override_forbidden(state: &ApiState, unit: Option<u8>) -> bool {
     unit.is_some() && !state.allow_unit_id.load(Ordering::Relaxed)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::FailureResponse;
+    use crate::compat::Elapsed;
+    use crate::modbus::exception_error;
+    use tokio_modbus::ExceptionCode;
+
+    #[test]
+    fn failures_expose_the_exception_number_when_there_is_one() {
+        let custom = FailureResponse::from_error(&exception_error(ExceptionCode::Custom(0x8F)));
+        assert_eq!(custom.exception, Some(143));
+        assert!(!custom.timed_out);
+
+        let known =
+            FailureResponse::from_error(&exception_error(ExceptionCode::IllegalDataAddress));
+        assert_eq!(known.exception, Some(2));
+
+        let transport = FailureResponse::from_error(&anyhow::anyhow!("connection reset"));
+        assert_eq!(transport.exception, None);
+        assert!(!transport.timed_out);
+    }
+
+    #[test]
+    fn timeouts_are_flagged_without_an_exception() {
+        let timeout = FailureResponse::from_error(&anyhow::Error::from(Elapsed));
+        assert_eq!(timeout.exception, None);
+        assert!(timeout.timed_out);
+    }
 }
