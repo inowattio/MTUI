@@ -43,6 +43,11 @@ jobs:
       - name: Bump version
         run: sed -i "0,/^version = /s/^version = .*/version = \"${{ inputs.version }}\"/" Cargo.toml
 
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Sync lockfile
+        run: cargo update --workspace
+
       - name: Commit and tag
         id: tag
         run: |
