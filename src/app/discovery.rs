@@ -195,9 +195,9 @@ impl App {
             Ok(device) => {
                 self.device = Some(device);
                 self.sync_api_device();
-                self.refresh_writes_log_state();
                 self.interpreter.set_word_order(config.word_order);
                 self.config.device = config;
+                self.refresh_writes_log_state();
                 self.refresh_dirty();
                 self.clear_read_accumulation();
                 self.connection = ConnectionStatus::Unknown;
