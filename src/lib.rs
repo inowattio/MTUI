@@ -11,6 +11,7 @@ pub mod handler;
 pub mod input;
 pub mod interpretator;
 pub mod logger;
+pub mod mbmap;
 pub mod mock;
 pub mod modbus;
 pub mod num_ops;
