@@ -1,4 +1,4 @@
-use num_traits::{CheckedAdd, CheckedMul};
+use num_traits::{CheckedAdd, CheckedMul, CheckedSub};
 use std::ops::Div;
 
 pub fn digit_remove<T>(v: &mut T)
@@ -11,7 +11,12 @@ where
 
 pub fn digit_add<T>(v: &mut T, digit: u8)
 where
-    T: Copy + From<u8> + CheckedAdd<Output = T> + CheckedMul<Output = T>,
+    T: Copy
+        + PartialOrd
+        + From<u8>
+        + CheckedAdd<Output = T>
+        + CheckedSub<Output = T>
+        + CheckedMul<Output = T>,
 {
     if digit > 9 {
         return;
@@ -19,8 +24,17 @@ where
 
     let ten = T::from(10u8);
     let d = T::from(digit);
+    let negative = *v < T::from(0u8);
 
-    if let Some(c) = v.checked_mul(&ten).and_then(|n| n.checked_add(&d)) {
+    let next = v.checked_mul(&ten).and_then(|n| {
+        if negative {
+            n.checked_sub(&d)
+        } else {
+            n.checked_add(&d)
+        }
+    });
+
+    if let Some(c) = next {
         *v = c;
     }
 }
@@ -65,7 +79,35 @@ pub fn step_hscroll(current: u16, max: u16, right: bool) -> u16 {
 
 #[cfg(test)]
 mod tests {
-    use super::wrap_index;
+    use super::{digit_add, digit_remove, wrap_index};
+
+    #[test]
+    fn digits_extend_the_magnitude_of_negative_values() {
+        let mut n: i64 = -5;
+        digit_add(&mut n, 3);
+        assert_eq!(n, -53);
+        digit_add(&mut n, 0);
+        assert_eq!(n, -530);
+        digit_remove(&mut n);
+        assert_eq!(n, -53);
+    }
+
+    #[test]
+    fn digits_append_to_positive_values_and_stop_on_overflow() {
+        let mut n: i64 = 12;
+        digit_add(&mut n, 3);
+        assert_eq!(n, 123);
+
+        let mut p: u16 = 6553;
+        digit_add(&mut p, 5);
+        assert_eq!(p, 65535);
+        digit_add(&mut p, 1);
+        assert_eq!(p, 65535);
+
+        let mut m: i64 = i64::MIN / 10;
+        digit_add(&mut m, 9);
+        assert_eq!(m, i64::MIN / 10);
+    }
 
     #[test]
     fn wrapping_moves_in_both_directions_and_round_trips_at_the_ends() {
