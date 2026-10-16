@@ -661,7 +661,8 @@ impl CustomParams {
             return false;
         };
         let i = (i as usize).min(self.list_len().saturating_sub(1));
-        match self.current_field() {
+        let field = self.current_field();
+        match field {
             CustomField::Enum if !self.enum_map.is_empty() => {
                 self.enum_map.remove(i);
             }
@@ -670,6 +671,7 @@ impl CustomParams {
             }
             _ => {}
         }
+        self.reselect(field);
         let len = self.list_len();
         self.list_index = (len > 0).then(|| (i.min(len - 1)) as u16);
         true
@@ -758,6 +760,23 @@ mod custom_params_tests {
         c.list_remove();
         assert!(c.bits.is_empty());
         assert_eq!(c.enum_map.len(), 3);
+    }
+
+    #[test]
+    fn removing_the_last_bit_stays_on_bits_and_leaves_the_list() {
+        let mut c = params();
+        c.reselect(CustomField::Bits);
+        c.toggle_list();
+        c.list_remove();
+        assert_eq!(c.current_field(), CustomField::Bits);
+        assert_eq!(c.list_index, None);
+
+        c.list_remove();
+        assert_eq!(
+            c.enum_map.len(),
+            3,
+            "a second removal must not reach the enum list"
+        );
     }
 }
 
