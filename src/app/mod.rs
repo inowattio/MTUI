@@ -314,6 +314,7 @@ struct QueuedWrite {
     number: i64,
     write_type: WriteType,
     func: crate::state::WriteFunc,
+    raw: bool,
 }
 
 #[derive(Debug)]

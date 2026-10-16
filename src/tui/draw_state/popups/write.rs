@@ -1,4 +1,4 @@
-use crate::app::WriteType;
+use crate::app::{App, WriteType};
 use crate::config::AddressMode;
 use crate::config::Keybinds;
 use crate::input::KeyCode;
@@ -32,15 +32,10 @@ fn push_result(lines: &mut Vec<Line<'static>>, theme: &Theme, write: &WriteParam
     }
 }
 
-pub(super) fn draw(
-    frame: &mut Frame,
-    area: Rect,
-    theme: &Theme,
-    kb: &Keybinds,
-    write: &WriteParams,
-    custom: Option<String>,
-    address_mode: AddressMode,
-) {
+pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, write: &WriteParams) {
+    let kb = &app.config.keybinds;
+    let custom = app.write_custom_preview(write);
+    let address_mode = app.interpreter.address_mode();
     let bits: u16 = match write.write_type {
         WriteType::Word => 16,
         WriteType::DWord => 32,
@@ -157,11 +152,24 @@ pub(super) fn draw(
         label("Func", theme),
         Span::styled(write.func.label(), theme.base()),
     ]));
+    let layout = app.write_layout_text(write);
+    if let Some(text) = &layout {
+        lines.push(Line::from(vec![
+            label("Layout", theme),
+            Span::styled(text.clone(), theme.base()),
+        ]));
+    }
 
     push_result(&mut lines, theme, write);
 
     super::push_footer(&mut lines, theme, footer1);
     lines.push(hints::footer(theme, footer2));
+    if layout.is_some() {
+        lines.push(hints::footer(
+            theme,
+            [Hint::key(KeyCode::Tab, "Rule/raw layout")],
+        ));
+    }
 
     let title = format!(
         "Write [{:?}] @ {}",

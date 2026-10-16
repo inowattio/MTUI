@@ -45,6 +45,7 @@ pub mod message {
     pub const READ_ONLY_ON: &str = "Read-only mode is on (toggle in settings)";
     pub const READ_ONLY: &str = "Read-only mode.";
     pub const ENTER_VALUE: &str = "Enter a value first.";
+    pub const DWORD_NOT_CONTIGUOUS: &str = "Words aren't adjacent, write each in Word mode";
     pub const WRITING: &str = "Writing...";
     pub const READING: &str = "Reading...";
     pub const READ_TASK_STOPPED: &str = "Read failed: task stopped unexpectedly";

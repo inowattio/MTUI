@@ -45,17 +45,7 @@ pub fn draw_popup(
         Popup::Label(l) => label::draw(frame, area, theme, l),
         Popup::Custom(c) => custom::draw(frame, area, theme, app, c),
         Popup::Columns(params) => columns::draw(frame, area, theme, app, params),
-        Popup::Write(write) => {
-            write::draw(
-                frame,
-                area,
-                theme,
-                kb,
-                write,
-                app.write_custom_preview(write),
-                address_mode,
-            );
-        }
+        Popup::Write(write) => write::draw(frame, area, theme, app, write),
         Popup::Unit(params) => {
             unit::draw(
                 frame,

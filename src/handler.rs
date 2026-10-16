@@ -265,6 +265,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
             KeyCode::Esc => app.close_popup(),
             KeyCode::Enter => app.commit_write(),
             c if c == kb.write => app.write_toggle_type(),
+            KeyCode::Tab => app.write_toggle_raw(),
             KeyCode::Up => {
                 if let Some(w) = app.write_mut() {
                     w.value = w.value.and_then(|v| v.checked_sub(1));

@@ -422,6 +422,7 @@ pub struct WriteParams {
     pub write_type: WriteType,
     pub bit_cursor: u16,
     pub func: WriteFunc,
+    pub raw: bool,
 }
 
 impl WriteParams {

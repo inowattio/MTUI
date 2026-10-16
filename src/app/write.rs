@@ -2,6 +2,7 @@ use super::{App, BackgroundTask, PendingWrite, QueuedWrite, WriteOutcome, WriteT
 use crate::compat;
 use crate::constants::UNINTERPRETABLE;
 use crate::constants::message;
+use crate::custom::CustomRule;
 use crate::modbus::WordOrder;
 use crate::num_ops::cycle;
 use crate::register::{RegisterCell, RegisterType};
@@ -32,7 +33,7 @@ impl App {
             WriteType::Coil
         } else if self
             .custom_rule((kind, write_pos))
-            .is_some_and(|rule| rule.repr.register_count() >= 2)
+            .is_some_and(|rule| rule.repr.register_count() == 2)
         {
             WriteType::DWord
         } else {
@@ -40,7 +41,7 @@ impl App {
         };
 
         let value = match write_type {
-            WriteType::DWord => self.dword_value((kind, write_pos)).map(i64::from),
+            WriteType::DWord => self.dword_value((kind, write_pos), false).map(i64::from),
             _ => self.cell_value((kind, write_pos)).map(i64::from),
         };
 
@@ -70,10 +71,20 @@ impl App {
         self.popup_as()
     }
 
-    fn dword_value(&self, (kind, address): RegisterCell) -> Option<u32> {
-        let lo = self.cell_value((kind, address))?;
-        let hi = self.cell_value((kind, address.wrapping_add(1)))?;
-        Some(self.config.device.word_order.make_word(lo, hi))
+    fn dword_layout(&self, cell: RegisterCell, raw: bool) -> ([u16; 2], WordOrder) {
+        dword_layout(
+            self.custom_rule(cell).filter(|_| !raw),
+            cell.1,
+            self.config.device.word_order,
+        )
+    }
+
+    fn dword_value(&self, cell: RegisterCell, raw: bool) -> Option<u32> {
+        let (kind, _) = cell;
+        let ([first, second], order) = self.dword_layout(cell, raw);
+        let lo = self.cell_value((kind, first))?;
+        let hi = self.cell_value((kind, second))?;
+        Some(order.make_word(lo, hi))
     }
 
     pub fn toggle_word_order(&mut self) {
@@ -84,6 +95,36 @@ impl App {
             device.set_word_order(next);
         }
         self.refresh_dirty();
+    }
+
+    fn write_has_rule_layout(&self, w: &WriteParams) -> bool {
+        w.write_type == WriteType::DWord
+            && self
+                .custom_rule((RegisterType::Holding, w.position))
+                .is_some_and(|rule| rule.repr.register_count() == 2)
+    }
+
+    pub fn write_toggle_raw(&mut self) {
+        let applies = self.write().is_some_and(|w| self.write_has_rule_layout(w));
+        if applies && let Some(w) = self.write_mut() {
+            w.raw = !w.raw;
+            w.result = None;
+        }
+    }
+
+    pub fn write_layout_text(&self, w: &WriteParams) -> Option<String> {
+        if !self.write_has_rule_layout(w) {
+            return None;
+        }
+        let ([first, second], order) =
+            self.dword_layout((RegisterType::Holding, w.position), w.raw);
+        let mode = self.interpreter.address_mode();
+        let source = if w.raw { "Raw" } else { "Rule" };
+        Some(format!(
+            "{source} {} + {} ({order:?})",
+            mode.display(first),
+            mode.display(second)
+        ))
     }
 
     pub fn write_custom_preview(&self, w: &WriteParams) -> Option<String> {
@@ -105,16 +146,17 @@ impl App {
             return Some(UNINTERPRETABLE.to_string());
         }
 
+        let ([_, second_address], order) = self.dword_layout(cell, w.raw);
         let (value, second) = match w.write_type {
             WriteType::Coil => ((number != 0) as u16, None),
             WriteType::Word => (number as u16, None),
             WriteType::DWord => {
-                let [first, second] = self.config.device.word_order.split_word(number as u32);
+                let [first, second] = order.split_word(number as u32);
                 (first, Some(second))
             }
         };
         let at = |address: u16| {
-            if address == w.position.wrapping_add(1) && second.is_some() {
+            if address == second_address && second.is_some() {
                 return second;
             }
             self.read_log.get(&(kind, address)).map(|e| e.value)
@@ -143,8 +185,20 @@ impl App {
                 number,
                 write_type: w.write_type,
                 func: w.func,
+                raw: w.raw,
             }
         };
+
+        if queued.write_type == WriteType::DWord {
+            let ([first, second], _) =
+                self.dword_layout((RegisterType::Holding, queued.position), queued.raw);
+            if second != first.wrapping_add(1) {
+                if let Some(w) = self.write_mut() {
+                    w.result = Some(StatusMessage::err(message::DWORD_NOT_CONTIGUOUS));
+                }
+                return;
+            }
+        }
 
         if let Some(task) = &self.background_task {
             let reading = matches!(task, BackgroundTask::Refresh(_));
@@ -181,6 +235,7 @@ impl App {
             number,
             write_type,
             func,
+            raw,
         } = queued;
         let kind = if write_type == WriteType::Coil {
             RegisterType::Coil
@@ -192,7 +247,7 @@ impl App {
             WriteType::Word => (self.cell_value(cell).map(u64::from), (number as u16) as u64),
             WriteType::Coil => (self.cell_value(cell).map(u64::from), (number != 0) as u64),
             WriteType::DWord => (
-                self.dword_value(cell).map(u64::from),
+                self.dword_value(cell, raw).map(u64::from),
                 (number as u32) as u64,
             ),
         };
@@ -205,7 +260,7 @@ impl App {
             new_value,
         });
 
-        let word_order = self.config.device.word_order;
+        let (_, word_order) = self.dword_layout(cell, raw);
         self.background_task = Some(BackgroundTask::Write(compat::spawn(async move {
             let words = match write_type {
                 WriteType::Word => vec![number as u16],
@@ -325,6 +380,23 @@ impl App {
     }
 }
 
+fn dword_layout(
+    rule: Option<&CustomRule>,
+    address: u16,
+    device_order: WordOrder,
+) -> ([u16; 2], WordOrder) {
+    match rule {
+        Some(rule) if rule.repr.register_count() == 2 => {
+            let second = rule
+                .word_addresses()
+                .nth(1)
+                .unwrap_or_else(|| address.wrapping_add(1));
+            ([address, second], rule.word_order.unwrap_or(device_order))
+        }
+        _ => ([address, address.wrapping_add(1)], device_order),
+    }
+}
+
 fn read_back_message(read_back: Option<u128>, written: u64) -> String {
     match read_back {
         None => "Write OK".to_string(),
@@ -335,12 +407,58 @@ fn read_back_message(read_back: Option<u128>, written: u64) -> String {
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
-    use super::read_back_message;
+    use super::{dword_layout, read_back_message};
     use crate::app::{App, BackgroundTask};
     use crate::config::Config;
     use crate::constants::message;
+    use crate::custom::{CustomRepr, CustomRule};
+    use crate::modbus::WordOrder;
     use crate::register::RegisterType;
     use crate::state::{MessageKind, WriteParams};
+
+    fn rule(repr: CustomRepr, address: u16) -> CustomRule {
+        CustomRule {
+            repr,
+            address,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn dword_layout_without_a_rule_is_contiguous_in_device_order() {
+        assert_eq!(
+            dword_layout(None, 100, WordOrder::CDAB),
+            ([100, 101], WordOrder::CDAB)
+        );
+    }
+
+    #[test]
+    fn dword_layout_follows_the_rules_next_address_and_word_order() {
+        let mut r = rule(CustomRepr::U32, 520);
+        r.next = vec![524];
+        r.word_order = Some(WordOrder::DCBA);
+        assert_eq!(
+            dword_layout(Some(&r), 520, WordOrder::ABCD),
+            ([520, 524], WordOrder::DCBA)
+        );
+
+        let r = rule(CustomRepr::F32, 520);
+        assert_eq!(
+            dword_layout(Some(&r), 520, WordOrder::BADC),
+            ([520, 521], WordOrder::BADC)
+        );
+    }
+
+    #[test]
+    fn dword_layout_ignores_rules_that_are_not_two_registers_wide() {
+        let mut r = rule(CustomRepr::F64, 520);
+        r.next = vec![524];
+        r.word_order = Some(WordOrder::DCBA);
+        assert_eq!(
+            dword_layout(Some(&r), 520, WordOrder::ABCD),
+            ([520, 521], WordOrder::ABCD)
+        );
+    }
 
     async fn write_popup() -> App {
         let mut app = App::boot(Config::default(), String::new()).await;
