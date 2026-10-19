@@ -38,12 +38,16 @@ Escape
 Sleep 400ms
 
 # graph on the "frequency" input
-Up@250ms 4
+Down
 Sleep 400ms
 Type "g"
 Sleep 5.4s
 Type "g"
 Sleep 800ms
+
+# shrink the batch
+Type@300ms "[["
+Sleep 600ms
 
 # jump to the "seconds" register by label
 Type "j"
