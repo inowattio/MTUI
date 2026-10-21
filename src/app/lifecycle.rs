@@ -1165,6 +1165,7 @@ mod tests {
             data_bits: DataBits::Eight,
             parity: Parity::None,
             stop_bits: StopBits::One,
+            local_echo: false,
         })
     }
 
