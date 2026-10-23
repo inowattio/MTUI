@@ -45,17 +45,17 @@ Sleep 5.4s
 Type "g"
 Sleep 800ms
 
-# shrink the batch
-Type@300ms "[["
-Sleep 600ms
-
 # jump to the "seconds" register by label
 Type "j"
-Sleep 1.25s
+Sleep 500ms
 Type "sec"
 Sleep 1.5s
 Enter
-Sleep 1.65s
+Sleep 200ms
+
+# shrink the batch
+Type@300ms "[["
+Sleep 600ms
 
 # custom rule on "seconds": /60, 1 decimal, " min"
 Type "m"
@@ -72,7 +72,7 @@ Down@250ms 2
 Type " min"
 Sleep 1.5s
 Enter
-Sleep 1.95s
+Sleep 2s
 
 # settings: Display -> Show frame render time
 Type "s"
