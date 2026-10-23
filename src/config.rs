@@ -221,6 +221,22 @@ impl AddressMode {
         }
     }
 
+    const fn radix(self) -> u16 {
+        match self {
+            Self::Dec => 10,
+            Self::Hex => 16,
+        }
+    }
+
+    pub fn push_digit(self, address: u16, ch: char) -> Option<u16> {
+        let digit = ch.to_digit(u32::from(self.radix()))? as u16;
+        address.checked_mul(self.radix())?.checked_add(digit)
+    }
+
+    pub const fn pop_digit(self, address: u16) -> u16 {
+        address / self.radix()
+    }
+
     pub fn parse(self, text: &str) -> Option<u16> {
         let text = text.trim();
         if let Some(hex) = text.strip_prefix("0x").or_else(|| text.strip_prefix("0X")) {
@@ -978,6 +994,18 @@ mod tests {
             format!("{:>5}|", AddressMode::Hex.display(u16::MAX)),
             " FFFF|"
         );
+    }
+
+    #[test]
+    fn address_mode_types_digits_in_its_own_radix() {
+        assert_eq!(AddressMode::Dec.push_digit(25, '6'), Some(256));
+        assert_eq!(AddressMode::Hex.push_digit(0x10, '0'), Some(0x100));
+        assert_eq!(AddressMode::Hex.push_digit(0xF, 'f'), Some(0xFF));
+        assert_eq!(AddressMode::Dec.push_digit(1, 'f'), None);
+        assert_eq!(AddressMode::Dec.push_digit(6553, '6'), None);
+        assert_eq!(AddressMode::Hex.push_digit(0xFFFF, '0'), None);
+        assert_eq!(AddressMode::Dec.pop_digit(256), 25);
+        assert_eq!(AddressMode::Hex.pop_digit(0x100), 0x10);
     }
 
     #[test]

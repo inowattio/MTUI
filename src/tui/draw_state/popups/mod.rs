@@ -57,7 +57,9 @@ pub fn draw_popup(
                 address_mode,
             );
         }
-        Popup::SweepConfig(s) => sweep_config::draw(frame, area, theme, *s, app.sweep.active),
+        Popup::SweepConfig(s) => {
+            sweep_config::draw(frame, area, theme, *s, app.sweep.active, address_mode);
+        }
         Popup::Logs(logs) => logs::draw(
             frame,
             area,

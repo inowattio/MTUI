@@ -400,7 +400,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
                     app.sweep_config_toggle();
                 }
                 KeyCode::Backspace => app.sweep_config_backspace(field),
-                KeyCode::Char(c) if c.is_ascii_digit() => app.sweep_config_digit(field, c),
+                KeyCode::Char(c) if c.is_ascii_hexdigit() => app.sweep_config_digit(field, c),
                 _ => {}
             }
         }
