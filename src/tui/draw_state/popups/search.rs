@@ -54,7 +54,7 @@ pub(super) fn draw(
             " Type an address or a label. Prefixes:",
             " h/i/c/d  register type",
             " +/-      relative to the cursor",
-            " n/x      decimal / hex",
+            " n/x      explicit decimal / hex",
         ] {
             lines.push(Line::from(Span::styled(hint, theme.dim_style())));
         }
