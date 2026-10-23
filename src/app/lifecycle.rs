@@ -511,7 +511,6 @@ impl App {
         };
 
         let read_main = sweeping || matches!(panel, ReadPanel::Main | ReadPanel::Matrix);
-        self.connection = ConnectionStatus::Reading;
 
         let mut graph_registers = self.graph_extra_registers();
         if read_main {
@@ -533,6 +532,12 @@ impl App {
             regs.dedup();
             regs
         };
+
+        if !read_main && panel_registers.is_empty() {
+            self.read_mut().finish_read();
+            return;
+        }
+        self.connection = ConnectionStatus::Reading;
 
         let full_spans = if self.config.batch.read_full_customs {
             custom_full_spans(&self.custom_rules)
