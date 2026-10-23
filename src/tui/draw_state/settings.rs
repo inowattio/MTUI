@@ -346,7 +346,13 @@ fn field_value(
         SettingsField::WriteLogEnabled => (on_off(device.write_log.enabled), None),
         SettingsField::StartupPanel => (device.startup.panel.name().to_string(), None),
         SettingsField::StartupType => (device.startup.register_type.name().to_string(), None),
-        SettingsField::StartupAddress => (device.startup.address.to_string(), None),
+        SettingsField::StartupAddress => (
+            app.interpreter
+                .address_mode()
+                .display(device.startup.address)
+                .to_string(),
+            None,
+        ),
         SettingsField::SavePositionOnExit => (on_off(device.save_position_on_exit), None),
         SettingsField::CycleHoldings => (on_off(device.cycle_register_types.holdings), None),
         SettingsField::CycleInputs => (on_off(device.cycle_register_types.inputs), None),

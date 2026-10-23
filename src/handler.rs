@@ -766,6 +766,7 @@ fn handle_settings_field_key(key_event: KeyEvent, app: &mut App) {
         },
         KeyCode::Backspace => app.settings_backspace(field),
         KeyCode::Char(c) if field.is_text_input() => app.settings_text_input(field, c),
+        KeyCode::Char(c) if field == SettingsField::StartupAddress => app.settings_address_digit(c),
         KeyCode::Char(c) if c.is_ascii_digit() => app.settings_digit(field, c as u8 - b'0'),
         _ => {}
     }
@@ -843,7 +844,7 @@ fn handle_keybinds_key(key_event: KeyEvent, app: &mut App) {
 mod tests {
     use super::handle_key_events;
     use crate::app::App;
-    use crate::config::{Config, KeybindAction};
+    use crate::config::{AddressMode, Config, KeybindAction};
     use crate::input::{KeyCode, KeyEvent};
     use crate::scratch::ScratchDir;
     use crate::state::{
@@ -1131,6 +1132,50 @@ mod tests {
         app.config.save_position_on_exit = false;
         handle_key_events(KeyEvent::new(KeyCode::Right), &mut app).await;
         assert_eq!(app.config.startup.address, address + 1);
+    }
+
+    #[tokio::test]
+    async fn the_startup_address_is_typed_in_the_address_mode() {
+        let mut app = app().await;
+        app.open_settings();
+        let category = SettingsCategory::ALL
+            .iter()
+            .position(|&c| c == SettingsCategory::Data)
+            .unwrap() as u16;
+        let index = SettingsCategory::Data
+            .fields()
+            .iter()
+            .position(|&f| f == SettingsField::StartupAddress)
+            .unwrap() as u16;
+        {
+            let s = app.settings_mut().unwrap();
+            s.category = category;
+            s.focus = SettingsFocus::Fields;
+            s.field = index;
+        }
+        app.config.save_position_on_exit = false;
+
+        app.config.startup.address = 0;
+        for c in "200".chars() {
+            handle_key_events(KeyEvent::new(KeyCode::Char(c)), &mut app).await;
+        }
+        assert_eq!(app.config.startup.address, 200);
+        for c in "f".chars() {
+            handle_key_events(KeyEvent::new(KeyCode::Char(c)), &mut app).await;
+        }
+        assert_eq!(
+            app.config.startup.address, 200,
+            "decimal ignores hex digits"
+        );
+
+        app.interpreter.set_address_mode(AddressMode::Hex);
+        app.config.startup.address = 0;
+        for c in "C8".chars() {
+            handle_key_events(KeyEvent::new(KeyCode::Char(c)), &mut app).await;
+        }
+        assert_eq!(app.config.startup.address, 0xC8);
+        handle_key_events(KeyEvent::new(KeyCode::Backspace), &mut app).await;
+        assert_eq!(app.config.startup.address, 0xC);
     }
 
     #[tokio::test]

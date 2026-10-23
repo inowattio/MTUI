@@ -314,6 +314,17 @@ impl App {
         self.refresh_dirty();
     }
 
+    pub fn settings_address_digit(&mut self, c: char) {
+        if self.settings_field_disabled(SettingsField::StartupAddress) {
+            return;
+        }
+        let mode = self.interpreter.address_mode();
+        if let Some(next) = mode.push_digit(self.config.startup.address, c) {
+            self.config.startup.address = next;
+            self.refresh_dirty();
+        }
+    }
+
     pub fn settings_text_input(&mut self, field: SettingsField, c: char) {
         match field {
             SettingsField::LoadConfig => {
@@ -377,6 +388,12 @@ impl App {
                 }
                 self.refresh_dirty();
             }
+            return;
+        }
+        if field == SettingsField::StartupAddress {
+            let mode = self.interpreter.address_mode();
+            self.config.startup.address = mode.pop_digit(self.config.startup.address);
+            self.refresh_dirty();
             return;
         }
         let Some((min, _, _)) = Self::numeric_spec(field) else {
