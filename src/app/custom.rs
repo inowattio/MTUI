@@ -282,21 +282,8 @@ impl App {
         value: u16,
         at: &impl Fn(u16) -> Option<u16>,
     ) -> Option<CustomCell> {
-        let (kind, address) = cell;
         let Some(rule) = self.custom_rules.get(&cell) else {
-            if !self.config.display.rule_continuation {
-                return None;
-            }
-            return self
-                .custom_rules
-                .range((kind, 0)..=(kind, u16::MAX))
-                .find_map(|(&(_, owner), r)| {
-                    let continuation = r.continuation(address)?;
-                    Some(CustomCell::PartOf {
-                        owner,
-                        continuation,
-                    })
-                });
+            return self.custom_part_of(cell);
         };
         let mut words = vec![value];
         for word_address in rule.word_addresses().skip(1) {
@@ -307,6 +294,21 @@ impl App {
         }
         let formatted = rule.evaluate(&words, self.config.device.word_order);
         (!formatted.is_empty()).then_some(CustomCell::Value(formatted))
+    }
+
+    pub(super) fn custom_part_of(&self, (kind, address): RegisterCell) -> Option<CustomCell> {
+        if !self.config.display.rule_continuation {
+            return None;
+        }
+        self.custom_rules
+            .range((kind, 0)..=(kind, u16::MAX))
+            .find_map(|(&(_, owner), r)| {
+                let continuation = r.continuation(address)?;
+                Some(CustomCell::PartOf {
+                    owner,
+                    continuation,
+                })
+            })
     }
 
     pub(super) fn custom_marker(&self, cell: CustomCell) -> String {

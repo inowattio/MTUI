@@ -403,11 +403,17 @@ impl Interpretor {
 
     pub fn placeholder(&self, address: u16, label: Option<&str>) -> String {
         let mut row = self.row_buffer();
-        self.placeholder_into(&mut row, address, label);
+        self.placeholder_into(&mut row, address, None, label);
         row
     }
 
-    pub fn placeholder_into(&self, row: &mut String, address: u16, label: Option<&str>) {
+    pub fn placeholder_into(
+        &self,
+        row: &mut String,
+        address: u16,
+        custom: Option<&str>,
+        label: Option<&str>,
+    ) {
         let ctx = RowCtx::new(
             &self.config,
             self.word_order,
@@ -415,7 +421,7 @@ impl Interpretor {
                 address,
                 value: 0,
                 next: [None; LOOKAHEAD],
-                custom: None,
+                custom,
                 time: NO_VALUE,
                 elapsed: None,
                 label,
@@ -424,7 +430,9 @@ impl Interpretor {
 
         for col in self.enabled_columns() {
             let mark = row.len();
-            if col.spec.column.is_meta() {
+            if col.spec.column.is_meta()
+                || (matches!(col.spec.column, Column::Custom) && custom.is_some())
+            {
                 (col.spec.render)(&ctx, col.width, row);
             } else {
                 row.push_str(NO_VALUE);
@@ -1081,6 +1089,23 @@ mod tests {
         };
         assert_eq!(named("label"), "pump", "the label survives with no read");
         assert_eq!(named("u16"), NO_VALUE, "value columns have nothing to show");
+        assert_eq!(named("custom"), NO_VALUE, "no marker, nothing to show");
+    }
+
+    #[test]
+    fn a_placeholder_shows_the_rule_marker_it_is_given() {
+        let i = interpretor();
+        let mut row = i.row_buffer();
+        i.placeholder_into(&mut row, 101, Some("`- 100"), None);
+        let named = |name: &str| {
+            i.row_segments()
+                .into_iter()
+                .find(|s| s.name == name)
+                .expect("segment")
+                .text(&row)
+        };
+        assert_eq!(named("custom"), "`- 100");
+        assert_eq!(named("u16"), NO_VALUE);
     }
 
     #[test]

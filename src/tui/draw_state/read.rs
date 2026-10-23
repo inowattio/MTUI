@@ -158,11 +158,10 @@ impl TableCtx<'_> {
             }
             let (base_style, continuation) = match app.cell_row_into(&mut text, cell, now, true) {
                 Some(flags) => (theme.row_style(zebra, flags.changed), flags.continuation),
-                None => {
-                    app.interpreter
-                        .placeholder_into(&mut text, addr, app.label(cell));
-                    (theme.placeholder_style(zebra), false)
-                }
+                None => (
+                    theme.placeholder_style(zebra),
+                    app.placeholder_row_into(&mut text, cell, true),
+                ),
             };
             let style = if selected {
                 theme.selected_style()
@@ -239,14 +238,10 @@ impl TableCtx<'_> {
             let (changed, continuation) =
                 match app.cell_row_into(&mut text, (kind, address), now, false) {
                     Some(flags) => (flags.changed, flags.continuation),
-                    None => {
-                        app.interpreter.placeholder_into(
-                            &mut text,
-                            address,
-                            app.label((kind, address)),
-                        );
-                        (false, false)
-                    }
+                    None => (
+                        false,
+                        app.placeholder_row_into(&mut text, (kind, address), false),
+                    ),
                 };
 
             let selected = (top + ord) as u16 == params.pinned_index;

@@ -396,6 +396,21 @@ impl App {
         self.write_cell_row(row, cell, now, markers)
     }
 
+    pub fn placeholder_row_into(
+        &self,
+        row: &mut String,
+        cell: RegisterCell,
+        bracketed: bool,
+    ) -> bool {
+        let marker = self
+            .custom_part_of(cell)
+            .map(|part| if bracketed { part } else { part.detached() })
+            .map(|part| self.custom_marker(part));
+        self.interpreter
+            .placeholder_into(row, cell.1, marker.as_deref(), self.label(cell));
+        marker.is_some()
+    }
+
     fn write_cell_row(
         &self,
         row: &mut String,
