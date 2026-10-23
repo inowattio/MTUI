@@ -192,7 +192,7 @@ impl Column {
 pub fn following(address: u16, count: usize, at: impl Fn(u16) -> Option<u16>) -> Lookahead {
     std::array::from_fn(|i| {
         (i < count)
-            .then(|| at(address.saturating_add(i as u16 + 1)))
+            .then(|| address.checked_add(i as u16 + 1).and_then(&at))
             .flatten()
     })
 }
@@ -1133,8 +1133,13 @@ mod tests {
         );
         assert_eq!(
             following(u16::MAX, 2, at),
-            [Some(u16::MAX), Some(u16::MAX), None, None, None, None, None],
-            "saturates at the top of the address space"
+            [None; LOOKAHEAD],
+            "nothing follows the top of the address space"
+        );
+        assert_eq!(
+            following(u16::MAX - 1, 3, at),
+            [Some(u16::MAX), None, None, None, None, None, None],
+            "stops at the top instead of repeating the last register"
         );
         assert!(following(0, LOOKAHEAD, at).iter().all(Option::is_some));
     }
