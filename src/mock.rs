@@ -33,6 +33,8 @@ use tokio_modbus::{ExceptionCode, Request, Response};
 ///   320..=327  event log, 4 x (code, age seconds) pairs
 ///   1000..=1001 energy Wh (u32), 1002..=1003 on-time s (u32),
 ///   1004       accepted-write counter, 1005..=1006 energy (m10k)
+///   1010..=1013 net energy Wh (i64, negative = exported)
+///   1020..=1027 device id (u128, fixed prefix + serial number)
 ///   1100       status word (bit0 run, bit1 grid, bit2 warn, bit15 heartbeat)
 ///   1101       alarm count
 ///   65520..=65535 zeros, so the end of the address space is readable
@@ -129,6 +131,10 @@ const fn dword(value: u64, index: u16) -> u16 {
     (value >> (48 - 16 * index)) as u16
 }
 
+const fn qword(value: u128, index: u16) -> u16 {
+    (value >> (112 - 16 * index)) as u16
+}
+
 const fn m10k(value: u32, index: u16) -> u16 {
     if index == 0 {
         ((value / 10_000) % 10_000) as u16
@@ -193,6 +199,14 @@ impl MockContext {
     fn energy_wh(&self, t: f64) -> f64 {
         let base_kw = 0.4f64.mul_add(self.unit_id as f64, 3.2);
         50_000.0f64.mul_add(1.0 + self.unit_id as f64, base_kw * 1000.0 * t / 3600.0)
+    }
+
+    fn net_energy_wh(&self, t: f64) -> i64 {
+        10_000 - self.energy_wh(t) as i64 / 4
+    }
+
+    fn device_id(&self) -> u128 {
+        (0xC3A5_9D81_F0B7_E28F << 64) | u128::from(24_000_000 + 1_111 * self.unit_id as u32)
     }
 
     fn grid_present(&self, t: f64) -> bool {
@@ -265,6 +279,8 @@ impl MockContext {
             1002 | 1003 => word(t as u32, addr - 1002),
             1004 => self.write_count,
             1005 | 1006 => m10k(self.energy_wh(t) as u32, addr - 1005),
+            1010..=1013 => dword(self.net_energy_wh(t) as u64, addr - 1010),
+            1020..=1027 => qword(self.device_id(), addr - 1020),
             1100 => self.status_word(t),
             1101 => (t / 97.0) as u16,
             _ => 0,
@@ -671,6 +687,24 @@ mod tests {
             mock.read_discrete_inputs(4, 3).await.unwrap(),
             Err(RESERVED)
         );
+    }
+
+    #[tokio::test]
+    async fn wide_holdings_decode_as_i64_and_u128() {
+        let mut mock = MockContext::make();
+
+        let words = mock.read_holding_registers(1010, 4).await.unwrap().unwrap();
+        let net = words
+            .iter()
+            .fold(0u64, |acc, &w| (acc << 16) | u64::from(w)) as i64;
+        assert!(net < 0, "net energy starts out exported, got {net}");
+
+        let words = mock.read_holding_registers(1020, 8).await.unwrap().unwrap();
+        let id = words
+            .iter()
+            .fold(0u128, |acc, &w| (acc << 16) | u128::from(w));
+        assert_eq!(id, (0xC3A5_9D81_F0B7_E28F << 64) | 24_000_000);
+        assert!(id > u128::from(u64::MAX));
     }
 
     #[tokio::test]
