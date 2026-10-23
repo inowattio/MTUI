@@ -147,7 +147,10 @@ fn parse_target(input: &str, current: u16, mode: AddressMode) -> Option<(u16, St
     let offset = mode.parse_saturating(rest)?;
     let address = (i32::from(current) + sign * i32::from(offset)).clamp(0, i32::from(u16::MAX));
     let symbol = if sign > 0 { '+' } else { '-' };
-    Some((address as u16, format!("move by {symbol}{offset}")))
+    Some((
+        address as u16,
+        format!("move by {symbol}{}", mode.display(offset)),
+    ))
 }
 
 #[cfg(test)]
@@ -220,7 +223,15 @@ mod tests {
         );
         assert_eq!(
             parse_target("+n10", 0, AddressMode::Hex),
-            Some((10, "move by +10".to_string()))
+            Some((10, "move by +A".to_string()))
+        );
+        assert_eq!(
+            parse_target("+10", 0, AddressMode::Hex),
+            Some((16, "move by +10".to_string()))
+        );
+        assert_eq!(
+            parse_target("-x10", 0x20, AddressMode::Hex),
+            Some((0x10, "move by -10".to_string()))
         );
         assert_eq!(
             parse_target(" - 5 ", 10, AddressMode::Dec),
