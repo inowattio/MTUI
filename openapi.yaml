@@ -21,8 +21,8 @@ servers:
       host:
         default: localhost
       port:
-        default: "8080"
-        description: Configured API port (set in mtui; 0 selects an ephemeral port)
+        default: "26127"
+        description: Configured API port (set in mtui; 0 tries 26127, then any free port)
 
 paths:
   /read:
