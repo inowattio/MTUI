@@ -176,7 +176,7 @@ impl DumpHeader {
             return None;
         }
         let kind = register_type(&fields[0])?;
-        let address = parse_address(&fields[self.address], mode)?;
+        let address = mode.parse(&fields[self.address])?;
         let (column, index) = self.raw;
         let value = raw_value(column, &fields[index])?;
         let time = self
@@ -193,17 +193,6 @@ fn register_type(text: &str) -> Option<RegisterType> {
     RegisterType::ALL
         .into_iter()
         .find(|kind| kind.name().eq_ignore_ascii_case(text))
-}
-
-fn parse_address(text: &str, mode: AddressMode) -> Option<u16> {
-    let text = text.trim();
-    if let Some(hex) = text.strip_prefix("0x").or_else(|| text.strip_prefix("0X")) {
-        return u16::from_str_radix(hex, 16).ok();
-    }
-    match mode {
-        AddressMode::Dec => text.parse().ok(),
-        AddressMode::Hex => u16::from_str_radix(text, 16).ok(),
-    }
 }
 
 fn raw_value(column: Column, text: &str) -> Option<u16> {

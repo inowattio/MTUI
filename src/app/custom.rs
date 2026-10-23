@@ -106,6 +106,7 @@ impl App {
     }
 
     pub fn custom_char(&mut self, field: CustomField, ch: char) {
+        let mode = self.interpreter.address_mode();
         self.with_custom(|c| {
             c.error = None;
             c.list_index = None;
@@ -114,7 +115,7 @@ impl App {
                 CustomField::Enum => c.enum_buffer.push(ch),
                 CustomField::Bits => c.bit_buffer.push(ch),
                 CustomField::Next => {
-                    if ch.is_ascii_digit() && c.next_buffer.len() < 5 {
+                    if mode.accepts(&c.next_buffer, ch) && c.next_buffer.len() < 6 {
                         c.next_buffer.push(ch);
                     }
                 }
@@ -181,6 +182,7 @@ impl App {
     }
 
     pub fn custom_enter(&mut self, field: CustomField) {
+        let mode = self.interpreter.address_mode();
         let mut adding = false;
         self.with_custom(|c| {
             adding = match field {
@@ -223,12 +225,12 @@ impl App {
                             c.register_count()
                         ));
                     } else {
-                        match c.next_buffer.trim().parse::<u16>() {
-                            Ok(address) => {
+                        match mode.parse(&c.next_buffer) {
+                            Some(address) => {
                                 c.next.push(address);
                                 c.next_buffer.clear();
                             }
-                            Err(_) => c.error = Some("next: invalid address".to_string()),
+                            None => c.error = Some("next: invalid address".to_string()),
                         }
                     }
                 }

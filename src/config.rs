@@ -220,6 +220,27 @@ impl AddressMode {
             address,
         }
     }
+
+    pub fn parse(self, text: &str) -> Option<u16> {
+        let text = text.trim();
+        if let Some(hex) = text.strip_prefix("0x").or_else(|| text.strip_prefix("0X")) {
+            return u16::from_str_radix(hex, 16).ok();
+        }
+        match self {
+            Self::Dec => text.parse().ok(),
+            Self::Hex => u16::from_str_radix(text, 16).ok(),
+        }
+    }
+
+    pub fn accepts(self, typed: &str, ch: char) -> bool {
+        let prefixed = typed.starts_with("0x") || typed.starts_with("0X");
+        let digit = if self == Self::Hex || prefixed {
+            ch.is_ascii_hexdigit()
+        } else {
+            ch.is_ascii_digit()
+        };
+        digit || (matches!(ch, 'x' | 'X') && typed == "0")
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -957,6 +978,26 @@ mod tests {
             format!("{:>5}|", AddressMode::Hex.display(u16::MAX)),
             " FFFF|"
         );
+    }
+
+    #[test]
+    fn address_mode_parses_in_its_own_radix_or_with_a_0x_prefix() {
+        assert_eq!(AddressMode::Dec.parse("200"), Some(200));
+        assert_eq!(AddressMode::Hex.parse("200"), Some(0x200));
+        assert_eq!(AddressMode::Hex.parse("ffff"), Some(u16::MAX));
+        assert_eq!(AddressMode::Dec.parse("0x200"), Some(0x200));
+        assert_eq!(AddressMode::Dec.parse("C8"), None);
+        assert_eq!(AddressMode::Dec.parse("65536"), None);
+    }
+
+    #[test]
+    fn address_mode_accepts_only_digits_it_can_parse() {
+        assert!(AddressMode::Dec.accepts("", '7'));
+        assert!(!AddressMode::Dec.accepts("", 'c'));
+        assert!(AddressMode::Hex.accepts("", 'c'));
+        assert!(AddressMode::Dec.accepts("0", 'x'));
+        assert!(AddressMode::Dec.accepts("0x", 'c'));
+        assert!(!AddressMode::Hex.accepts("1", 'x'));
     }
 
     #[test]
