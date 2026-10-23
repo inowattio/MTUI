@@ -7,11 +7,13 @@ use crate::constants::CONFIG_PATH;
 use crate::constants::SCAN_PREFIX_RANGE;
 use crate::custom::CustomRule;
 use crate::interpretator::Interpretor;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::modbus::Interface;
 use crate::modbus::{DeviceConfig, DeviceIdAccess, ModbusDevice};
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
-#[cfg(not(target_arch = "wasm32"))]
-use crate::state::ScanMethod;
 use crate::state::{ConnectionStatus, CustomParams, ScreenLayout, State, UnitParams};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::state::{FoundHost, ScanMethod};
 use crate::writes_log::SharedWritesLog;
 use chrono::{DateTime, Utc};
 use std::collections::{BTreeMap, VecDeque};
@@ -186,13 +188,23 @@ impl fmt::Display for ScanRange {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+#[derive(Clone, Debug)]
+struct ModbusProbe {
+    device: DeviceConfig,
+    register_type: RegisterType,
+    address: u16,
+    amount: u16,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 async fn scan_subnet(
     range: ScanRange,
     port: u16,
     method: ScanMethod,
     per_host: Duration,
+    probe: ModbusProbe,
     done: Arc<AtomicUsize>,
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<FoundHost>, String> {
     use futures::stream::{self, StreamExt};
 
     let pinger = match method {
@@ -200,21 +212,35 @@ async fn scan_subnet(
             surge_ping::Client::new(&surge_ping::Config::default())
                 .map_err(|error| format!("ICMP unavailable: {error}"))?,
         ),
-        ScanMethod::Port => None,
+        ScanMethod::Port | ScanMethod::Modbus => None,
     };
     let ident = surge_ping::PingIdentifier(std::process::id() as u16);
 
-    let mut found: Vec<(usize, Ipv4Addr)> = stream::iter(range.hosts().enumerate())
+    let mut found: Vec<(usize, FoundHost)> = stream::iter(range.hosts().enumerate())
         .map(|(index, host)| {
             let done = done.clone();
             let pinger = pinger.clone();
+            let probe = &probe;
             async move {
-                let alive = match &pinger {
-                    Some(client) => ping_host(client, host, ident, index as u16, per_host).await,
-                    None => probe_port(host, port, per_host).await,
+                let reply = match (&pinger, method) {
+                    (Some(client), _) => ping_host(client, host, ident, index as u16, per_host)
+                        .await
+                        .then_some(None),
+                    (None, ScanMethod::Modbus) => {
+                        probe_modbus(probe, host, per_host).await.map(Some)
+                    }
+                    (None, _) => probe_port(host, port, per_host).await.then_some(None),
                 };
                 done.fetch_add(1, Ordering::Relaxed);
-                alive.then_some((index, host))
+                reply.map(|reply| {
+                    (
+                        index,
+                        FoundHost {
+                            ip: host.to_string(),
+                            reply,
+                        },
+                    )
+                })
             }
         })
         .buffer_unordered(256)
@@ -223,7 +249,31 @@ async fn scan_subnet(
         .await;
 
     found.sort_by_key(|(index, _)| *index);
-    Ok(found.into_iter().map(|(_, ip)| ip.to_string()).collect())
+    Ok(found.into_iter().map(|(_, host)| host).collect())
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+async fn probe_modbus(
+    probe: &ModbusProbe,
+    ip: Ipv4Addr,
+    per_host: Duration,
+) -> Option<Result<Vec<u16>, String>> {
+    let mut config = probe.device.clone();
+    config.connect_timeout_ms = per_host.as_millis() as u64;
+    match &mut config.interface {
+        Interface::Tcp(n) | Interface::RtuOverTcp(n) => n.ip = ip.to_string(),
+        Interface::Serial(_) | Interface::Mock => return None,
+    }
+    let result =
+        ModbusDevice::read_once(&config, probe.register_type, probe.address, probe.amount).await;
+    match result {
+        Ok(values) => {
+            log::info!("Network scan | {ip} responded | {values:?}");
+            Some(Ok(values))
+        }
+        Err(e) if e.downcast_ref::<ExceptionCode>().is_some() => Some(Err(e.to_string())),
+        Err(_) => None,
+    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -477,7 +527,7 @@ pub struct App {
     network_scan: Option<ScanProgress>,
     unit_scan: Option<(String, UnitParams)>,
     #[cfg(not(target_arch = "wasm32"))]
-    network_scan_task: Option<TaskHandle<Result<Vec<String>, String>>>,
+    network_scan_task: Option<TaskHandle<Result<Vec<FoundHost>, String>>>,
     #[cfg(not(target_arch = "wasm32"))]
     ports_task: Option<TaskHandle<Vec<String>>>,
     changed: BTreeMap<RegisterCell, DateTime<Utc>>,

@@ -907,6 +907,48 @@ impl ModbusDevice {
         }
     }
 
+    pub async fn read_once(
+        config: &DeviceConfig,
+        register_type: RegisterType,
+        address: u16,
+        count: u16,
+    ) -> Result<Vec<u16>> {
+        let mut context = Self::connect_context(config).await?;
+        let wait = Duration::from_millis(config.request_timeout_ms);
+        let bits_to_words =
+            |bits: Vec<bool>| -> Vec<u16> { bits.into_iter().map(u16::from).collect() };
+        let outcome = match register_type {
+            RegisterType::Holding => {
+                timeout(
+                    context.read_holding_registers(address, count),
+                    wait,
+                    Duration::ZERO,
+                )
+                .await
+            }
+            RegisterType::Input => {
+                timeout(
+                    context.read_input_registers(address, count),
+                    wait,
+                    Duration::ZERO,
+                )
+                .await
+            }
+            RegisterType::Coil => timeout(context.read_coils(address, count), wait, Duration::ZERO)
+                .await
+                .map(|reply| reply.map(|reply| reply.map(bits_to_words))),
+            RegisterType::Discrete => timeout(
+                context.read_discrete_inputs(address, count),
+                wait,
+                Duration::ZERO,
+            )
+            .await
+            .map(|reply| reply.map(|reply| reply.map(bits_to_words))),
+        };
+        let _ = context.disconnect().await;
+        outcome??.map_err(exception_error)
+    }
+
     pub async fn write_typed(
         &self,
         unit: Option<UnitId>,

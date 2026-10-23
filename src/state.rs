@@ -89,6 +89,7 @@ field_enum! {
         #[default]
         Ping,
         Port,
+        Modbus,
     }
 }
 
@@ -97,6 +98,22 @@ impl ScanMethod {
         match self {
             Self::Ping => "ICMP ping",
             Self::Port => "TCP port",
+            Self::Modbus => "Modbus read",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FoundHost {
+    pub ip: String,
+    pub reply: Option<Result<Vec<u16>, String>>,
+}
+
+impl FoundHost {
+    pub fn alive(ip: impl Into<String>) -> Self {
+        Self {
+            ip: ip.into(),
+            reply: None,
         }
     }
 }
@@ -134,6 +151,7 @@ pub enum DiscoveryField {
     Ip,
     NetPort,
     ScanMethod,
+    ScanRepr,
     ScanPrefix,
     ScanNetwork,
     Found(usize),
@@ -163,13 +181,17 @@ pub struct DiscoveryParams {
     pub ip: String,
     pub net_port: u16,
     pub scan_method: ScanMethod,
+    pub scan_ascii: bool,
     pub scan_prefix: u8,
+    pub register_type: RegisterType,
+    pub address: u16,
+    pub amount: u16,
     pub unit_id: u8,
     pub connect_timeout_ms: u64,
     pub command_timeout_ms: u64,
     pub between_commands_ms: u64,
     pub word_order: WordOrder,
-    pub found: Vec<String>,
+    pub found: Vec<FoundHost>,
     pub status: Option<StatusMessage>,
 }
 
@@ -191,7 +213,11 @@ impl Default for DiscoveryParams {
             ip: "127.0.0.1".to_string(),
             net_port: 502,
             scan_method: ScanMethod::default(),
+            scan_ascii: false,
             scan_prefix: DEFAULT_SCAN_PREFIX,
+            register_type: RegisterType::default(),
+            address: 0,
+            amount: 1,
             unit_id: 1,
             connect_timeout_ms: 1000,
             command_timeout_ms: 2000,
@@ -222,12 +248,12 @@ impl DiscoveryParams {
                 .map(Port)
                 .chain([CustomPath, Baud, DataBits, Parity, StopBits])
                 .collect(),
-            InterfaceKind::Tcp | InterfaceKind::RtuOverTcp => {
-                [Ip, NetPort, ScanMethod, ScanPrefix, ScanNetwork]
-                    .into_iter()
-                    .chain((0..self.found.len()).map(Found))
-                    .collect()
-            }
+            InterfaceKind::Tcp | InterfaceKind::RtuOverTcp => [Ip, NetPort, ScanMethod]
+                .into_iter()
+                .chain(self.reads_on_scan().then_some(ScanRepr))
+                .chain([ScanPrefix, ScanNetwork])
+                .chain((0..self.found.len()).map(Found))
+                .collect(),
         }
     }
 
@@ -243,8 +269,13 @@ impl DiscoveryParams {
         Self::BAUD_PRESETS.contains(&self.baud_rate)
     }
 
+    pub fn reads_on_scan(&self) -> bool {
+        self.scan_method == ScanMethod::Modbus
+    }
+
     pub fn cycle_scan_method(&mut self, forward: bool) {
         self.scan_method = crate::num_ops::cycle(&ScanMethod::ALL, self.scan_method, forward);
+        self.clamp_side();
     }
 
     pub fn step_scan_prefix(&mut self, forward: bool) {
@@ -349,7 +380,7 @@ impl DiscoveryParams {
         self.clamp_side();
     }
 
-    pub fn set_found(&mut self, found: Vec<String>) {
+    pub fn set_found(&mut self, found: Vec<FoundHost>) {
         self.found = found;
         self.clamp_side();
     }

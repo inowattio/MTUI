@@ -113,10 +113,8 @@ impl App {
                 app.notify_no_cycle_types();
             }
         } else {
-            let mut read = app.startup_read_params();
-            read.popup = Some(Popup::Discovery(Self::discovery_params(&app.config)));
-            app.state = State::Read(read);
-            app.request_ports();
+            app.state = State::Read(app.startup_read_params());
+            app.open_discovery();
             log::warn!("Started | no device, opened the Device popup");
         }
 
