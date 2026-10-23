@@ -449,6 +449,14 @@ pub fn handle_paste(data: String, app: &mut App) {
         return;
     }
 
+    if app.popup_kind().is_none()
+        && let Some(address) = app.interpreter.address_mode().parse(trimmed)
+    {
+        app.read_mut().position = address;
+        app.scroll_to_cursor();
+        return;
+    }
+
     if trimmed.bytes().all(|b| b.is_ascii_digit()) {
         paste_digits(trimmed, app);
         return;
@@ -1546,6 +1554,31 @@ mod tests {
             Some(PopupKind::Help),
             "other popups ignore it"
         );
+        assert_eq!(snapshot_len(&app), None);
+    }
+
+    #[tokio::test]
+    async fn a_pasted_address_jumps_in_the_address_mode() {
+        let mut app = app().await;
+        for (text, expected) in [("200", 200), ("0x1F", 0x1F)] {
+            paste(&mut app, text);
+            assert_eq!(app.read().position, expected, "{text:?}");
+        }
+
+        app.interpreter.set_address_mode(AddressMode::Hex);
+        for (text, expected) in [
+            ("200", 0x200),
+            ("1F", 0x1F),
+            ("0x1F", 0x1F),
+            (
+                " c8
+", 0xC8,
+            ),
+        ] {
+            paste(&mut app, text);
+            assert_eq!(app.read().position, expected, "{text:?}");
+        }
+        assert_eq!(app.popup_kind(), None);
         assert_eq!(snapshot_len(&app), None);
     }
 
