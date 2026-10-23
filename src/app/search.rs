@@ -156,56 +156,6 @@ fn parse_target(input: &str, current: u16, mode: AddressMode) -> Option<(u16, St
 #[cfg(test)]
 mod tests {
     use super::{AddressMode, parse_target};
-    use crate::app::App;
-    use crate::config::Config;
-    use crate::register::RegisterType;
-    use crate::state::SearchParams;
-
-    #[cfg(not(target_arch = "wasm32"))]
-    async fn search(mode: AddressMode, query: &str) -> Vec<(RegisterType, u16)> {
-        let mut app = App::boot(Config::demo(), String::new()).await;
-        app.interpreter.set_address_mode(mode);
-        app.read_mut().register_type = RegisterType::Holding;
-        app.open_search();
-        for c in query.chars() {
-            app.search_input(c);
-        }
-        app.popup_as::<SearchParams>()
-            .map(|s| s.matches.iter().map(|m| m.cell).collect())
-            .unwrap_or_default()
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    #[tokio::test]
-    async fn hex_mode_offers_the_address_before_the_type_prefix() {
-        let cells = search(AddressMode::Hex, "C8").await;
-        assert_eq!(
-            cells[..2],
-            [(RegisterType::Holding, 0xC8), (RegisterType::Coil, 8)]
-        );
-        let cells = search(AddressMode::Hex, "d0").await;
-        assert_eq!(
-            cells[..2],
-            [(RegisterType::Holding, 0xD0), (RegisterType::Discrete, 0)]
-        );
-        let cells = search(AddressMode::Hex, "C").await;
-        assert_eq!(cells.first(), Some(&(RegisterType::Holding, 0xC)));
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    #[tokio::test]
-    async fn non_hex_prefixes_and_decimal_mode_keep_one_reading() {
-        let cells = search(AddressMode::Hex, "i10").await;
-        assert_eq!(cells.first(), Some(&(RegisterType::Input, 0x10)));
-        assert!(!cells.contains(&(RegisterType::Holding, 0x10)));
-        let cells = search(AddressMode::Dec, "c8").await;
-        assert_eq!(cells.first(), Some(&(RegisterType::Coil, 8)));
-        assert!(
-            !cells
-                .iter()
-                .any(|c| c.0 == RegisterType::Holding && c.1 == 8)
-        );
-    }
 
     #[test]
     fn relative_targets_move_from_the_cursor() {
@@ -248,6 +198,57 @@ mod tests {
         assert_eq!(
             parse_target("+100", 65500, AddressMode::Dec).map(|t| t.0),
             Some(u16::MAX)
+        );
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod app_tests {
+    use crate::app::App;
+    use crate::config::{AddressMode, Config};
+    use crate::register::RegisterType;
+    use crate::state::SearchParams;
+
+    async fn search(mode: AddressMode, query: &str) -> Vec<(RegisterType, u16)> {
+        let mut app = App::boot(Config::demo(), String::new()).await;
+        app.interpreter.set_address_mode(mode);
+        app.read_mut().register_type = RegisterType::Holding;
+        app.open_search();
+        for c in query.chars() {
+            app.search_input(c);
+        }
+        app.popup_as::<SearchParams>()
+            .map(|s| s.matches.iter().map(|m| m.cell).collect())
+            .unwrap_or_default()
+    }
+
+    #[tokio::test]
+    async fn hex_mode_offers_the_address_before_the_type_prefix() {
+        let cells = search(AddressMode::Hex, "C8").await;
+        assert_eq!(
+            cells[..2],
+            [(RegisterType::Holding, 0xC8), (RegisterType::Coil, 8)]
+        );
+        let cells = search(AddressMode::Hex, "d0").await;
+        assert_eq!(
+            cells[..2],
+            [(RegisterType::Holding, 0xD0), (RegisterType::Discrete, 0)]
+        );
+        let cells = search(AddressMode::Hex, "C").await;
+        assert_eq!(cells.first(), Some(&(RegisterType::Holding, 0xC)));
+    }
+
+    #[tokio::test]
+    async fn non_hex_prefixes_and_decimal_mode_keep_one_reading() {
+        let cells = search(AddressMode::Hex, "i10").await;
+        assert_eq!(cells.first(), Some(&(RegisterType::Input, 0x10)));
+        assert!(!cells.contains(&(RegisterType::Holding, 0x10)));
+        let cells = search(AddressMode::Dec, "c8").await;
+        assert_eq!(cells.first(), Some(&(RegisterType::Coil, 8)));
+        assert!(
+            !cells
+                .iter()
+                .any(|c| c.0 == RegisterType::Holding && c.1 == 8)
         );
     }
 }
