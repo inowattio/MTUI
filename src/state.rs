@@ -1186,7 +1186,7 @@ settings_fields! {
             ShowMatrixContext: Toggle => "Show matrix context", "Show the custom value and label of the selected register under the Matrix panel",
             GraphTimeAxis: Toggle => "Graph time axis", "Plot the graph against time instead of sample count",
             ChangedExpiry: Number => "Changed highlight (ms)", "How long a changed value stays highlighted, 0 never clears it",
-            ShowRuleContinuation: Toggle => "Show \"part of\" marker", "Mark registers that belong to a multi-register custom rule",
+            ShowRuleContinuation: Toggle => "Show rule continuation", "Mark the other registers of a multi-register custom rule, pointing to its value",
         ],
         [
             PaddingHorizontal: Number => "Horizontal padding", "Empty columns kept on both sides of the interface",

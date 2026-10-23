@@ -1,5 +1,5 @@
 use super::{App, build_custom_rule};
-use crate::custom::{CustomRepr, parse_bit, parse_enum, parse_op};
+use crate::custom::{CustomCell, CustomRepr, parse_bit, parse_enum, parse_op};
 use crate::interpretator::fmt_num;
 use crate::modbus::WordOrder;
 use crate::num_ops::{cycle, wrap_index};
@@ -252,7 +252,7 @@ impl App {
         cell: RegisterCell,
         value: u16,
         at: &impl Fn(u16) -> Option<u16>,
-    ) -> Option<String> {
+    ) -> Option<CustomCell> {
         let (kind, address) = cell;
         let Some(rule) = self.custom_rules.get(&cell) else {
             if !self.config.display.rule_continuation {
@@ -262,11 +262,10 @@ impl App {
                 .custom_rules
                 .range((kind, 0)..=(kind, u16::MAX))
                 .find_map(|(&(_, owner), r)| {
-                    let position = r.word_addresses().skip(1).position(|a| a == address)? as u16;
-                    Some(if address == owner.wrapping_add(position + 1) {
-                        "part of ^".to_string()
-                    } else {
-                        format!("part of {}", self.interpreter.address_mode().display(owner))
+                    let continuation = r.continuation(address)?;
+                    Some(CustomCell::PartOf {
+                        owner,
+                        continuation,
                     })
                 });
         };
@@ -278,7 +277,26 @@ impl App {
             }
         }
         let formatted = rule.evaluate(&words, self.config.device.word_order);
-        (!formatted.is_empty()).then_some(formatted)
+        (!formatted.is_empty()).then_some(CustomCell::Value(formatted))
+    }
+
+    pub(super) fn custom_marker(&self, cell: CustomCell) -> String {
+        match cell {
+            CustomCell::Value(text) => text,
+            CustomCell::PartOf {
+                owner,
+                continuation,
+            } => continuation.marker(self.interpreter.address_mode().display(owner)),
+        }
+    }
+
+    pub(super) fn custom_description(&self, cell: CustomCell) -> String {
+        match cell {
+            CustomCell::Value(text) => text,
+            CustomCell::PartOf { owner, .. } => {
+                format!("part of {}", self.interpreter.address_mode().display(owner))
+            }
+        }
     }
 
     pub fn custom_preview(&self, c: &CustomParams) -> Result<CustomPreview, String> {

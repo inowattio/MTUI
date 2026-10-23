@@ -391,6 +391,12 @@ impl Interpretor {
         segments
     }
 
+    pub fn segment(&self, column: Column) -> Option<RowSegment> {
+        self.row_segments()
+            .into_iter()
+            .find(|segment| segment.name == column.name())
+    }
+
     pub fn row_buffer(&self) -> String {
         String::with_capacity(self.header.len() + 32)
     }

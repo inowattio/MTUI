@@ -2,7 +2,7 @@ use super::{App, BackgroundTask, PendingWrite, QueuedWrite, WriteOutcome, WriteT
 use crate::compat;
 use crate::constants::UNINTERPRETABLE;
 use crate::constants::message;
-use crate::custom::CustomRule;
+use crate::custom::{CustomCell, CustomRule};
 use crate::modbus::WordOrder;
 use crate::num_ops::cycle;
 use crate::register::{RegisterCell, RegisterType};
@@ -162,6 +162,7 @@ impl App {
             self.read_log.get(&(kind, address)).map(|e| e.value)
         };
         self.custom_value(cell, value, &at)
+            .and_then(CustomCell::value)
     }
 
     pub fn commit_write(&mut self) {

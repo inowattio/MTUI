@@ -3,6 +3,7 @@ use super::App;
 use super::dropped::dropped_dump;
 use crate::config::Column;
 use crate::constants::{NO_VALUE, message};
+use crate::custom::CustomCell;
 use crate::interpretator::{RowSegment, following};
 use crate::num_ops::step_hscroll;
 use crate::register::RegisterCell;
@@ -180,7 +181,9 @@ impl App {
     ) -> String {
         let (kind, addr) = cell;
         let at = |address: u16| snapshot.get(&(kind, address)).map(|e| e.value);
-        let custom = self.custom_value(cell, entry.value, &at);
+        let custom = self
+            .custom_value(cell, entry.value, &at)
+            .and_then(CustomCell::value);
         self.interpreter.format_row(
             addr,
             entry.value,

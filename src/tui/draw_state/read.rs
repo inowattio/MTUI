@@ -3,7 +3,7 @@ use crate::app::App;
 use crate::config::{Column, Config};
 use crate::constants::{NO_VALUE, UNINTERPRETABLE};
 use crate::input::KeyCode;
-use crate::interpretator::fmt_num;
+use crate::interpretator::{RowSegment, fmt_num};
 use crate::register::{RegisterCell, RegisterType};
 use crate::state::ConnectionStatus;
 use crate::state::{ReadPanel, ReadParams, ScreenLayout};
@@ -36,21 +36,28 @@ fn ascii_title(ascii: &str, theme: &Theme) -> Line<'static> {
     Line::from(Span::styled(format!(" '{ascii}'"), theme.base())).right_aligned()
 }
 
-fn picked_row(text: String, style: Style, start: usize, width: usize) -> TableRow {
+type Shade = (usize, usize, Style);
+
+fn shaded_row(text: String, style: Style, (start, width, shade): Shade) -> TableRow {
     let chars: Vec<char> = text.chars().collect();
     let start = start.min(chars.len());
     let end = start.saturating_add(width).min(chars.len());
     TableRow {
         spans: vec![
             Span::styled(chars[..start].iter().collect::<String>(), style),
-            Span::styled(
-                chars[start..end].iter().collect::<String>(),
-                style.add_modifier(Modifier::REVERSED),
-            ),
+            Span::styled(chars[start..end].iter().collect::<String>(), shade),
             Span::styled(chars[end..].iter().collect::<String>(), style),
         ],
         style,
     }
+}
+
+fn continuation_shade(segment: RowSegment, lead: u16, style: Style, theme: &Theme) -> Shade {
+    (
+        segment.start + lead as usize,
+        segment.width,
+        style.patch(theme.dim_style()),
+    )
 }
 
 fn rows_table(
@@ -71,10 +78,15 @@ struct TableCtx<'a> {
 }
 
 impl TableCtx<'_> {
-    fn horizontal_offset(&mut self, rows: &[(String, Style)], header: &str, prefix: u16) -> u16 {
+    fn horizontal_offset(
+        &mut self,
+        rows: &[(String, Style, Option<Shade>)],
+        header: &str,
+        prefix: u16,
+    ) -> u16 {
         let widths = rows
             .iter()
-            .map(|(t, _)| t.chars().count())
+            .map(|(t, _, _)| t.chars().count())
             .chain(std::iter::once(header.chars().count()));
         let max_offset = max_h_offset(widths, prefix as usize, self.inner_width as usize);
         self.layout.h_max_offset = max_offset;
@@ -83,7 +95,7 @@ impl TableCtx<'_> {
 
     fn scrollable_table(
         &mut self,
-        rows: Vec<(String, Style)>,
+        rows: Vec<(String, Style, Option<Shade>)>,
         header: &str,
         prefix: u16,
         block: Block<'static>,
@@ -93,9 +105,17 @@ impl TableCtx<'_> {
         let table_rows = rows
             .into_iter()
             .enumerate()
-            .map(|(index, (text, style))| match pick {
-                Some((row, start, width)) if row == index => picked_row(text, style, start, width),
-                _ => TableRow::plain(text, style),
+            .map(|(index, (text, style, shade))| {
+                let shade = match pick {
+                    Some((row, start, width)) if row == index => {
+                        Some((start, width, style.add_modifier(Modifier::REVERSED)))
+                    }
+                    _ => shade,
+                };
+                match shade {
+                    Some(shade) => shaded_row(text, style, shade),
+                    None => TableRow::plain(text, style),
+                }
             })
             .collect();
         rows_table(table_rows, header.to_string(), self.theme, block).hscroll(prefix, h_off)
@@ -109,10 +129,12 @@ impl TableCtx<'_> {
     fn main_table(&mut self, visible: u16, header: &str, ascii: Option<&str>) -> RowsTable {
         let (params, app, theme) = (self.params, self.app, self.theme);
         let now = Utc::now();
-        let mut rows: Vec<(String, Style)> = Vec::with_capacity(visible as usize);
+        let mut rows: Vec<(String, Style, Option<Shade>)> = Vec::with_capacity(visible as usize);
         let mut pick_row = None;
 
         let show_window = app.config.display.read_window;
+        let lead = u16::from(show_window);
+        let custom_segment = app.interpreter.segment(Column::Custom);
         let (read_start, read_amount) = app.read_window();
         let read_end = read_start.saturating_add(read_amount - 1);
         let extra = if show_window {
@@ -134,12 +156,12 @@ impl TableCtx<'_> {
                 let in_window = (read_start..=read_end).contains(&addr) || extra.contains(&cell);
                 text.push(if in_window { '|' } else { ' ' });
             }
-            let base_style = match app.cell_row_into(&mut text, cell, now) {
-                Some(changed) => theme.row_style(zebra, changed),
+            let (base_style, continuation) = match app.cell_row_into(&mut text, cell, now, true) {
+                Some(flags) => (theme.row_style(zebra, flags.changed), flags.continuation),
                 None => {
                     app.interpreter
                         .placeholder_into(&mut text, addr, app.label(cell));
-                    theme.placeholder_style(zebra)
+                    (theme.placeholder_style(zebra), false)
                 }
             };
             let style = if selected {
@@ -147,11 +169,14 @@ impl TableCtx<'_> {
             } else {
                 base_style
             };
+            let shade = custom_segment
+                .filter(|_| continuation && !selected)
+                .map(|segment| continuation_shade(segment, lead, style, theme));
 
             if selected {
                 pick_row = Some(rows.len());
             }
-            rows.push((text, style));
+            rows.push((text, style, shade));
         }
 
         let mut block = panel_block(theme, ReadPanel::Main, &app.config);
@@ -159,7 +184,6 @@ impl TableCtx<'_> {
             block = block.title_top(ascii_title(ascii, theme));
         }
 
-        let lead = u16::from(show_window);
         let pick = self.pick_spans(pick_row, lead);
         if show_window {
             let header = format!(" {header}");
@@ -189,12 +213,14 @@ impl TableCtx<'_> {
             header.insert(0, ' ');
         }
 
-        let mut rows: Vec<(String, Style)> = Vec::with_capacity(cells.len() + 3);
+        let lead = 2 * u16::from(type_marker) + u16::from(show_window);
+        let custom_segment = app.interpreter.segment(Column::Custom);
+        let mut rows: Vec<(String, Style, Option<Shade>)> = Vec::with_capacity(cells.len() + 3);
         let mut pick_row = None;
         let mut prev_kind: Option<RegisterType> = None;
         for (ord, &(kind, address)) in cells.iter().enumerate() {
             if prev_kind.is_some_and(|pk| pk != kind) {
-                rows.push((String::new(), theme.base()));
+                rows.push((String::new(), theme.base(), None));
             }
             prev_kind = Some(kind);
 
@@ -210,25 +236,30 @@ impl TableCtx<'_> {
             if type_marker {
                 let _ = write!(text, "{:<2}", kind.marker());
             }
-            let changed = match app.cell_row_into(&mut text, (kind, address), now) {
-                Some(changed) => changed,
-                None => {
-                    app.interpreter.placeholder_into(
-                        &mut text,
-                        address,
-                        app.label((kind, address)),
-                    );
-                    false
-                }
-            };
+            let (changed, continuation) =
+                match app.cell_row_into(&mut text, (kind, address), now, false) {
+                    Some(flags) => (flags.changed, flags.continuation),
+                    None => {
+                        app.interpreter.placeholder_into(
+                            &mut text,
+                            address,
+                            app.label((kind, address)),
+                        );
+                        (false, false)
+                    }
+                };
 
-            let style = if (top + ord) as u16 == params.pinned_index {
+            let selected = (top + ord) as u16 == params.pinned_index;
+            let style = if selected {
                 pick_row = Some(rows.len());
                 theme.selected_style()
             } else {
                 theme.row_style(ord % 2 == 1, changed)
             };
-            rows.push((text, style));
+            let shade = custom_segment
+                .filter(|_| continuation && !selected)
+                .map(|segment| continuation_shade(segment, lead, style, theme));
+            rows.push((text, style, shade));
         }
 
         let mut block = panel_block(theme, params.panel, &app.config);
@@ -236,7 +267,6 @@ impl TableCtx<'_> {
             block = block.title_top(ascii_title(ascii, theme));
         }
 
-        let lead = 2 * u16::from(type_marker) + u16::from(show_window);
         let pick = self.pick_spans(pick_row, lead);
         let prefix = lead + app.interpreter.prefix_width();
         self.scrollable_table(rows, &header, prefix, block, pick)

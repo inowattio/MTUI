@@ -83,6 +83,51 @@ impl CustomRepr {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Continuation {
+    Middle,
+    End,
+    Detached,
+}
+
+impl Continuation {
+    pub fn marker(self, owner: impl std::fmt::Display) -> String {
+        match self {
+            Self::Middle => "|".to_string(),
+            Self::End => format!("`- {owner}"),
+            Self::Detached => format!("-> {owner}"),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CustomCell {
+    Value(String),
+    PartOf {
+        owner: u16,
+        continuation: Continuation,
+    },
+}
+
+impl CustomCell {
+    pub fn detached(self) -> Self {
+        match self {
+            Self::PartOf { owner, .. } => Self::PartOf {
+                owner,
+                continuation: Continuation::Detached,
+            },
+            value => value,
+        }
+    }
+
+    pub fn value(self) -> Option<String> {
+        match self {
+            Self::Value(text) => Some(text),
+            Self::PartOf { .. } => None,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OpKind {
     Add,
     Sub,
@@ -242,6 +287,19 @@ impl CustomRule {
             };
             *previous = address;
             Some(address)
+        })
+    }
+
+    pub fn continuation(&self, address: u16) -> Option<Continuation> {
+        let words: Vec<u16> = self.word_addresses().collect();
+        let index = words.iter().skip(1).position(|&a| a == address)? + 1;
+        let contiguous = |i: usize| words[i] == self.address.wrapping_add(i as u16);
+        Some(if !contiguous(index) {
+            Continuation::Detached
+        } else if index + 1 < words.len() && contiguous(index + 1) {
+            Continuation::Middle
+        } else {
+            Continuation::End
         })
     }
 
@@ -844,5 +902,50 @@ mod tests {
             }
         );
         assert!(parse_enum("Running").is_err());
+    }
+
+    #[test]
+    fn contiguous_words_bracket_down_to_the_last_one() {
+        let mut r = rule(CustomRepr::F64);
+        r.address = 100;
+        assert_eq!(r.continuation(100), None);
+        assert_eq!(r.continuation(101), Some(Continuation::Middle));
+        assert_eq!(r.continuation(102), Some(Continuation::Middle));
+        assert_eq!(r.continuation(103), Some(Continuation::End));
+        assert_eq!(r.continuation(104), None);
+    }
+
+    #[test]
+    fn a_jump_ends_the_bracket_and_detaches_the_rest() {
+        let mut r = rule(CustomRepr::F64);
+        r.address = 100;
+        r.next = vec![101, 200];
+        assert_eq!(r.continuation(101), Some(Continuation::End));
+        assert_eq!(r.continuation(200), Some(Continuation::Detached));
+        assert_eq!(r.continuation(201), Some(Continuation::Detached));
+    }
+
+    #[test]
+    fn continuation_markers_are_ascii_and_name_the_owner() {
+        assert_eq!(Continuation::Middle.marker(100), "|");
+        assert_eq!(Continuation::End.marker(100), "`- 100");
+        assert_eq!(Continuation::Detached.marker("9C40"), "-> 9C40");
+    }
+
+    #[test]
+    fn detaching_keeps_the_owner_and_leaves_values_alone() {
+        let part = CustomCell::PartOf {
+            owner: 100,
+            continuation: Continuation::Middle,
+        };
+        assert_eq!(
+            part.detached(),
+            CustomCell::PartOf {
+                owner: 100,
+                continuation: Continuation::Detached,
+            }
+        );
+        let value = CustomCell::Value("1.5 V".to_string());
+        assert_eq!(value.clone().detached(), value);
     }
 }
