@@ -245,9 +245,14 @@ impl MockContext {
             254 => ((t / 30.0) as u16) % 4,
             300..=302 => self
                 .setpoint(50)
-                .saturating_sub(self.setpoint(52) + 8 + 3 * (addr - 300)),
-            303..=305 => self.setpoint(50) + self.setpoint(52) + 8 + 3 * (addr - 303),
-            306..=308 => (self.setpoint(51) as f64 * 1.15) as u16 + 9 * (addr - 306),
+                .saturating_sub(self.setpoint(52).saturating_add(8 + 3 * (addr - 300))),
+            303..=305 => self
+                .setpoint(50)
+                .saturating_add(self.setpoint(52))
+                .saturating_add(8 + 3 * (addr - 303)),
+            306..=308 => {
+                ((self.setpoint(51) as f64 * 1.15) as u16).saturating_add(9 * (addr - 306))
+            }
             320..=327 => {
                 let n = (addr - 320) / 2;
                 if (addr - 320).is_multiple_of(2) {
@@ -665,6 +670,29 @@ mod tests {
         assert_eq!(
             mock.read_discrete_inputs(4, 3).await.unwrap(),
             Err(RESERVED)
+        );
+    }
+
+    #[tokio::test]
+    async fn derived_limits_saturate_on_extreme_setpoints() {
+        let mut mock = MockContext::make();
+        mock.write_multiple_registers(50, &[u16::MAX, u16::MAX, u16::MAX])
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            mock.read_holding_registers(300, 9).await.unwrap(),
+            Ok(vec![
+                0,
+                0,
+                0,
+                u16::MAX,
+                u16::MAX,
+                u16::MAX,
+                u16::MAX,
+                u16::MAX,
+                u16::MAX
+            ])
         );
     }
 
