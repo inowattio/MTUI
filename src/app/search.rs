@@ -140,36 +140,19 @@ fn parse_target(input: &str, current: u16, mode: AddressMode) -> Option<(u16, St
     } else if let Some(rest) = input.strip_prefix('-') {
         (-1, rest)
     } else {
-        return parse_address(input, mode)
+        return mode
+            .parse_saturating(input)
             .map(|address| (address, "jump to this address".to_string()));
     };
-    let offset = parse_address(rest, mode)?;
+    let offset = mode.parse_saturating(rest)?;
     let address = (i32::from(current) + sign * i32::from(offset)).clamp(0, i32::from(u16::MAX));
     let symbol = if sign > 0 { '+' } else { '-' };
     Some((address as u16, format!("move by {symbol}{offset}")))
 }
 
-fn parse_address(input: &str, mode: AddressMode) -> Option<u16> {
-    let input = input.trim();
-    let (digits, radix) = if let Some(dec) = input.strip_prefix(['n', 'N']) {
-        (dec, 10)
-    } else if let Some(hex) = input.strip_prefix(['x', 'X']) {
-        (hex, 16)
-    } else if let Some(hex) = input
-        .strip_prefix("0x")
-        .or_else(|| input.strip_prefix("0X"))
-    {
-        (hex, 16)
-    } else {
-        (input, u32::from(mode.radix()))
-    };
-    let value = u32::from_str_radix(digits, radix).ok()?;
-    Some(value.min(u16::MAX as u32) as u16)
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{AddressMode, parse_address, parse_target};
+    use super::{AddressMode, parse_target};
     use crate::app::App;
     use crate::config::Config;
     use crate::register::RegisterType;
@@ -219,27 +202,6 @@ mod tests {
                 .iter()
                 .any(|c| c.0 == RegisterType::Holding && c.1 == 8)
         );
-    }
-
-    #[test]
-    fn parses_bare_addresses_in_the_configured_mode() {
-        assert_eq!(parse_address("111", AddressMode::Dec), Some(111));
-        assert_eq!(parse_address(" 42 ", AddressMode::Dec), Some(42));
-        assert_eq!(parse_address("70000", AddressMode::Dec), Some(u16::MAX));
-        assert_eq!(parse_address("6F", AddressMode::Hex), Some(0x6F));
-        assert_eq!(parse_address("10000", AddressMode::Hex), Some(u16::MAX));
-    }
-
-    #[test]
-    fn prefixes_force_the_radix() {
-        assert_eq!(parse_address("x6F", AddressMode::Dec), Some(0x6F));
-        assert_eq!(parse_address("X6f", AddressMode::Dec), Some(0x6F));
-        assert_eq!(parse_address("0x6F", AddressMode::Dec), Some(0x6F));
-        assert_eq!(parse_address("xFFFF", AddressMode::Dec), Some(u16::MAX));
-        assert_eq!(parse_address("x10000", AddressMode::Dec), Some(u16::MAX));
-        assert_eq!(parse_address("n111", AddressMode::Hex), Some(111));
-        assert_eq!(parse_address("N42", AddressMode::Hex), Some(42));
-        assert_eq!(parse_address("n6F", AddressMode::Hex), None);
     }
 
     #[test]

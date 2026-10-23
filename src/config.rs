@@ -221,7 +221,7 @@ impl AddressMode {
         }
     }
 
-    pub const fn radix(self) -> u16 {
+    const fn radix(self) -> u16 {
         match self {
             Self::Dec => 10,
             Self::Hex => 16,
@@ -237,25 +237,41 @@ impl AddressMode {
         address / self.radix()
     }
 
-    pub fn parse(self, text: &str) -> Option<u16> {
-        let text = text.trim();
-        if let Some(hex) = text.strip_prefix("0x").or_else(|| text.strip_prefix("0X")) {
-            return u16::from_str_radix(hex, 16).ok();
-        }
-        match self {
-            Self::Dec => text.parse().ok(),
-            Self::Hex => u16::from_str_radix(text, 16).ok(),
+    fn split_radix(self, text: &str) -> (&str, u32) {
+        if let Some(hex) = text
+            .strip_prefix("0x")
+            .or_else(|| text.strip_prefix("0X"))
+            .or_else(|| text.strip_prefix(['x', 'X']))
+        {
+            (hex, 16)
+        } else if let Some(dec) = text.strip_prefix(['n', 'N']) {
+            (dec, 10)
+        } else {
+            (text, u32::from(self.radix()))
         }
     }
 
+    fn parse_wide(self, text: &str) -> Option<u32> {
+        let (digits, radix) = self.split_radix(text.trim());
+        u32::from_str_radix(digits, radix).ok()
+    }
+
+    pub fn parse(self, text: &str) -> Option<u16> {
+        u16::try_from(self.parse_wide(text)?).ok()
+    }
+
+    pub fn parse_saturating(self, text: &str) -> Option<u16> {
+        self.parse_wide(text)
+            .map(|value| value.min(u32::from(u16::MAX)) as u16)
+    }
+
     pub fn accepts(self, typed: &str, ch: char) -> bool {
-        let prefixed = typed.starts_with("0x") || typed.starts_with("0X");
-        let digit = if self == Self::Hex || prefixed {
-            ch.is_ascii_hexdigit()
-        } else {
-            ch.is_ascii_digit()
+        let prefix = match typed {
+            "" => matches!(ch, 'x' | 'X' | 'n' | 'N'),
+            "0" => matches!(ch, 'x' | 'X'),
+            _ => false,
         };
-        digit || (matches!(ch, 'x' | 'X') && typed == "0")
+        prefix || ch.is_digit(self.split_radix(typed).1)
     }
 }
 
@@ -1009,13 +1025,30 @@ mod tests {
     }
 
     #[test]
-    fn address_mode_parses_in_its_own_radix_or_with_a_0x_prefix() {
+    fn address_mode_parses_in_its_own_radix_or_with_a_prefix() {
         assert_eq!(AddressMode::Dec.parse("200"), Some(200));
+        assert_eq!(AddressMode::Dec.parse(" 42 "), Some(42));
         assert_eq!(AddressMode::Hex.parse("200"), Some(0x200));
         assert_eq!(AddressMode::Hex.parse("ffff"), Some(u16::MAX));
-        assert_eq!(AddressMode::Dec.parse("0x200"), Some(0x200));
         assert_eq!(AddressMode::Dec.parse("C8"), None);
         assert_eq!(AddressMode::Dec.parse("65536"), None);
+        for hex in ["0x6F", "0X6f", "x6F", "X6f"] {
+            assert_eq!(AddressMode::Dec.parse(hex), Some(0x6F), "{hex}");
+        }
+        assert_eq!(AddressMode::Hex.parse("n111"), Some(111));
+        assert_eq!(AddressMode::Hex.parse("N42"), Some(42));
+        assert_eq!(AddressMode::Hex.parse("n6F"), None);
+        assert_eq!(AddressMode::Dec.parse("x"), None);
+        assert_eq!(AddressMode::Dec.parse("n"), None);
+    }
+
+    #[test]
+    fn saturating_parse_clamps_to_the_address_range() {
+        assert_eq!(AddressMode::Dec.parse_saturating("70000"), Some(u16::MAX));
+        assert_eq!(AddressMode::Hex.parse_saturating("10000"), Some(u16::MAX));
+        assert_eq!(AddressMode::Dec.parse_saturating("x10000"), Some(u16::MAX));
+        assert_eq!(AddressMode::Dec.parse_saturating("xFFFF"), Some(u16::MAX));
+        assert_eq!(AddressMode::Dec.parse_saturating("C8"), None);
     }
 
     #[test]
@@ -1026,6 +1059,12 @@ mod tests {
         assert!(AddressMode::Dec.accepts("0", 'x'));
         assert!(AddressMode::Dec.accepts("0x", 'c'));
         assert!(!AddressMode::Hex.accepts("1", 'x'));
+        assert!(AddressMode::Dec.accepts("", 'x'));
+        assert!(AddressMode::Dec.accepts("x", 'f'));
+        assert!(AddressMode::Hex.accepts("", 'n'));
+        assert!(AddressMode::Hex.accepts("n", '9'));
+        assert!(!AddressMode::Hex.accepts("n", 'f'));
+        assert!(!AddressMode::Dec.accepts("x", 'n'));
     }
 
     #[test]

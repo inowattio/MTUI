@@ -1560,7 +1560,7 @@ mod tests {
     #[tokio::test]
     async fn a_pasted_address_jumps_in_the_address_mode() {
         let mut app = app().await;
-        for (text, expected) in [("200", 200), ("0x1F", 0x1F)] {
+        for (text, expected) in [("200", 200), ("0x1F", 0x1F), ("x1F", 0x1F)] {
             paste(&mut app, text);
             assert_eq!(app.read().position, expected, "{text:?}");
         }
@@ -1570,10 +1570,8 @@ mod tests {
             ("200", 0x200),
             ("1F", 0x1F),
             ("0x1F", 0x1F),
-            (
-                " c8
-", 0xC8,
-            ),
+            (" c8\n", 0xC8),
+            ("n200", 200),
         ] {
             paste(&mut app, text);
             assert_eq!(app.read().position, expected, "{text:?}");
