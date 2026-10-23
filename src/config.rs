@@ -221,7 +221,7 @@ impl AddressMode {
         }
     }
 
-    const fn radix(self) -> u16 {
+    pub const fn radix(self) -> u16 {
         match self {
             Self::Dec => 10,
             Self::Hex => 16,

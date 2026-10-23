@@ -51,9 +51,10 @@ pub(super) fn draw(
 
     if search.matches.is_empty() {
         for hint in [
-            " Type an address (x6F for hex) or a label.",
-            " +N / -N moves relative to the cursor.",
-            " h/i/c/d prefix picks the register type.",
+            " Type an address or a label. Prefixes:",
+            " h/i/c/d  register type",
+            " +/-      relative to the cursor",
+            " n/x      decimal / hex",
         ] {
             lines.push(Line::from(Span::styled(hint, theme.dim_style())));
         }
@@ -68,9 +69,9 @@ pub(super) fn draw(
                 address_mode,
             ));
         }
+        lines.push(hints::more(theme, top, len.saturating_sub(end)));
     }
 
-    lines.push(hints::more(theme, top, len.saturating_sub(end)));
     super::push_footer(&mut lines, theme, footer);
 
     super::render(frame, area, theme, "Go to", width, lines);
