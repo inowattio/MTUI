@@ -654,6 +654,35 @@ where
     Ok(output)
 }
 
+trait ReadWords {
+    async fn read_words(
+        &mut self,
+        register_type: RegisterType,
+        address: u16,
+        count: u16,
+    ) -> tokio_modbus::Result<Vec<u16>>;
+}
+
+impl ReadWords for Context {
+    async fn read_words(
+        &mut self,
+        register_type: RegisterType,
+        address: u16,
+        count: u16,
+    ) -> tokio_modbus::Result<Vec<u16>> {
+        let bits_to_words = |bits: Vec<bool>| bits.into_iter().map(u16::from).collect();
+        Ok(match register_type {
+            RegisterType::Holding => self.read_holding_registers(address, count).await?,
+            RegisterType::Input => self.read_input_registers(address, count).await?,
+            RegisterType::Coil => self.read_coils(address, count).await?.map(bits_to_words),
+            RegisterType::Discrete => self
+                .read_discrete_inputs(address, count)
+                .await?
+                .map(bits_to_words),
+        })
+    }
+}
+
 macro_rules! timeout_as {
     ($this:ident, $unit:expr, $action:ident, ($($arg:expr),* $(,)?), $desc:expr) => {
         {
@@ -888,23 +917,14 @@ impl ModbusDevice {
         address: u16,
         count: u16,
     ) -> Result<Vec<u16>> {
-        let bits_to_words = |bits: Vec<bool>| bits.into_iter().map(u16::from).collect();
         let desc = format!("Read {register_type:?} @ {address} with {count} value(s)");
-        match register_type {
-            RegisterType::Holding => {
-                timeout_as!(self, unit, read_holding_registers, (address, count), desc)
-            }
-            RegisterType::Input => {
-                timeout_as!(self, unit, read_input_registers, (address, count), desc)
-            }
-            RegisterType::Coil => {
-                timeout_as!(self, unit, read_coils, (address, count), desc).map(bits_to_words)
-            }
-            RegisterType::Discrete => {
-                timeout_as!(self, unit, read_discrete_inputs, (address, count), desc)
-                    .map(bits_to_words)
-            }
-        }
+        timeout_as!(
+            self,
+            unit,
+            read_words,
+            (register_type, address, count),
+            desc
+        )
     }
 
     pub async fn read_once(
@@ -915,36 +935,12 @@ impl ModbusDevice {
     ) -> Result<Vec<u16>> {
         let mut context = Self::connect_context(config).await?;
         let wait = Duration::from_millis(config.request_timeout_ms);
-        let bits_to_words =
-            |bits: Vec<bool>| -> Vec<u16> { bits.into_iter().map(u16::from).collect() };
-        let outcome = match register_type {
-            RegisterType::Holding => {
-                timeout(
-                    context.read_holding_registers(address, count),
-                    wait,
-                    Duration::ZERO,
-                )
-                .await
-            }
-            RegisterType::Input => {
-                timeout(
-                    context.read_input_registers(address, count),
-                    wait,
-                    Duration::ZERO,
-                )
-                .await
-            }
-            RegisterType::Coil => timeout(context.read_coils(address, count), wait, Duration::ZERO)
-                .await
-                .map(|reply| reply.map(|reply| reply.map(bits_to_words))),
-            RegisterType::Discrete => timeout(
-                context.read_discrete_inputs(address, count),
-                wait,
-                Duration::ZERO,
-            )
-            .await
-            .map(|reply| reply.map(|reply| reply.map(bits_to_words))),
-        };
+        let outcome = timeout(
+            context.read_words(register_type, address, count),
+            wait,
+            Duration::ZERO,
+        )
+        .await;
         let _ = context.disconnect().await;
         outcome??.map_err(exception_error)
     }
