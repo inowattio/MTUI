@@ -74,35 +74,44 @@ impl App {
             (p.register_type, p.position)
         };
 
-        let (register_type, has_explicit_type) = match query.chars().next() {
-            Some('h' | 'H') => (RegisterType::Holding, true),
-            Some('i' | 'I') => (RegisterType::Input, true),
-            Some('c' | 'C') => (RegisterType::Coil, true),
-            Some('d' | 'D') => (RegisterType::Discrete, true),
-            _ => (current_type, false),
+        let prefixed_type = match query.chars().next() {
+            Some('h' | 'H') => Some(RegisterType::Holding),
+            Some('i' | 'I') => Some(RegisterType::Input),
+            Some('c' | 'C') => Some(RegisterType::Coil),
+            Some('d' | 'D') => Some(RegisterType::Discrete),
+            _ => None,
         };
+
+        let mut readings: Vec<(RegisterType, &str)> = Vec::new();
+        let starts_with_hex_digit = query.starts_with(|c: char| c.is_ascii_hexdigit());
+        if prefixed_type.is_none() || (address_mode == AddressMode::Hex && starts_with_hex_digit) {
+            readings.push((current_type, query.as_str()));
+        }
+        if let Some(register_type) = prefixed_type {
+            readings.push((register_type, &query[1..]));
+        }
 
         let mut matches: Vec<SearchMatch> = Vec::new();
-
-        let numeric_query = if has_explicit_type {
-            &query[1..]
-        } else {
-            query.as_str()
-        };
-
-        if let Some((address, hint)) = parse_target(numeric_query, current_position, address_mode) {
+        for (register_type, numeric_query) in readings {
+            let Some((address, hint)) = parse_target(numeric_query, current_position, address_mode)
+            else {
+                continue;
+            };
             let cell = (register_type, address);
+            if matches.iter().any(|m| m.cell == cell) {
+                continue;
+            }
             matches.push(match self.labels.get(&cell) {
                 Some(label) => SearchMatch::label(cell, label.clone()),
                 None => SearchMatch::hint(cell, hint),
             });
         }
-        let target = matches.first().map(|m| m.cell);
+        let targets: Vec<RegisterCell> = matches.iter().map(|m| m.cell).collect();
 
         let mut scored: Vec<(i32, RegisterCell, String)> = self
             .labels
             .iter()
-            .filter(|&(&cell, _)| Some(cell) != target)
+            .filter(|&(cell, _)| !targets.contains(cell))
             .filter_map(|(&cell, text)| {
                 fuzzy_score(&query, text).map(|score| (score, cell, text.clone()))
             })
@@ -161,6 +170,56 @@ fn parse_address(input: &str, mode: AddressMode) -> Option<u16> {
 #[cfg(test)]
 mod tests {
     use super::{AddressMode, parse_address, parse_target};
+    use crate::app::App;
+    use crate::config::Config;
+    use crate::register::RegisterType;
+    use crate::state::SearchParams;
+
+    #[cfg(not(target_arch = "wasm32"))]
+    async fn search(mode: AddressMode, query: &str) -> Vec<(RegisterType, u16)> {
+        let mut app = App::boot(Config::demo(), String::new()).await;
+        app.interpreter.set_address_mode(mode);
+        app.read_mut().register_type = RegisterType::Holding;
+        app.open_search();
+        for c in query.chars() {
+            app.search_input(c);
+        }
+        app.popup_as::<SearchParams>()
+            .map(|s| s.matches.iter().map(|m| m.cell).collect())
+            .unwrap_or_default()
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn hex_mode_offers_the_address_before_the_type_prefix() {
+        let cells = search(AddressMode::Hex, "C8").await;
+        assert_eq!(
+            cells[..2],
+            [(RegisterType::Holding, 0xC8), (RegisterType::Coil, 8)]
+        );
+        let cells = search(AddressMode::Hex, "d0").await;
+        assert_eq!(
+            cells[..2],
+            [(RegisterType::Holding, 0xD0), (RegisterType::Discrete, 0)]
+        );
+        let cells = search(AddressMode::Hex, "C").await;
+        assert_eq!(cells.first(), Some(&(RegisterType::Holding, 0xC)));
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn non_hex_prefixes_and_decimal_mode_keep_one_reading() {
+        let cells = search(AddressMode::Hex, "i10").await;
+        assert_eq!(cells.first(), Some(&(RegisterType::Input, 0x10)));
+        assert!(!cells.contains(&(RegisterType::Holding, 0x10)));
+        let cells = search(AddressMode::Dec, "c8").await;
+        assert_eq!(cells.first(), Some(&(RegisterType::Coil, 8)));
+        assert!(
+            !cells
+                .iter()
+                .any(|c| c.0 == RegisterType::Holding && c.1 == 8)
+        );
+    }
 
     #[test]
     fn parses_bare_addresses_in_the_configured_mode() {
