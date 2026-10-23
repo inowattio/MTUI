@@ -20,10 +20,14 @@ pub enum CustomRepr {
     U128,
     I128,
     F128,
+    Ascii,
 }
 
+pub const ASCII_REGISTERS_MAX: u8 = 125;
+pub const ASCII_REGISTERS_DEFAULT: u8 = 8;
+
 impl CustomRepr {
-    pub const ALL: [Self; 12] = [
+    pub const ALL: [Self; 13] = [
         Self::U16,
         Self::I16,
         Self::F16,
@@ -36,11 +40,12 @@ impl CustomRepr {
         Self::U128,
         Self::I128,
         Self::F128,
+        Self::Ascii,
     ];
 
     pub const fn register_count(self) -> usize {
         match self {
-            Self::U16 | Self::I16 | Self::F16 => 1,
+            Self::U16 | Self::I16 | Self::F16 | Self::Ascii => 1,
             Self::U32 | Self::I32 | Self::F32 => 2,
             Self::U64 | Self::I64 | Self::F64 => 4,
             Self::U128 | Self::I128 | Self::F128 => 8,
@@ -61,6 +66,7 @@ impl CustomRepr {
             Self::U128 => raw as f64,
             Self::I128 => raw as i128 as f64,
             Self::F128 => f128_to_f64(raw),
+            Self::Ascii => f64::NAN,
         }
     }
 
@@ -78,6 +84,7 @@ impl CustomRepr {
             Self::U128 => "u128",
             Self::I128 => "i128",
             Self::F128 => "f128",
+            Self::Ascii => "ascii",
         }
     }
 }
@@ -245,6 +252,8 @@ pub struct CustomRule {
     #[serde(skip)]
     pub address: u16,
     pub repr: CustomRepr,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub registers: Option<u8>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ops: Vec<CustomOp>,
     #[serde(
@@ -275,8 +284,15 @@ pub struct CustomRule {
 }
 
 impl CustomRule {
+    pub fn register_count(&self) -> usize {
+        match (self.repr, self.registers) {
+            (CustomRepr::Ascii, Some(n)) => usize::from(n.clamp(1, ASCII_REGISTERS_MAX)),
+            (repr, _) => repr.register_count(),
+        }
+    }
+
     pub fn word_addresses(&self) -> impl Iterator<Item = u16> + '_ {
-        (0..self.repr.register_count()).scan(self.address, |previous, i| {
+        (0..self.register_count()).scan(self.address, |previous, i| {
             let address = if i == 0 {
                 self.address
             } else {
@@ -304,8 +320,29 @@ impl CustomRule {
     }
 
     pub fn raw(&self, words: &[u16], order: WordOrder) -> Option<u128> {
+        if self.repr == CustomRepr::Ascii {
+            return None;
+        }
         let order = self.word_order.unwrap_or(order);
-        order.assemble(words.get(..self.repr.register_count())?)
+        order.assemble(words.get(..self.register_count())?)
+    }
+
+    fn text(&self, words: &[u16], order: WordOrder) -> Option<String> {
+        let swap = self.word_order.unwrap_or(order).swaps_bytes();
+        let text: String = words
+            .get(..self.register_count())?
+            .iter()
+            .flat_map(|&word| if swap { word.swap_bytes() } else { word }.to_be_bytes())
+            .take_while(|&byte| byte != 0)
+            .map(|byte| {
+                if byte == b' ' || byte.is_ascii_graphic() {
+                    char::from(byte)
+                } else {
+                    '.'
+                }
+            })
+            .collect();
+        Some(text.trim().to_string())
     }
 
     pub fn base(&self, words: &[u16], order: WordOrder) -> Option<f64> {
@@ -351,6 +388,12 @@ impl CustomRule {
     }
 
     pub fn evaluate(&self, words: &[u16], order: WordOrder) -> String {
+        if self.repr == CustomRepr::Ascii {
+            return self
+                .text(words, order)
+                .map(|text| format!("{}{text}{}", self.prefix, self.suffix))
+                .unwrap_or_default();
+        }
         let Some(resolved) = self.resolve(words, order) else {
             return String::new();
         };
@@ -947,5 +990,80 @@ mod tests {
         );
         let value = CustomCell::Value("1.5 V".to_string());
         assert_eq!(value.clone().detached(), value);
+    }
+
+    fn ascii_rule(registers: u8) -> CustomRule {
+        CustomRule {
+            repr: CustomRepr::Ascii,
+            registers: Some(registers),
+            ..Default::default()
+        }
+    }
+
+    fn words(text: &[u8]) -> Vec<u16> {
+        text.chunks(2)
+            .map(|pair| u16::from_be_bytes([pair[0], pair.get(1).copied().unwrap_or(0)]))
+            .collect()
+    }
+
+    #[test]
+    fn ascii_reads_high_byte_first_and_stops_at_the_first_nul() {
+        let r = ascii_rule(4);
+        assert_eq!(r.evaluate(&words(b"MTUI\0\0zz"), WordOrder::ABCD), "MTUI");
+        assert_eq!(r.evaluate(&words(b"  SN 42 "), WordOrder::ABCD), "SN 42");
+    }
+
+    #[test]
+    fn ascii_honors_only_the_byte_swap_of_the_word_order() {
+        let r = ascii_rule(2);
+        let swapped = words(b"TMIU");
+        assert_eq!(r.evaluate(&swapped, WordOrder::BADC), "MTUI");
+        assert_eq!(r.evaluate(&swapped, WordOrder::DCBA), "MTUI");
+        assert_eq!(r.evaluate(&swapped, WordOrder::CDAB), "TMIU");
+        let mut own = ascii_rule(2);
+        own.word_order = Some(WordOrder::BADC);
+        assert_eq!(own.evaluate(&swapped, WordOrder::ABCD), "MTUI");
+    }
+
+    #[test]
+    fn ascii_masks_control_bytes_and_wraps_with_prefix_and_suffix() {
+        let mut r = ascii_rule(2);
+        r.prefix = "fw ".to_string();
+        r.suffix = "!".to_string();
+        assert_eq!(r.evaluate(&[0x4101, 0x4243], WordOrder::ABCD), "fw A.BC!");
+    }
+
+    #[test]
+    fn ascii_needs_every_register_and_is_never_numeric() {
+        let r = ascii_rule(3);
+        assert_eq!(r.evaluate(&words(b"ABCD"), WordOrder::ABCD), "");
+        assert_eq!(r.numeric(&words(b"ABCDEF"), WordOrder::ABCD), None);
+        assert_eq!(r.raw(&words(b"AB"), WordOrder::ABCD), None);
+    }
+
+    #[test]
+    fn ascii_spans_its_register_count_and_clamps_it() {
+        let mut r = ascii_rule(3);
+        r.address = 200;
+        assert_eq!(r.word_addresses().collect::<Vec<_>>(), vec![200, 201, 202]);
+        assert_eq!(r.continuation(202), Some(Continuation::End));
+        assert_eq!(ascii_rule(0).register_count(), 1);
+        assert_eq!(ascii_rule(200).register_count(), 125);
+        let mut numeric = rule(CustomRepr::U32);
+        numeric.registers = Some(10);
+        assert_eq!(numeric.register_count(), 2);
+    }
+
+    #[test]
+    fn ascii_rules_round_trip_with_their_register_count() {
+        let json = serde_json::to_string(&ascii_rule(8)).unwrap();
+        assert_eq!(json, r#"{"repr":"ascii","registers":8}"#);
+        let back: CustomRule = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, ascii_rule(8));
+        assert!(
+            !serde_json::to_string(&rule(CustomRepr::U16))
+                .unwrap()
+                .contains("registers")
+        );
     }
 }

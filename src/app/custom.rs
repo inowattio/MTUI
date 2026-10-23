@@ -1,10 +1,15 @@
 use super::{App, build_custom_rule};
-use crate::custom::{CustomCell, CustomRepr, parse_bit, parse_enum, parse_op};
+use crate::custom::{
+    ASCII_REGISTERS_DEFAULT, ASCII_REGISTERS_MAX, CustomCell, CustomRepr, parse_bit, parse_enum,
+    parse_op,
+};
 use crate::interpretator::fmt_num;
 use crate::modbus::WordOrder;
 use crate::num_ops::{cycle, wrap_index};
 use crate::register::RegisterCell;
 use crate::state::{CustomField, CustomParams, Popup};
+
+const PREVIEW_WORDS: usize = 8;
 
 impl App {
     pub fn open_custom(&mut self) {
@@ -15,6 +20,7 @@ impl App {
                 address,
                 register_type,
                 repr: rule.repr,
+                registers: rule.registers.unwrap_or_default(),
                 word_order: rule.word_order,
                 next: rule.next.clone(),
                 ops: rule.ops.clone(),
@@ -77,7 +83,19 @@ impl App {
         self.with_custom(|c| {
             c.error = None;
             match field {
-                CustomField::Repr => c.repr = cycle(&CustomRepr::ALL, c.repr, forward),
+                CustomField::Repr => {
+                    c.repr = cycle(&CustomRepr::ALL, c.repr, forward);
+                    if c.is_ascii() && c.registers == 0 {
+                        c.registers = ASCII_REGISTERS_DEFAULT;
+                    }
+                }
+                CustomField::Registers => {
+                    c.registers = if forward {
+                        c.registers.saturating_add(1).min(ASCII_REGISTERS_MAX)
+                    } else {
+                        c.registers.saturating_sub(1).max(1)
+                    };
+                }
                 CustomField::WordOrder => {
                     c.word_order = cycle(&ORDER_CHOICES, c.word_order, forward);
                 }
@@ -103,6 +121,14 @@ impl App {
                 CustomField::Decimals => {
                     if ch.is_ascii_digit() && c.decimals.len() < 2 {
                         c.decimals.push(ch);
+                    }
+                }
+                CustomField::Registers => {
+                    if let Some(digit) = ch.to_digit(10) {
+                        let typed = u32::from(c.registers) * 10 + digit;
+                        if typed <= u32::from(ASCII_REGISTERS_MAX) {
+                            c.registers = typed as u8;
+                        }
                     }
                 }
                 CustomField::Prefix => c.prefix.push(ch),
@@ -138,6 +164,9 @@ impl App {
                 }
                 CustomField::Decimals => {
                     c.decimals.pop();
+                }
+                CustomField::Registers => {
+                    c.registers /= 10;
                 }
                 CustomField::Prefix => {
                     c.prefix.pop();
@@ -187,11 +216,11 @@ impl App {
                     Err(e) => c.error = Some(format!("bit: {e}")),
                 },
                 CustomField::Next => {
-                    if c.next.len() + 1 >= c.repr.register_count() {
+                    if c.next.len() + 1 >= c.register_count() {
                         c.error = Some(format!(
                             "next: {} uses {} register(s)",
                             c.repr.label(),
-                            c.repr.register_count()
+                            c.register_count()
                         ));
                     } else {
                         match c.next_buffer.trim().parse::<u16>() {
@@ -301,8 +330,8 @@ impl App {
 
     pub fn custom_preview(&self, c: &CustomParams) -> Result<CustomPreview, String> {
         let (cell, rule) = build_custom_rule(c)?;
-        let mut words = Vec::with_capacity(rule.repr.register_count());
-        let mut sources = Vec::with_capacity(rule.repr.register_count());
+        let mut words = Vec::with_capacity(rule.register_count());
+        let mut sources = Vec::with_capacity(rule.register_count());
         for word_address in rule.word_addresses() {
             let addr = self.interpreter.address_mode().display(word_address);
             match self.read_log.get(&(cell.0, word_address)) {
@@ -323,7 +352,7 @@ impl App {
         }
 
         let transforms = !rule.ops.is_empty() || !rule.enum_map.is_empty() || !rule.bits.is_empty();
-        let base = (rule.repr.register_count() > 1 || transforms)
+        let base = (rule.register_count() > 1 || transforms)
             .then(|| {
                 if rule.bits.is_empty() {
                     let b = rule.base(&words, order)?;
@@ -334,14 +363,20 @@ impl App {
                     ))
                 } else {
                     let raw = rule.raw(&words, order)?;
-                    let hex_width = 2 + rule.repr.register_count() * 4;
+                    let hex_width = 2 + rule.register_count() * 4;
                     Some(format!("{raw:#0hex_width$x}"))
                 }
             })
             .flatten();
 
+        let hidden = sources.len().saturating_sub(PREVIEW_WORDS);
+        let mut words = sources[..sources.len() - hidden].join("  ");
+        if hidden > 0 {
+            words.push_str(&format!("  +{hidden} more"));
+        }
+
         Ok(CustomPreview {
-            words: sources.join("  "),
+            words,
             base,
             output,
         })

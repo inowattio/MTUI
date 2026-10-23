@@ -592,6 +592,7 @@ impl Default for ScreenLayout {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CustomField {
     Repr,
+    Registers,
     WordOrder,
     Next,
     Ops,
@@ -607,6 +608,7 @@ pub struct CustomParams {
     pub address: u16,
     pub register_type: RegisterType,
     pub repr: CustomRepr,
+    pub registers: u8,
     pub word_order: Option<WordOrder>,
     pub next: Vec<u16>,
     pub ops: Vec<CustomOp>,
@@ -626,17 +628,38 @@ pub struct CustomParams {
 }
 
 impl CustomParams {
+    pub fn is_ascii(&self) -> bool {
+        self.repr == CustomRepr::Ascii
+    }
+
+    pub fn register_count(&self) -> usize {
+        if self.is_ascii() {
+            usize::from(self.registers.max(1))
+        } else {
+            self.repr.register_count()
+        }
+    }
+
     pub fn fields(&self) -> Vec<CustomField> {
         use CustomField::*;
-        let multi = self.repr.register_count() > 1;
+        let ascii = self.is_ascii();
+        let multi = self.register_count() > 1;
         let bits_active = !self.bits.is_empty();
 
         let mut fields = vec![Repr];
-        if multi || self.word_order.is_some() {
+        if ascii {
+            fields.push(Registers);
+        }
+        if ascii || multi || self.word_order.is_some() {
             fields.push(WordOrder);
         }
         if multi || !self.next.is_empty() {
             fields.push(Next);
+        }
+        if ascii {
+            fields.push(Prefix);
+            fields.push(Suffix);
+            return fields;
         }
         if !bits_active || !self.ops.is_empty() {
             fields.push(Ops);
@@ -712,7 +735,22 @@ impl CustomParams {
 #[cfg(test)]
 mod custom_params_tests {
     use super::{CustomField, CustomParams};
-    use crate::custom::{BitEntry, EnumEntry};
+    use crate::custom::{BitEntry, CustomRepr, EnumEntry};
+
+    #[test]
+    fn ascii_offers_only_decode_and_affixes() {
+        use CustomField::*;
+        let mut c = params();
+        c.repr = CustomRepr::Ascii;
+        c.registers = 1;
+        assert_eq!(c.fields(), vec![Repr, Registers, WordOrder, Prefix, Suffix]);
+        c.registers = 8;
+        assert_eq!(c.register_count(), 8);
+        assert_eq!(
+            c.fields(),
+            vec![Repr, Registers, WordOrder, Next, Prefix, Suffix]
+        );
+    }
 
     fn params() -> CustomParams {
         let mut c = CustomParams {

@@ -583,6 +583,15 @@ fn plain(address: u16, repr: CustomRepr, decimals: Option<u8>, suffix: &str) -> 
     }
 }
 
+fn ascii(address: u16, registers: u8) -> CustomRule {
+    CustomRule {
+        address,
+        repr: CustomRepr::Ascii,
+        registers: Some(registers),
+        ..Default::default()
+    }
+}
+
 fn flags(address: u16, entries: &[(u8, &str)]) -> CustomRule {
     CustomRule {
         address,
@@ -628,6 +637,7 @@ fn demo_labels() -> BTreeMap<RegisterCell, String> {
                 (52, "set: ripple"),
                 (53, "set: noise"),
                 (54, "set: time scale"),
+                (200, "vendor (ascii)"),
                 (1000, "energy (u32 Wh)"),
                 (1002, "on-time (u32 s)"),
                 (1004, "write count"),
@@ -698,10 +708,12 @@ fn demo_rules() -> BTreeMap<RegisterCell, CustomRule> {
         (
             RegisterType::Holding,
             vec![
+                ascii(0, 8),
                 scaled(50, CustomRepr::U16, 10.0, 1, " V"),
                 scaled(51, CustomRepr::U16, 100.0, 2, " A"),
                 switch(53, &[(0, "off"), (1, "on")]),
                 plain(54, CustomRepr::U16, None, " %"),
+                ascii(200, 16),
                 scaled(1000, CustomRepr::U32, 1000.0, 2, " kWh"),
                 flags(1100, &[(0, "run"), (1, "grid"), (2, "warn"), (15, "beat")]),
             ],

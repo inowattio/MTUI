@@ -35,7 +35,9 @@ fn count_label(n: usize) -> String {
 
 const fn section(field: CustomField) -> &'static str {
     match field {
-        CustomField::Repr | CustomField::WordOrder | CustomField::Next => "DECODE",
+        CustomField::Repr | CustomField::Registers | CustomField::WordOrder | CustomField::Next => {
+            "DECODE"
+        }
         CustomField::Ops | CustomField::Enum | CustomField::Bits => "MAP",
         CustomField::Decimals | CustomField::Prefix | CustomField::Suffix => "FORMAT",
     }
@@ -196,7 +198,11 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &
 
         match field {
             CustomField::Repr => {
-                let value = format!("{}  ({} reg)", c.repr.label(), c.repr.register_count());
+                let value = if c.is_ascii() {
+                    c.repr.label().to_string()
+                } else {
+                    format!("{}  ({} reg)", c.repr.label(), c.register_count())
+                };
                 lines.push(field_row(
                     theme,
                     "Type",
@@ -204,6 +210,10 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &
                     edit_value(value, selected, true),
                     selected,
                 ));
+            }
+            CustomField::Registers => {
+                let value = edit_value(c.registers.to_string(), selected, true);
+                lines.push(field_row(theme, "Registers", 12, value, selected));
             }
             CustomField::WordOrder => {
                 let value = match c.word_order {

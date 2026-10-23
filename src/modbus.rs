@@ -145,6 +145,10 @@ impl WordOrder {
         }
     }
 
+    pub const fn swaps_bytes(self) -> bool {
+        self.swaps().0
+    }
+
     const fn ordered(self, a: u16, b: u16) -> (u16, u16) {
         let (byte_swap, word_swap) = self.swaps();
         let (mut high, mut low) = if word_swap { (b, a) } else { (a, b) };

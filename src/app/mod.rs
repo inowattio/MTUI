@@ -5,7 +5,7 @@ use crate::config::{Config, Registers};
 use crate::constants::CONFIG_PATH;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::constants::SCAN_PREFIX_RANGE;
-use crate::custom::CustomRule;
+use crate::custom::{ASCII_REGISTERS_MAX, CustomRule};
 use crate::interpretator::Interpretor;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::modbus::Interface;
@@ -636,8 +636,9 @@ fn build_custom_rule(c: &CustomParams) -> Result<(RegisterCell, CustomRule), Str
         ),
     };
 
-    let width = c.repr.register_count() as u8 * 16;
-    if let Some(entry) = c.bits.iter().find(|e| e.bit >= width) {
+    let ascii = c.is_ascii();
+    let width = c.register_count() * 16;
+    if !ascii && let Some(entry) = c.bits.iter().find(|e| usize::from(e.bit) >= width) {
         return Err(format!(
             "bit: {} exceeds {} ({} bits)",
             entry.bit,
@@ -646,22 +647,31 @@ fn build_custom_rule(c: &CustomParams) -> Result<(RegisterCell, CustomRule), Str
         ));
     }
 
-    if c.next.len() > c.repr.register_count() - 1 {
+    if c.next.len() > c.register_count() - 1 {
         return Err(format!(
             "next: {} uses {} register(s)",
             c.repr.label(),
-            c.repr.register_count()
+            c.register_count()
         ));
+    }
+
+    if ascii && !(1..=ASCII_REGISTERS_MAX).contains(&c.registers) {
+        return Err(format!("registers: 1 to {ASCII_REGISTERS_MAX}"));
     }
 
     let rule = CustomRule {
         address: c.address,
         repr: c.repr,
-        ops: c.ops.clone(),
-        enum_map: c.enum_map.clone(),
-        bits: c.bits.clone(),
+        registers: ascii.then_some(c.registers),
+        ops: if ascii { Vec::new() } else { c.ops.clone() },
+        enum_map: if ascii {
+            Vec::new()
+        } else {
+            c.enum_map.clone()
+        },
+        bits: if ascii { Vec::new() } else { c.bits.clone() },
         next: c.next.clone(),
-        decimals,
+        decimals: decimals.filter(|_| !ascii),
         prefix: c.prefix.clone(),
         suffix: c.suffix.clone(),
         word_order: c.word_order,
@@ -768,6 +778,39 @@ pub(crate) async fn settle_until(app: &mut App, done: impl Fn(&App) -> bool, wha
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn ascii_rules_drop_numeric_settings_and_need_a_register_count() {
+        use crate::custom::{CustomOp, CustomRepr, OpKind};
+        use crate::state::CustomParams;
+
+        let mut c = CustomParams {
+            address: 200,
+            repr: CustomRepr::Ascii,
+            registers: 16,
+            ops: vec![CustomOp {
+                op: OpKind::Div,
+                v: 10.0,
+            }],
+            decimals: "2".to_string(),
+            suffix: " fw".to_string(),
+            ..Default::default()
+        };
+        let (_, rule) = super::build_custom_rule(&c).unwrap();
+        assert_eq!(rule.registers, Some(16));
+        assert_eq!(rule.register_count(), 16);
+        assert!(rule.ops.is_empty());
+        assert_eq!(rule.decimals, None);
+        assert_eq!(rule.suffix, " fw");
+
+        c.registers = 0;
+        assert!(super::build_custom_rule(&c).is_err());
+
+        c.repr = CustomRepr::U16;
+        let (_, rule) = super::build_custom_rule(&c).unwrap();
+        assert_eq!(rule.registers, None);
+        assert_eq!(rule.ops.len(), 1);
+    }
+
     #[test]
     fn file_names_skip_empty_parts_and_sanitize_the_rest() {
         assert_eq!(

@@ -1,7 +1,7 @@
 use super::App;
 use crate::config::{BatchAnchor, Column};
 use crate::constants::NO_VALUE;
-use crate::custom::CustomCell;
+use crate::custom::{CustomCell, CustomRule};
 use crate::interpretator::{LOOKAHEAD, ascii_words, fmt_num, following, graph_value};
 use crate::num_ops::cycle;
 use crate::register::{RegisterCell, RegisterType};
@@ -143,7 +143,7 @@ impl App {
                     .map(|cell| {
                         self.custom_rules
                             .get(cell)
-                            .map_or(1, |rule| rule.repr.register_count())
+                            .map_or(1, CustomRule::register_count)
                     })
                     .collect();
                 let (start, end) = sized_window(&costs, pos, batch, self.config.batch.anchor);
