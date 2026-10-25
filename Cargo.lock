@@ -1538,7 +1538,7 @@ dependencies = [
 
 [[package]]
 name = "mtui"
-version = "1.4.2"
+version = "1.5.0"
 dependencies = [
  "anyhow",
  "arboard",
