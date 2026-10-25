@@ -144,7 +144,10 @@ impl App {
     }
 
     pub const fn settings_field_disabled(&self, field: SettingsField) -> bool {
-        field.is_startup() && self.config.save_position_on_exit
+        match field {
+            SettingsField::ClockMillis => !self.config.display.clock,
+            _ => field.is_startup() && self.config.save_position_on_exit,
+        }
     }
 
     pub fn settings_adjust(&mut self, field: SettingsField, delta: i64) {
@@ -211,6 +214,9 @@ impl App {
                 self.config.display.rule_continuation = !self.config.display.rule_continuation;
             }
             SettingsField::ShowClock => self.config.display.clock = !self.config.display.clock,
+            SettingsField::ClockMillis => {
+                self.config.display.clock_millis = !self.config.display.clock_millis;
+            }
             SettingsField::ShowFrameTime => {
                 self.config.display.frame_time = !self.config.display.frame_time;
             }

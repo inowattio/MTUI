@@ -99,6 +99,7 @@ impl Default for MatrixConfig {
 #[serde(default)]
 pub struct DisplayConfig {
     pub clock: bool,
+    pub clock_millis: bool,
     pub frame_time: bool,
     pub ram: bool,
     pub connection_label: bool,
@@ -114,6 +115,7 @@ impl Default for DisplayConfig {
     fn default() -> Self {
         Self {
             clock: true,
+            clock_millis: true,
             frame_time: false,
             ram: false,
             connection_label: true,

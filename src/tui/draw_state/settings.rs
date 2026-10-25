@@ -369,6 +369,7 @@ fn field_value(
         SettingsField::CopyConfig => (String::new(), None),
         SettingsField::ShowRuleContinuation => (on_off(device.display.rule_continuation), None),
         SettingsField::ShowClock => (on_off(device.display.clock), None),
+        SettingsField::ClockMillis => (on_off(device.display.clock_millis), None),
         SettingsField::ShowFrameTime => (on_off(device.display.frame_time), None),
         SettingsField::ShowRam => (on_off(device.display.ram), None),
         SettingsField::ShowConnectionLabel => (on_off(device.display.connection_label), None),

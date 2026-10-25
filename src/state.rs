@@ -1200,6 +1200,7 @@ settings_fields! {
     Display {
         [
             ShowClock: Toggle => "Show clock", "Show the current time in the bottom bar",
+            ClockMillis: Toggle => "Clock milliseconds", "Show milliseconds in the bottom bar clock",
             ShowFrameTime: Toggle => "Show frame time", "Show how long each frame takes to render",
             ShowRam: Toggle => "Show RAM usage", "Show the memory used by the application",
             ShowConnectionLabel: Toggle => "Show connection label", "Show the connection state as a word next to the refresh countdown",
@@ -1927,7 +1928,10 @@ mod settings_params_tests {
         let groups = SettingsCategory::search("clock");
         assert_eq!(groups.len(), 1);
         assert_eq!(groups[0].0, Some(SettingsCategory::Display));
-        assert_eq!(groups[0].1, vec![SettingsField::ShowClock]);
+        assert_eq!(
+            groups[0].1,
+            vec![SettingsField::ShowClock, SettingsField::ClockMillis]
+        );
 
         let by_description = SettingsCategory::search("auto-refresh");
         assert_eq!(by_description[0].1, vec![SettingsField::RefreshInterval]);

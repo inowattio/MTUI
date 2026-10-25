@@ -20,7 +20,12 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     let key_hints = make_bottom_title(&theme, app);
     let mut clock_spans = Vec::new();
     if app.config.display.clock {
-        let clock = Local::now().format("%H:%M:%S.%3f").to_string();
+        let format = if app.config.display.clock_millis {
+            "%H:%M:%S.%3f"
+        } else {
+            "%H:%M:%S"
+        };
+        let clock = Local::now().format(format).to_string();
         clock_spans.push(Span::styled(format!("{clock} "), theme.accent_style()));
     }
     if app.config.display.ram

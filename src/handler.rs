@@ -1093,7 +1093,10 @@ mod tests {
         }
         let s = app.settings().unwrap();
         assert_eq!(s.query, "clock");
-        assert_eq!(s.current_fields(), vec![SettingsField::ShowClock]);
+        assert_eq!(
+            s.current_fields(),
+            vec![SettingsField::ShowClock, SettingsField::ClockMillis]
+        );
         assert_eq!(s.focus, SettingsFocus::Categories);
 
         let before = app.config.display.clock;
@@ -1140,6 +1143,39 @@ mod tests {
         app.config.save_position_on_exit = false;
         handle_key_events(KeyEvent::new(KeyCode::Right), &mut app).await;
         assert_eq!(app.config.startup.address, address + 1);
+    }
+
+    #[tokio::test]
+    async fn clock_millis_is_locked_while_the_clock_is_hidden() {
+        let mut app = app().await;
+        app.open_settings();
+        let category = SettingsCategory::ALL
+            .iter()
+            .position(|&c| c == SettingsCategory::Display)
+            .unwrap() as u16;
+        let index = SettingsCategory::Display
+            .fields()
+            .iter()
+            .position(|&f| f == SettingsField::ClockMillis)
+            .unwrap() as u16;
+        {
+            let s = app.settings_mut().unwrap();
+            s.category = category;
+            s.focus = SettingsFocus::Fields;
+            s.field = index;
+        }
+        let millis = app.config.display.clock_millis;
+
+        app.config.display.clock = false;
+        handle_key_events(KeyEvent::new(KeyCode::Right), &mut app).await;
+        assert_eq!(
+            app.config.display.clock_millis, millis,
+            "locked fields ignore edits"
+        );
+
+        app.config.display.clock = true;
+        handle_key_events(KeyEvent::new(KeyCode::Right), &mut app).await;
+        assert_ne!(app.config.display.clock_millis, millis);
     }
 
     #[tokio::test]
