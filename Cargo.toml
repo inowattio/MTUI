@@ -30,7 +30,17 @@ required-features = ["web"]
 web = []
 
 [lints.rust]
+unsafe_code = "forbid"
 unused_qualifications = "deny"
+unused_macro_rules = "deny"
+meta_variable_misuse = "deny"
+unused_lifetimes = "deny"
+redundant_lifetimes = "deny"
+unused_import_braces = "deny"
+redundant_imports = "deny"
+unused_parens = "deny"
+trivial_casts = "deny"
+trivial_numeric_casts = "deny"
 
 [lints.clippy]
 all = { level = "deny", priority = -1 }

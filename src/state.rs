@@ -727,7 +727,7 @@ impl CustomParams {
         }
         self.reselect(field);
         let len = self.list_len();
-        self.list_index = (len > 0).then(|| (i.min(len - 1)) as u16);
+        self.list_index = (len > 0).then(|| i.min(len - 1) as u16);
         true
     }
 }

@@ -4,7 +4,6 @@ use crate::register::RegisterType;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
-use std::future::Future;
 #[cfg(not(target_arch = "wasm32"))]
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 #[cfg(not(target_arch = "wasm32"))]
