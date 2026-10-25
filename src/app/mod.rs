@@ -1,4 +1,3 @@
-#[cfg(not(target_arch = "wasm32"))]
 use crate::compat;
 use crate::compat::{Instant, TaskHandle};
 use crate::config::{Config, Registers};
@@ -462,7 +461,7 @@ impl From<anyhow::Error> for ReadError {
     fn from(error: anyhow::Error) -> Self {
         let kind = if error.downcast_ref::<ExceptionCode>().is_some() {
             ReadFailure::Exception
-        } else if error.downcast_ref::<crate::compat::Elapsed>().is_some() {
+        } else if error.downcast_ref::<compat::Elapsed>().is_some() {
             ReadFailure::Timeout
         } else {
             ReadFailure::Transport
@@ -487,8 +486,8 @@ struct RefreshTaskResult {
 struct ClipboardHandle(arboard::Clipboard);
 
 #[cfg(not(target_arch = "wasm32"))]
-impl std::fmt::Debug for ClipboardHandle {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Debug for ClipboardHandle {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("ClipboardHandle")
     }
 }
@@ -771,7 +770,7 @@ pub(crate) async fn settle_until(app: &mut App, done: impl Fn(&App) -> bool, wha
         if done(app) {
             return;
         }
-        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        tokio::time::sleep(Duration::from_millis(5)).await;
     }
     panic!("{what} never finished");
 }

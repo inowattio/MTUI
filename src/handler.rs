@@ -138,35 +138,35 @@ fn run_action(app: &mut App, action: KeybindAction) {
         Help => app.open_help(),
         About => app.open_about(),
         Refresh => app.refresh(),
-        KeybindAction::SwitchType => app.toggle_type(),
+        SwitchType => app.toggle_type(),
         Write => app.open_write(),
-        KeybindAction::GoTo => app.open_search(),
+        GoTo => app.open_search(),
         Label => app.open_label(),
-        KeybindAction::CustomRule => app.open_custom(),
+        CustomRule => app.open_custom(),
         Columns => app.open_columns(),
         Pause => app.toggle_pause(),
         WordOrder => app.toggle_word_order(),
-        KeybindAction::UnitId => app.open_unit(),
+        UnitId => app.open_unit(),
         Inspect => app.open_inspect(),
         DeviceId => app.open_device_id(),
-        KeybindAction::RawRequest => app.open_raw(),
+        RawRequest => app.open_raw(),
         Graph => app.toggle_graph(),
-        KeybindAction::Device => app.open_discovery(),
+        Device => app.open_discovery(),
         Settings => app.open_settings(),
         CopyColumn => app.copy_column_arm(),
-        KeybindAction::WriteLogs => app.open_logs(),
+        WriteLogs => app.open_logs(),
         AppLogs => app.open_log_view(),
         Stats => app.open_stats(),
         Sweep => app.open_sweep(),
-        KeybindAction::ClearSession => {
+        ClearSession => {
             if app.read().graph {
                 app.clear_graph_history();
             } else {
                 app.clear_session_data();
             }
         }
-        KeybindAction::CycleConfig => app.cycle_config(),
-        KeybindAction::Panel => {
+        CycleConfig => app.cycle_config(),
+        Panel => {
             app.toggle_panel();
             let len = app.panel_len();
             let scroll_rows = app.panel_scroll_rows();

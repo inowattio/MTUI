@@ -261,7 +261,7 @@ impl App {
     pub fn tick(&mut self) {
         self.frame = self.frame.wrapping_add(1);
         if self.config.display.ram && (self.ram_bytes.is_none() || self.frame.is_multiple_of(10)) {
-            self.ram_bytes = crate::compat::ram_bytes();
+            self.ram_bytes = compat::ram_bytes();
         }
         self.sync_api_status();
         #[cfg(not(target_arch = "wasm32"))]

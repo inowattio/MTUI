@@ -646,7 +646,7 @@ fn pad_to(out: &mut String, mark: usize, width: usize) {
 }
 
 fn bcd_to_decimal<T: num_traits::PrimInt>(value: T) -> Option<T> {
-    let nibbles = std::mem::size_of::<T>() * 2;
+    let nibbles = size_of::<T>() * 2;
     let mut result = T::zero();
     let ten = T::from(10)?;
     let mask = T::from(0xF)?;

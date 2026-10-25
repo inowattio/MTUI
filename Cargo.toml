@@ -29,6 +29,9 @@ required-features = ["web"]
 [features]
 web = []
 
+[lints.rust]
+unused_qualifications = "deny"
+
 [lints.clippy]
 all = { level = "deny", priority = -1 }
 nursery = { level = "deny", priority = -1 }
