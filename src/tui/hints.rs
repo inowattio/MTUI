@@ -93,11 +93,8 @@ pub fn more(theme: &Theme, above: usize, below: usize) -> Line<'static> {
     if above > 0 {
         spans.push(Span::styled(format!(" ^ {above} more"), dim));
     }
-    if above > 0 && below > 0 {
-        spans.push(Span::styled(SEP, dim));
-    }
     if below > 0 {
-        spans.push(Span::styled(format!("v {below} more"), dim));
+        spans.push(Span::styled(format!(" v {below} more"), dim));
     }
     Line::from(spans)
 }
