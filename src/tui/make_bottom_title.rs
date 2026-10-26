@@ -67,7 +67,11 @@ pub fn make_bottom_title(theme: &Theme, app: &App) -> Line<'static> {
         State::Logs(l) => hints::footer(
             theme,
             [
-                Hint::pair(KeyCode::Down, KeyCode::Right, "Scroll"),
+                Hint::pair(
+                    KeyCode::Down,
+                    KeyCode::Right,
+                    if l.frames { "Select" } else { "Scroll" },
+                ),
                 Hint::key(kb.write, if l.wrap { "Unwrap" } else { "Wrap" }),
                 Hint::key(kb.panel, if l.frames { "Events" } else { "Frames" }),
                 Hint::key(kb.copy_column, "Copy"),

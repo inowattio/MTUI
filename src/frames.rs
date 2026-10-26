@@ -3,6 +3,8 @@ use std::collections::VecDeque;
 use std::sync::Mutex;
 use tokio_modbus::{ExceptionCode, Request, Response};
 
+pub mod decode;
+
 const CAP: usize = 1000;
 const MERGE_GAP: TimeDelta = TimeDelta::milliseconds(50);
 
@@ -28,32 +30,62 @@ impl Direction {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Framing {
+    Rtu,
+    Tcp,
+}
+
+impl Framing {
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Rtu => "RTU",
+            Self::Tcp => "TCP",
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Frame {
     pub time: DateTime<Local>,
     pub last: DateTime<Local>,
     pub direction: Direction,
+    pub framing: Framing,
     pub bytes: Vec<u8>,
 }
 
 impl Frame {
     pub fn hex(&self) -> String {
-        self.bytes
-            .iter()
-            .map(|byte| format!("{byte:02X}"))
-            .collect::<Vec<_>>()
-            .join(" ")
+        hex(&self.bytes)
     }
+}
+
+pub fn hex(bytes: &[u8]) -> String {
+    bytes
+        .iter()
+        .map(|byte| format!("{byte:02X}"))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 static FRAMES: Mutex<VecDeque<Frame>> = Mutex::new(VecDeque::new());
 
-fn push(frames: &mut VecDeque<Frame>, direction: Direction, bytes: &[u8], now: DateTime<Local>) {
+fn push(
+    frames: &mut VecDeque<Frame>,
+    direction: Direction,
+    framing: Framing,
+    bytes: &[u8],
+    now: DateTime<Local>,
+) {
     if bytes.is_empty() {
         return;
     }
     match frames.back_mut() {
-        Some(last) if last.direction == direction && now - last.last <= MERGE_GAP => {
+        Some(last)
+            if last.direction == direction
+                && last.framing == framing
+                && now - last.last <= MERGE_GAP =>
+        {
             last.bytes.extend_from_slice(bytes);
             last.last = now;
         }
@@ -62,6 +94,7 @@ fn push(frames: &mut VecDeque<Frame>, direction: Direction, bytes: &[u8], now: D
                 time: now,
                 last: now,
                 direction,
+                framing,
                 bytes: bytes.to_vec(),
             });
             frames.retain_back(CAP);
@@ -69,9 +102,9 @@ fn push(frames: &mut VecDeque<Frame>, direction: Direction, bytes: &[u8], now: D
     }
 }
 
-pub fn record(direction: Direction, bytes: &[u8]) {
+pub fn record(direction: Direction, framing: Framing, bytes: &[u8]) {
     if let Ok(mut frames) = FRAMES.lock() {
-        push(&mut frames, direction, bytes, Local::now());
+        push(&mut frames, direction, framing, bytes, Local::now());
     }
 }
 
@@ -253,14 +286,14 @@ pub use tap::Tap;
 
 #[cfg(not(target_arch = "wasm32"))]
 mod tap {
-    use super::{Direction, record};
+    use super::{Direction, Framing, record};
     use std::io;
     use std::pin::Pin;
     use std::task::{Context, Poll};
     use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
     #[derive(Debug)]
-    pub struct Tap<T>(pub T);
+    pub struct Tap<T>(pub T, pub Framing);
 
     impl<T: AsyncRead + Unpin> AsyncRead for Tap<T> {
         fn poll_read(
@@ -271,7 +304,7 @@ mod tap {
             let before = buf.filled().len();
             let poll = Pin::new(&mut self.0).poll_read(cx, buf);
             if matches!(poll, Poll::Ready(Ok(()))) {
-                record(Direction::Rx, &buf.filled()[before..]);
+                record(Direction::Rx, self.1, &buf.filled()[before..]);
             }
             poll
         }
@@ -285,7 +318,7 @@ mod tap {
         ) -> Poll<io::Result<usize>> {
             let poll = Pin::new(&mut self.0).poll_write(cx, buf);
             if let Poll::Ready(Ok(written)) = poll {
-                record(Direction::Tx, &buf[..written]);
+                record(Direction::Tx, self.1, &buf[..written]);
             }
             poll
         }
@@ -302,7 +335,7 @@ mod tap {
 
 #[cfg(test)]
 mod tests {
-    use super::{Direction, Frame, crc16, export, push, request_pdu, response_pdu, rtu};
+    use super::{Direction, Frame, Framing, crc16, export, push, request_pdu, response_pdu, rtu};
     use chrono::{Local, TimeDelta, TimeZone};
     use std::collections::VecDeque;
     use tokio_modbus::{ExceptionCode, Request, Response};
@@ -311,34 +344,45 @@ mod tests {
     fn chunks_in_the_same_direction_merge_while_they_keep_coming() {
         let start = Local.with_ymd_and_hms(2026, 10, 26, 12, 0, 0).unwrap();
         let mut frames = VecDeque::new();
-        push(&mut frames, Direction::Tx, &[0x01, 0x03], start);
         push(
             &mut frames,
             Direction::Tx,
+            Framing::Rtu,
+            &[0x01, 0x03],
+            start,
+        );
+        push(
+            &mut frames,
+            Direction::Tx,
+            Framing::Rtu,
             &[0x00],
             start + TimeDelta::milliseconds(10),
         );
         push(
             &mut frames,
             Direction::Rx,
+            Framing::Rtu,
             &[0x01],
             start + TimeDelta::milliseconds(20),
         );
         push(
             &mut frames,
             Direction::Rx,
+            Framing::Rtu,
             &[],
             start + TimeDelta::milliseconds(25),
         );
         push(
             &mut frames,
             Direction::Rx,
+            Framing::Rtu,
             &[0x83],
             start + TimeDelta::milliseconds(30),
         );
         push(
             &mut frames,
             Direction::Rx,
+            Framing::Rtu,
             &[0x02],
             start + TimeDelta::seconds(2),
         );
@@ -362,6 +406,7 @@ mod tests {
             time,
             last: time,
             direction: Direction::Rx,
+            framing: Framing::Rtu,
             bytes: vec![0x01, 0xAB, 0x0F],
         };
         assert_eq!(export(&[frame]), "2026-10-26T12:00:00.000 RX 01 AB 0F\n");

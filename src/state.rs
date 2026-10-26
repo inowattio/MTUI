@@ -1076,7 +1076,7 @@ pub struct ColumnsParams {
     pub selected: u16,
 }
 
-fn scroll_window(cursor: &mut u16, top: &mut u16, rows: u16, len: u16) {
+pub fn scroll_window(cursor: &mut u16, top: &mut u16, rows: u16, len: u16) {
     let rows = rows.max(1);
     if len == 0 {
         *cursor = 0;
@@ -1754,6 +1754,7 @@ impl ConnectionStatus {
 #[derive(Debug, PartialEq)]
 pub struct LogViewParams {
     pub top: u16,
+    pub selected: u16,
     pub follow: bool,
     pub h_offset: u16,
     pub wrap: bool,

@@ -1,5 +1,5 @@
 use crate::compat::{self, Instant};
-use crate::frames::{self, Direction};
+use crate::frames::{self, Direction, Framing};
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
@@ -634,6 +634,7 @@ impl Client for MockContext {
         let function = request.function_code().value();
         frames::record(
             Direction::Tx,
+            Framing::Rtu,
             &frames::rtu(self.unit_id, &frames::request_pdu(&request)),
         );
         if !KNOWN_UNITS.contains(&self.unit_id) || stalls(&request) {
@@ -646,6 +647,7 @@ impl Client for MockContext {
         let response = self.respond(request, t);
         frames::record(
             Direction::Rx,
+            Framing::Rtu,
             &frames::rtu(self.unit_id, &frames::response_pdu(function, &response)),
         );
         Ok(response)

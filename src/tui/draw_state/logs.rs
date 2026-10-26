@@ -1,13 +1,20 @@
 use crate::app::App;
+use crate::config::AddressMode;
+use crate::frames::decode::{self, Field, Tone};
 use crate::frames::{self, Direction};
 use crate::logger::{self, LogLevel};
 use crate::state::{LogViewParams, ScreenLayout};
 use crate::tui::draw_state::dim_line;
 use crate::tui::theme::Theme;
 use ratatui::Frame;
-use ratatui::layout::Rect;
+use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::Paragraph;
+use ratatui::widgets::{Block, Borders, Paragraph};
+
+const DETAIL_W: u16 = 46;
+const DIVIDER_W: u16 = 2;
+const DETAIL_MIN_TOTAL: u16 = 100;
+const HEX_W: usize = 11;
 
 struct Row {
     head: Vec<Span<'static>>,
@@ -43,9 +50,9 @@ fn event_rows(theme: &Theme) -> Vec<Row> {
         .collect()
 }
 
-fn frame_rows(theme: &Theme) -> Vec<Row> {
-    frames::snapshot()
-        .into_iter()
+fn frame_rows(snapshot: &[frames::Frame], theme: &Theme) -> Vec<Row> {
+    snapshot
+        .iter()
         .map(|frame| {
             let tag_style = match frame.direction {
                 Direction::Tx => theme.accent_style(),
@@ -66,18 +73,34 @@ fn frame_rows(theme: &Theme) -> Vec<Row> {
         .collect()
 }
 
+fn highlight(spans: Vec<Span<'static>>, theme: &Theme, selected: bool) -> Line<'static> {
+    if selected {
+        let style = theme.selected_style();
+        Line::from(
+            spans
+                .into_iter()
+                .map(|span| span.patch_style(style))
+                .collect::<Vec<_>>(),
+        )
+        .style(style)
+    } else {
+        Line::from(spans)
+    }
+}
+
 fn entry_rows(
     row: &Row,
     theme: &Theme,
     wrap: bool,
     msg_width: usize,
     h_off: usize,
+    selected: bool,
 ) -> Vec<Line<'static>> {
     if !wrap {
         let shown: String = row.text.chars().skip(h_off).collect();
         let mut spans = row.head.clone();
         spans.push(Span::styled(shown, theme.base()));
-        return vec![Line::from(spans)];
+        return vec![highlight(spans, theme, selected)];
     }
 
     let chars: Vec<char> = row.text.chars().collect();
@@ -87,18 +110,46 @@ fn entry_rows(
         .map(|piece| piece.iter().collect::<String>())
         .enumerate()
         .map(|(i, piece)| {
-            if i == 0 {
+            let spans = if i == 0 {
                 let mut spans = row.head.clone();
                 spans.push(Span::styled(piece, theme.base()));
-                Line::from(spans)
+                spans
             } else {
-                Line::from(vec![
+                vec![
                     Span::raw(" ".repeat(indent)),
                     Span::styled(piece, theme.base()),
-                ])
-            }
+                ]
+            };
+            highlight(spans, theme, selected)
         })
         .collect()
+}
+
+fn detail_lines(fields: &[Field], theme: &Theme, height: usize) -> Vec<Line<'static>> {
+    let line = |field: &Field| match field.tone {
+        Tone::Heading => Line::from(Span::styled(
+            format!(" {}", field.label),
+            theme.header_style(),
+        )),
+        tone => {
+            let style = match tone {
+                Tone::Good => theme.ok_style(),
+                Tone::Bad => theme.err_style(),
+                _ => theme.base(),
+            };
+            Line::from(vec![
+                Span::styled(format!(" {:<HEX_W$}  ", field.hex()), theme.dim_style()),
+                Span::styled(field.label.clone(), style),
+            ])
+        }
+    };
+    if fields.len() <= height {
+        return fields.iter().map(line).collect();
+    }
+    let shown = height.saturating_sub(1);
+    let mut lines: Vec<Line> = fields.iter().take(shown).map(line).collect();
+    lines.push(dim_line(theme, format!(" … {} more", fields.len() - shown)));
+    lines
 }
 
 /// The "shown/total events" counter for the top bar; relies on the row count
@@ -131,13 +182,55 @@ pub fn draw(
     area: Rect,
     theme: &Theme,
     layout: &mut ScreenLayout,
+    address_mode: AddressMode,
 ) {
+    let snapshot = if params.frames {
+        frames::snapshot()
+    } else {
+        Vec::new()
+    };
     let entries = if params.frames {
-        frame_rows(theme)
+        frame_rows(&snapshot, theme)
     } else {
         event_rows(theme)
     };
     let len = entries.len();
+    let selected = if params.frames && len > 0 {
+        Some(if params.follow {
+            len - 1
+        } else {
+            (params.selected as usize).min(len - 1)
+        })
+    } else {
+        None
+    };
+
+    let area = if params.frames && area.width >= DETAIL_MIN_TOTAL {
+        let [list, divider, detail] = Layout::horizontal([
+            Constraint::Min(0),
+            Constraint::Length(DIVIDER_W),
+            Constraint::Length(DETAIL_W),
+        ])
+        .areas(area);
+        frame.render_widget(
+            Block::default()
+                .borders(Borders::LEFT)
+                .border_style(theme.dim_style()),
+            divider,
+        );
+        let lines = match selected {
+            Some(index) => {
+                let request = decode::request_for(&snapshot, index);
+                let fields = decode::breakdown(&snapshot[index], request, address_mode);
+                detail_lines(&fields, theme, detail.height as usize)
+            }
+            None => vec![dim_line(theme, " (nothing selected)")],
+        };
+        frame.render_widget(Paragraph::new(lines), detail);
+        list
+    } else {
+        area
+    };
 
     let visible = area.height.max(1);
     layout.visible_rows = visible;
@@ -185,9 +278,10 @@ pub fn draw(
     } else if params.wrap && params.follow {
         let mut rows: Vec<Line> = entries
             .iter()
+            .enumerate()
             .rev()
-            .flat_map(|entry| {
-                entry_rows(entry, theme, true, msg_width, 0)
+            .flat_map(|(i, entry)| {
+                entry_rows(entry, theme, true, msg_width, 0, selected == Some(i))
                     .into_iter()
                     .rev()
             })
@@ -199,8 +293,18 @@ pub fn draw(
         lines.extend(
             entries
                 .iter()
+                .enumerate()
                 .skip(top)
-                .flat_map(|entry| entry_rows(entry, theme, params.wrap, msg_width, h_off))
+                .flat_map(|(i, entry)| {
+                    entry_rows(
+                        entry,
+                        theme,
+                        params.wrap,
+                        msg_width,
+                        h_off,
+                        selected == Some(i),
+                    )
+                })
                 .take(visible),
         );
     }

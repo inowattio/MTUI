@@ -1,6 +1,6 @@
 use crate::compat;
 #[cfg(not(target_arch = "wasm32"))]
-use crate::frames::Tap;
+use crate::frames::{Framing, Tap};
 use crate::mock::MockContext;
 use crate::register::RegisterType;
 use anyhow::Result;
@@ -860,19 +860,19 @@ impl ModbusDevice {
                     .stop_bits(interface.stop_bits.into());
 
                 let port = SerialStream::open(&builder)?;
-                rtu::attach_slave(Tap(port), Unit(config.unit_id))
+                rtu::attach_slave(Tap(port, Framing::Rtu), Unit(config.unit_id))
             }
             Interface::Tcp(interface) => {
                 let connect = tokio::net::TcpStream::connect(socket_addr(interface)?);
                 let stream = timeout(connect, timeout_connect, Duration::default()).await??;
-                tcp::attach_slave(Tap(stream), Unit(config.unit_id))
+                tcp::attach_slave(Tap(stream, Framing::Tcp), Unit(config.unit_id))
             }
             Interface::RtuOverTcp(interface) => {
                 let connect = tokio::net::TcpStream::connect(socket_addr(interface)?);
                 let stream = timeout(connect, timeout_connect, Duration::default()).await??;
 
                 let _ = stream.set_nodelay(true);
-                rtu::attach_slave(Tap(stream), Unit(config.unit_id))
+                rtu::attach_slave(Tap(stream, Framing::Rtu), Unit(config.unit_id))
             }
             Interface::Mock => MockContext::make(),
         };

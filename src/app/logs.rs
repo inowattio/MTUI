@@ -4,7 +4,7 @@ use crate::frames;
 use crate::logger;
 use crate::modbus::Interface;
 use crate::num_ops::step_hscroll;
-use crate::state::{LogViewParams, LogsParams, Popup, State, StatusMessage};
+use crate::state::{LogViewParams, LogsParams, Popup, State, StatusMessage, scroll_window};
 use crate::writes_log::{self, SharedWritesLog, WriteKind};
 use chrono::Local;
 use std::fs;
@@ -81,6 +81,7 @@ impl App {
         let previous = std::mem::take(self.read_mut());
         self.state = State::Logs(LogViewParams {
             top: 0,
+            selected: 0,
             follow: true,
             h_offset: 0,
             wrap: false,
@@ -168,7 +169,8 @@ impl App {
     }
 
     pub fn log_view_scroll(&mut self, delta: i32) {
-        let len = if self.log_view_shows_frames() {
+        let shows_frames = self.log_view_shows_frames();
+        let len = if shows_frames {
             frames::count()
         } else {
             logger::count()
@@ -176,9 +178,22 @@ impl App {
         let visible = self.layout.visible_rows.max(1) as i32;
         let max_top = (len - visible).max(0);
         if let Some(l) = self.log_view_mut() {
-            let new = (l.top as i32 + delta).clamp(0, max_top);
-            l.top = new as u16;
-            l.follow = new >= max_top;
+            if shows_frames {
+                let last = (len - 1).max(0);
+                let from = if l.follow {
+                    l.top = max_top as u16;
+                    last
+                } else {
+                    i32::from(l.selected)
+                };
+                l.selected = from.saturating_add(delta).clamp(0, last) as u16;
+                scroll_window(&mut l.selected, &mut l.top, visible as u16, len as u16);
+                l.follow = i32::from(l.selected) >= last;
+            } else {
+                let new = (l.top as i32).saturating_add(delta).clamp(0, max_top);
+                l.top = new as u16;
+                l.follow = new >= max_top;
+            }
         }
     }
 
