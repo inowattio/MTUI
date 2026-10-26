@@ -7,6 +7,7 @@ use crate::tui::theme::Theme;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt;
+use std::ops::RangeInclusive;
 
 pub const CONFIG_VERSION: u32 = 1;
 
@@ -745,9 +746,21 @@ fn demo_labels() -> BTreeMap<RegisterCell, String> {
                 (2, "warning"),
                 (3, "heartbeat"),
                 (7, "noise enabled"),
-                (8, "fault"),
+                (8, "fault bit"),
             ],
         ),
+    ];
+    let failing: [(RegisterType, RangeInclusive<u16>, &str); 10] = [
+        (RegisterType::Holding, 16..=19, "reserved (exc 02)"),
+        (RegisterType::Holding, 1102..=1103, "diagnostics (exc 04)"),
+        (RegisterType::Holding, 1104..=1105, "watchdog (timeout)"),
+        (RegisterType::Holding, 1108..=1109, "vendor lock (exc 20)"),
+        (RegisterType::Input, 38..=39, "reserved (exc 02)"),
+        (RegisterType::Input, 64..=67, "faulted (exc 04)"),
+        (RegisterType::Input, 68..=69, "stalled (timeout)"),
+        (RegisterType::Input, 76..=77, "vendor lock (exc A5)"),
+        (RegisterType::Coil, 6..=7, "reserved (exc 02)"),
+        (RegisterType::Discrete, 4..=6, "reserved (exc 02)"),
     ];
     sections
         .into_iter()
@@ -756,6 +769,9 @@ fn demo_labels() -> BTreeMap<RegisterCell, String> {
                 .iter()
                 .map(move |&(address, text)| ((kind, address), text.to_string()))
         })
+        .chain(failing.into_iter().flat_map(|(kind, range, text)| {
+            range.map(move |address| ((kind, address), text.to_string()))
+        }))
         .collect()
 }
 

@@ -821,6 +821,37 @@ mod tests {
         );
     }
 
+    #[test]
+    fn every_failing_address_is_labelled_in_the_demo() {
+        use super::{
+            COIL_FAULTS, DISCRETE_FAULTS, HOLDING_FAULTS, HOLDING_SILENT, INPUT_FAULTS,
+            INPUT_SILENT,
+        };
+        use crate::config::Config;
+        use crate::register::RegisterType;
+        let (_, labels, _) = Config::demo().registers.into_views();
+        let faults = [
+            (RegisterType::Holding, HOLDING_FAULTS),
+            (RegisterType::Input, INPUT_FAULTS),
+            (RegisterType::Coil, COIL_FAULTS),
+            (RegisterType::Discrete, DISCRETE_FAULTS),
+        ]
+        .into_iter()
+        .flat_map(|(kind, faults)| faults.iter().map(move |(zone, _)| (kind, zone.clone())));
+        let silent = [
+            (RegisterType::Holding, HOLDING_SILENT),
+            (RegisterType::Input, INPUT_SILENT),
+        ];
+        for (kind, zone) in faults.chain(silent) {
+            for address in zone {
+                assert!(
+                    labels.contains_key(&(kind, address)),
+                    "{kind:?} {address} has no demo label"
+                );
+            }
+        }
+    }
+
     #[tokio::test]
     async fn the_neighbours_of_a_fault_still_answer() {
         let mut mock = MockContext::make();
