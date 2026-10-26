@@ -32,6 +32,9 @@ impl App {
 
     fn parse_json_import(data: &str) -> Option<Registers> {
         let value: serde_json::Value = serde_json::from_str(data.trim()).ok()?;
+        if value.get("mbmap").is_some() {
+            return crate::mbmap::to_registers(&value).filter(|r| r.total() > 0);
+        }
         let value = value.get("registers").cloned().unwrap_or(value);
         let registers: Registers = serde_json::from_value(value).ok()?;
         (registers.total() > 0).then_some(registers)
