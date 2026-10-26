@@ -1757,6 +1757,7 @@ pub struct LogViewParams {
     pub follow: bool,
     pub h_offset: u16,
     pub wrap: bool,
+    pub frames: bool,
     pub previous: ReadParams,
 }
 

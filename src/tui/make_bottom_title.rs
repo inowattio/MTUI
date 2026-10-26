@@ -69,6 +69,7 @@ pub fn make_bottom_title(theme: &Theme, app: &App) -> Line<'static> {
             [
                 Hint::pair(KeyCode::Down, KeyCode::Right, "Scroll"),
                 Hint::key(kb.write, if l.wrap { "Unwrap" } else { "Wrap" }),
+                Hint::key(kb.panel, if l.frames { "Events" } else { "Frames" }),
                 Hint::key(kb.copy_column, "Copy"),
                 Hint::key(kb.dump, "Dump"),
                 Hint::key(KeyCode::Esc, "Close"),

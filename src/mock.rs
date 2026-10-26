@@ -1,4 +1,5 @@
 use crate::compat::{self, Instant};
+use crate::frames::{self, Direction};
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
@@ -630,6 +631,11 @@ impl MockContext {
 #[async_trait]
 impl Client for MockContext {
     async fn call(&mut self, request: Request<'_>) -> tokio_modbus::Result<Response> {
+        let function = request.function_code().value();
+        frames::record(
+            Direction::Tx,
+            &frames::rtu(self.unit_id, &frames::request_pdu(&request)),
+        );
         if !KNOWN_UNITS.contains(&self.unit_id) || stalls(&request) {
             std::future::pending::<()>().await;
             unreachable!();
@@ -637,7 +643,12 @@ impl Client for MockContext {
 
         self.simulate_latency().await;
         let t = self.time();
-        Ok(self.respond(request, t))
+        let response = self.respond(request, t);
+        frames::record(
+            Direction::Rx,
+            &frames::rtu(self.unit_id, &frames::response_pdu(function, &response)),
+        );
+        Ok(response)
     }
 
     async fn disconnect(&mut self) -> std::io::Result<()> {

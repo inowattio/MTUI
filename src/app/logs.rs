@@ -1,5 +1,6 @@
 use super::{App, WriteType};
 use crate::constants::message;
+use crate::frames;
 use crate::logger;
 use crate::modbus::Interface;
 use crate::num_ops::step_hscroll;
@@ -83,9 +84,22 @@ impl App {
             follow: true,
             h_offset: 0,
             wrap: false,
+            frames: false,
             previous,
         });
         self.log_view_scroll(i32::MAX);
+    }
+
+    pub fn log_view_toggle_frames(&mut self) {
+        if let Some(l) = self.log_view_mut() {
+            l.frames = !l.frames;
+            l.h_offset = 0;
+        }
+        self.log_view_scroll(i32::MAX);
+    }
+
+    fn log_view_shows_frames(&self) -> bool {
+        self.log_view().is_some_and(|l| l.frames)
     }
 
     pub fn log_view_hscroll(&mut self, right: bool) {
@@ -113,34 +127,52 @@ impl App {
         self.state = State::Read(previous);
     }
 
+    fn log_view_export(&self) -> (&'static str, usize, String) {
+        if self.log_view_shows_frames() {
+            let entries = frames::snapshot();
+            ("frame", entries.len(), frames::export(&entries))
+        } else {
+            let entries = logger::snapshot();
+            ("log line", entries.len(), logger::export(&entries))
+        }
+    }
+
     pub fn copy_app_logs(&mut self) {
-        let entries = logger::snapshot();
-        let count = entries.len();
-        if self.set_clipboard(logger::export(&entries)) {
-            log::info!("Copied {count} log line(s) to clipboard");
+        let (noun, count, text) = self.log_view_export();
+        if self.set_clipboard(text) {
+            log::info!("Copied {count} {noun}(s) to clipboard");
         } else {
             log::error!("Clipboard unavailable");
         }
     }
 
     pub fn dump_app_logs(&mut self) {
-        let entries = logger::snapshot();
+        let (noun, count, text) = self.log_view_export();
+        let prefix = if self.log_view_shows_frames() {
+            "frames"
+        } else {
+            "logs"
+        };
         let filename = super::file_name(
             &[
-                "logs",
+                prefix,
                 &self.config.name,
                 &Local::now().format("%Y%m%d_%H%M%S").to_string(),
             ],
             "txt",
         );
-        match fs::write(&filename, logger::export(&entries)) {
-            Ok(()) => log::info!("Saved {} log line(s) to {filename}", entries.len()),
+        match fs::write(&filename, text) {
+            Ok(()) => log::info!("Saved {count} {noun}(s) to {filename}"),
             Err(e) => log::error!("Log dump failed | {e}"),
         }
     }
 
     pub fn log_view_scroll(&mut self, delta: i32) {
-        let len = logger::count() as i32;
+        let len = if self.log_view_shows_frames() {
+            frames::count()
+        } else {
+            logger::count()
+        } as i32;
         let visible = self.layout.visible_rows.max(1) as i32;
         let max_top = (len - visible).max(0);
         if let Some(l) = self.log_view_mut() {

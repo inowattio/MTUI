@@ -1,4 +1,6 @@
 use crate::compat;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::frames::Tap;
 use crate::mock::MockContext;
 use crate::register::RegisterType;
 use anyhow::Result;
@@ -461,25 +463,9 @@ mod tests {
         (config, connections)
     }
 
-    // not really worth it to pull in an entire crate just for a function
-    #[cfg(not(target_arch = "wasm32"))]
-    fn crc16(data: &[u8]) -> u16 {
-        let mut crc = 0xFFFFu16;
-        for &byte in data {
-            crc ^= u16::from(byte);
-            for _ in 0..8 {
-                crc = if crc & 1 == 1 {
-                    (crc >> 1) ^ 0xA001
-                } else {
-                    crc >> 1
-                };
-            }
-        }
-        crc
-    }
-
     #[cfg(not(target_arch = "wasm32"))]
     async fn rtu_gateway() -> u16 {
+        use crate::frames::crc16;
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();
@@ -874,18 +860,19 @@ impl ModbusDevice {
                     .stop_bits(interface.stop_bits.into());
 
                 let port = SerialStream::open(&builder)?;
-                rtu::attach_slave(port, Unit(config.unit_id))
+                rtu::attach_slave(Tap(port), Unit(config.unit_id))
             }
             Interface::Tcp(interface) => {
-                let connection = tcp::connect_slave(socket_addr(interface)?, Unit(config.unit_id));
-                timeout(connection, timeout_connect, Duration::default()).await??
+                let connect = tokio::net::TcpStream::connect(socket_addr(interface)?);
+                let stream = timeout(connect, timeout_connect, Duration::default()).await??;
+                tcp::attach_slave(Tap(stream), Unit(config.unit_id))
             }
             Interface::RtuOverTcp(interface) => {
                 let connect = tokio::net::TcpStream::connect(socket_addr(interface)?);
                 let stream = timeout(connect, timeout_connect, Duration::default()).await??;
 
                 let _ = stream.set_nodelay(true);
-                rtu::attach_slave(stream, Unit(config.unit_id))
+                rtu::attach_slave(Tap(stream), Unit(config.unit_id))
             }
             Interface::Mock => MockContext::make(),
         };

@@ -629,6 +629,7 @@ fn handle_logs_view_key(key_event: KeyEvent, app: &mut App) {
         c if c == kb.page_up => app.log_view_scroll(-(app.layout.visible_rows as i32)),
         c if c == kb.page_down => app.log_view_scroll(app.layout.visible_rows as i32),
         c if c == kb.write => app.log_view_toggle_wrap(),
+        c if c == kb.panel => app.log_view_toggle_frames(),
         c if c == kb.copy_column => app.copy_app_logs(),
         c if c == kb.dump => app.dump_app_logs(),
         KeyCode::Left => app.log_view_hscroll(false),
