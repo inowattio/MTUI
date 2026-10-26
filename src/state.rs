@@ -536,8 +536,16 @@ pub struct DumpParams {
     pub result: Option<StatusMessage>,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ImportSource {
+    #[default]
+    Mtui,
+    HomeAssistant,
+}
+
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct ImportParams {
+    pub source: ImportSource,
     pub pins: usize,
     pub labels: usize,
     pub rules: usize,

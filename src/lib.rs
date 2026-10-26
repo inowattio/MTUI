@@ -8,6 +8,7 @@ pub mod custom;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod event;
 pub mod handler;
+pub mod home_assistant;
 pub mod input;
 pub mod interpretator;
 pub mod logger;

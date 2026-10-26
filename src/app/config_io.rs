@@ -2,13 +2,35 @@ use super::{App, BackgroundTask, LoadConfigTaskResult, save_config};
 use crate::compat;
 use crate::config::{Config, Registers, Startup};
 use crate::constants::message;
+use crate::home_assistant;
 use crate::modbus::ModbusDevice;
-use crate::state::{ConnectionStatus, ImportParams, Outcome, Popup, State, StatusMessage};
+use crate::state::{
+    ConnectionStatus, ImportParams, ImportSource, Outcome, Popup, State, StatusMessage,
+};
 use std::fs;
 use std::path::{Path, PathBuf};
 
+struct ParsedImport {
+    registers: Registers,
+    source: ImportSource,
+}
+
 impl App {
-    fn parse_import(data: &str) -> Option<Registers> {
+    fn parse_import(data: &str) -> Option<ParsedImport> {
+        Self::parse_json_import(data)
+            .map(|registers| ParsedImport {
+                registers,
+                source: ImportSource::Mtui,
+            })
+            .or_else(|| {
+                home_assistant::parse(data).map(|registers| ParsedImport {
+                    registers,
+                    source: ImportSource::HomeAssistant,
+                })
+            })
+    }
+
+    fn parse_json_import(data: &str) -> Option<Registers> {
         let value: serde_json::Value = serde_json::from_str(data.trim()).ok()?;
         let value = value.get("registers").cloned().unwrap_or(value);
         let registers: Registers = serde_json::from_value(value).ok()?;
@@ -16,10 +38,15 @@ impl App {
     }
 
     pub fn paste_import(&mut self, data: &str) -> bool {
-        let Some(payload) = Self::parse_import(data) else {
+        let Some(ParsedImport {
+            registers: payload,
+            source,
+        }) = Self::parse_import(data)
+        else {
             return false;
         };
         let params = ImportParams {
+            source,
             pins: payload.pins(),
             labels: payload.labels(),
             rules: payload.rules(),
@@ -319,7 +346,7 @@ impl App {
 mod tests {
     use super::{App, BackgroundTask};
     use crate::config::Config;
-    use crate::state::MessageKind;
+    use crate::state::{ImportSource, MessageKind};
 
     async fn app_with_refresh_in_flight() -> App {
         let mut app = App::boot(Config::default(), String::new()).await;
@@ -364,7 +391,9 @@ mod tests {
         ];
         let json = app.export_payload_json();
 
-        let payload = App::parse_import(&json).expect("export is importable");
+        let parsed = App::parse_import(&json).expect("export is importable");
+        assert_eq!(parsed.source, ImportSource::Mtui);
+        let payload = parsed.registers;
         assert_eq!(payload.pins(), 2);
         assert_eq!(payload.labels(), app.labels.len());
         assert_eq!(payload.rules(), app.custom_rules.len());
