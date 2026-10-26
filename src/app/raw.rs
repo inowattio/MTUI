@@ -184,7 +184,7 @@ mod tests {
     use crate::config::Config;
     use std::time::Duration;
 
-    fn outcome(result: Result<(Vec<u8>, Duration), String>) -> Option<RawTaskResult> {
+    const fn outcome(result: Result<(Vec<u8>, Duration), String>) -> Option<RawTaskResult> {
         Some(RawTaskResult {
             code: 0x41,
             sent: 0,
