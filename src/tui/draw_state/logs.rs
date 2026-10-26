@@ -10,7 +10,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
 struct Row {
-    head: [Span<'static>; 2],
+    head: Vec<Span<'static>>,
     text: String,
 }
 
@@ -30,7 +30,7 @@ fn event_rows(theme: &Theme) -> Vec<Row> {
                 LogLevel::Error => ("ERR ", theme.err_style()),
             };
             Row {
-                head: [
+                head: vec![
                     Span::styled(
                         format!(" {} ", entry.time.format("%H:%M:%S")),
                         theme.dim_style(),
@@ -52,12 +52,13 @@ fn frame_rows(theme: &Theme) -> Vec<Row> {
                 Direction::Rx => theme.ok_style(),
             };
             Row {
-                head: [
+                head: vec![
                     Span::styled(
                         format!(" {} ", frame.time.format("%H:%M:%S%.3f")),
                         theme.dim_style(),
                     ),
                     Span::styled(format!("{} ", frame.direction.tag()), tag_style),
+                    Span::styled(format!("{} ", frame.direction.arrow()), theme.dim_style()),
                 ],
                 text: frame.hex(),
             }
@@ -74,7 +75,7 @@ fn entry_rows(
 ) -> Vec<Line<'static>> {
     if !wrap {
         let shown: String = row.text.chars().skip(h_off).collect();
-        let mut spans = row.head.to_vec();
+        let mut spans = row.head.clone();
         spans.push(Span::styled(shown, theme.base()));
         return vec![Line::from(spans)];
     }
@@ -87,7 +88,7 @@ fn entry_rows(
         .enumerate()
         .map(|(i, piece)| {
             if i == 0 {
-                let mut spans = row.head.to_vec();
+                let mut spans = row.head.clone();
                 spans.push(Span::styled(piece, theme.base()));
                 Line::from(spans)
             } else {

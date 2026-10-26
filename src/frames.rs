@@ -19,6 +19,13 @@ impl Direction {
             Self::Rx => "RX",
         }
     }
+
+    pub const fn arrow(self) -> char {
+        match self {
+            Self::Tx => '>',
+            Self::Rx => '<',
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
