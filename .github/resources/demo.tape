@@ -80,8 +80,8 @@ Sleep 1.2s
 Down@250ms 2
 Enter
 Sleep 900ms
-Down
-Sleep 350ms
+Down@250ms 2
+Sleep 250ms
 Right
 Sleep 1.7s
 Escape
