@@ -855,7 +855,7 @@ impl Default for Config {
             refresh_interval_ms: 1000,
             reconnect_on_timeout: true,
             raw_exceptions: false,
-            changed_expiry_ms: 1000,
+            changed_expiry_ms: 1100,
             graph: GraphConfig::default(),
             matrix: MatrixConfig::default(),
             read_only: false,
