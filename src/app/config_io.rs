@@ -2,8 +2,7 @@ use super::{App, BackgroundTask, LoadConfigTaskResult, save_config};
 use crate::compat;
 use crate::config::{Config, Registers, Startup};
 use crate::constants::message;
-use crate::home_assistant;
-use crate::mbmap;
+use crate::import::{home_assistant, mbmap};
 use crate::modbus::ModbusDevice;
 use crate::state::{
     ConnectionStatus, ImportParams, ImportSource, Outcome, Popup, State, StatusMessage,
