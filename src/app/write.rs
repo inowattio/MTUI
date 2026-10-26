@@ -7,6 +7,7 @@ use crate::modbus::WordOrder;
 use crate::num_ops::cycle;
 use crate::register::{RegisterCell, RegisterType};
 use crate::state::{Popup, StatusMessage, WriteFunc, WriteParams};
+use std::time::Duration;
 
 impl App {
     pub fn open_write(&mut self) {
@@ -272,21 +273,22 @@ impl App {
                 (WriteType::Coil, _) => device
                     .write_coil(position, number != 0)
                     .await
-                    .map(|()| Vec::new()),
+                    .map(|((), latency)| (Vec::new(), latency)),
                 (WriteType::Word, WriteFunc::Single) => device
                     .write_register(position, number as u16)
                     .await
-                    .map(|()| Vec::new()),
+                    .map(|((), latency)| (Vec::new(), latency)),
                 (_, WriteFunc::ReadWrite) => device.read_write_registers(position, &words).await,
                 (_, _) => device
                     .write_registers(position, &words)
                     .await
-                    .map(|()| Vec::new()),
+                    .map(|((), latency)| (Vec::new(), latency)),
             };
             match result {
-                Ok(read) => WriteOutcome {
+                Ok((read, latency)) => WriteOutcome {
                     ok: true,
                     message: read_back_message(word_order.assemble(&read), new_value),
+                    latency,
                     read_back: read
                         .into_iter()
                         .enumerate()
@@ -296,6 +298,7 @@ impl App {
                 Err(e) => WriteOutcome {
                     ok: false,
                     message: format!("Write failed: {e}"),
+                    latency: Duration::ZERO,
                     read_back: Vec::new(),
                 },
             }

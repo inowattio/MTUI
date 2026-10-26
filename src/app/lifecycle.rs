@@ -1,8 +1,8 @@
 use super::{
     App, BackgroundTask, CommStats, ConfigError, ConnectTaskResult, DeviceIdTaskResult,
-    LoadConfigTaskResult, RawTaskResult, ReadEntry, ReadError, ReadFailure, ReconnectState,
-    RefreshTaskResult, SweepState, UnitScanTaskResult, WriteOutcome, default_config_path,
-    load_config, reconnect_backoff,
+    LoadConfigTaskResult, PendingWrite, RawTaskResult, ReadEntry, ReadError, ReadFailure,
+    ReconnectState, RefreshTaskResult, RequestTrace, StatTarget, SweepState, UnitScanTaskResult,
+    WriteOutcome, default_config_path, load_config, reconnect_backoff,
 };
 use crate::compat::{self, Instant, TaskPoll};
 use crate::config::{AddressMode, BatchAnchor, Config, RegisterViews};
@@ -20,6 +20,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU16, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 impl App {
     pub async fn new(
@@ -54,7 +55,7 @@ impl App {
             running: true,
             connection: ConnectionStatus::Unknown,
             frame: 0,
-            last_frame: std::time::Duration::ZERO,
+            last_frame: Duration::ZERO,
             ram_bytes: None,
             paused: false,
             headless: false,
@@ -399,9 +400,11 @@ impl App {
         register_type: RegisterType,
         position: u16,
         amount: u16,
-    ) -> Result<Vec<u16>, anyhow::Error> {
+        trace: &mut RequestTrace,
+    ) -> Result<(Vec<u16>, Duration), anyhow::Error> {
+        trace.attempt = Some(StatTarget::Read(register_type, position, amount));
         device
-            .read_typed(None, register_type, position, amount)
+            .read_timed(None, register_type, position, amount)
             .await
     }
 
@@ -410,8 +413,11 @@ impl App {
         amount: u16,
         position: u16,
         register_type: RegisterType,
+        trace: &mut RequestTrace,
     ) -> Result<Vec<RegisterCellValue>, anyhow::Error> {
-        let values = Self::read_words(device, register_type, position, amount).await?;
+        let (values, latency) =
+            Self::read_words(device, register_type, position, amount, trace).await?;
+        trace.latencies.push(latency);
 
         Ok(values
             .into_iter()
@@ -426,6 +432,7 @@ impl App {
         batch: u16,
         full_spans: &BTreeMap<RegisterCell, u16>,
         address_mode: AddressMode,
+        trace: &mut RequestTrace,
     ) -> Result<Vec<RegisterCellValue>, anyhow::Error> {
         let batch = batch.max(1) as usize;
         let mut collection = Vec::with_capacity(regs.len());
@@ -435,13 +442,15 @@ impl App {
             let (kind, start_addr) = regs[i];
             let run_len = read_run_len(regs, i, batch, full_spans);
 
-            let values = Self::read_words(device, kind, start_addr, run_len as u16).await?;
+            let (values, latency) =
+                Self::read_words(device, kind, start_addr, run_len as u16, trace).await?;
             anyhow::ensure!(
                 values.len() == run_len,
                 "Expected {run_len} value(s) at {}, got {}",
                 address_mode.display(start_addr),
                 values.len()
             );
+            trace.latencies.push(latency);
 
             collection.extend(regs[i..i + run_len].iter().copied().zip(values));
 
@@ -549,9 +558,18 @@ impl App {
         self.background_task = Some(BackgroundTask::Refresh(compat::spawn(async move {
             let read_began = Instant::now();
             let mut values = Vec::new();
+            let mut trace = RequestTrace::default();
             let mut error = None;
             if read_main {
-                match Self::acquire_data_with(&device, amount, read_start, register_type).await {
+                match Self::acquire_data_with(
+                    &device,
+                    amount,
+                    read_start,
+                    register_type,
+                    &mut trace,
+                )
+                .await
+                {
                     Ok(data) => values = data,
                     Err(e) => error = Some(ReadError::from(e)),
                 }
@@ -563,6 +581,7 @@ impl App {
                     amount,
                     &full_spans,
                     address_mode,
+                    &mut trace,
                 )
                 .await
                 {
@@ -576,6 +595,7 @@ impl App {
                 register_type,
                 main_window: read_main,
                 values,
+                trace,
                 error,
                 read_duration,
             }
@@ -583,9 +603,13 @@ impl App {
     }
 
     fn apply_refresh_result(&mut self, result: RefreshTaskResult) {
-        match &result.error {
-            Some(e) => self.stats.record_read_error(&e.message),
-            None => self.stats.record_read_ok(result.read_duration),
+        for &latency in &result.trace.latencies {
+            self.stats.reads.record_ok(latency);
+        }
+        if let Some(e) = &result.error {
+            self.stats
+                .reads
+                .record_error(&e.message, result.trace.attempt);
         }
         if !self.is_reading() {
             self.read_or_previous_mut().finish_read();
@@ -752,7 +776,7 @@ impl App {
             Done::Refresh(Some(result)) => self.apply_refresh_result(result),
             Done::Refresh(None) => {
                 let message = "read task stopped unexpectedly".to_string();
-                self.stats.record_read_error(&message);
+                self.stats.reads.record_error(&message, None);
                 let params = self.read_or_previous_mut();
                 params.read_error = Some(message.clone());
                 params.finish_read();
@@ -764,9 +788,15 @@ impl App {
                 let outcome = outcome.unwrap_or_else(|| WriteOutcome {
                     ok: false,
                     message: "write task stopped unexpectedly".to_string(),
+                    latency: Duration::ZERO,
                     read_back: Vec::new(),
                 });
-                self.stats.record_write(outcome.ok, &outcome.message);
+                if outcome.ok {
+                    self.stats.writes.record_ok(outcome.latency);
+                } else {
+                    let target = self.pending_write.as_ref().map(PendingWrite::target);
+                    self.stats.writes.record_error(&outcome.message, target);
+                }
                 if outcome.ok && !outcome.read_back.is_empty() {
                     self.store_values(&outcome.read_back);
                     self.sync_auto_widths();
@@ -908,7 +938,7 @@ fn read_run_len(
 #[cfg(test)]
 mod tests {
     #[cfg(not(target_arch = "wasm32"))]
-    use super::{App, BackgroundTask};
+    use super::{App, BackgroundTask, StatTarget};
     use super::{cover_runs, custom_full_spans, custom_runs, custom_words_outside, read_run_len};
     #[cfg(not(target_arch = "wasm32"))]
     use crate::config::{Config, CyclePanels};
@@ -1324,6 +1354,53 @@ mod tests {
         assert!(
             app.background_task.is_none(),
             "an exception must not trigger a reconnect"
+        );
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn every_modbus_request_of_a_refresh_counts_as_a_read() {
+        let mut app = App::boot(Config::default(), String::new()).await;
+        {
+            let p = app.read_mut();
+            p.register_type = RegisterType::Input;
+            p.position = 0;
+            p.graph = true;
+            p.graph_series = vec![(RegisterType::Input, 200), (RegisterType::Input, 400)];
+        }
+
+        app.refresh();
+        settle(&mut app).await;
+
+        assert_eq!(app.stats.reads.ok, 3, "main window plus two graph runs");
+        assert_eq!(app.stats.reads.errors, 0);
+        assert!(app.stats.reads.latency().is_some());
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn a_failing_request_counts_once_after_the_ones_before_it() {
+        let mut app = App::boot(Config::default(), String::new()).await;
+        {
+            let p = app.read_mut();
+            p.register_type = RegisterType::Input;
+            p.position = 0;
+            p.graph = true;
+            p.graph_series = vec![(RegisterType::Input, 64), (RegisterType::Input, 400)];
+        }
+
+        app.refresh();
+        settle(&mut app).await;
+
+        assert_eq!(app.stats.reads.ok, 1, "only the main window answered");
+        assert_eq!(
+            app.stats.reads.errors, 1,
+            "the run after the failure is never sent"
+        );
+        let target = app.stats.reads.last_error().and_then(|e| e.target);
+        assert!(
+            matches!(target, Some(StatTarget::Read(RegisterType::Input, 64, _))),
+            "the error points at the failing request, got {target:?}"
         );
     }
 

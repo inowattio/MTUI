@@ -61,7 +61,7 @@ pub fn draw_popup(
         }
         Popup::Inspect(mode) => inspect::draw(frame, area, theme, app, *mode),
         Popup::About => about::draw(frame, area, theme),
-        Popup::Stats => stats::draw(frame, area, theme, app),
+        Popup::Stats(tab) => stats::draw(frame, area, theme, app, *tab),
         Popup::DeviceId(params) => device_id::draw(frame, area, theme, app, params, layout),
         Popup::Raw(params) => raw::draw(frame, area, theme, params),
         Popup::Import(params) => import::draw(frame, area, theme, params),

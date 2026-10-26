@@ -672,7 +672,7 @@ impl ReadWords for Context {
     }
 }
 
-macro_rules! timeout_as {
+macro_rules! timed_as {
     ($this:ident, $unit:expr, $action:ident, ($($arg:expr),* $(,)?), $desc:expr) => {
         {
             let mut hold = $this.context.lock().await;
@@ -697,8 +697,10 @@ macro_rules! timeout_as {
             if let Some(id) = override_unit {
                 hold.set_slave(Unit(id));
             }
-            let outcome =
-                timeout(hold.$action($($arg),*), timeout_command, time_between).await;
+            let began = compat::Instant::now();
+            let outcome = compat::timeout(timeout_command, hold.$action($($arg),*)).await;
+            let elapsed = began.elapsed();
+            compat::sleep(time_between).await;
             if override_unit.is_some() {
                 hold.set_slave(Unit($this.default_unit.load(Ordering::Relaxed)));
             }
@@ -712,7 +714,7 @@ macro_rules! timeout_as {
                         "()" => log::info!("{desc} | ok"),
                         shown => log::info!("{desc} | ok | {shown}"),
                     }
-                    Ok(value)
+                    Ok((value, elapsed))
                 }
                 Ok(Ok(Err(code))) => {
                     let error = exception_error(code);
@@ -726,16 +728,28 @@ macro_rules! timeout_as {
                 Err(error) => {
                     $this.poisoned.store(true, Ordering::Relaxed);
                     log::warn!("{desc} | timed out");
-                    Err(error)
+                    Err(anyhow::Error::from(error))
                 }
             }
         }
     };
 }
 
+macro_rules! timeout_as {
+    ($this:ident, $unit:expr, $action:ident, ($($arg:expr),* $(,)?), $desc:expr) => {
+        timed_as!($this, $unit, $action, ($($arg),*), $desc).map(|(value, _)| value)
+    };
+}
+
 macro_rules! timeout {
     ($this:ident, $action:ident, ($($arg:expr),* $(,)?), $desc:expr) => {
         timeout_as!($this, None::<UnitId>, $action, ($($arg),*), $desc)
+    };
+}
+
+macro_rules! timed {
+    ($this:ident, $action:ident, ($($arg:expr),* $(,)?), $desc:expr) => {
+        timed_as!($this, None::<UnitId>, $action, ($($arg),*), $desc)
     };
 }
 
@@ -907,8 +921,20 @@ impl ModbusDevice {
         address: u16,
         count: u16,
     ) -> Result<Vec<u16>> {
+        self.read_timed(unit, register_type, address, count)
+            .await
+            .map(|(values, _)| values)
+    }
+
+    pub async fn read_timed(
+        &self,
+        unit: Option<UnitId>,
+        register_type: RegisterType,
+        address: u16,
+        count: u16,
+    ) -> Result<(Vec<u16>, Duration)> {
         let desc = format!("Read {register_type:?} @ {address} with {count} value(s)");
-        timeout_as!(
+        timed_as!(
             self,
             unit,
             read_words,
@@ -962,8 +988,8 @@ impl ModbusDevice {
         self.config.word_order = word_order;
     }
 
-    pub async fn write_register(&self, address: u16, data: u16) -> Result<()> {
-        timeout!(
+    pub async fn write_register(&self, address: u16, data: u16) -> Result<((), Duration)> {
+        timed!(
             self,
             write_single_register,
             (address, data),
@@ -971,8 +997,8 @@ impl ModbusDevice {
         )
     }
 
-    pub async fn write_registers(&self, address: u16, data: &[u16]) -> Result<()> {
-        timeout!(
+    pub async fn write_registers(&self, address: u16, data: &[u16]) -> Result<((), Duration)> {
+        timed!(
             self,
             write_multiple_registers,
             (address, data),
@@ -980,8 +1006,12 @@ impl ModbusDevice {
         )
     }
 
-    pub async fn read_write_registers(&self, address: u16, data: &[u16]) -> Result<Vec<u16>> {
-        timeout!(
+    pub async fn read_write_registers(
+        &self,
+        address: u16,
+        data: &[u16],
+    ) -> Result<(Vec<u16>, Duration)> {
+        timed!(
             self,
             read_write_multiple_registers,
             (address, data.len() as u16, address, data),
@@ -989,8 +1019,8 @@ impl ModbusDevice {
         )
     }
 
-    pub async fn write_coil(&self, address: u16, data: bool) -> Result<()> {
-        timeout!(
+    pub async fn write_coil(&self, address: u16, data: bool) -> Result<((), Duration)> {
+        timed!(
             self,
             write_single_coil,
             (address, data),
@@ -1000,7 +1030,7 @@ impl ModbusDevice {
 
     pub async fn write_register_word(&self, address: u16, data: i32) -> Result<()> {
         let words = self.config.word_order.split_word(data as u32);
-        self.write_registers(address, &words).await
+        self.write_registers(address, &words).await.map(|_| ())
     }
 
     pub async fn device_identification(
@@ -1051,7 +1081,18 @@ impl ModbusDevice {
     }
 
     pub async fn custom(&self, unit: Option<UnitId>, code: u8, data: &[u8]) -> Result<Vec<u8>> {
-        let response = timeout_as!(
+        self.custom_timed(unit, code, data)
+            .await
+            .map(|(bytes, _)| bytes)
+    }
+
+    pub async fn custom_timed(
+        &self,
+        unit: Option<UnitId>,
+        code: u8,
+        data: &[u8],
+    ) -> Result<(Vec<u8>, Duration)> {
+        let (response, elapsed) = timed_as!(
             self,
             unit,
             call,
@@ -1059,7 +1100,7 @@ impl ModbusDevice {
             format!("Raw function 0x{code:02X} with data {data:?}")
         )?;
         match response {
-            Response::Custom(_, bytes) => Ok(bytes.to_vec()),
+            Response::Custom(_, bytes) => Ok((bytes.to_vec(), elapsed)),
             _ => anyhow::bail!("Unexpected response type."),
         }
     }

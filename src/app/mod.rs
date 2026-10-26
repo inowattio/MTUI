@@ -122,7 +122,7 @@ struct DeviceIdTaskResult {
 struct RawTaskResult {
     code: u8,
     sent: usize,
-    result: Result<Vec<u8>, String>,
+    result: Result<(Vec<u8>, Duration), String>,
 }
 
 #[derive(Debug)]
@@ -354,6 +354,7 @@ struct ReconnectState {
 struct WriteOutcome {
     ok: bool,
     message: String,
+    latency: Duration,
     read_back: Vec<(RegisterCell, u16)>,
 }
 
@@ -374,6 +375,16 @@ struct PendingWrite {
     func: crate::state::WriteFunc,
     previous: Option<u64>,
     new_value: u64,
+}
+
+impl PendingWrite {
+    const fn target(&self) -> StatTarget {
+        match self.write_type {
+            WriteType::Coil => StatTarget::Write(RegisterType::Coil, self.address, 1),
+            WriteType::Word => StatTarget::Write(RegisterType::Holding, self.address, 1),
+            WriteType::DWord => StatTarget::Write(RegisterType::Holding, self.address, 2),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -400,48 +411,9 @@ impl Default for SweepState {
 }
 
 #[derive(Debug, Default)]
-pub struct CommStats {
-    pub reads_ok: u64,
-    pub read_errors: u64,
-    pub writes_ok: u64,
-    pub write_errors: u64,
-    latency_sum: Duration,
-    latency_min: Option<Duration>,
-    latency_max: Option<Duration>,
-    last_error: Option<(String, DateTime<Utc>)>,
-}
-
-impl CommStats {
-    pub fn record_read_ok(&mut self, latency: Duration) {
-        self.reads_ok += 1;
-        self.latency_sum += latency;
-        self.latency_min = Some(self.latency_min.map_or(latency, |m| m.min(latency)));
-        self.latency_max = Some(self.latency_max.map_or(latency, |m| m.max(latency)));
-    }
-
-    pub fn record_read_error(&mut self, message: &str) {
-        self.read_errors += 1;
-        self.last_error = Some((message.to_string(), Utc::now()));
-    }
-
-    pub fn record_write(&mut self, ok: bool, message: &str) {
-        if ok {
-            self.writes_ok += 1;
-        } else {
-            self.write_errors += 1;
-            self.last_error = Some((message.to_string(), Utc::now()));
-        }
-    }
-
-    pub fn latency(&self) -> Option<(Duration, Duration, Duration)> {
-        let (min, max) = (self.latency_min?, self.latency_max?);
-        let avg = self.latency_sum / self.reads_ok.min(u32::MAX as u64) as u32;
-        Some((min, avg, max))
-    }
-
-    pub fn last_error(&self) -> Option<(&str, DateTime<Utc>)> {
-        self.last_error.as_ref().map(|(m, at)| (m.as_str(), *at))
-    }
+struct RequestTrace {
+    latencies: Vec<Duration>,
+    attempt: Option<StatTarget>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -478,6 +450,7 @@ struct RefreshTaskResult {
     register_type: RegisterType,
     main_window: bool,
     values: Vec<RegisterCellValue>,
+    trace: RequestTrace,
     error: Option<ReadError>,
     read_duration: Duration,
 }
@@ -1012,7 +985,10 @@ mod pin;
 mod raw;
 mod search;
 mod settings;
+mod stats;
 mod sweep;
 mod unit;
 mod unit_scan;
 mod write;
+
+pub use stats::{CommStats, StatTarget};

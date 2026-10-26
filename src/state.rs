@@ -1584,6 +1584,28 @@ impl InspectMode {
     }
 }
 
+field_enum! {
+    #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+    pub enum StatsTab {
+        #[default]
+        All,
+        Reads,
+        Writes,
+        Others,
+    }
+}
+
+impl StatsTab {
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::All => "All",
+            Self::Reads => "Reads",
+            Self::Writes => "Writes",
+            Self::Others => "Others",
+        }
+    }
+}
+
 popups! {
     Discovery(DiscoveryParams),
     Help(HelpParams),
@@ -1597,7 +1619,7 @@ popups! {
     Unit(UnitParams),
     SweepConfig(SweepConfigParams),
     Inspect(InspectMode),
-    Stats,
+    Stats(StatsTab),
     DeviceId(DeviceIdParams),
     Raw(RawParams),
     Import(ImportParams),

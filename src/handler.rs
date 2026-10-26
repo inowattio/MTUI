@@ -206,6 +206,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
         PopupKind::Stats => match key_event.code {
             c if c == KeyCode::Esc || c == kb.stats => app.close_popup(),
             c if c == kb.clear_session => app.clear_session_data(),
+            c if c == kb.panel => app.stats_cycle(),
             _ => {}
         },
 
@@ -842,13 +843,14 @@ fn handle_keybinds_key(key_event: KeyEvent, app: &mut App) {
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use super::handle_key_events;
-    use crate::app::App;
+    use crate::app::{App, StatTarget};
     use crate::config::{AddressMode, Config, KeybindAction};
     use crate::input::{KeyCode, KeyEvent};
+    use crate::register::RegisterType;
     use crate::scratch::ScratchDir;
     use crate::state::{
         DiscoveryField, DiscoveryParams, InterfaceKind, MessageKind, Popup, PopupKind,
-        SettingsCategory, SettingsField, SettingsFocus, State, UnitField, UnitParams,
+        SettingsCategory, SettingsField, SettingsFocus, State, StatsTab, UnitField, UnitParams,
     };
 
     async fn app() -> App {
@@ -1217,18 +1219,78 @@ mod tests {
     async fn the_stats_popup_clears_the_counters_in_place() {
         let mut app = app().await;
         app.stats
-            .record_read_ok(std::time::Duration::from_millis(5));
+            .reads
+            .record_ok(std::time::Duration::from_millis(5));
         app.open_stats();
         assert_eq!(app.popup_kind(), Some(PopupKind::Stats));
 
         handle_key_events(KeyEvent::new(app.config.keybinds.clear_session), &mut app).await;
-        assert_eq!(app.stats.reads_ok, 0);
-        assert_eq!(app.stats.latency(), None);
+        assert_eq!(app.stats.reads.ok, 0);
+        assert_eq!(app.stats.reads.latency(), None);
         assert_eq!(
             app.popup_kind(),
             Some(PopupKind::Stats),
             "the popup stays open to show the reset"
         );
+    }
+
+    #[tokio::test]
+    async fn the_stats_popup_cycles_its_tabs_with_the_panel_key() {
+        let mut app = app().await;
+        let panel = app.config.keybinds.panel;
+        app.open_stats();
+        assert_eq!(app.popup_as::<StatsTab>(), Some(&StatsTab::All));
+
+        handle_key_events(KeyEvent::new(panel), &mut app).await;
+        assert_eq!(app.popup_as::<StatsTab>(), Some(&StatsTab::Reads));
+
+        handle_key_events(KeyEvent::new(panel), &mut app).await;
+        handle_key_events(KeyEvent::new(panel), &mut app).await;
+        assert_eq!(app.popup_as::<StatsTab>(), Some(&StatsTab::Others));
+
+        handle_key_events(KeyEvent::new(panel), &mut app).await;
+        assert_eq!(
+            app.popup_as::<StatsTab>(),
+            Some(&StatsTab::All),
+            "wraps around"
+        );
+
+        handle_key_events(KeyEvent::new(KeyCode::Right), &mut app).await;
+        assert_eq!(
+            app.popup_as::<StatsTab>(),
+            Some(&StatsTab::All),
+            "arrows no longer switch tabs"
+        );
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn the_stats_popup_names_where_the_last_error_happened() {
+        let mut app = app().await;
+        app.stats.writes.record_error(
+            "Illegal data address",
+            Some(StatTarget::Write(RegisterType::Holding, 16, 2)),
+        );
+        app.open_stats();
+
+        app.stats
+            .reads
+            .record_ok(std::time::Duration::from_micros(850));
+        app.stats
+            .reads
+            .record_ok(std::time::Duration::from_micros(1150));
+
+        let all = screen(&mut app);
+        assert!(all.contains("Latency  0.85 / 1.00 / 1.15 ms"), "{all}");
+        assert!(all.contains("Illegal data address"), "{all}");
+        assert!(all.contains("Holding 16-17 (write)"), "{all}");
+
+        let panel = app.config.keybinds.panel;
+        for _ in 0..3 {
+            handle_key_events(KeyEvent::new(panel), &mut app).await;
+        }
+        let others = screen(&mut app);
+        assert!(!others.contains("Illegal data address"), "{others}");
     }
 
     #[tokio::test]

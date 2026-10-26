@@ -1,4 +1,4 @@
-use super::{App, BackgroundTask, RawTaskResult};
+use super::{App, BackgroundTask, RawTaskResult, StatTarget};
 use crate::compat;
 use crate::constants::message;
 use crate::state::{Popup, RawField, RawParams, StatusMessage};
@@ -115,7 +115,7 @@ impl App {
         let sent = data.len();
         self.background_task = Some(BackgroundTask::Raw(compat::spawn(async move {
             let result = device
-                .custom(None, code, &data)
+                .custom_timed(None, code, &data)
                 .await
                 .map_err(|e| e.to_string());
             RawTaskResult { code, sent, result }
@@ -123,6 +123,24 @@ impl App {
     }
 
     pub(super) fn apply_raw_result(&mut self, result: Option<RawTaskResult>) {
+        match &result {
+            Some(RawTaskResult {
+                result: Ok((_, latency)),
+                ..
+            }) => self.stats.others.record_ok(*latency),
+            Some(RawTaskResult {
+                code,
+                result: Err(e),
+                ..
+            }) => self
+                .stats
+                .others
+                .record_error(e, Some(StatTarget::Function(*code))),
+            None => self
+                .stats
+                .others
+                .record_error("raw task stopped unexpectedly", None),
+        }
         // The popup may have been closed while the call was in flight.
         let Some(p) = self.raw_mut() else {
             return;
@@ -132,7 +150,7 @@ impl App {
             return;
         };
         match result {
-            Ok(bytes) => {
+            Ok((bytes, _)) => {
                 log::info!(
                     "Raw function {code:#04X} | {sent} byte(s) in, {} byte(s) out",
                     bytes.len()
@@ -157,5 +175,48 @@ impl App {
                 p.status = Some(StatusMessage::err(format!("Failed: {e}")));
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Config;
+    use std::time::Duration;
+
+    fn outcome(result: Result<(Vec<u8>, Duration), String>) -> Option<RawTaskResult> {
+        Some(RawTaskResult {
+            code: 0x41,
+            sent: 0,
+            result,
+        })
+    }
+
+    #[tokio::test]
+    async fn raw_calls_count_as_others_even_with_the_popup_closed() {
+        let mut app = App::boot(Config::default(), String::new()).await;
+        assert!(app.raw_mut().is_none());
+
+        app.apply_raw_result(outcome(Ok((vec![0x01], Duration::from_millis(3)))));
+        app.apply_raw_result(outcome(Err("Illegal function".to_string())));
+
+        let others = &app.stats.others;
+        assert_eq!((others.ok, others.errors), (1, 1));
+        assert_eq!(
+            others.latency().map(|(min, _, _)| min),
+            Some(Duration::from_millis(3))
+        );
+        let error = others.last_error().expect("the failure is kept");
+        assert_eq!(error.target, Some(StatTarget::Function(0x41)));
+        assert_eq!(app.stats.reads.ok + app.stats.writes.ok, 0);
+
+        app.apply_raw_result(None);
+        let error = app
+            .stats
+            .others
+            .last_error()
+            .expect("the dead task is kept");
+        assert_eq!(error.message, "raw task stopped unexpectedly");
+        assert_eq!(error.target, None);
     }
 }

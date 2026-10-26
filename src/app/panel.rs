@@ -5,7 +5,7 @@ use crate::custom::{CustomCell, CustomRule};
 use crate::interpretator::{LOOKAHEAD, ascii_words, fmt_num, following, graph_value};
 use crate::num_ops::cycle;
 use crate::register::{RegisterCell, RegisterType};
-use crate::state::{InspectMode, Popup, ReadPanel};
+use crate::state::{InspectMode, Popup, ReadPanel, StatsTab};
 use chrono::{DateTime, Utc};
 use std::collections::{BTreeSet, VecDeque};
 
@@ -64,7 +64,13 @@ impl App {
     }
 
     pub fn open_stats(&mut self) {
-        self.read_mut().popup = Some(Popup::Stats);
+        self.read_mut().popup = Some(Popup::Stats(StatsTab::default()));
+    }
+
+    pub fn stats_cycle(&mut self) {
+        if let Some(tab) = self.popup_as_mut::<StatsTab>() {
+            *tab = cycle(&StatsTab::ALL, *tab, true);
+        }
     }
 
     fn all_panel_cells(&self) -> Box<dyn Iterator<Item = RegisterCell> + '_> {
