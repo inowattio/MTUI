@@ -1,6 +1,6 @@
 [package]
 name = "mtui"
-version = "1.4.0"
+version = "1.5.0"
 edition = "2024"
 rust-version = "1.99.0"
 license = "GPL-2.0-only"
@@ -29,6 +29,19 @@ required-features = ["web"]
 [features]
 web = []
 
+[lints.rust]
+unsafe_code = "forbid"
+unused_qualifications = "deny"
+unused_macro_rules = "deny"
+meta_variable_misuse = "deny"
+unused_lifetimes = "deny"
+redundant_lifetimes = "deny"
+unused_import_braces = "deny"
+redundant_imports = "deny"
+unused_parens = "deny"
+trivial_casts = "deny"
+trivial_numeric_casts = "deny"
+
 [lints.clippy]
 all = { level = "deny", priority = -1 }
 nursery = { level = "deny", priority = -1 }
@@ -51,7 +64,7 @@ missing_panics_doc = "deny"
 
 [dependencies]
 ratatui = { version = "0.30.2", default-features = false, features = ["serde", "layout-cache"] }
-tokio = { version = "1.53.3", default-features = false, features = ["sync", "macros"] }
+tokio = { version = "1.54.1", default-features = false, features = ["sync", "macros"] }
 futures = "0.3.34"
 web-time = "1"
 serde = { version = "1.0.229", features = ["derive"] }
@@ -64,11 +77,12 @@ anyhow = "1.0.104"
 serde_json = "1.0.154"
 chrono = "0.4"
 log = "0.4"
+serde_norway = "0.9.42"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 ratatui = { version = "0.30.2", default-features = false, features = ["crossterm"] }
 crossterm = { version = "0.29.0", features = ["event-stream"] }
-tokio = { version = "1.53.3", features = ["rt-multi-thread", "macros", "time", "signal", "sync", "net", "io-util"] }
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "time", "signal", "sync", "net", "io-util"] }
 tokio-modbus = { version = "0.17.0", default-features = false, features = ["rtu", "tcp"] }
 tokio-serial = { version = "5.5.0" }
 arboard = { version = "3", default-features = false, features = ["wayland-data-control"] }

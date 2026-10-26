@@ -99,6 +99,7 @@ impl Default for MatrixConfig {
 #[serde(default)]
 pub struct DisplayConfig {
     pub clock: bool,
+    pub clock_millis: bool,
     pub frame_time: bool,
     pub ram: bool,
     pub connection_label: bool,
@@ -114,6 +115,7 @@ impl Default for DisplayConfig {
     fn default() -> Self {
         Self {
             clock: true,
+            clock_millis: true,
             frame_time: false,
             ram: false,
             connection_label: true,
@@ -219,6 +221,59 @@ impl AddressMode {
             mode: self,
             address,
         }
+    }
+
+    const fn radix(self) -> u16 {
+        match self {
+            Self::Dec => 10,
+            Self::Hex => 16,
+        }
+    }
+
+    pub fn push_digit(self, address: u16, ch: char) -> Option<u16> {
+        let digit = ch.to_digit(u32::from(self.radix()))? as u16;
+        address.checked_mul(self.radix())?.checked_add(digit)
+    }
+
+    pub const fn pop_digit(self, address: u16) -> u16 {
+        address / self.radix()
+    }
+
+    fn split_radix(self, text: &str) -> (&str, u32) {
+        if let Some(hex) = text
+            .strip_prefix("0x")
+            .or_else(|| text.strip_prefix("0X"))
+            .or_else(|| text.strip_prefix(['x', 'X']))
+        {
+            (hex, 16)
+        } else if let Some(dec) = text.strip_prefix(['n', 'N']) {
+            (dec, 10)
+        } else {
+            (text, u32::from(self.radix()))
+        }
+    }
+
+    fn parse_wide(self, text: &str) -> Option<u32> {
+        let (digits, radix) = self.split_radix(text.trim());
+        u32::from_str_radix(digits, radix).ok()
+    }
+
+    pub fn parse(self, text: &str) -> Option<u16> {
+        u16::try_from(self.parse_wide(text)?).ok()
+    }
+
+    pub fn parse_saturating(self, text: &str) -> Option<u16> {
+        self.parse_wide(text)
+            .map(|value| value.min(u32::from(u16::MAX)) as u16)
+    }
+
+    pub fn accepts(self, typed: &str, ch: char) -> bool {
+        let prefix = match typed {
+            "" => matches!(ch, 'x' | 'X' | 'n' | 'N'),
+            "0" => matches!(ch, 'x' | 'X'),
+            _ => false,
+        };
+        prefix || ch.is_digit(self.split_radix(typed).1)
     }
 }
 
@@ -583,6 +638,15 @@ fn plain(address: u16, repr: CustomRepr, decimals: Option<u8>, suffix: &str) -> 
     }
 }
 
+fn ascii(address: u16, registers: u8) -> CustomRule {
+    CustomRule {
+        address,
+        repr: CustomRepr::Ascii,
+        registers: Some(registers),
+        ..Default::default()
+    }
+}
+
 fn flags(address: u16, entries: &[(u8, &str)]) -> CustomRule {
     CustomRule {
         address,
@@ -628,10 +692,13 @@ fn demo_labels() -> BTreeMap<RegisterCell, String> {
                 (52, "set: ripple"),
                 (53, "set: noise"),
                 (54, "set: time scale"),
+                (200, "vendor (ascii)"),
                 (1000, "energy (u32 Wh)"),
                 (1002, "on-time (u32 s)"),
                 (1004, "write count"),
                 (1005, "energy (m10k)"),
+                (1010, "net energy (i64 Wh)"),
+                (1020, "device id (u128)"),
                 (1100, "status bits"),
                 (1101, "alarm count"),
             ],
@@ -698,11 +765,15 @@ fn demo_rules() -> BTreeMap<RegisterCell, CustomRule> {
         (
             RegisterType::Holding,
             vec![
+                ascii(0, 8),
                 scaled(50, CustomRepr::U16, 10.0, 1, " V"),
                 scaled(51, CustomRepr::U16, 100.0, 2, " A"),
                 switch(53, &[(0, "off"), (1, "on")]),
                 plain(54, CustomRepr::U16, None, " %"),
+                ascii(200, 16),
                 scaled(1000, CustomRepr::U32, 1000.0, 2, " kWh"),
+                plain(1010, CustomRepr::I64, None, " Wh"),
+                plain(1020, CustomRepr::U128, None, ""),
                 flags(1100, &[(0, "run"), (1, "grid"), (2, "warn"), (15, "beat")]),
             ],
         ),
@@ -941,6 +1012,61 @@ mod tests {
             format!("{:>5}|", AddressMode::Hex.display(u16::MAX)),
             " FFFF|"
         );
+    }
+
+    #[test]
+    fn address_mode_types_digits_in_its_own_radix() {
+        assert_eq!(AddressMode::Dec.push_digit(25, '6'), Some(256));
+        assert_eq!(AddressMode::Hex.push_digit(0x10, '0'), Some(0x100));
+        assert_eq!(AddressMode::Hex.push_digit(0xF, 'f'), Some(0xFF));
+        assert_eq!(AddressMode::Dec.push_digit(1, 'f'), None);
+        assert_eq!(AddressMode::Dec.push_digit(6553, '6'), None);
+        assert_eq!(AddressMode::Hex.push_digit(0xFFFF, '0'), None);
+        assert_eq!(AddressMode::Dec.pop_digit(256), 25);
+        assert_eq!(AddressMode::Hex.pop_digit(0x100), 0x10);
+    }
+
+    #[test]
+    fn address_mode_parses_in_its_own_radix_or_with_a_prefix() {
+        assert_eq!(AddressMode::Dec.parse("200"), Some(200));
+        assert_eq!(AddressMode::Dec.parse(" 42 "), Some(42));
+        assert_eq!(AddressMode::Hex.parse("200"), Some(0x200));
+        assert_eq!(AddressMode::Hex.parse("ffff"), Some(u16::MAX));
+        assert_eq!(AddressMode::Dec.parse("C8"), None);
+        assert_eq!(AddressMode::Dec.parse("65536"), None);
+        for hex in ["0x6F", "0X6f", "x6F", "X6f"] {
+            assert_eq!(AddressMode::Dec.parse(hex), Some(0x6F), "{hex}");
+        }
+        assert_eq!(AddressMode::Hex.parse("n111"), Some(111));
+        assert_eq!(AddressMode::Hex.parse("N42"), Some(42));
+        assert_eq!(AddressMode::Hex.parse("n6F"), None);
+        assert_eq!(AddressMode::Dec.parse("x"), None);
+        assert_eq!(AddressMode::Dec.parse("n"), None);
+    }
+
+    #[test]
+    fn saturating_parse_clamps_to_the_address_range() {
+        assert_eq!(AddressMode::Dec.parse_saturating("70000"), Some(u16::MAX));
+        assert_eq!(AddressMode::Hex.parse_saturating("10000"), Some(u16::MAX));
+        assert_eq!(AddressMode::Dec.parse_saturating("x10000"), Some(u16::MAX));
+        assert_eq!(AddressMode::Dec.parse_saturating("xFFFF"), Some(u16::MAX));
+        assert_eq!(AddressMode::Dec.parse_saturating("C8"), None);
+    }
+
+    #[test]
+    fn address_mode_accepts_only_digits_it_can_parse() {
+        assert!(AddressMode::Dec.accepts("", '7'));
+        assert!(!AddressMode::Dec.accepts("", 'c'));
+        assert!(AddressMode::Hex.accepts("", 'c'));
+        assert!(AddressMode::Dec.accepts("0", 'x'));
+        assert!(AddressMode::Dec.accepts("0x", 'c'));
+        assert!(!AddressMode::Hex.accepts("1", 'x'));
+        assert!(AddressMode::Dec.accepts("", 'x'));
+        assert!(AddressMode::Dec.accepts("x", 'f'));
+        assert!(AddressMode::Hex.accepts("", 'n'));
+        assert!(AddressMode::Hex.accepts("n", '9'));
+        assert!(!AddressMode::Hex.accepts("n", 'f'));
+        assert!(!AddressMode::Dec.accepts("x", 'n'));
     }
 
     #[test]

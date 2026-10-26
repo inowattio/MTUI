@@ -1,3 +1,4 @@
+use crate::config::AddressMode;
 use crate::input::KeyCode;
 use crate::state::{SweepConfigParams, SweepField};
 use crate::tui::draw_state::{action_line, edit_value, field_row};
@@ -13,14 +14,16 @@ pub(super) fn draw(
     theme: &Theme,
     params: SweepConfigParams,
     running: bool,
+    address_mode: AddressMode,
 ) {
     let sel = params.current_field();
 
     let field =
         |label: &str, value: String, selected: bool| field_row(theme, label, 13, value, selected);
 
-    let from_val = edit_value(params.from.to_string(), sel == SweepField::From, false);
-    let to_val = edit_value(params.to.to_string(), sel == SweepField::To, false);
+    let shown = |address: u16| address_mode.display(address).to_string();
+    let from_val = edit_value(shown(params.from), sel == SweepField::From, false);
+    let to_val = edit_value(shown(params.to), sel == SweepField::To, false);
     let mode = if params.continuous { "loop" } else { "once" };
     let mode_val = edit_value(mode.to_string(), sel == SweepField::Mode, true);
 

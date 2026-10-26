@@ -1,12 +1,14 @@
 use super::{App, BackgroundTask, ConnectTaskResult, ReconnectState};
 #[cfg(not(target_arch = "wasm32"))]
-use super::{ScanProgress, ScanRange, scan_subnet};
+use super::{ModbusProbe, ScanProgress, ScanRange, scan_subnet};
 use crate::compat;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::compat::TaskPoll;
 use crate::config::Config;
 use crate::constants::{DEFAULT_SCAN_PREFIX, message};
 use crate::modbus::{Interface, ModbusDevice};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::state::FoundHost;
 use crate::state::{ConnectionStatus, DiscoveryParams, InterfaceKind, Popup, StatusMessage};
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::Arc;
@@ -126,7 +128,9 @@ impl App {
     }
 
     pub fn open_discovery(&mut self) {
-        let params = Self::discovery_params(&self.config);
+        let mut params = Self::discovery_params(&self.config);
+        (params.address, params.amount) = self.read_window();
+        params.register_type = self.read().register_type;
         self.read_mut().popup = Some(Popup::Discovery(params));
         self.request_ports();
     }
@@ -239,7 +243,7 @@ impl App {
 
     pub fn use_found_ip(&mut self, index: usize) {
         if let Some(d) = self.discovery_mut()
-            && let Some(ip) = d.found.get(index).cloned()
+            && let Some(ip) = d.found.get(index).map(|host| host.ip.clone())
         {
             d.ip = ip;
             d.status = None;
@@ -277,6 +281,12 @@ impl App {
         };
         let port = d.net_port;
         let method = d.scan_method;
+        let probe = ModbusProbe {
+            device: d.device_config(),
+            register_type: d.register_type,
+            address: d.address,
+            amount: d.amount,
+        };
         let per_host = Duration::from_millis(d.connect_timeout_ms.clamp(100, 2_000));
         let total = range.host_count();
         let done = Arc::new(AtomicUsize::new(0));
@@ -292,7 +302,7 @@ impl App {
             )));
         }
         self.network_scan_task = Some(compat::spawn(scan_subnet(
-            range, port, method, per_host, done,
+            range, port, method, per_host, probe, done,
         )));
     }
 
@@ -316,7 +326,7 @@ impl App {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn finish_network_scan(&mut self, result: Result<Vec<String>, String>) {
+    fn finish_network_scan(&mut self, result: Result<Vec<FoundHost>, String>) {
         self.network_scan_task = None;
         self.network_scan = None;
         let found = match result {
@@ -352,7 +362,9 @@ mod tests {
     use crate::modbus::{
         DataBits, Interface, InterfaceSerialParams, InterfaceTcpParams, Parity, StopBits,
     };
-    use crate::state::{DiscoveryColumn, DiscoveryField, DiscoveryParams, InterfaceKind};
+    use crate::state::{
+        DiscoveryColumn, DiscoveryField, DiscoveryParams, FoundHost, InterfaceKind,
+    };
 
     fn wired_with_ports(ports: &[&str]) -> DiscoveryParams {
         let mut d = DiscoveryParams {
@@ -387,7 +399,7 @@ mod tests {
             ]
         );
 
-        d.set_found(vec!["10.0.0.5".to_string()]);
+        d.set_found(vec![FoundHost::alive("10.0.0.5")]);
         d.set_interface(InterfaceKind::Tcp);
         assert_eq!(
             d.side_fields(),
@@ -553,10 +565,43 @@ mod tests {
     }
 
     #[test]
+    fn a_modbus_scan_adds_the_representation_toggle() {
+        use DiscoveryField::*;
+        let mut d = DiscoveryParams::default();
+        d.set_interface(InterfaceKind::Tcp);
+        d.set_found(vec![FoundHost::alive("10.0.0.1")]);
+        d.scan_method = crate::state::ScanMethod::Port;
+        d.cycle_scan_method(true);
+        assert_eq!(d.scan_method, crate::state::ScanMethod::Modbus);
+        assert_eq!(
+            d.side_fields(),
+            vec![
+                Ip,
+                NetPort,
+                ScanMethod,
+                ScanRepr,
+                ScanPrefix,
+                ScanNetwork,
+                Found(0)
+            ]
+        );
+
+        d.toggle_column();
+        d.side_selected = 6;
+        assert_eq!(d.current_field(), Found(0));
+        d.cycle_scan_method(true);
+        assert_eq!(d.scan_method, crate::state::ScanMethod::Ping);
+        assert_eq!(d.current_field(), Found(0), "the cursor stays in range");
+    }
+
+    #[test]
     fn a_shrinking_list_keeps_the_cursor_in_range() {
         let mut d = DiscoveryParams::default();
         d.set_interface(InterfaceKind::Tcp);
-        d.set_found(vec!["10.0.0.1".to_string(), "10.0.0.2".to_string()]);
+        d.set_found(vec![
+            FoundHost::alive("10.0.0.1"),
+            FoundHost::alive("10.0.0.2"),
+        ]);
         d.toggle_column();
         d.side_selected = 6; // Found(1)
         assert_eq!(d.current_field(), DiscoveryField::Found(1));
@@ -634,7 +679,7 @@ mod tests {
         {
             let d = app.discovery_mut().unwrap();
             d.set_interface(InterfaceKind::Tcp);
-            d.set_found(vec!["10.0.0.5".to_string()]);
+            d.set_found(vec![FoundHost::alive("10.0.0.5")]);
         }
 
         app.use_found_ip(0);

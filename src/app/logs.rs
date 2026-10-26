@@ -140,7 +140,7 @@ impl App {
     }
 
     pub fn log_view_scroll(&mut self, delta: i32) {
-        let len = crate::logger::count() as i32;
+        let len = logger::count() as i32;
         let visible = self.layout.visible_rows.max(1) as i32;
         let max_top = (len - visible).max(0);
         if let Some(l) = self.log_view_mut() {

@@ -38,7 +38,7 @@ Escape
 Sleep 400ms
 
 # graph on the "frequency" input
-Up@250ms 4
+Down
 Sleep 400ms
 Type "g"
 Sleep 5.4s
@@ -47,11 +47,15 @@ Sleep 800ms
 
 # jump to the "seconds" register by label
 Type "j"
-Sleep 1.25s
+Sleep 500ms
 Type "sec"
 Sleep 1.5s
 Enter
-Sleep 1.65s
+Sleep 200ms
+
+# shrink the batch
+Type@300ms "[["
+Sleep 600ms
 
 # custom rule on "seconds": /60, 1 decimal, " min"
 Type "m"
@@ -68,7 +72,7 @@ Down@250ms 2
 Type " min"
 Sleep 1.5s
 Enter
-Sleep 1.95s
+Sleep 2s
 
 # settings: Display -> Show frame render time
 Type "s"
@@ -76,8 +80,8 @@ Sleep 1.2s
 Down@250ms 2
 Enter
 Sleep 900ms
-Down
-Sleep 350ms
+Down@250ms 2
+Sleep 250ms
 Right
 Sleep 1.7s
 Escape

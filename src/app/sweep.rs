@@ -1,5 +1,5 @@
 use super::App;
-use crate::num_ops::{digit_add, digit_remove, wrap_index};
+use crate::num_ops::wrap_index;
 use crate::state::{Popup, SweepConfigParams, SweepField};
 
 impl App {
@@ -88,24 +88,25 @@ impl App {
     }
 
     pub fn sweep_config_digit(&mut self, field: SweepField, c: char) {
-        if !c.is_ascii_digit() {
-            return;
-        }
-        let digit = c as u8 - b'0';
+        let mode = self.interpreter.address_mode();
         if let Some(p) = self.sweep_config_mut() {
-            match field {
-                SweepField::From => digit_add(&mut p.from, digit),
-                SweepField::To => digit_add(&mut p.to, digit),
-                SweepField::Mode | SweepField::Action => {}
+            let target = match field {
+                SweepField::From => &mut p.from,
+                SweepField::To => &mut p.to,
+                SweepField::Mode | SweepField::Action => return,
+            };
+            if let Some(next) = mode.push_digit(*target, c) {
+                *target = next;
             }
         }
     }
 
     pub fn sweep_config_backspace(&mut self, field: SweepField) {
+        let mode = self.interpreter.address_mode();
         if let Some(p) = self.sweep_config_mut() {
             match field {
-                SweepField::From => digit_remove(&mut p.from),
-                SweepField::To => digit_remove(&mut p.to),
+                SweepField::From => p.from = mode.pop_digit(p.from),
+                SweepField::To => p.to = mode.pop_digit(p.to),
                 SweepField::Mode | SweepField::Action => {}
             }
         }

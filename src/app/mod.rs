@@ -1,17 +1,18 @@
-#[cfg(not(target_arch = "wasm32"))]
 use crate::compat;
 use crate::compat::{Instant, TaskHandle};
 use crate::config::{Config, Registers};
 use crate::constants::CONFIG_PATH;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::constants::SCAN_PREFIX_RANGE;
-use crate::custom::CustomRule;
+use crate::custom::{ASCII_REGISTERS_MAX, CustomRule};
 use crate::interpretator::Interpretor;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::modbus::Interface;
 use crate::modbus::{DeviceConfig, DeviceIdAccess, ModbusDevice};
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
-#[cfg(not(target_arch = "wasm32"))]
-use crate::state::ScanMethod;
 use crate::state::{ConnectionStatus, CustomParams, ScreenLayout, State, UnitParams};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::state::{FoundHost, ScanMethod};
 use crate::writes_log::SharedWritesLog;
 use chrono::{DateTime, Utc};
 use std::collections::{BTreeMap, VecDeque};
@@ -186,13 +187,23 @@ impl fmt::Display for ScanRange {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+#[derive(Clone, Debug)]
+struct ModbusProbe {
+    device: DeviceConfig,
+    register_type: RegisterType,
+    address: u16,
+    amount: u16,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 async fn scan_subnet(
     range: ScanRange,
     port: u16,
     method: ScanMethod,
     per_host: Duration,
+    probe: ModbusProbe,
     done: Arc<AtomicUsize>,
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<FoundHost>, String> {
     use futures::stream::{self, StreamExt};
 
     let pinger = match method {
@@ -200,21 +211,35 @@ async fn scan_subnet(
             surge_ping::Client::new(&surge_ping::Config::default())
                 .map_err(|error| format!("ICMP unavailable: {error}"))?,
         ),
-        ScanMethod::Port => None,
+        ScanMethod::Port | ScanMethod::Modbus => None,
     };
     let ident = surge_ping::PingIdentifier(std::process::id() as u16);
 
-    let mut found: Vec<(usize, Ipv4Addr)> = stream::iter(range.hosts().enumerate())
+    let mut found: Vec<(usize, FoundHost)> = stream::iter(range.hosts().enumerate())
         .map(|(index, host)| {
             let done = done.clone();
             let pinger = pinger.clone();
+            let probe = &probe;
             async move {
-                let alive = match &pinger {
-                    Some(client) => ping_host(client, host, ident, index as u16, per_host).await,
-                    None => probe_port(host, port, per_host).await,
+                let reply = match (&pinger, method) {
+                    (Some(client), _) => ping_host(client, host, ident, index as u16, per_host)
+                        .await
+                        .then_some(None),
+                    (None, ScanMethod::Modbus) => {
+                        probe_modbus(probe, host, per_host).await.map(Some)
+                    }
+                    (None, _) => probe_port(host, port, per_host).await.then_some(None),
                 };
                 done.fetch_add(1, Ordering::Relaxed);
-                alive.then_some((index, host))
+                reply.map(|reply| {
+                    (
+                        index,
+                        FoundHost {
+                            ip: host.to_string(),
+                            reply,
+                        },
+                    )
+                })
             }
         })
         .buffer_unordered(256)
@@ -223,7 +248,31 @@ async fn scan_subnet(
         .await;
 
     found.sort_by_key(|(index, _)| *index);
-    Ok(found.into_iter().map(|(_, ip)| ip.to_string()).collect())
+    Ok(found.into_iter().map(|(_, host)| host).collect())
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+async fn probe_modbus(
+    probe: &ModbusProbe,
+    ip: Ipv4Addr,
+    per_host: Duration,
+) -> Option<Result<Vec<u16>, String>> {
+    let mut config = probe.device.clone();
+    config.connect_timeout_ms = per_host.as_millis() as u64;
+    match &mut config.interface {
+        Interface::Tcp(n) | Interface::RtuOverTcp(n) => n.ip = ip.to_string(),
+        Interface::Serial(_) | Interface::Mock => return None,
+    }
+    let result =
+        ModbusDevice::read_once(&config, probe.register_type, probe.address, probe.amount).await;
+    match result {
+        Ok(values) => {
+            log::info!("Network scan | {ip} responded | {values:?}");
+            Some(Ok(values))
+        }
+        Err(e) if e.downcast_ref::<ExceptionCode>().is_some() => Some(Err(e.to_string())),
+        Err(_) => None,
+    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -412,7 +461,7 @@ impl From<anyhow::Error> for ReadError {
     fn from(error: anyhow::Error) -> Self {
         let kind = if error.downcast_ref::<ExceptionCode>().is_some() {
             ReadFailure::Exception
-        } else if error.downcast_ref::<crate::compat::Elapsed>().is_some() {
+        } else if error.downcast_ref::<compat::Elapsed>().is_some() {
             ReadFailure::Timeout
         } else {
             ReadFailure::Transport
@@ -437,8 +486,8 @@ struct RefreshTaskResult {
 struct ClipboardHandle(arboard::Clipboard);
 
 #[cfg(not(target_arch = "wasm32"))]
-impl std::fmt::Debug for ClipboardHandle {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Debug for ClipboardHandle {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("ClipboardHandle")
     }
 }
@@ -477,7 +526,7 @@ pub struct App {
     network_scan: Option<ScanProgress>,
     unit_scan: Option<(String, UnitParams)>,
     #[cfg(not(target_arch = "wasm32"))]
-    network_scan_task: Option<TaskHandle<Result<Vec<String>, String>>>,
+    network_scan_task: Option<TaskHandle<Result<Vec<FoundHost>, String>>>,
     #[cfg(not(target_arch = "wasm32"))]
     ports_task: Option<TaskHandle<Vec<String>>>,
     changed: BTreeMap<RegisterCell, DateTime<Utc>>,
@@ -586,8 +635,9 @@ fn build_custom_rule(c: &CustomParams) -> Result<(RegisterCell, CustomRule), Str
         ),
     };
 
-    let width = c.repr.register_count() as u8 * 16;
-    if let Some(entry) = c.bits.iter().find(|e| e.bit >= width) {
+    let ascii = c.is_ascii();
+    let width = c.register_count() * 16;
+    if !ascii && let Some(entry) = c.bits.iter().find(|e| usize::from(e.bit) >= width) {
         return Err(format!(
             "bit: {} exceeds {} ({} bits)",
             entry.bit,
@@ -596,22 +646,31 @@ fn build_custom_rule(c: &CustomParams) -> Result<(RegisterCell, CustomRule), Str
         ));
     }
 
-    if c.next.len() > c.repr.register_count() - 1 {
+    if c.next.len() > c.register_count() - 1 {
         return Err(format!(
             "next: {} uses {} register(s)",
             c.repr.label(),
-            c.repr.register_count()
+            c.register_count()
         ));
+    }
+
+    if ascii && !(1..=ASCII_REGISTERS_MAX).contains(&c.registers) {
+        return Err(format!("registers: 1 to {ASCII_REGISTERS_MAX}"));
     }
 
     let rule = CustomRule {
         address: c.address,
         repr: c.repr,
-        ops: c.ops.clone(),
-        enum_map: c.enum_map.clone(),
-        bits: c.bits.clone(),
+        registers: ascii.then_some(c.registers),
+        ops: if ascii { Vec::new() } else { c.ops.clone() },
+        enum_map: if ascii {
+            Vec::new()
+        } else {
+            c.enum_map.clone()
+        },
+        bits: if ascii { Vec::new() } else { c.bits.clone() },
         next: c.next.clone(),
-        decimals,
+        decimals: decimals.filter(|_| !ascii),
         prefix: c.prefix.clone(),
         suffix: c.suffix.clone(),
         word_order: c.word_order,
@@ -711,13 +770,46 @@ pub(crate) async fn settle_until(app: &mut App, done: impl Fn(&App) -> bool, wha
         if done(app) {
             return;
         }
-        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        tokio::time::sleep(Duration::from_millis(5)).await;
     }
     panic!("{what} never finished");
 }
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn ascii_rules_drop_numeric_settings_and_need_a_register_count() {
+        use crate::custom::{CustomOp, CustomRepr, OpKind};
+        use crate::state::CustomParams;
+
+        let mut c = CustomParams {
+            address: 200,
+            repr: CustomRepr::Ascii,
+            registers: 16,
+            ops: vec![CustomOp {
+                op: OpKind::Div,
+                v: 10.0,
+            }],
+            decimals: "2".to_string(),
+            suffix: " fw".to_string(),
+            ..Default::default()
+        };
+        let (_, rule) = super::build_custom_rule(&c).unwrap();
+        assert_eq!(rule.registers, Some(16));
+        assert_eq!(rule.register_count(), 16);
+        assert!(rule.ops.is_empty());
+        assert_eq!(rule.decimals, None);
+        assert_eq!(rule.suffix, " fw");
+
+        c.registers = 0;
+        assert!(super::build_custom_rule(&c).is_err());
+
+        c.repr = CustomRepr::U16;
+        let (_, rule) = super::build_custom_rule(&c).unwrap();
+        assert_eq!(rule.registers, None);
+        assert_eq!(rule.ops.len(), 1);
+    }
+
     #[test]
     fn file_names_skip_empty_parts_and_sanitize_the_rest() {
         assert_eq!(

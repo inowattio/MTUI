@@ -89,6 +89,7 @@ field_enum! {
         #[default]
         Ping,
         Port,
+        Modbus,
     }
 }
 
@@ -97,6 +98,22 @@ impl ScanMethod {
         match self {
             Self::Ping => "ICMP ping",
             Self::Port => "TCP port",
+            Self::Modbus => "Modbus read",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FoundHost {
+    pub ip: String,
+    pub reply: Option<Result<Vec<u16>, String>>,
+}
+
+impl FoundHost {
+    pub fn alive(ip: impl Into<String>) -> Self {
+        Self {
+            ip: ip.into(),
+            reply: None,
         }
     }
 }
@@ -134,6 +151,7 @@ pub enum DiscoveryField {
     Ip,
     NetPort,
     ScanMethod,
+    ScanRepr,
     ScanPrefix,
     ScanNetwork,
     Found(usize),
@@ -163,13 +181,17 @@ pub struct DiscoveryParams {
     pub ip: String,
     pub net_port: u16,
     pub scan_method: ScanMethod,
+    pub scan_ascii: bool,
     pub scan_prefix: u8,
+    pub register_type: RegisterType,
+    pub address: u16,
+    pub amount: u16,
     pub unit_id: u8,
     pub connect_timeout_ms: u64,
     pub command_timeout_ms: u64,
     pub between_commands_ms: u64,
     pub word_order: WordOrder,
-    pub found: Vec<String>,
+    pub found: Vec<FoundHost>,
     pub status: Option<StatusMessage>,
 }
 
@@ -191,7 +213,11 @@ impl Default for DiscoveryParams {
             ip: "127.0.0.1".to_string(),
             net_port: 502,
             scan_method: ScanMethod::default(),
+            scan_ascii: false,
             scan_prefix: DEFAULT_SCAN_PREFIX,
+            register_type: RegisterType::default(),
+            address: 0,
+            amount: 1,
             unit_id: 1,
             connect_timeout_ms: 1000,
             command_timeout_ms: 2000,
@@ -222,12 +248,12 @@ impl DiscoveryParams {
                 .map(Port)
                 .chain([CustomPath, Baud, DataBits, Parity, StopBits])
                 .collect(),
-            InterfaceKind::Tcp | InterfaceKind::RtuOverTcp => {
-                [Ip, NetPort, ScanMethod, ScanPrefix, ScanNetwork]
-                    .into_iter()
-                    .chain((0..self.found.len()).map(Found))
-                    .collect()
-            }
+            InterfaceKind::Tcp | InterfaceKind::RtuOverTcp => [Ip, NetPort, ScanMethod]
+                .into_iter()
+                .chain(self.reads_on_scan().then_some(ScanRepr))
+                .chain([ScanPrefix, ScanNetwork])
+                .chain((0..self.found.len()).map(Found))
+                .collect(),
         }
     }
 
@@ -243,8 +269,13 @@ impl DiscoveryParams {
         Self::BAUD_PRESETS.contains(&self.baud_rate)
     }
 
+    pub fn reads_on_scan(&self) -> bool {
+        self.scan_method == ScanMethod::Modbus
+    }
+
     pub fn cycle_scan_method(&mut self, forward: bool) {
         self.scan_method = crate::num_ops::cycle(&ScanMethod::ALL, self.scan_method, forward);
+        self.clamp_side();
     }
 
     pub fn step_scan_prefix(&mut self, forward: bool) {
@@ -349,7 +380,7 @@ impl DiscoveryParams {
         self.clamp_side();
     }
 
-    pub fn set_found(&mut self, found: Vec<String>) {
+    pub fn set_found(&mut self, found: Vec<FoundHost>) {
         self.found = found;
         self.clamp_side();
     }
@@ -505,8 +536,16 @@ pub struct DumpParams {
     pub result: Option<StatusMessage>,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ImportSource {
+    #[default]
+    Mtui,
+    HomeAssistant,
+}
+
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct ImportParams {
+    pub source: ImportSource,
     pub pins: usize,
     pub labels: usize,
     pub rules: usize,
@@ -561,6 +600,7 @@ impl Default for ScreenLayout {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CustomField {
     Repr,
+    Registers,
     WordOrder,
     Next,
     Ops,
@@ -576,6 +616,7 @@ pub struct CustomParams {
     pub address: u16,
     pub register_type: RegisterType,
     pub repr: CustomRepr,
+    pub registers: u8,
     pub word_order: Option<WordOrder>,
     pub next: Vec<u16>,
     pub ops: Vec<CustomOp>,
@@ -595,17 +636,38 @@ pub struct CustomParams {
 }
 
 impl CustomParams {
+    pub fn is_ascii(&self) -> bool {
+        self.repr == CustomRepr::Ascii
+    }
+
+    pub fn register_count(&self) -> usize {
+        if self.is_ascii() {
+            usize::from(self.registers.max(1))
+        } else {
+            self.repr.register_count()
+        }
+    }
+
     pub fn fields(&self) -> Vec<CustomField> {
         use CustomField::*;
-        let multi = self.repr.register_count() > 1;
+        let ascii = self.is_ascii();
+        let multi = self.register_count() > 1;
         let bits_active = !self.bits.is_empty();
 
         let mut fields = vec![Repr];
-        if multi || self.word_order.is_some() {
+        if ascii {
+            fields.push(Registers);
+        }
+        if ascii || multi || self.word_order.is_some() {
             fields.push(WordOrder);
         }
         if multi || !self.next.is_empty() {
             fields.push(Next);
+        }
+        if ascii {
+            fields.push(Prefix);
+            fields.push(Suffix);
+            return fields;
         }
         if !bits_active || !self.ops.is_empty() {
             fields.push(Ops);
@@ -673,7 +735,7 @@ impl CustomParams {
         }
         self.reselect(field);
         let len = self.list_len();
-        self.list_index = (len > 0).then(|| (i.min(len - 1)) as u16);
+        self.list_index = (len > 0).then(|| i.min(len - 1) as u16);
         true
     }
 }
@@ -681,7 +743,22 @@ impl CustomParams {
 #[cfg(test)]
 mod custom_params_tests {
     use super::{CustomField, CustomParams};
-    use crate::custom::{BitEntry, EnumEntry};
+    use crate::custom::{BitEntry, CustomRepr, EnumEntry};
+
+    #[test]
+    fn ascii_offers_only_decode_and_affixes() {
+        use CustomField::*;
+        let mut c = params();
+        c.repr = CustomRepr::Ascii;
+        c.registers = 1;
+        assert_eq!(c.fields(), vec![Repr, Registers, WordOrder, Prefix, Suffix]);
+        c.registers = 8;
+        assert_eq!(c.register_count(), 8);
+        assert_eq!(
+            c.fields(),
+            vec![Repr, Registers, WordOrder, Next, Prefix, Suffix]
+        );
+    }
 
     fn params() -> CustomParams {
         let mut c = CustomParams {
@@ -1131,6 +1208,7 @@ settings_fields! {
     Display {
         [
             ShowClock: Toggle => "Show clock", "Show the current time in the bottom bar",
+            ClockMillis: Toggle => "Clock milliseconds", "Show milliseconds in the bottom bar clock",
             ShowFrameTime: Toggle => "Show frame time", "Show how long each frame takes to render",
             ShowRam: Toggle => "Show RAM usage", "Show the memory used by the application",
             ShowConnectionLabel: Toggle => "Show connection label", "Show the connection state as a word next to the refresh countdown",
@@ -1155,7 +1233,7 @@ settings_fields! {
             ShowMatrixContext: Toggle => "Show matrix context", "Show the custom value and label of the selected register under the Matrix panel",
             GraphTimeAxis: Toggle => "Graph time axis", "Plot the graph against time instead of sample count",
             ChangedExpiry: Number => "Changed highlight (ms)", "How long a changed value stays highlighted, 0 never clears it",
-            ShowRuleContinuation: Toggle => "Show \"part of\" marker", "Mark registers that belong to a multi-register custom rule",
+            ShowRuleContinuation: Toggle => "Show rule continuation", "Mark the other registers of a multi-register custom rule, pointing to its value",
         ],
         [
             PaddingHorizontal: Number => "Horizontal padding", "Empty columns kept on both sides of the interface",
@@ -1858,7 +1936,10 @@ mod settings_params_tests {
         let groups = SettingsCategory::search("clock");
         assert_eq!(groups.len(), 1);
         assert_eq!(groups[0].0, Some(SettingsCategory::Display));
-        assert_eq!(groups[0].1, vec![SettingsField::ShowClock]);
+        assert_eq!(
+            groups[0].1,
+            vec![SettingsField::ShowClock, SettingsField::ClockMillis]
+        );
 
         let by_description = SettingsCategory::search("auto-refresh");
         assert_eq!(by_description[0].1, vec![SettingsField::RefreshInterval]);

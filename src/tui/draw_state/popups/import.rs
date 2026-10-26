@@ -1,5 +1,5 @@
 use crate::input::KeyCode;
-use crate::state::ImportParams;
+use crate::state::{ImportParams, ImportSource};
 use crate::tui::hints::Hint;
 use crate::tui::theme::Theme;
 use ratatui::Frame;
@@ -7,12 +7,13 @@ use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 
 pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, params: &ImportParams) {
+    let found = match params.source {
+        ImportSource::Mtui => " Found importable data:",
+        ImportSource::HomeAssistant => " Found a Home Assistant config:",
+    };
     let mut lines = vec![
         Line::default(),
-        Line::from(Span::styled(
-            " Found importable data on the clipboard:",
-            theme.base(),
-        )),
+        Line::from(Span::styled(found, theme.base())),
         Line::default(),
     ];
 

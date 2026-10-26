@@ -1,8 +1,9 @@
 use crate::app::App;
 use crate::constants::ELLIPSIS;
 use crate::input::KeyCode;
+use crate::interpretator::ascii_words;
 use crate::state::{
-    DiscoveryColumn, DiscoveryField, DiscoveryParams, InterfaceKind, StatusMessage,
+    DiscoveryColumn, DiscoveryField, DiscoveryParams, FoundHost, InterfaceKind, StatusMessage,
 };
 use crate::tui::draw_state::{action_line, cyclable, dim_line, edit_value, field_row, marker};
 use crate::tui::hints::{self, Hint};
@@ -17,6 +18,7 @@ use std::net::Ipv4Addr;
 const LEFT_W: u16 = 46;
 const DIVIDER_W: u16 = 3;
 const SIDE_W: u16 = 36;
+const SIDE_READ_W: u16 = 48;
 const COMMON_LABEL: usize = 22;
 const SIDE_LABEL: usize = 10;
 const LIST_ROWS: usize = 6;
@@ -34,7 +36,7 @@ pub fn draw(params: &DiscoveryParams, app: &App, frame: &mut Frame, area: Rect, 
     let action = match field {
         DiscoveryField::ScanNetwork if scanning => "Stop",
         DiscoveryField::ScanNetwork => "Scan",
-        DiscoveryField::ScanMethod => "Toggle",
+        DiscoveryField::ScanMethod | DiscoveryField::ScanRepr => "Toggle",
         DiscoveryField::Port(_) => "Use port",
         DiscoveryField::Found(_) => "Use address",
         _ => "Connect",
@@ -59,7 +61,7 @@ pub fn draw(params: &DiscoveryParams, app: &App, frame: &mut Frame, area: Rect, 
     let tail = vec![Line::default(), footer];
 
     let body_w = if has_side {
-        LEFT_W + DIVIDER_W + SIDE_W
+        LEFT_W + DIVIDER_W + side_width(params)
     } else {
         LEFT_W
     };
@@ -224,7 +226,7 @@ fn side_lines(
                     _ => None,
                 };
                 let chosen = (!p.custom_path_active()).then_some(p.port_index as usize);
-                push_list(&mut lines, theme, &p.ports, cursor, true, chosen);
+                push_list(&mut lines, theme, &p.ports, cursor, true, chosen, SIDE_W);
             }
             lines.push(custom_path_row(
                 p,
@@ -305,6 +307,29 @@ fn side_lines(
                 on,
                 None,
             ));
+            if p.reads_on_scan() {
+                let on = selected(DiscoveryField::ScanRepr);
+                let repr = if p.scan_ascii { "ASCII" } else { "decimal" };
+                lines.push(row(
+                    theme,
+                    "Show as",
+                    SIDE_LABEL,
+                    edit_value(repr.to_string(), on, true),
+                    on,
+                    None,
+                ));
+                lines.push(dim_line(
+                    theme,
+                    format!(
+                        "{}{:<SIDE_LABEL$} {} @ {} x{}",
+                        marker(false),
+                        "Request",
+                        p.register_type.name(),
+                        app.interpreter.address_mode().display(p.address),
+                        p.amount
+                    ),
+                ));
+            }
             let on = selected(DiscoveryField::ScanPrefix);
             lines.push(row(
                 theme,
@@ -348,11 +373,40 @@ fn side_lines(
                     DiscoveryField::Found(i) if focused => Some(i),
                     _ => None,
                 };
-                push_list(&mut lines, theme, &p.found, cursor, false, None);
+                let rows = found_rows(&p.found, p.scan_ascii);
+                push_list(&mut lines, theme, &rows, cursor, false, None, side_width(p));
             }
         }
     }
     lines
+}
+
+fn side_width(p: &DiscoveryParams) -> u16 {
+    if p.interface.uses_tcp() && p.reads_on_scan() {
+        SIDE_READ_W
+    } else {
+        SIDE_W
+    }
+}
+
+fn found_rows(found: &[FoundHost], ascii: bool) -> Vec<String> {
+    let width = found.iter().map(|host| host.ip.len()).max().unwrap_or(0);
+    found
+        .iter()
+        .map(|host| {
+            let reply = match &host.reply {
+                None => return host.ip.clone(),
+                Some(Ok(values)) if ascii => format!("'{}'", ascii_words(values)),
+                Some(Ok(values)) => values
+                    .iter()
+                    .map(u16::to_string)
+                    .collect::<Vec<_>>()
+                    .join(" "),
+                Some(Err(e)) => e.clone(),
+            };
+            format!("{:<width$}  {reply}", host.ip)
+        })
+        .collect()
 }
 
 fn push_list(
@@ -362,6 +416,7 @@ fn push_list(
     cursor: Option<usize>,
     radio: bool,
     chosen: Option<usize>,
+    width: u16,
 ) {
     let len = items.len();
     let anchor = cursor.or(chosen).unwrap_or(0);
@@ -379,7 +434,7 @@ fn push_list(
             (true, Some(c)) if c == i => "* ",
             (true, _) => "o ",
         };
-        let room = (SIDE_W as usize).saturating_sub(2 + mark.chars().count() + 1);
+        let room = (width as usize).saturating_sub(2 + mark.chars().count() + 1);
         let style = if selected {
             theme.selected_style()
         } else if chosen == Some(i) {
@@ -473,7 +528,32 @@ fn button_line(
 
 #[cfg(test)]
 mod tests {
-    use super::wrap_words;
+    use super::{found_rows, wrap_words};
+    use crate::state::FoundHost;
+
+    #[test]
+    fn found_rows_align_replies_and_follow_the_representation() {
+        let found = vec![
+            FoundHost {
+                ip: "10.0.0.5".to_string(),
+                reply: Some(Ok(vec![0x4142, 7])),
+            },
+            FoundHost {
+                ip: "10.0.0.17".to_string(),
+                reply: Some(Err("Illegal data address".to_string())),
+            },
+            FoundHost::alive("10.0.0.200"),
+        ];
+        assert_eq!(
+            found_rows(&found, false),
+            vec![
+                "10.0.0.5    16706 7",
+                "10.0.0.17   Illegal data address",
+                "10.0.0.200",
+            ]
+        );
+        assert_eq!(found_rows(&found, true)[0], "10.0.0.5    'AB..'");
+    }
 
     #[test]
     fn wrap_words_breaks_between_words_and_keeps_long_words_whole() {

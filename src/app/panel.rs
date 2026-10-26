@@ -1,6 +1,7 @@
 use super::App;
 use crate::config::{BatchAnchor, Column};
 use crate::constants::NO_VALUE;
+use crate::custom::{CustomCell, CustomRule};
 use crate::interpretator::{LOOKAHEAD, ascii_words, fmt_num, following, graph_value};
 use crate::num_ops::cycle;
 use crate::register::{RegisterCell, RegisterType};
@@ -33,6 +34,19 @@ const INSPECT_COLUMNS: &[Column] = &[
     Column::Bits,
     Column::Custom,
 ];
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Markers {
+    Hidden,
+    Bracketed,
+    Detached,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct RowFlags {
+    pub changed: bool,
+    pub continuation: bool,
+}
 
 impl App {
     pub fn open_inspect(&mut self) {
@@ -129,7 +143,7 @@ impl App {
                     .map(|cell| {
                         self.custom_rules
                             .get(cell)
-                            .map_or(1, |rule| rule.repr.register_count())
+                            .map_or(1, CustomRule::register_count)
                     })
                     .collect();
                 let (start, end) = sized_window(&costs, pos, batch, self.config.batch.anchor);
@@ -230,7 +244,9 @@ impl App {
         };
         let value = entry.value;
         let at = |address: u16| self.read_log.get(&(kind, address)).map(|e| e.value);
-        let custom = self.custom_value(cell, value, &at);
+        let custom = self
+            .custom_value(cell, value, &at)
+            .map(|custom| self.custom_description(custom));
         let label = self.labels.get(&cell).map(String::as_str);
         self.interpreter.interpret_all(
             addr,
@@ -361,8 +377,8 @@ impl App {
 
     pub fn cell_row(&self, cell: RegisterCell, now: DateTime<Utc>) -> Option<(String, bool)> {
         let mut row = self.interpreter.row_buffer();
-        let changed = self.cell_row_into(&mut row, cell, now)?;
-        Some((row, changed))
+        let flags = self.write_cell_row(&mut row, cell, now, Markers::Hidden)?;
+        Some((row, flags.changed))
     }
 
     pub fn cell_row_into(
@@ -370,12 +386,48 @@ impl App {
         row: &mut String,
         cell: RegisterCell,
         now: DateTime<Utc>,
-    ) -> Option<bool> {
+        bracketed: bool,
+    ) -> Option<RowFlags> {
+        let markers = if bracketed {
+            Markers::Bracketed
+        } else {
+            Markers::Detached
+        };
+        self.write_cell_row(row, cell, now, markers)
+    }
+
+    pub fn placeholder_row_into(
+        &self,
+        row: &mut String,
+        cell: RegisterCell,
+        bracketed: bool,
+    ) -> bool {
+        let marker = self
+            .custom_part_of(cell)
+            .map(|part| if bracketed { part } else { part.detached() })
+            .map(|part| self.custom_marker(part));
+        self.interpreter
+            .placeholder_into(row, cell.1, marker.as_deref(), self.label(cell));
+        marker.is_some()
+    }
+
+    fn write_cell_row(
+        &self,
+        row: &mut String,
+        cell: RegisterCell,
+        now: DateTime<Utc>,
+        markers: Markers,
+    ) -> Option<RowFlags> {
         let (kind, addr) = cell;
         let entry = self.read_log.get(&cell)?;
         let value = entry.value;
         let at = |address: u16| self.read_log.get(&(kind, address)).map(|e| e.value);
-        let custom = self.custom_value(cell, value, &at);
+        let (custom, continuation) = match (self.custom_value(cell, value, &at), markers) {
+            (Some(CustomCell::Value(text)), _) => (Some(text), false),
+            (Some(part), Markers::Bracketed) => (Some(self.custom_marker(part)), true),
+            (Some(part), Markers::Detached) => (Some(self.custom_marker(part.detached())), true),
+            _ => (None, false),
+        };
         self.interpreter.format_row_into(
             row,
             addr,
@@ -386,7 +438,10 @@ impl App {
             custom.as_deref(),
             self.label(cell),
         );
-        Some(self.changed_since(cell, now))
+        Some(RowFlags {
+            changed: self.changed_since(cell, now),
+            continuation,
+        })
     }
 
     pub fn matrix_cols(&self) -> u16 {
@@ -400,6 +455,7 @@ impl App {
         let value = self.read_log.get(&cell)?.value;
         let at = |address: u16| self.read_log.get(&(cell.0, address)).map(|e| e.value);
         self.custom_value(cell, value, &at)
+            .map(|custom| self.custom_description(custom))
     }
 
     pub fn ascii_string_for(&self, cells: impl Iterator<Item = RegisterCell>) -> String {

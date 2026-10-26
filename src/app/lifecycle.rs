@@ -113,10 +113,8 @@ impl App {
                 app.notify_no_cycle_types();
             }
         } else {
-            let mut read = app.startup_read_params();
-            read.popup = Some(Popup::Discovery(Self::discovery_params(&app.config)));
-            app.state = State::Read(read);
-            app.request_ports();
+            app.state = State::Read(app.startup_read_params());
+            app.open_discovery();
             log::warn!("Started | no device, opened the Device popup");
         }
 
@@ -263,7 +261,7 @@ impl App {
     pub fn tick(&mut self) {
         self.frame = self.frame.wrapping_add(1);
         if self.config.display.ram && (self.ram_bytes.is_none() || self.frame.is_multiple_of(10)) {
-            self.ram_bytes = crate::compat::ram_bytes();
+            self.ram_bytes = compat::ram_bytes();
         }
         self.sync_api_status();
         #[cfg(not(target_arch = "wasm32"))]
@@ -513,7 +511,6 @@ impl App {
         };
 
         let read_main = sweeping || matches!(panel, ReadPanel::Main | ReadPanel::Matrix);
-        self.connection = ConnectionStatus::Reading;
 
         let mut graph_registers = self.graph_extra_registers();
         if read_main {
@@ -535,6 +532,12 @@ impl App {
             regs.dedup();
             regs
         };
+
+        if !read_main && panel_registers.is_empty() {
+            self.read_mut().finish_read();
+            return;
+        }
+        self.connection = ConnectionStatus::Reading;
 
         let full_spans = if self.config.batch.read_full_customs {
             custom_full_spans(&self.custom_rules)

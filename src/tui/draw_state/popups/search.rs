@@ -9,9 +9,27 @@ use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 
-const PREFIX_W: usize = 18;
-const MIN_WIDTH: u16 = 44;
+const MIN_WIDTH: u16 = 38;
 const CHROME_ROWS: u16 = 7;
+
+const fn address_w(mode: AddressMode) -> usize {
+    match mode {
+        AddressMode::Dec => 5,
+        AddressMode::Hex => 4,
+    }
+}
+
+const fn prefix_w(mode: AddressMode, kind_w: usize) -> usize {
+    1 + address_w(mode) + 1 + kind_w + 1
+}
+
+fn kind_w(matches: &[SearchMatch]) -> usize {
+    matches
+        .iter()
+        .map(|m| m.cell.0.name().len())
+        .max()
+        .unwrap_or(0)
+}
 
 fn max_rows(area: Rect) -> u16 {
     let budget = u32::from(area.height) * u32::from(SEARCH_POPUP_MAX_HEIGHT_PERCENT) / 100;
@@ -47,13 +65,22 @@ pub(super) fn draw(
         .map(|m| m.text.chars().count())
         .max()
         .unwrap_or(0);
-    let (width, label_w) = fit(hints::min_width(MIN_WIDTH, &footer), area.width, longest);
+    let kind_w = kind_w(&search.matches);
+    let (width, label_w) = fit(
+        hints::min_width(MIN_WIDTH, &footer),
+        area.width,
+        longest,
+        prefix_w(address_mode, kind_w),
+    );
 
     if search.matches.is_empty() {
         for hint in [
-            " Type an address (x6F for hex) or a label.",
-            " +N / -N moves relative to the cursor.",
-            " h/i/c/d prefix picks the register type.",
+            " Type an address or a label.",
+            "",
+            " Prefix for quick actions:",
+            " h/i/c/d register type",
+            " +/-     relative to the cursor",
+            " n/x     explicit decimal / hex",
         ] {
             lines.push(Line::from(Span::styled(hint, theme.dim_style())));
         }
@@ -63,24 +90,27 @@ pub(super) fn draw(
                 theme,
                 &search.matches[i],
                 &search.query,
+                kind_w,
                 label_w,
                 i as u16 == search.selected,
                 address_mode,
             ));
         }
+        if top > 0 || end < len {
+            lines.push(hints::more(theme, top, len - end));
+        }
     }
 
-    lines.push(hints::more(theme, top, len.saturating_sub(end)));
     super::push_footer(&mut lines, theme, footer);
 
     super::render(frame, area, theme, "Go to", width, lines);
 }
 
-fn fit(min_width: u16, area_width: u16, longest: usize) -> (u16, usize) {
-    let needed = (PREFIX_W + longest + 2).min(u16::MAX as usize) as u16;
+fn fit(min_width: u16, area_width: u16, longest: usize, prefix_w: usize) -> (u16, usize) {
+    let needed = (prefix_w + longest + 2).min(u16::MAX as usize) as u16;
     let cap = (u32::from(area_width) * u32::from(SEARCH_POPUP_MAX_WIDTH_PERCENT) / 100) as u16;
     let width = min_width.max(needed.min(cap)).min(area_width);
-    (width, (width as usize).saturating_sub(PREFIX_W + 2))
+    (width, (width as usize).saturating_sub(prefix_w + 2))
 }
 
 fn clipped(text: &str, width: usize) -> (Vec<char>, bool) {
@@ -95,6 +125,7 @@ fn row(
     theme: &Theme,
     m: &SearchMatch,
     query: &str,
+    kind_w: usize,
     label_w: usize,
     selected: bool,
     address_mode: AddressMode,
@@ -104,11 +135,15 @@ fn row(
 
     let mut spans = vec![
         Span::styled(
-            format!(" {:>5}  ", address_mode.display(address)),
+            format!(
+                " {:>w$} ",
+                address_mode.display(address),
+                w = address_w(address_mode)
+            ),
             style(theme.accent_style()),
         ),
         Span::styled(
-            format!("{:<10}", format!("{kind:?}")),
+            format!("{:<kind_w$} ", kind.name()),
             style(theme.dim_style()),
         ),
     ];
@@ -205,40 +240,72 @@ fn match_positions(query: &str, text: &str) -> Vec<usize> {
 
 #[cfg(test)]
 mod tests {
-    use super::{MIN_WIDTH, PREFIX_W, clipped, fit};
+    use super::{MIN_WIDTH, clipped, fit, kind_w, prefix_w};
+    use crate::config::AddressMode;
+    use crate::register::RegisterType;
+    use crate::state::SearchMatch;
+
+    const PREFIX_W: usize = prefix_w(AddressMode::Dec, 8);
+
+    fn hit(kind: RegisterType) -> SearchMatch {
+        SearchMatch {
+            cell: (kind, 0),
+            text: String::new(),
+            labeled: false,
+        }
+    }
+
+    #[test]
+    fn the_kind_column_fits_the_longest_type_listed() {
+        assert_eq!(kind_w(&[]), 0);
+        assert_eq!(
+            kind_w(&[hit(RegisterType::Coil), hit(RegisterType::Input)]),
+            "Input".len()
+        );
+        assert_eq!(
+            kind_w(&[hit(RegisterType::Coil), hit(RegisterType::Discrete)]),
+            "Discrete".len()
+        );
+    }
+
+    #[test]
+    fn the_prefix_holds_the_address_and_kind_with_one_space_around() {
+        assert_eq!(prefix_w(AddressMode::Dec, 8), " 65535 Discrete ".len());
+        assert_eq!(prefix_w(AddressMode::Hex, 5), " FFFF Input ".len());
+    }
 
     #[test]
     fn short_labels_keep_the_minimum_width() {
-        let (width, label_w) = fit(MIN_WIDTH, 120, 10);
+        let (width, label_w) = fit(MIN_WIDTH, 120, 10, PREFIX_W);
         assert_eq!(width, MIN_WIDTH);
         assert_eq!(label_w, MIN_WIDTH as usize - PREFIX_W - 2);
     }
 
     #[test]
     fn long_labels_widen_the_popup_up_to_half_the_screen() {
-        let (width, label_w) = fit(MIN_WIDTH, 200, 60);
+        let (width, label_w) = fit(MIN_WIDTH, 200, 60, PREFIX_W);
         assert_eq!(width as usize, PREFIX_W + 60 + 2);
         assert_eq!(label_w, 60);
 
-        let (width, label_w) = fit(MIN_WIDTH, 120, 60);
+        let (width, label_w) = fit(MIN_WIDTH, 120, 60, PREFIX_W);
         assert_eq!(width, 60);
         assert_eq!(label_w, 60 - PREFIX_W - 2);
 
-        let (width, label_w) = fit(MIN_WIDTH, 200, 5000);
+        let (width, label_w) = fit(MIN_WIDTH, 200, 5000, PREFIX_W);
         assert_eq!(width, 100);
         assert_eq!(label_w, 100 - PREFIX_W - 2);
     }
 
     #[test]
     fn the_minimum_width_wins_over_the_cap_on_narrow_screens() {
-        let (width, label_w) = fit(MIN_WIDTH, 50, 60);
+        let (width, label_w) = fit(MIN_WIDTH, 50, 60, PREFIX_W);
         assert_eq!(width, MIN_WIDTH);
         assert_eq!(label_w, MIN_WIDTH as usize - PREFIX_W - 2);
     }
 
     #[test]
     fn a_tiny_screen_leaves_no_room_for_labels_without_panicking() {
-        let (width, label_w) = fit(MIN_WIDTH, 10, 60);
+        let (width, label_w) = fit(MIN_WIDTH, 10, 60, PREFIX_W);
         assert_eq!(width, 10);
         assert_eq!(label_w, 0);
         assert_eq!(clipped("abc", 0), (Vec::new(), true));

@@ -192,7 +192,7 @@ impl Column {
 pub fn following(address: u16, count: usize, at: impl Fn(u16) -> Option<u16>) -> Lookahead {
     std::array::from_fn(|i| {
         (i < count)
-            .then(|| at(address.saturating_add(i as u16 + 1)))
+            .then(|| address.checked_add(i as u16 + 1).and_then(&at))
             .flatten()
     })
 }
@@ -391,17 +391,29 @@ impl Interpretor {
         segments
     }
 
+    pub fn segment(&self, column: Column) -> Option<RowSegment> {
+        self.row_segments()
+            .into_iter()
+            .find(|segment| segment.name == column.name())
+    }
+
     pub fn row_buffer(&self) -> String {
         String::with_capacity(self.header.len() + 32)
     }
 
     pub fn placeholder(&self, address: u16, label: Option<&str>) -> String {
         let mut row = self.row_buffer();
-        self.placeholder_into(&mut row, address, label);
+        self.placeholder_into(&mut row, address, None, label);
         row
     }
 
-    pub fn placeholder_into(&self, row: &mut String, address: u16, label: Option<&str>) {
+    pub fn placeholder_into(
+        &self,
+        row: &mut String,
+        address: u16,
+        custom: Option<&str>,
+        label: Option<&str>,
+    ) {
         let ctx = RowCtx::new(
             &self.config,
             self.word_order,
@@ -409,7 +421,7 @@ impl Interpretor {
                 address,
                 value: 0,
                 next: [None; LOOKAHEAD],
-                custom: None,
+                custom,
                 time: NO_VALUE,
                 elapsed: None,
                 label,
@@ -418,7 +430,9 @@ impl Interpretor {
 
         for col in self.enabled_columns() {
             let mark = row.len();
-            if col.spec.column.is_meta() {
+            if col.spec.column.is_meta()
+                || (matches!(col.spec.column, Column::Custom) && custom.is_some())
+            {
                 (col.spec.render)(&ctx, col.width, row);
             } else {
                 row.push_str(NO_VALUE);
@@ -632,7 +646,7 @@ fn pad_to(out: &mut String, mark: usize, width: usize) {
 }
 
 fn bcd_to_decimal<T: num_traits::PrimInt>(value: T) -> Option<T> {
-    let nibbles = std::mem::size_of::<T>() * 2;
+    let nibbles = size_of::<T>() * 2;
     let mut result = T::zero();
     let ten = T::from(10)?;
     let mask = T::from(0xF)?;
@@ -1075,6 +1089,23 @@ mod tests {
         };
         assert_eq!(named("label"), "pump", "the label survives with no read");
         assert_eq!(named("u16"), NO_VALUE, "value columns have nothing to show");
+        assert_eq!(named("custom"), NO_VALUE, "no marker, nothing to show");
+    }
+
+    #[test]
+    fn a_placeholder_shows_the_rule_marker_it_is_given() {
+        let i = interpretor();
+        let mut row = i.row_buffer();
+        i.placeholder_into(&mut row, 101, Some("`- 100"), None);
+        let named = |name: &str| {
+            i.row_segments()
+                .into_iter()
+                .find(|s| s.name == name)
+                .expect("segment")
+                .text(&row)
+        };
+        assert_eq!(named("custom"), "`- 100");
+        assert_eq!(named("u16"), NO_VALUE);
     }
 
     #[test]
@@ -1127,8 +1158,13 @@ mod tests {
         );
         assert_eq!(
             following(u16::MAX, 2, at),
-            [Some(u16::MAX), Some(u16::MAX), None, None, None, None, None],
-            "saturates at the top of the address space"
+            [None; LOOKAHEAD],
+            "nothing follows the top of the address space"
+        );
+        assert_eq!(
+            following(u16::MAX - 1, 3, at),
+            [Some(u16::MAX), None, None, None, None, None, None],
+            "stops at the top instead of repeating the last register"
         );
         assert!(following(0, LOOKAHEAD, at).iter().all(Option::is_some));
     }

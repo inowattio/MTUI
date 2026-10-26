@@ -1,5 +1,4 @@
 use std::fmt;
-use std::future::Future;
 use std::time::Duration;
 
 pub use web_time::Instant;

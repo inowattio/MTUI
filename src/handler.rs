@@ -138,35 +138,35 @@ fn run_action(app: &mut App, action: KeybindAction) {
         Help => app.open_help(),
         About => app.open_about(),
         Refresh => app.refresh(),
-        KeybindAction::SwitchType => app.toggle_type(),
+        SwitchType => app.toggle_type(),
         Write => app.open_write(),
-        KeybindAction::GoTo => app.open_search(),
+        GoTo => app.open_search(),
         Label => app.open_label(),
-        KeybindAction::CustomRule => app.open_custom(),
+        CustomRule => app.open_custom(),
         Columns => app.open_columns(),
         Pause => app.toggle_pause(),
         WordOrder => app.toggle_word_order(),
-        KeybindAction::UnitId => app.open_unit(),
+        UnitId => app.open_unit(),
         Inspect => app.open_inspect(),
         DeviceId => app.open_device_id(),
-        KeybindAction::RawRequest => app.open_raw(),
+        RawRequest => app.open_raw(),
         Graph => app.toggle_graph(),
-        KeybindAction::Device => app.open_discovery(),
+        Device => app.open_discovery(),
         Settings => app.open_settings(),
         CopyColumn => app.copy_column_arm(),
-        KeybindAction::WriteLogs => app.open_logs(),
+        WriteLogs => app.open_logs(),
         AppLogs => app.open_log_view(),
         Stats => app.open_stats(),
         Sweep => app.open_sweep(),
-        KeybindAction::ClearSession => {
+        ClearSession => {
             if app.read().graph {
                 app.clear_graph_history();
             } else {
                 app.clear_session_data();
             }
         }
-        KeybindAction::CycleConfig => app.cycle_config(),
-        KeybindAction::Panel => {
+        CycleConfig => app.cycle_config(),
+        Panel => {
             app.toggle_panel();
             let len = app.panel_len();
             let scroll_rows = app.panel_scroll_rows();
@@ -400,7 +400,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
                     app.sweep_config_toggle();
                 }
                 KeyCode::Backspace => app.sweep_config_backspace(field),
-                KeyCode::Char(c) if c.is_ascii_digit() => app.sweep_config_digit(field, c),
+                KeyCode::Char(c) if c.is_ascii_hexdigit() => app.sweep_config_digit(field, c),
                 _ => {}
             }
         }
@@ -446,6 +446,14 @@ pub fn handle_paste(data: String, app: &mut App) {
             d.custom_path.push_str(first_line);
             d.status = None;
         }
+        return;
+    }
+
+    if app.popup_kind().is_none()
+        && let Some(address) = app.interpreter.address_mode().parse(trimmed)
+    {
+        app.read_mut().position = address;
+        app.scroll_to_cursor();
         return;
     }
 
@@ -506,6 +514,11 @@ fn handle_discovery_key(key_event: KeyEvent, app: &mut App) {
                 if let Some(d) = app.discovery_mut() {
                     d.cycle_scan_method(true);
                     d.status = None;
+                }
+            }
+            DiscoveryField::ScanRepr => {
+                if let Some(d) = app.discovery_mut() {
+                    d.scan_ascii = !d.scan_ascii;
                 }
             }
             DiscoveryField::Port(index) => app.choose_port(index),
@@ -597,6 +610,7 @@ fn cycle_field(
         DiscoveryField::Interface => d.set_interface(cycle(&kinds, d.interface, forward)),
         DiscoveryField::Baud => d.cycle_baud(forward),
         DiscoveryField::ScanMethod => d.cycle_scan_method(forward),
+        DiscoveryField::ScanRepr => d.scan_ascii = !d.scan_ascii,
         DiscoveryField::ScanPrefix => d.step_scan_prefix(forward),
         DiscoveryField::DataBits => d.data_bits = cycle(&DataBits::ALL, d.data_bits, forward),
         DiscoveryField::Parity => d.parity = cycle(&Parity::ALL, d.parity, forward),
@@ -760,6 +774,7 @@ fn handle_settings_field_key(key_event: KeyEvent, app: &mut App) {
         },
         KeyCode::Backspace => app.settings_backspace(field),
         KeyCode::Char(c) if field.is_text_input() => app.settings_text_input(field, c),
+        KeyCode::Char(c) if field == SettingsField::StartupAddress => app.settings_address_digit(c),
         KeyCode::Char(c) if c.is_ascii_digit() => app.settings_digit(field, c as u8 - b'0'),
         _ => {}
     }
@@ -837,7 +852,7 @@ fn handle_keybinds_key(key_event: KeyEvent, app: &mut App) {
 mod tests {
     use super::handle_key_events;
     use crate::app::App;
-    use crate::config::{Config, KeybindAction};
+    use crate::config::{AddressMode, Config, KeybindAction};
     use crate::input::{KeyCode, KeyEvent};
     use crate::scratch::ScratchDir;
     use crate::state::{
@@ -1078,7 +1093,10 @@ mod tests {
         }
         let s = app.settings().unwrap();
         assert_eq!(s.query, "clock");
-        assert_eq!(s.current_fields(), vec![SettingsField::ShowClock]);
+        assert_eq!(
+            s.current_fields(),
+            vec![SettingsField::ShowClock, SettingsField::ClockMillis]
+        );
         assert_eq!(s.focus, SettingsFocus::Categories);
 
         let before = app.config.display.clock;
@@ -1125,6 +1143,83 @@ mod tests {
         app.config.save_position_on_exit = false;
         handle_key_events(KeyEvent::new(KeyCode::Right), &mut app).await;
         assert_eq!(app.config.startup.address, address + 1);
+    }
+
+    #[tokio::test]
+    async fn clock_millis_is_locked_while_the_clock_is_hidden() {
+        let mut app = app().await;
+        app.open_settings();
+        let category = SettingsCategory::ALL
+            .iter()
+            .position(|&c| c == SettingsCategory::Display)
+            .unwrap() as u16;
+        let index = SettingsCategory::Display
+            .fields()
+            .iter()
+            .position(|&f| f == SettingsField::ClockMillis)
+            .unwrap() as u16;
+        {
+            let s = app.settings_mut().unwrap();
+            s.category = category;
+            s.focus = SettingsFocus::Fields;
+            s.field = index;
+        }
+        let millis = app.config.display.clock_millis;
+
+        app.config.display.clock = false;
+        handle_key_events(KeyEvent::new(KeyCode::Right), &mut app).await;
+        assert_eq!(
+            app.config.display.clock_millis, millis,
+            "locked fields ignore edits"
+        );
+
+        app.config.display.clock = true;
+        handle_key_events(KeyEvent::new(KeyCode::Right), &mut app).await;
+        assert_ne!(app.config.display.clock_millis, millis);
+    }
+
+    #[tokio::test]
+    async fn the_startup_address_is_typed_in_the_address_mode() {
+        let mut app = app().await;
+        app.open_settings();
+        let category = SettingsCategory::ALL
+            .iter()
+            .position(|&c| c == SettingsCategory::Data)
+            .unwrap() as u16;
+        let index = SettingsCategory::Data
+            .fields()
+            .iter()
+            .position(|&f| f == SettingsField::StartupAddress)
+            .unwrap() as u16;
+        {
+            let s = app.settings_mut().unwrap();
+            s.category = category;
+            s.focus = SettingsFocus::Fields;
+            s.field = index;
+        }
+        app.config.save_position_on_exit = false;
+
+        app.config.startup.address = 0;
+        for c in "200".chars() {
+            handle_key_events(KeyEvent::new(KeyCode::Char(c)), &mut app).await;
+        }
+        assert_eq!(app.config.startup.address, 200);
+        for c in "f".chars() {
+            handle_key_events(KeyEvent::new(KeyCode::Char(c)), &mut app).await;
+        }
+        assert_eq!(
+            app.config.startup.address, 200,
+            "decimal ignores hex digits"
+        );
+
+        app.interpreter.set_address_mode(AddressMode::Hex);
+        app.config.startup.address = 0;
+        for c in "C8".chars() {
+            handle_key_events(KeyEvent::new(KeyCode::Char(c)), &mut app).await;
+        }
+        assert_eq!(app.config.startup.address, 0xC8);
+        handle_key_events(KeyEvent::new(KeyCode::Backspace), &mut app).await;
+        assert_eq!(app.config.startup.address, 0xC);
     }
 
     #[tokio::test]
@@ -1495,6 +1590,29 @@ mod tests {
             Some(PopupKind::Help),
             "other popups ignore it"
         );
+        assert_eq!(snapshot_len(&app), None);
+    }
+
+    #[tokio::test]
+    async fn a_pasted_address_jumps_in_the_address_mode() {
+        let mut app = app().await;
+        for (text, expected) in [("200", 200), ("0x1F", 0x1F), ("x1F", 0x1F)] {
+            paste(&mut app, text);
+            assert_eq!(app.read().position, expected, "{text:?}");
+        }
+
+        app.interpreter.set_address_mode(AddressMode::Hex);
+        for (text, expected) in [
+            ("200", 0x200),
+            ("1F", 0x1F),
+            ("0x1F", 0x1F),
+            (" c8\n", 0xC8),
+            ("n200", 200),
+        ] {
+            paste(&mut app, text);
+            assert_eq!(app.read().position, expected, "{text:?}");
+        }
+        assert_eq!(app.popup_kind(), None);
         assert_eq!(snapshot_len(&app), None);
     }
 

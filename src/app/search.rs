@@ -1,4 +1,5 @@
 use super::{App, fuzzy_score};
+use crate::config::AddressMode;
 use crate::register::{RegisterCell, RegisterType};
 use crate::state::{Popup, ReadPanel, SearchMatch, SearchParams};
 
@@ -67,40 +68,50 @@ impl App {
         let Some(query) = self.popup_as::<SearchParams>().map(|s| s.query.clone()) else {
             return;
         };
+        let address_mode = self.interpreter.address_mode();
         let (current_type, current_position) = {
             let p = self.read();
             (p.register_type, p.position)
         };
 
-        let (register_type, has_explicit_type) = match query.chars().next() {
-            Some('h' | 'H') => (RegisterType::Holding, true),
-            Some('i' | 'I') => (RegisterType::Input, true),
-            Some('c' | 'C') => (RegisterType::Coil, true),
-            Some('d' | 'D') => (RegisterType::Discrete, true),
-            _ => (current_type, false),
+        let prefixed_type = match query.chars().next() {
+            Some('h' | 'H') => Some(RegisterType::Holding),
+            Some('i' | 'I') => Some(RegisterType::Input),
+            Some('c' | 'C') => Some(RegisterType::Coil),
+            Some('d' | 'D') => Some(RegisterType::Discrete),
+            _ => None,
         };
+
+        let mut readings: Vec<(RegisterType, &str)> = Vec::new();
+        let starts_with_hex_digit = query.starts_with(|c: char| c.is_ascii_hexdigit());
+        if prefixed_type.is_none() || (address_mode == AddressMode::Hex && starts_with_hex_digit) {
+            readings.push((current_type, query.as_str()));
+        }
+        if let Some(register_type) = prefixed_type {
+            readings.push((register_type, &query[1..]));
+        }
 
         let mut matches: Vec<SearchMatch> = Vec::new();
-
-        let numeric_query = if has_explicit_type {
-            &query[1..]
-        } else {
-            query.as_str()
-        };
-
-        if let Some((address, hint)) = parse_target(numeric_query, current_position) {
+        for (register_type, numeric_query) in readings {
+            let Some((address, hint)) = parse_target(numeric_query, current_position, address_mode)
+            else {
+                continue;
+            };
             let cell = (register_type, address);
+            if matches.iter().any(|m| m.cell == cell) {
+                continue;
+            }
             matches.push(match self.labels.get(&cell) {
                 Some(label) => SearchMatch::label(cell, label.clone()),
                 None => SearchMatch::hint(cell, hint),
             });
         }
-        let target = matches.first().map(|m| m.cell);
+        let targets: Vec<RegisterCell> = matches.iter().map(|m| m.cell).collect();
 
         let mut scored: Vec<(i32, RegisterCell, String)> = self
             .labels
             .iter()
-            .filter(|&(&cell, _)| Some(cell) != target)
+            .filter(|&(cell, _)| !targets.contains(cell))
             .filter_map(|(&cell, text)| {
                 fuzzy_score(&query, text).map(|score| (score, cell, text.clone()))
             })
@@ -122,103 +133,122 @@ impl App {
     }
 }
 
-fn parse_target(input: &str, current: u16) -> Option<(u16, String)> {
+fn parse_target(input: &str, current: u16, mode: AddressMode) -> Option<(u16, String)> {
     let input = input.trim();
     let (sign, rest) = if let Some(rest) = input.strip_prefix('+') {
         (1, rest)
     } else if let Some(rest) = input.strip_prefix('-') {
         (-1, rest)
     } else {
-        return parse_address(input).map(|address| (address, "jump to this address".to_string()));
+        return mode
+            .parse_saturating(input)
+            .map(|address| (address, "jump to this address".to_string()));
     };
-    let offset = parse_address(rest)?;
+    let offset = mode.parse_saturating(rest)?;
     let address = (i32::from(current) + sign * i32::from(offset)).clamp(0, i32::from(u16::MAX));
     let symbol = if sign > 0 { '+' } else { '-' };
-    Some((address as u16, format!("move by {symbol}{offset}")))
-}
-
-fn parse_address(input: &str) -> Option<u16> {
-    let input = input.trim();
-    let (digits, radix) = match input.strip_prefix(['x', 'X']) {
-        Some(hex) => (hex, 16),
-        None => match input
-            .strip_prefix("0x")
-            .or_else(|| input.strip_prefix("0X"))
-        {
-            Some(hex) => (hex, 16),
-            None => (input, 10),
-        },
-    };
-    let value = u32::from_str_radix(digits, radix).ok()?;
-    Some(value.min(u16::MAX as u32) as u16)
+    Some((
+        address as u16,
+        format!("move by {symbol}{}", mode.display(offset)),
+    ))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_address, parse_target};
-
-    #[test]
-    fn parses_decimal_addresses() {
-        assert_eq!(parse_address("111"), Some(111));
-        assert_eq!(parse_address(" 42 "), Some(42));
-        assert_eq!(parse_address("70000"), Some(u16::MAX));
-    }
-
-    #[test]
-    fn parses_hex_addresses_with_x_prefix() {
-        assert_eq!(parse_address("x6F"), Some(0x6F));
-        assert_eq!(parse_address("X6f"), Some(0x6F));
-        assert_eq!(parse_address("0x6F"), Some(0x6F));
-        assert_eq!(parse_address("xFFFF"), Some(u16::MAX));
-        assert_eq!(parse_address("x10000"), Some(u16::MAX));
-    }
+    use super::{AddressMode, parse_target};
 
     #[test]
     fn relative_targets_move_from_the_cursor() {
         assert_eq!(
-            parse_target("+69", 100),
+            parse_target("+69", 100, AddressMode::Dec),
             Some((169, "move by +69".to_string()))
         );
         assert_eq!(
-            parse_target("-100", 250),
+            parse_target("-100", 250, AddressMode::Dec),
             Some((150, "move by -100".to_string()))
         );
         assert_eq!(
-            parse_target("+x10", 0),
+            parse_target("+x10", 0, AddressMode::Dec),
             Some((16, "move by +16".to_string()))
         );
         assert_eq!(
-            parse_target(" - 5 ", 10),
+            parse_target("+n10", 0, AddressMode::Hex),
+            Some((10, "move by +A".to_string()))
+        );
+        assert_eq!(
+            parse_target("+10", 0, AddressMode::Hex),
+            Some((16, "move by +10".to_string()))
+        );
+        assert_eq!(
+            parse_target("-x10", 0x20, AddressMode::Hex),
+            Some((0x10, "move by -10".to_string()))
+        );
+        assert_eq!(
+            parse_target(" - 5 ", 10, AddressMode::Dec),
             Some((5, "move by -5".to_string()))
         );
     }
 
     #[test]
     fn relative_targets_clamp_to_the_address_range() {
-        assert_eq!(parse_target("-100", 50).map(|t| t.0), Some(0));
-        assert_eq!(parse_target("+100", 65500).map(|t| t.0), Some(u16::MAX));
-    }
-
-    #[test]
-    fn absolute_targets_keep_the_jump_text() {
         assert_eq!(
-            parse_target("111", 0),
-            Some((111, "jump to this address".to_string()))
+            parse_target("-100", 50, AddressMode::Dec).map(|t| t.0),
+            Some(0)
         );
         assert_eq!(
-            parse_target("x6F", 0),
-            Some((0x6F, "jump to this address".to_string()))
+            parse_target("+100", 65500, AddressMode::Dec).map(|t| t.0),
+            Some(u16::MAX)
         );
-        assert_eq!(parse_target("+", 10), None);
-        assert_eq!(parse_target("-", 10), None);
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod app_tests {
+    use crate::app::App;
+    use crate::config::{AddressMode, Config};
+    use crate::register::RegisterType;
+    use crate::state::SearchParams;
+
+    async fn search(mode: AddressMode, query: &str) -> Vec<(RegisterType, u16)> {
+        let mut app = App::boot(Config::demo(), String::new()).await;
+        app.interpreter.set_address_mode(mode);
+        app.read_mut().register_type = RegisterType::Holding;
+        app.open_search();
+        for c in query.chars() {
+            app.search_input(c);
+        }
+        app.popup_as::<SearchParams>()
+            .map(|s| s.matches.iter().map(|m| m.cell).collect())
+            .unwrap_or_default()
     }
 
-    #[test]
-    fn rejects_non_numeric_input() {
-        assert_eq!(parse_address(""), None);
-        assert_eq!(parse_address("x"), None);
-        assert_eq!(parse_address("xG1"), None);
-        assert_eq!(parse_address("temp"), None);
-        assert_eq!(parse_address("-5"), None);
+    #[tokio::test]
+    async fn hex_mode_offers_the_address_before_the_type_prefix() {
+        let cells = search(AddressMode::Hex, "C8").await;
+        assert_eq!(
+            cells[..2],
+            [(RegisterType::Holding, 0xC8), (RegisterType::Coil, 8)]
+        );
+        let cells = search(AddressMode::Hex, "d0").await;
+        assert_eq!(
+            cells[..2],
+            [(RegisterType::Holding, 0xD0), (RegisterType::Discrete, 0)]
+        );
+        let cells = search(AddressMode::Hex, "C").await;
+        assert_eq!(cells.first(), Some(&(RegisterType::Holding, 0xC)));
+    }
+
+    #[tokio::test]
+    async fn non_hex_prefixes_and_decimal_mode_keep_one_reading() {
+        let cells = search(AddressMode::Hex, "i10").await;
+        assert_eq!(cells.first(), Some(&(RegisterType::Input, 0x10)));
+        assert!(!cells.contains(&(RegisterType::Holding, 0x10)));
+        let cells = search(AddressMode::Dec, "c8").await;
+        assert_eq!(cells.first(), Some(&(RegisterType::Coil, 8)));
+        assert!(
+            !cells
+                .iter()
+                .any(|c| c.0 == RegisterType::Holding && c.1 == 8)
+        );
     }
 }

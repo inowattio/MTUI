@@ -4,7 +4,6 @@ use crate::register::RegisterType;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
-use std::future::Future;
 #[cfg(not(target_arch = "wasm32"))]
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 #[cfg(not(target_arch = "wasm32"))]
@@ -143,6 +142,10 @@ impl WordOrder {
             Self::CDAB => (false, true),
             Self::DCBA => (true, true),
         }
+    }
+
+    pub const fn swaps_bytes(self) -> bool {
+        self.swaps().0
     }
 
     const fn ordered(self, a: u16, b: u16) -> (u16, u16) {
@@ -654,6 +657,35 @@ where
     Ok(output)
 }
 
+trait ReadWords {
+    async fn read_words(
+        &mut self,
+        register_type: RegisterType,
+        address: u16,
+        count: u16,
+    ) -> tokio_modbus::Result<Vec<u16>>;
+}
+
+impl ReadWords for Context {
+    async fn read_words(
+        &mut self,
+        register_type: RegisterType,
+        address: u16,
+        count: u16,
+    ) -> tokio_modbus::Result<Vec<u16>> {
+        let bits_to_words = |bits: Vec<bool>| bits.into_iter().map(u16::from).collect();
+        Ok(match register_type {
+            RegisterType::Holding => self.read_holding_registers(address, count).await?,
+            RegisterType::Input => self.read_input_registers(address, count).await?,
+            RegisterType::Coil => self.read_coils(address, count).await?.map(bits_to_words),
+            RegisterType::Discrete => self
+                .read_discrete_inputs(address, count)
+                .await?
+                .map(bits_to_words),
+        })
+    }
+}
+
 macro_rules! timeout_as {
     ($this:ident, $unit:expr, $action:ident, ($($arg:expr),* $(,)?), $desc:expr) => {
         {
@@ -888,23 +920,32 @@ impl ModbusDevice {
         address: u16,
         count: u16,
     ) -> Result<Vec<u16>> {
-        let bits_to_words = |bits: Vec<bool>| bits.into_iter().map(u16::from).collect();
         let desc = format!("Read {register_type:?} @ {address} with {count} value(s)");
-        match register_type {
-            RegisterType::Holding => {
-                timeout_as!(self, unit, read_holding_registers, (address, count), desc)
-            }
-            RegisterType::Input => {
-                timeout_as!(self, unit, read_input_registers, (address, count), desc)
-            }
-            RegisterType::Coil => {
-                timeout_as!(self, unit, read_coils, (address, count), desc).map(bits_to_words)
-            }
-            RegisterType::Discrete => {
-                timeout_as!(self, unit, read_discrete_inputs, (address, count), desc)
-                    .map(bits_to_words)
-            }
-        }
+        timeout_as!(
+            self,
+            unit,
+            read_words,
+            (register_type, address, count),
+            desc
+        )
+    }
+
+    pub async fn read_once(
+        config: &DeviceConfig,
+        register_type: RegisterType,
+        address: u16,
+        count: u16,
+    ) -> Result<Vec<u16>> {
+        let mut context = Self::connect_context(config).await?;
+        let wait = Duration::from_millis(config.request_timeout_ms);
+        let outcome = timeout(
+            context.read_words(register_type, address, count),
+            wait,
+            Duration::ZERO,
+        )
+        .await;
+        let _ = context.disconnect().await;
+        outcome??.map_err(exception_error)
     }
 
     pub async fn write_typed(
