@@ -3,12 +3,15 @@ use crate::compat;
 use crate::config::{Config, Registers, Startup};
 use crate::constants::message;
 use crate::home_assistant;
+use crate::mbmap;
 use crate::modbus::ModbusDevice;
 use crate::state::{
     ConnectionStatus, ImportParams, ImportSource, Outcome, Popup, State, StatusMessage,
 };
 use std::fs;
 use std::path::{Path, PathBuf};
+
+type ImportParser = fn(&str) -> Option<Registers>;
 
 struct ParsedImport {
     registers: Registers,
@@ -17,24 +20,21 @@ struct ParsedImport {
 
 impl App {
     fn parse_import(data: &str) -> Option<ParsedImport> {
-        Self::parse_json_import(data)
-            .map(|registers| ParsedImport {
-                registers,
-                source: ImportSource::Mtui,
+        let parsers: [(ImportParser, ImportSource); 3] = [
+            (Self::parse_json_import, ImportSource::Mtui),
+            (mbmap::parse, ImportSource::Mbmap),
+            (home_assistant::parse, ImportSource::HomeAssistant),
+        ];
+        parsers.into_iter().find_map(|(parse, source)| {
+            Some(ParsedImport {
+                registers: parse(data)?,
+                source,
             })
-            .or_else(|| {
-                home_assistant::parse(data).map(|registers| ParsedImport {
-                    registers,
-                    source: ImportSource::HomeAssistant,
-                })
-            })
+        })
     }
 
     fn parse_json_import(data: &str) -> Option<Registers> {
         let value: serde_json::Value = serde_json::from_str(data.trim()).ok()?;
-        if value.get("mbmap").is_some() {
-            return crate::mbmap::to_registers(&value).filter(|r| r.total() > 0);
-        }
         let value = value.get("registers").cloned().unwrap_or(value);
         let registers: Registers = serde_json::from_value(value).ok()?;
         (registers.total() > 0).then_some(registers)

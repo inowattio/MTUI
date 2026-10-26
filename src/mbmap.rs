@@ -1,37 +1,85 @@
-//! Converts device maps in the .mbmap format, version 2
-//! (<https://github.com/nobrega8/mbmap-library>), to importable registers.
-
-use crate::config::{RegisterEntry, Registers};
-use crate::custom::{BitEntry, CustomOp, CustomRepr, CustomRule, EnumEntry};
+use crate::config::Registers;
+use crate::custom::{BitEntry, CustomOp, CustomRepr, CustomRule, EnumEntry, OpKind};
 use crate::modbus::WordOrder;
-use crate::register::RegisterType;
+use crate::register::{RegisterCell, RegisterType};
+use serde::Deserialize;
 use serde_json::{Map, Value};
 use std::collections::BTreeMap;
 
-/// An integer written as a JSON number or as a decimal or `0x` hex string.
-fn integer(value: &Value) -> Option<i64> {
-    match value {
-        Value::Number(n) => n.as_i64(),
-        Value::String(s) => match s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")) {
-            Some(hex) => i64::from_str_radix(hex, 16).ok(),
-            None => s.parse().ok(),
-        },
-        _ => None,
+#[derive(Deserialize)]
+struct DeviceMap {
+    mbmap: Integer,
+    address_base: Option<Integer>,
+    byte_order: Option<String>,
+    word_order: Option<String>,
+    #[serde(default)]
+    enums: Map<String, Value>,
+    registers: Vec<Value>,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum Integer {
+    Number(i64),
+    Text(String),
+}
+
+impl Integer {
+    fn value(&self) -> Option<i64> {
+        match self {
+            Self::Number(number) => Some(*number),
+            Self::Text(text) => parse_integer(text),
+        }
     }
 }
 
-fn area(name: &str) -> Option<RegisterType> {
-    Some(match name {
-        "holding" => RegisterType::Holding,
-        "input" => RegisterType::Input,
-        "coil" => RegisterType::Coil,
-        "discrete" => RegisterType::Discrete,
-        _ => return None,
-    })
+fn parse_integer(text: &str) -> Option<i64> {
+    match text.strip_prefix("0x").or_else(|| text.strip_prefix("0X")) {
+        Some(hex) => i64::from_str_radix(hex, 16).ok(),
+        None => text.parse().ok(),
+    }
 }
 
-fn repr(kind: &str) -> Option<CustomRepr> {
-    Some(match kind {
+#[derive(Clone, Copy, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum Area {
+    Holding,
+    Input,
+    Coil,
+    Discrete,
+}
+
+impl From<Area> for RegisterType {
+    fn from(area: Area) -> Self {
+        match area {
+            Area::Holding => Self::Holding,
+            Area::Input => Self::Input,
+            Area::Coil => Self::Coil,
+            Area::Discrete => Self::Discrete,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct Register {
+    name: String,
+    area: Area,
+    address: Integer,
+    #[serde(rename = "type")]
+    data_type: Option<String>,
+    unit: Option<String>,
+    bit: Option<Integer>,
+    bits: Option<Integer>,
+    scale: Option<f64>,
+    offset: Option<f64>,
+    #[serde(rename = "enum")]
+    labels: Option<Value>,
+    byte_order: Option<String>,
+    word_order: Option<String>,
+}
+
+fn repr(data_type: Option<&str>) -> Option<CustomRepr> {
+    Some(match data_type? {
         "uint16" => CustomRepr::U16,
         "int16" => CustomRepr::I16,
         "uint32" => CustomRepr::U32,
@@ -44,6 +92,10 @@ fn repr(kind: &str) -> Option<CustomRepr> {
     })
 }
 
+fn little(register: Option<&str>, map: Option<&str>) -> bool {
+    register.or(map) == Some("little")
+}
+
 const fn word_order(byte_swap: bool, word_swap: bool) -> WordOrder {
     match (byte_swap, word_swap) {
         (false, false) => WordOrder::ABCD,
@@ -53,141 +105,148 @@ const fn word_order(byte_swap: bool, word_swap: bool) -> WordOrder {
     }
 }
 
-/// A register's labels: an inline table, or the name of one in `enums`.
-fn enum_entries(reg: &Map<String, Value>, root: &Map<String, Value>) -> Vec<EnumEntry> {
-    let table = match reg.get("enum") {
-        Some(Value::String(name)) => root.get("enums").and_then(|e| e.get(name)),
-        other => other,
-    };
-    let Some(Value::Object(table)) = table else {
-        return Vec::new();
-    };
-    table
-        .iter()
-        .filter_map(|(key, text)| {
-            Some(EnumEntry {
-                value: integer(&Value::String(key.clone()))?,
-                text: text.as_str()?.to_string(),
-            })
-        })
-        .collect()
+impl Register {
+    fn unit(&self) -> Option<&str> {
+        self.unit.as_deref().filter(|unit| !unit.is_empty())
+    }
+
+    fn label(&self) -> String {
+        match self.unit() {
+            Some(unit) => format!("{} [{unit}]", self.name),
+            None => self.name.clone(),
+        }
+    }
+
+    fn shared_bit(&self, bit: i64) -> Option<u8> {
+        let width = self.bits.as_ref().and_then(Integer::value).unwrap_or(1);
+        u8::try_from(bit).ok().filter(|&bit| width == 1 && bit < 16)
+    }
 }
 
-/// The registers of a map, each labelled and pinned.
-///
-/// A rule decodes the type, byte and word order, scale, offset, unit and
-/// labels. Bits of one register share a rule; registers that cannot be
-/// decoded keep only their label. `None` when `value` is not a version 2 map.
-pub fn to_registers(value: &Value) -> Option<Registers> {
-    let root = value.as_object()?;
-    if integer(root.get("mbmap")?)? != 2 {
-        return None;
+impl DeviceMap {
+    fn enum_map(&self, register: &Register) -> Vec<EnumEntry> {
+        let table = match &register.labels {
+            Some(Value::String(name)) => self.enums.get(name),
+            other => other.as_ref(),
+        };
+        let Some(Value::Object(table)) = table else {
+            return Vec::new();
+        };
+        table
+            .iter()
+            .filter_map(|(key, text)| {
+                Some(EnumEntry {
+                    value: parse_integer(key)?,
+                    text: text.as_str()?.to_string(),
+                })
+            })
+            .collect()
     }
-    let base = root.get("address_base").and_then(integer).unwrap_or(0);
-    let little = |reg: &Map<String, Value>, key: &str| {
-        reg.get(key)
-            .or_else(|| root.get(key))
-            .and_then(Value::as_str)
-            == Some("little")
-    };
 
-    let mut entries: BTreeMap<(RegisterType, u16), RegisterEntry> = BTreeMap::new();
-    for reg in root
-        .get("registers")?
-        .as_array()?
-        .iter()
-        .filter_map(Value::as_object)
-    {
-        let (Some(name), Some(kind), Some(address)) = (
-            reg.get("name").and_then(Value::as_str),
-            reg.get("area").and_then(Value::as_str).and_then(area),
-            reg.get("address").and_then(integer),
-        ) else {
-            continue;
-        };
-        let Ok(address) = u16::try_from(address - base) else {
-            continue;
-        };
-        let entry = entries
-            .entry((kind, address))
-            .or_insert_with(|| RegisterEntry {
-                address,
-                pinned: true,
-                ..Default::default()
-            });
-        let label = match reg.get("unit").and_then(Value::as_str) {
-            Some(unit) if !unit.is_empty() => format!("{name} [{unit}]"),
-            _ => name.to_string(),
-        };
-        entry.label = Some(match entry.label.take() {
+    fn rule(&self, register: &Register, address: u16) -> Option<CustomRule> {
+        let repr = repr(register.data_type.as_deref())?;
+        let ops = [
+            register
+                .scale
+                .filter(|&v| (v - 1.0).abs() > f64::EPSILON)
+                .map(|v| CustomOp { op: OpKind::Mul, v }),
+            register
+                .offset
+                .filter(|&v| v != 0.0)
+                .map(|v| CustomOp { op: OpKind::Add, v }),
+        ];
+        let byte_swap = little(register.byte_order.as_deref(), self.byte_order.as_deref());
+        let word_swap = little(register.word_order.as_deref(), self.word_order.as_deref());
+        Some(CustomRule {
+            address,
+            repr,
+            ops: ops.into_iter().flatten().collect(),
+            enum_map: self.enum_map(register),
+            suffix: register
+                .unit()
+                .map(|unit| format!(" {unit}"))
+                .unwrap_or_default(),
+            word_order: Some(word_order(byte_swap, word_swap)),
+            ..Default::default()
+        })
+    }
+}
+
+#[derive(Default)]
+struct Import {
+    labels: BTreeMap<RegisterCell, String>,
+    rules: BTreeMap<RegisterCell, CustomRule>,
+}
+
+impl Import {
+    fn label(&mut self, cell: RegisterCell, label: String) {
+        let label = match self.labels.remove(&cell) {
             Some(previous) => format!("{previous}; {label}"),
             None => label,
-        });
-        if kind.is_bit() {
-            continue;
-        }
+        };
+        self.labels.insert(cell, label);
+    }
 
-        let kind_name = reg.get("type").and_then(Value::as_str).unwrap_or_default();
-        let bit = reg.get("bit").and_then(integer);
-        let bits = reg.get("bits").and_then(integer).unwrap_or(1);
-        if let Some(bit) = bit {
-            // One bit of the register: named in a shared bit rule
-            if bits == 1 && (0..16).contains(&bit) {
-                let rule = entry.custom.get_or_insert_with(CustomRule::default);
-                rule.bits.push(BitEntry {
-                    bit: bit as u8,
-                    name: name.to_string(),
+    fn register(&mut self, map: &DeviceMap, base: i64, register: &Register) {
+        let Some(address) = register
+            .address
+            .value()
+            .and_then(|address| address.checked_sub(base))
+            .and_then(|address| u16::try_from(address).ok())
+        else {
+            return;
+        };
+        let cell = (register.area.into(), address);
+        self.label(cell, register.label());
+        if cell.0.is_bit() {
+            return;
+        }
+        if let Some(bit) = register.bit.as_ref().and_then(Integer::value) {
+            if let Some(bit) = register.shared_bit(bit) {
+                self.rules.entry(cell).or_default().bits.push(BitEntry {
+                    bit,
+                    name: register.name.clone(),
                 });
             }
-            continue;
-        }
-        let Some(repr) = repr(kind_name) else {
-            continue;
-        };
-
-        let mut ops = Vec::new();
-        let scale = reg.get("scale").and_then(Value::as_f64).unwrap_or(1.0);
-        if scale != 1.0 {
-            ops.push(CustomOp::try_from(format!("*{scale}")).ok()?);
-        }
-        let offset = reg.get("offset").and_then(Value::as_f64).unwrap_or(0.0);
-        if offset != 0.0 {
-            ops.push(CustomOp::try_from(format!("+{offset}")).ok()?);
-        }
-        entry.custom = Some(CustomRule {
-            repr,
-            ops,
-            enum_map: enum_entries(reg, root),
-            suffix: reg
-                .get("unit")
-                .and_then(Value::as_str)
-                .filter(|u| !u.is_empty())
-                .map(|u| format!(" {u}"))
-                .unwrap_or_default(),
-            word_order: Some(word_order(
-                little(reg, "byte_order"),
-                little(reg, "word_order"),
-            )),
-            ..Default::default()
-        });
-    }
-
-    let mut registers = Registers::default();
-    for ((kind, _), entry) in entries {
-        match kind {
-            RegisterType::Holding => registers.holdings.push(entry),
-            RegisterType::Input => registers.inputs.push(entry),
-            RegisterType::Coil => registers.coils.push(entry),
-            RegisterType::Discrete => registers.discretes.push(entry),
+        } else if let Some(rule) = map.rule(register, address) {
+            self.rules.insert(cell, rule);
         }
     }
-    Some(registers)
+
+    fn into_registers(self) -> Registers {
+        let pinned: Vec<RegisterCell> = self.labels.keys().copied().collect();
+        Registers::from_views(&pinned, &self.labels, &self.rules)
+    }
+}
+
+pub fn parse(text: &str) -> Option<Registers> {
+    let map: DeviceMap = serde_json::from_str(text.trim()).ok()?;
+    if map.mbmap.value()? != 2 {
+        return None;
+    }
+    let base = map
+        .address_base
+        .as_ref()
+        .and_then(Integer::value)
+        .unwrap_or(0);
+    let mut import = Import::default();
+    for register in map
+        .registers
+        .iter()
+        .filter_map(|value| Register::deserialize(value).ok())
+    {
+        import.register(&map, base, &register);
+    }
+    let registers = import.into_registers();
+    (registers.total() > 0).then_some(registers)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use serde_json::json;
+    use super::parse;
+    use crate::custom::CustomRepr;
+    use crate::modbus::WordOrder;
+    use serde_json::{Value, json};
 
     fn map(registers: Value) -> Value {
         json!({"mbmap": 2, "vendor": "V", "model": "M", "word_order": "little", "registers": registers})
@@ -195,11 +254,14 @@ mod tests {
 
     #[test]
     fn converts_types_scale_unit_and_order() {
-        let r = to_registers(&map(json!([
-            {"name": "Voltage", "area": "input", "address": "0x0010", "type": "float32", "unit": "V"},
-            {"name": "Energy", "area": "holding", "address": 4, "type": "uint32", "scale": 0.1, "unit": "kWh", "word_order": "big"},
-            {"name": "Temp", "area": "holding", "address": 6, "type": "int16", "offset": -40, "byte_order": "little"},
-        ])))
+        let r = parse(
+            &map(json!([
+                {"name": "Voltage", "area": "input", "address": "0x0010", "type": "float32", "unit": "V"},
+                {"name": "Energy", "area": "holding", "address": 4, "type": "uint32", "scale": 0.1, "unit": "kWh", "word_order": "big"},
+                {"name": "Temp", "area": "holding", "address": 6, "type": "int16", "offset": -40, "byte_order": "little"},
+            ]))
+            .to_string(),
+        )
         .unwrap();
         let voltage = &r.inputs[0];
         assert_eq!(
@@ -231,7 +293,7 @@ mod tests {
             {"name": "Out", "area": "coil", "address": 0, "type": "bool"},
         ]));
         value["enums"] = json!({"run": {"0": "Stopped", "1": "Running"}});
-        let r = to_registers(&value).unwrap();
+        let r = parse(&value.to_string()).unwrap();
         let bits = r.holdings[0].custom.as_ref().unwrap();
         assert_eq!(r.holdings[0].label.as_deref(), Some("Relay; Alarm"));
         assert_eq!(bits.evaluate(&[0b1001], WordOrder::ABCD), "Relay|Alarm");
@@ -253,13 +315,14 @@ mod tests {
             {"name": "Bad", "area": "Holding", "address": 2, "type": "uint16"},
         ]));
         value["address_base"] = json!(1);
-        let r = to_registers(&value).unwrap();
+        let r = parse(&value.to_string()).unwrap();
         assert_eq!(
             r.holdings.iter().map(|e| e.address).collect::<Vec<_>>(),
             [0, 9]
         );
         assert!(r.holdings[1].custom.is_none());
-        assert!(to_registers(&json!({"mbmap": 3, "registers": []})).is_none());
-        assert!(to_registers(&json!({"holdings": []})).is_none());
+        assert!(parse(r#"{"mbmap": 3, "registers": []}"#).is_none());
+        assert!(parse(r#"{"holdings": []}"#).is_none());
+        assert!(parse(r#"{"mbmap": 2, "registers": []}"#).is_none());
     }
 }

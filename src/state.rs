@@ -540,6 +540,7 @@ pub struct DumpParams {
 pub enum ImportSource {
     #[default]
     Mtui,
+    Mbmap,
     HomeAssistant,
 }
 

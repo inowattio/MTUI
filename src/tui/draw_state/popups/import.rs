@@ -9,6 +9,7 @@ use ratatui::text::{Line, Span};
 pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, params: &ImportParams) {
     let found = match params.source {
         ImportSource::Mtui => " Found importable data:",
+        ImportSource::Mbmap => " Found an .mbmap device map:",
         ImportSource::HomeAssistant => " Found a Home Assistant config:",
     };
     let mut lines = vec![
