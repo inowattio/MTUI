@@ -122,14 +122,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
             draw_state::read::draw(p, app, frame, inner, &theme, &device, &mut layout);
         }
         State::Settings(s) => draw_state::settings::draw(s, app, frame, inner, &theme),
-        State::Logs(l) => draw_state::logs::draw(
-            l,
-            frame,
-            inner,
-            &theme,
-            &mut layout,
-            app.interpreter.address_mode(),
-        ),
+        State::Logs(l) => draw_state::logs::draw(l, app, frame, inner, &theme, &mut layout),
         State::Diff(d) => draw_state::diff::draw(d, app, frame, inner, &theme, &mut layout),
     }
     app.layout = layout;

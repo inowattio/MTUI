@@ -1562,27 +1562,6 @@ impl SettingsParams {
     }
 }
 
-#[derive(Debug, Default, PartialEq, Eq)]
-pub struct LogsParams {
-    pub path: String,
-    pub entries: Vec<WriteEntry>,
-    pub top: u16,
-}
-
-impl LogsParams {
-    pub const VISIBLE: u16 = 16;
-
-    pub fn scroll(&mut self, delta: i32) {
-        let len = self.entries.len() as i32;
-        let max_top = (len - Self::VISIBLE as i32).max(0);
-        self.top = (self.top as i32 + delta).clamp(0, max_top) as u16;
-    }
-
-    pub fn scroll_to_bottom(&mut self) {
-        self.scroll(i32::MAX);
-    }
-}
-
 field_enum! {
     #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
     pub enum InspectMode {
@@ -1616,7 +1595,6 @@ popups! {
     Columns(ColumnsParams),
     Write(WriteParams),
     Unit(UnitParams),
-    Logs(LogsParams),
     SweepConfig(SweepConfigParams),
     Inspect(InspectMode),
     Stats,
@@ -1751,6 +1729,40 @@ impl ConnectionStatus {
     }
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum LogMode {
+    #[default]
+    Events,
+    Frames,
+    Writes,
+}
+
+impl LogMode {
+    pub const fn next(self) -> Self {
+        match self {
+            Self::Events => Self::Frames,
+            Self::Frames => Self::Writes,
+            Self::Writes => Self::Events,
+        }
+    }
+
+    pub const fn title(self) -> &'static str {
+        match self {
+            Self::Events => "Logs",
+            Self::Frames => "Frames",
+            Self::Writes => "Writes",
+        }
+    }
+
+    pub const fn noun(self) -> &'static str {
+        match self {
+            Self::Events => "events",
+            Self::Frames => "frames",
+            Self::Writes => "writes",
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub struct LogViewParams {
     pub top: u16,
@@ -1758,7 +1770,9 @@ pub struct LogViewParams {
     pub follow: bool,
     pub h_offset: u16,
     pub wrap: bool,
-    pub frames: bool,
+    pub mode: LogMode,
+    pub writes: Vec<WriteEntry>,
+    pub writes_path: String,
     pub previous: ReadParams,
 }
 

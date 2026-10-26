@@ -4,7 +4,7 @@ use crate::input::{KeyCode, KeyEvent};
 use crate::modbus::{DataBits, Parity, StopBits, WordOrder};
 use crate::num_ops::{cycle, digit_add, digit_remove, wrap_index};
 use crate::state::{
-    CustomParams, DiscoveryField, DiscoveryParams, InterfaceKind, LogsParams, PopupKind, ReadPanel,
+    CustomParams, DiscoveryField, DiscoveryParams, InterfaceKind, PopupKind, ReadPanel,
     SettingsCategory, SettingsField, SettingsFocus, StatusMessage, SweepConfigParams, SweepField,
     UnitField, UnitParams,
 };
@@ -154,7 +154,6 @@ fn run_action(app: &mut App, action: KeybindAction) {
         Device => app.open_discovery(),
         Settings => app.open_settings(),
         CopyColumn => app.copy_column_arm(),
-        WriteLogs => app.open_logs(),
         AppLogs => app.open_log_view(),
         Stats => app.open_stats(),
         Sweep => app.open_sweep(),
@@ -373,15 +372,6 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
                 _ => {}
             }
         }
-
-        PopupKind::Logs => match key_event.code {
-            c if c == KeyCode::Esc || c == kb.write_logs => app.close_popup(),
-            KeyCode::Up => app.logs_scroll(-1),
-            KeyCode::Down => app.logs_scroll(1),
-            c if c == kb.page_up => app.logs_scroll(-(LogsParams::VISIBLE as i32)),
-            c if c == kb.page_down => app.logs_scroll(LogsParams::VISIBLE as i32),
-            _ => {}
-        },
 
         PopupKind::SweepConfig => {
             let Some(field) = app
@@ -629,7 +619,7 @@ fn handle_logs_view_key(key_event: KeyEvent, app: &mut App) {
         c if c == kb.page_up => app.log_view_scroll(-(app.layout.visible_rows as i32)),
         c if c == kb.page_down => app.log_view_scroll(app.layout.visible_rows as i32),
         c if c == kb.write => app.log_view_toggle_wrap(),
-        c if c == kb.panel => app.log_view_toggle_frames(),
+        c if c == kb.panel => app.log_view_cycle_mode(),
         c if c == kb.copy_column => app.copy_app_logs(),
         c if c == kb.dump => app.dump_app_logs(),
         KeyCode::Left => app.log_view_hscroll(false),

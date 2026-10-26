@@ -82,7 +82,6 @@ pub mod keybind {
     pub const DEVICE: KeyCode = KeyCode::Char('n');
     pub const SETTINGS: KeyCode = KeyCode::Char('s');
     pub const COPY_COLUMN: KeyCode = KeyCode::Char('y');
-    pub const WRITE_LOGS: KeyCode = KeyCode::Char('L');
     pub const APP_LOGS: KeyCode = KeyCode::Char('k');
     pub const STATS: KeyCode = KeyCode::Char('S');
     pub const SWEEP: KeyCode = KeyCode::Char('u');

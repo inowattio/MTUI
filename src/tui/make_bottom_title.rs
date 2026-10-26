@@ -1,6 +1,6 @@
 use crate::app::App;
 use crate::input::KeyCode;
-use crate::state::{SettingsFocus, State};
+use crate::state::{LogMode, SettingsFocus, State};
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
 use ratatui::text::{Line, Span};
@@ -70,10 +70,14 @@ pub fn make_bottom_title(theme: &Theme, app: &App) -> Line<'static> {
                 Hint::pair(
                     KeyCode::Down,
                     KeyCode::Right,
-                    if l.frames { "Select" } else { "Scroll" },
+                    if l.mode == LogMode::Frames {
+                        "Select"
+                    } else {
+                        "Scroll"
+                    },
                 ),
                 Hint::key(kb.write, if l.wrap { "Unwrap" } else { "Wrap" }),
-                Hint::key(kb.panel, if l.frames { "Events" } else { "Frames" }),
+                Hint::key(kb.panel, l.mode.next().title()),
                 Hint::key(kb.copy_column, "Copy"),
                 Hint::key(kb.dump, "Dump"),
                 Hint::key(KeyCode::Esc, "Close"),

@@ -3,9 +3,11 @@ use crate::config::AddressMode;
 use crate::frames::decode::{self, Field, Tone};
 use crate::frames::{self, Direction};
 use crate::logger::{self, LogLevel};
-use crate::state::{LogViewParams, ScreenLayout};
+use crate::state::{LogMode, LogViewParams, ScreenLayout};
 use crate::tui::draw_state::dim_line;
+use crate::tui::draw_state::popups::truncate;
 use crate::tui::theme::Theme;
+use crate::writes_log::WriteEntry;
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
@@ -15,6 +17,14 @@ const DETAIL_W: u16 = 46;
 const DIVIDER_W: u16 = 2;
 const DETAIL_MIN_TOTAL: u16 = 100;
 const HEX_W: usize = 11;
+
+const TIME_W: usize = 23;
+const UNIT_W: usize = 5;
+const ADDR_W: usize = 5;
+const TYPE_W: usize = 8;
+const FUNC_W: usize = 4;
+const PREV_W: usize = 10;
+const GAP: &str = "  ";
 
 struct Row {
     head: Vec<Span<'static>>,
@@ -71,6 +81,54 @@ fn frame_rows(snapshot: &[frames::Frame], theme: &Theme) -> Vec<Row> {
             }
         })
         .collect()
+}
+
+fn write_rows(entries: &[WriteEntry], theme: &Theme, address_mode: AddressMode) -> Vec<Row> {
+    entries
+        .iter()
+        .map(|entry| {
+            let time = entry.timestamp.replacen('T', " ", 1);
+            Row {
+                head: vec![
+                    Span::styled(
+                        format!(" {:<TIME_W$}{GAP}", truncate(&time, TIME_W)),
+                        theme.dim_style(),
+                    ),
+                    Span::styled(format!("{:>UNIT_W$}{GAP}", entry.unit), theme.base()),
+                    Span::styled(
+                        format!("{:>ADDR_W$}{GAP}", address_mode.display(entry.address)),
+                        theme.base(),
+                    ),
+                    Span::styled(
+                        format!("{:<TYPE_W$}{GAP}", truncate(&entry.kind, TYPE_W)),
+                        theme.accent_style(),
+                    ),
+                    Span::styled(
+                        format!("{:<FUNC_W$}{GAP}", entry.display_function()),
+                        theme.dim_style(),
+                    ),
+                    Span::styled(
+                        format!(
+                            "{:>PREV_W$}{GAP}",
+                            truncate(&entry.display_previous(), PREV_W)
+                        ),
+                        theme.dim_style(),
+                    ),
+                ],
+                text: entry.display_value(),
+            }
+        })
+        .collect()
+}
+
+fn write_header(theme: &Theme) -> Line<'static> {
+    Line::from(Span::styled(
+        format!(
+            " {:<TIME_W$}{GAP}{:>UNIT_W$}{GAP}{:>ADDR_W$}{GAP}{:<TYPE_W$}{GAP}{:<FUNC_W$}{GAP}{:>PREV_W$}{GAP}VALUE",
+            "TIME", "UNIT", "ADDR", "TYPE", "FUNC", "PREVIOUS"
+        ),
+        theme.header_style(),
+    ))
 }
 
 fn highlight(spans: Vec<Span<'static>>, theme: &Theme, selected: bool) -> Line<'static> {
@@ -155,10 +213,10 @@ fn detail_lines(fields: &[Field], theme: &Theme, height: usize) -> Vec<Line<'sta
 /// The "shown/total events" counter for the top bar; relies on the row count
 /// published by the previous draw, like the other status cells.
 pub fn counter(params: &LogViewParams, app: &App) -> String {
-    let len = if params.frames {
-        frames::count()
-    } else {
-        logger::count()
+    let len = match params.mode {
+        LogMode::Events => logger::count(),
+        LogMode::Frames => frames::count(),
+        LogMode::Writes => params.writes.len(),
     };
     let visible = app.layout.visible_rows.max(1) as usize;
     let max_top = len.saturating_sub(visible);
@@ -172,30 +230,31 @@ pub fn counter(params: &LogViewParams, app: &App) -> String {
     } else {
         (top + visible).min(len)
     };
-    let noun = if params.frames { "frames" } else { "events" };
-    format!("{shown}/{len} {noun}")
+    format!("{shown}/{len} {}", params.mode.noun())
 }
 
 pub fn draw(
     params: &LogViewParams,
+    app: &App,
     frame: &mut Frame,
     area: Rect,
     theme: &Theme,
     layout: &mut ScreenLayout,
-    address_mode: AddressMode,
 ) {
-    let snapshot = if params.frames {
+    let address_mode = app.interpreter.address_mode();
+    let shows_frames = params.mode == LogMode::Frames;
+    let snapshot = if shows_frames {
         frames::snapshot()
     } else {
         Vec::new()
     };
-    let entries = if params.frames {
-        frame_rows(&snapshot, theme)
-    } else {
-        event_rows(theme)
+    let entries = match params.mode {
+        LogMode::Events => event_rows(theme),
+        LogMode::Frames => frame_rows(&snapshot, theme),
+        LogMode::Writes => write_rows(&params.writes, theme, address_mode),
     };
     let len = entries.len();
-    let selected = if params.frames && len > 0 {
+    let selected = if shows_frames && len > 0 {
         Some(if params.follow {
             len - 1
         } else {
@@ -205,7 +264,7 @@ pub fn draw(
         None
     };
 
-    let area = if params.frames && area.width >= DETAIL_MIN_TOTAL {
+    let area = if shows_frames && area.width >= DETAIL_MIN_TOTAL {
         let [list, divider, detail] = Layout::horizontal([
             Constraint::Min(0),
             Constraint::Length(DIVIDER_W),
@@ -232,6 +291,21 @@ pub fn draw(
         area
     };
 
+    let area = if params.mode == LogMode::Writes {
+        let [head, list] =
+            Layout::vertical([Constraint::Length(2), Constraint::Min(0)]).areas(area);
+        frame.render_widget(
+            Paragraph::new(vec![
+                dim_line(theme, format!(" {}", params.writes_path)),
+                write_header(theme),
+            ]),
+            head,
+        );
+        list
+    } else {
+        area
+    };
+
     let visible = area.height.max(1);
     layout.visible_rows = visible;
     let visible = visible as usize;
@@ -246,7 +320,7 @@ pub fn draw(
 
     let prefix_w = entries.first().map_or(0, Row::head_width);
     let msg_width = (area.width as usize).saturating_sub(prefix_w).max(10);
-    let msg_width = if params.frames {
+    let msg_width = if shows_frames {
         (msg_width / 3 * 3).max(3)
     } else {
         msg_width
@@ -269,10 +343,11 @@ pub fn draw(
     let mut lines: Vec<Line> = Vec::new();
 
     if len == 0 {
-        let empty = if params.frames {
-            " (no frames yet)"
-        } else {
-            " (no activity yet)"
+        let empty = match params.mode {
+            LogMode::Events => " (no activity yet)",
+            LogMode::Frames => " (no frames yet)",
+            LogMode::Writes if app.config.write_log.enabled => " (no writes logged yet)",
+            LogMode::Writes => " (logging is off, enable \"Log writes\" in settings)",
         };
         lines.push(dim_line(theme, empty));
     } else if params.wrap && params.follow {

@@ -8,7 +8,6 @@ mod help;
 mod import;
 mod inspect;
 mod label;
-mod logs;
 mod raw;
 mod search;
 mod stats;
@@ -60,15 +59,6 @@ pub fn draw_popup(
         Popup::SweepConfig(s) => {
             sweep_config::draw(frame, area, theme, *s, app.sweep.active, address_mode);
         }
-        Popup::Logs(logs) => logs::draw(
-            frame,
-            area,
-            theme,
-            kb,
-            logs,
-            app.config.write_log.enabled,
-            address_mode,
-        ),
         Popup::Inspect(mode) => inspect::draw(frame, area, theme, app, *mode),
         Popup::About => about::draw(frame, area, theme),
         Popup::Stats => stats::draw(frame, area, theme, app),

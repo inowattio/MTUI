@@ -4,7 +4,7 @@ use crate::frames;
 use crate::logger;
 use crate::modbus::Interface;
 use crate::num_ops::step_hscroll;
-use crate::state::{LogViewParams, LogsParams, Popup, State, StatusMessage, scroll_window};
+use crate::state::{LogMode, LogViewParams, State, StatusMessage, scroll_window};
 use crate::writes_log::{self, SharedWritesLog, WriteKind};
 use chrono::Local;
 use std::fs;
@@ -46,23 +46,6 @@ impl App {
         }
     }
 
-    pub fn open_logs(&mut self) {
-        let path = self.writes_log_path();
-        let mut params = LogsParams {
-            path: path.display().to_string(),
-            entries: writes_log::read_entries(&path).unwrap_or_default(),
-            top: 0,
-        };
-        params.scroll_to_bottom();
-        self.read_mut().popup = Some(Popup::Logs(params));
-    }
-
-    pub fn logs_scroll(&mut self, delta: i32) {
-        if let Some(l) = self.popup_as_mut::<LogsParams>() {
-            l.scroll(delta);
-        }
-    }
-
     pub const fn log_view(&self) -> Option<&LogViewParams> {
         match &self.state {
             State::Logs(l) => Some(l),
@@ -85,22 +68,37 @@ impl App {
             follow: true,
             h_offset: 0,
             wrap: false,
-            frames: false,
+            mode: LogMode::Events,
+            writes: Vec::new(),
+            writes_path: String::new(),
             previous,
         });
         self.log_view_scroll(i32::MAX);
     }
 
-    pub fn log_view_toggle_frames(&mut self) {
+    pub fn log_view_cycle_mode(&mut self) {
+        let path = self.writes_log_path();
         if let Some(l) = self.log_view_mut() {
-            l.frames = !l.frames;
+            l.mode = l.mode.next();
             l.h_offset = 0;
+            if l.mode == LogMode::Writes {
+                l.writes = writes_log::read_entries(&path).unwrap_or_default();
+                l.writes_path = path.display().to_string();
+            }
         }
         self.log_view_scroll(i32::MAX);
     }
 
-    fn log_view_shows_frames(&self) -> bool {
-        self.log_view().is_some_and(|l| l.frames)
+    fn log_view_mode(&self) -> LogMode {
+        self.log_view().map_or_else(LogMode::default, |l| l.mode)
+    }
+
+    fn log_view_len(&self) -> usize {
+        match self.log_view() {
+            Some(l) if l.mode == LogMode::Frames => frames::count(),
+            Some(l) if l.mode == LogMode::Writes => l.writes.len(),
+            _ => logger::count(),
+        }
     }
 
     pub fn log_view_hscroll(&mut self, right: bool) {
@@ -129,12 +127,20 @@ impl App {
     }
 
     fn log_view_export(&self) -> (&'static str, usize, String) {
-        if self.log_view_shows_frames() {
-            let entries = frames::snapshot();
-            ("frame", entries.len(), frames::export(&entries))
-        } else {
-            let entries = logger::snapshot();
-            ("log line", entries.len(), logger::export(&entries))
+        match self.log_view() {
+            Some(l) if l.mode == LogMode::Frames => {
+                let entries = frames::snapshot();
+                ("frame", entries.len(), frames::export(&entries))
+            }
+            Some(l) if l.mode == LogMode::Writes => (
+                "write",
+                l.writes.len(),
+                fs::read_to_string(&l.writes_path).unwrap_or_default(),
+            ),
+            _ => {
+                let entries = logger::snapshot();
+                ("log line", entries.len(), logger::export(&entries))
+            }
         }
     }
 
@@ -149,10 +155,10 @@ impl App {
 
     pub fn dump_app_logs(&mut self) {
         let (noun, count, text) = self.log_view_export();
-        let prefix = if self.log_view_shows_frames() {
-            "frames"
-        } else {
-            "logs"
+        let (prefix, extension) = match self.log_view_mode() {
+            LogMode::Events => ("logs", "txt"),
+            LogMode::Frames => ("frames", "txt"),
+            LogMode::Writes => ("writes", "csv"),
         };
         let filename = super::file_name(
             &[
@@ -160,7 +166,7 @@ impl App {
                 &self.config.name,
                 &Local::now().format("%Y%m%d_%H%M%S").to_string(),
             ],
-            "txt",
+            extension,
         );
         match fs::write(&filename, text) {
             Ok(()) => log::info!("Saved {count} {noun}(s) to {filename}"),
@@ -169,12 +175,8 @@ impl App {
     }
 
     pub fn log_view_scroll(&mut self, delta: i32) {
-        let shows_frames = self.log_view_shows_frames();
-        let len = if shows_frames {
-            frames::count()
-        } else {
-            logger::count()
-        } as i32;
+        let shows_frames = self.log_view_mode() == LogMode::Frames;
+        let len = self.log_view_len() as i32;
         let visible = self.layout.visible_rows.max(1) as i32;
         let max_top = (len - visible).max(0);
         if let Some(l) = self.log_view_mut() {
