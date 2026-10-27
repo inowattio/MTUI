@@ -1092,6 +1092,19 @@ pub fn scroll_window(cursor: &mut u16, top: &mut u16, rows: u16, len: u16) {
     }
 }
 
+pub fn center_window(cursor: &mut u16, top: &mut u16, rows: u16, len: u16) {
+    let rows = rows.max(1);
+    if len == 0 {
+        *cursor = 0;
+        *top = 0;
+        return;
+    }
+    *cursor = (*cursor).min(len - 1);
+    *top = cursor
+        .saturating_sub(rows / 2)
+        .min(len.saturating_sub(rows));
+}
+
 field_enum! {
     #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
     #[serde(rename_all = "snake_case")]
@@ -1719,7 +1732,7 @@ impl ReadParams {
     }
 
     pub fn scroll_pinned(&mut self, rows: u16, len: u16) {
-        scroll_window(&mut self.pinned_index, &mut self.pinned_top, rows, len);
+        center_window(&mut self.pinned_index, &mut self.pinned_top, rows, len);
     }
 }
 
@@ -1826,7 +1839,7 @@ pub enum State {
 
 #[cfg(test)]
 mod tests {
-    use super::{SettingsCategory, SettingsField, scroll_window};
+    use super::{SettingsCategory, SettingsField, center_window, scroll_window};
 
     fn run(cursor: u16, top: u16, rows: u16, len: u16) -> (u16, u16) {
         let (mut cursor, mut top) = (cursor, top);
@@ -1848,6 +1861,20 @@ mod tests {
         assert_eq!(run(50, 45, 20, 4), (3, 0));
         assert_eq!(run(50, 45, 3, 10), (9, 7));
         assert_eq!(run(0, 0, 5, 0), (0, 0));
+    }
+
+    #[test]
+    fn center_window_keeps_cursor_in_the_middle() {
+        let center = |cursor: u16, top: u16, rows: u16, len: u16| {
+            let (mut cursor, mut top) = (cursor, top);
+            center_window(&mut cursor, &mut top, rows, len);
+            (cursor, top)
+        };
+        assert_eq!(center(25, 10, 10, 100), (25, 20));
+        assert_eq!(center(3, 10, 10, 100), (3, 0));
+        assert_eq!(center(97, 0, 10, 100), (97, 90));
+        assert_eq!(center(50, 45, 20, 4), (3, 0));
+        assert_eq!(center(0, 0, 5, 0), (0, 0));
     }
 
     #[test]
