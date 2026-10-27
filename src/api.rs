@@ -22,13 +22,15 @@ use tokio_modbus::ExceptionCode;
 pub const DEFAULT_PORT: u16 = 26127;
 
 #[derive(Clone)]
-struct ApiState {
-    device: ApiDevice,
-    writes_log: SharedWritesLog,
-    read_only: ReadOnlyFlag,
-    allow_unit_id: AllowUnitFlag,
-    allow_raw: AllowRawFlag,
-    status: StatusFlag,
+pub struct ApiState {
+    pub device: ApiDevice,
+    pub bound: BoundPort,
+    pub writes_log: SharedWritesLog,
+    pub read_only: ReadOnlyFlag,
+    pub allow_unit_id: AllowUnitFlag,
+    pub allow_raw: AllowRawFlag,
+    pub status: StatusFlag,
+    pub bind: BindStateFlag,
 }
 
 #[derive(Deserialize)]
@@ -103,32 +105,16 @@ struct HealthResponse {
     read_only: bool,
 }
 
-#[allow(clippy::too_many_arguments)]
-pub async fn serve(
-    port: u16,
-    device: ApiDevice,
-    bound: BoundPort,
-    writes_log: SharedWritesLog,
-    read_only: ReadOnlyFlag,
-    allow_unit_id: AllowUnitFlag,
-    allow_raw: AllowRawFlag,
-    status: StatusFlag,
-    bind: BindStateFlag,
-) {
+pub async fn serve(port: u16, state: ApiState) {
+    let bound = state.bound.clone();
+    let bind = state.bind.clone();
     let router = Router::new()
         .route("/read", post(read_handler))
         .route("/write", post(write_handler))
         .route("/raw", post(raw_handler))
         .route("/health", get(health_handler))
         .layer(middleware::from_fn(log_requests))
-        .with_state(ApiState {
-            device,
-            writes_log,
-            read_only,
-            allow_unit_id,
-            allow_raw,
-            status,
-        });
+        .with_state(state);
 
     let listener = match bind_requested(port) {
         Ok(listener) => listener,
@@ -368,7 +354,7 @@ mod tests {
     use axum::extract::State;
     use axum::http::StatusCode;
     use axum::{Json, body};
-    use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU16, Ordering};
     use std::sync::{Arc, Mutex};
     use tokio_modbus::ExceptionCode;
 
@@ -376,11 +362,13 @@ mod tests {
         let device = ModbusDevice::new(&DeviceConfig::default()).await.unwrap();
         ApiState {
             device: Arc::new(Mutex::new(Some(device))),
+            bound: Arc::new(AtomicU16::new(0)),
             writes_log: Arc::new(Mutex::new(WritesLogState::default())),
             read_only: Arc::new(AtomicBool::new(false)),
             allow_unit_id: Arc::new(AtomicBool::new(false)),
             allow_raw: Arc::new(AtomicBool::new(false)),
             status: Arc::new(AtomicU8::new(0)),
+            bind: Arc::new(AtomicU8::new(0)),
         }
     }
 

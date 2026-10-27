@@ -1,37 +1,22 @@
-use super::{
-    AllowRawFlag, AllowUnitFlag, ApiBindState, ApiDevice, App, BindStateFlag, BoundPort,
-    ReadOnlyFlag, StatusFlag,
-};
+use super::{ApiBindState, App};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::api::ApiState;
 use crate::modbus::ModbusDevice;
 use std::sync::atomic::Ordering;
 
 impl App {
-    pub fn api_device(&self) -> ApiDevice {
-        self.api_device.clone()
-    }
-
-    pub fn api_bound_port_handle(&self) -> BoundPort {
-        self.api_bound_port.clone()
-    }
-
-    pub fn api_read_only_handle(&self) -> ReadOnlyFlag {
-        self.api_read_only.clone()
-    }
-
-    pub fn api_allow_unit_id_handle(&self) -> AllowUnitFlag {
-        self.api_allow_unit_id.clone()
-    }
-
-    pub fn api_allow_raw_handle(&self) -> AllowRawFlag {
-        self.api_allow_raw.clone()
-    }
-
-    pub fn api_status_handle(&self) -> StatusFlag {
-        self.api_status.clone()
-    }
-
-    pub fn api_bind_handle(&self) -> BindStateFlag {
-        self.api_bind.clone()
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn api_handles(&self) -> ApiState {
+        ApiState {
+            device: self.api_device.clone(),
+            bound: self.api_bound_port.clone(),
+            writes_log: self.writes_log_handle(),
+            read_only: self.api_read_only.clone(),
+            allow_unit_id: self.api_allow_unit_id.clone(),
+            allow_raw: self.api_allow_raw.clone(),
+            status: self.api_status.clone(),
+            bind: self.api_bind.clone(),
+        }
     }
 
     pub fn api_bind_state(&self) -> ApiBindState {
@@ -78,17 +63,7 @@ impl App {
         self.api_server_port = desired;
 
         if let Some(port) = desired {
-            self.api_server = Some(tokio::spawn(crate::api::serve(
-                port,
-                self.api_device(),
-                self.api_bound_port_handle(),
-                self.writes_log_handle(),
-                self.api_read_only_handle(),
-                self.api_allow_unit_id_handle(),
-                self.api_allow_raw_handle(),
-                self.api_status_handle(),
-                self.api_bind_handle(),
-            )));
+            self.api_server = Some(tokio::spawn(crate::api::serve(port, self.api_handles())));
         }
     }
 
