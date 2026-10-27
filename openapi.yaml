@@ -281,7 +281,10 @@ paths:
                     version: 1.6.0
                     status: connected
                     device_present: true
+                    unit_id: 1
                     read_only: false
+                    unit_id_override: false
+                    raw_function: false
         "503":
           description: No device present, or status is not serving
           content:
@@ -294,7 +297,10 @@ paths:
                     version: 1.6.0
                     status: error
                     device_present: false
+                    unit_id: null
                     read_only: false
+                    unit_id_override: false
+                    raw_function: false
 
 components:
   responses:
@@ -476,7 +482,14 @@ components:
 
     HealthResponse:
       type: object
-      required: [version, status, device_present, read_only]
+      required:
+        - version
+        - status
+        - device_present
+        - unit_id
+        - read_only
+        - unit_id_override
+        - raw_function
       properties:
         version:
           type: string
@@ -493,6 +506,24 @@ components:
         device_present:
           type: boolean
           description: Whether a Modbus device is currently connected.
+        unit_id:
+          type: [integer, "null"]
+          format: uint8
+          minimum: 0
+          maximum: 255
+          description: |
+            Unit id used when a request omits `unit_id`, or `null` when no
+            device is connected.
         read_only:
           type: boolean
           description: Whether the server rejects writes.
+        unit_id_override:
+          type: boolean
+          description: |
+            Whether the "API unit id override" setting is enabled, i.e. whether
+            requests may set `unit_id`.
+        raw_function:
+          type: boolean
+          description: |
+            Whether the "API raw function" setting is enabled, i.e. whether
+            `/raw` accepts requests instead of answering `501`.

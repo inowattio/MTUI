@@ -102,7 +102,10 @@ struct HealthResponse {
     version: &'static str,
     status: &'static str,
     device_present: bool,
+    unit_id: Option<u8>,
     read_only: bool,
+    unit_id_override: bool,
+    raw_function: bool,
 }
 
 pub async fn serve(port: u16, state: ApiState) {
@@ -283,7 +286,8 @@ async fn raw_handler(State(state): State<ApiState>, Json(request): Json<RawReque
 }
 
 async fn health_handler(State(state): State<ApiState>) -> Response {
-    let device_present = current(&state.device).is_some();
+    let device = current(&state.device);
+    let device_present = device.is_some();
     let code = state.status.load(Ordering::Relaxed);
     let read_only = state.read_only.load(Ordering::Relaxed);
 
@@ -291,7 +295,10 @@ async fn health_handler(State(state): State<ApiState>) -> Response {
         version: env!("CARGO_PKG_VERSION"),
         status: ConnectionStatus::label_from_code(code),
         device_present,
+        unit_id: device.map(|device| device.unit()),
         read_only,
+        unit_id_override: state.allow_unit_id.load(Ordering::Relaxed),
+        raw_function: state.allow_raw.load(Ordering::Relaxed),
     });
 
     let http = if device_present && ConnectionStatus::code_serving(code) {
@@ -347,7 +354,7 @@ fn unit_override_forbidden(state: &ApiState, unit: Option<u8>) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{ApiState, FailureResponse, RawRequest, RawResponse, raw_handler};
+    use super::{ApiState, FailureResponse, RawRequest, RawResponse, health_handler, raw_handler};
     use crate::compat::Elapsed;
     use crate::modbus::{DeviceConfig, ModbusDevice, exception_error};
     use crate::writes_log::WritesLogState;
@@ -423,6 +430,33 @@ mod tests {
         state.read_only.store(true, Ordering::Relaxed);
         let response = raw_handler(State(state), raw(0x08, &[], None)).await;
         assert_eq!(response.status(), StatusCode::OK, "read-only is ignored");
+    }
+
+    async fn health(state: ApiState) -> serde_json::Value {
+        let response = health_handler(State(state)).await;
+        let bytes = body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        serde_json::from_slice(&bytes).unwrap()
+    }
+
+    #[tokio::test]
+    async fn health_reports_the_unit_and_api_settings() {
+        let state = mock_state().await;
+        let body = health(state.clone()).await;
+        assert_eq!(body["unit_id"], 1);
+        assert_eq!(body["unit_id_override"], false);
+        assert_eq!(body["raw_function"], false);
+
+        state.allow_unit_id.store(true, Ordering::Relaxed);
+        state.allow_raw.store(true, Ordering::Relaxed);
+        let body = health(state.clone()).await;
+        assert_eq!(body["unit_id_override"], true);
+        assert_eq!(body["raw_function"], true);
+
+        *state.device.lock().unwrap() = None;
+        let body = health(state).await;
+        assert!(body["unit_id"].is_null());
     }
 
     #[test]
