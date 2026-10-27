@@ -91,7 +91,7 @@ impl App {
             #[cfg(not(target_arch = "wasm32"))]
             api_server: None,
             #[cfg(not(target_arch = "wasm32"))]
-            api_server_port: None,
+            api_server_addr: None,
             #[cfg(not(target_arch = "wasm32"))]
             clipboard: None,
         };

@@ -59,10 +59,10 @@ mod native {
         let mut app = App::new(config, make_config_if_none).await?;
         app.headless = true;
 
-        let port = app.config.api.desired_port().ok_or_else(|| {
+        let addr = app.config.api.desired_addr().ok_or_else(|| {
             anyhow::anyhow!("Headless mode requires the API; set `api.enabled` in the config")
         })?;
-        log::info!("Headless mode - API server on port {port}");
+        log::info!("Headless mode - API server on {addr}");
 
         let mut ticker = tokio::time::interval(EVENT_HANDLER_TICKRATE);
         while app.running {
@@ -70,7 +70,7 @@ mod native {
                 _ = ticker.tick() => {
                     app.tick();
                     if app.api_bind_state() == ApiBindState::Failed {
-                        anyhow::bail!("API server could not bind port {port}");
+                        anyhow::bail!("API server could not bind {addr}");
                     }
                 }
                 _ = tokio::signal::ctrl_c() => {

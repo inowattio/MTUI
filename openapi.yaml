@@ -6,9 +6,10 @@ info:
     registers on the currently connected device, sending raw function
     codes, plus a health probe.
 
-    The server binds to `0.0.0.0` on a configurable port and proxies requests
-    to the live Modbus device backing the TUI. When no device is connected,
-    register operations return `503 Service Unavailable`.
+    The server binds to the configured `api.host` (`0.0.0.0` by default) on 
+    a configurable port and proxies requests to the live Modbus device 
+    backing the TUI. When no device is connected, register operations 
+    return `503 Service Unavailable`.
   version: 1.0.0
   license:
     name: GPL-2.0-only

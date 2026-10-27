@@ -648,7 +648,7 @@ fn handle_diff_view_key(key_event: KeyEvent, app: &mut App) {
 fn handle_settings_key(key_event: KeyEvent, app: &mut App) {
     dispatch_settings_key(key_event, app);
     if let Some(s) = app.settings_mut() {
-        s.drop_api_port_draft_if_left();
+        s.drop_api_drafts_if_left();
     }
 }
 
@@ -762,6 +762,7 @@ fn handle_settings_field_key(key_event: KeyEvent, app: &mut App) {
             SettingsField::Save => app.settings_save(),
             SettingsField::LoadConfig => app.settings_load(),
             SettingsField::ApiPort => app.apply_api_port(),
+            SettingsField::ApiHost => app.apply_api_host(),
             _ => {}
         },
         KeyCode::Backspace => app.settings_backspace(field),

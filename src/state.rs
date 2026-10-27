@@ -1201,7 +1201,10 @@ settings_fields! {
     Api {
         [
             ApiEnabled: Toggle => "Server", "Serve the HTTP API while the app runs",
+            ApiHost: Text => "Host", "IP the HTTP API listens on, 0.0.0.0 for all interfaces, 127.0.0.1 for local only",
             ApiPort: Number => "Port", "Port for the HTTP API, 0 tries 26127 then any free port",
+        ],
+        [
             ApiUnitIdOverride: Toggle => "Unit ID set", "Let API requests target a unit id other than the configured one",
             ApiRawFunction: Toggle => "Raw function", "Let the API send any function code with raw bytes through POST /raw",
         ],
@@ -1472,6 +1475,7 @@ pub struct SettingsParams {
     pub kb_capturing: bool,
     pub query: String,
     pub api_port_draft: Option<u16>,
+    pub api_host_draft: Option<String>,
 }
 
 impl SettingsParams {
@@ -1514,11 +1518,15 @@ impl SettingsParams {
         self.current_fields().get(self.field as usize).copied()
     }
 
-    pub fn drop_api_port_draft_if_left(&mut self) {
-        let editing = self.focus == SettingsFocus::Fields
-            && self.current_field() == Some(SettingsField::ApiPort);
-        if !editing {
+    pub fn drop_api_drafts_if_left(&mut self) {
+        let editing = (self.focus == SettingsFocus::Fields)
+            .then(|| self.current_field())
+            .flatten();
+        if editing != Some(SettingsField::ApiPort) {
             self.api_port_draft = None;
+        }
+        if editing != Some(SettingsField::ApiHost) {
+            self.api_host_draft = None;
         }
     }
 

@@ -7,6 +7,7 @@ use crate::tui::theme::Theme;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::ops::RangeInclusive;
 
 pub const CONFIG_VERSION: u32 = 1;
@@ -144,18 +145,31 @@ pub struct WriteLogConfig {
     pub directory: String,
 }
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 #[serde(default)]
 pub struct ApiConfig {
     pub enabled: bool,
+    pub host: IpAddr,
     pub port: u16,
     pub unit_id_override: bool,
     pub raw_function: bool,
 }
 
+impl Default for ApiConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            host: IpAddr::V4(Ipv4Addr::UNSPECIFIED),
+            port: 0,
+            unit_id_override: false,
+            raw_function: false,
+        }
+    }
+}
+
 impl ApiConfig {
-    pub fn desired_port(&self) -> Option<u16> {
-        self.enabled.then_some(self.port)
+    pub fn desired_addr(&self) -> Option<SocketAddr> {
+        self.enabled.then(|| SocketAddr::new(self.host, self.port))
     }
 }
 
@@ -1016,7 +1030,8 @@ interpretation_columns! {
 
 #[cfg(test)]
 mod tests {
-    use super::{AddressMode, CONFIG_VERSION, Config};
+    use super::{AddressMode, ApiConfig, CONFIG_VERSION, Config};
+    use std::net::{IpAddr, Ipv4Addr};
 
     #[test]
     fn address_mode_displays_decimal_or_uppercase_hex() {
@@ -1082,6 +1097,20 @@ mod tests {
         assert!(AddressMode::Hex.accepts("n", '9'));
         assert!(!AddressMode::Hex.accepts("n", 'f'));
         assert!(!AddressMode::Dec.accepts("x", 'n'));
+    }
+
+    #[test]
+    fn the_api_host_defaults_to_every_interface_and_accepts_any_ip() {
+        let missing: ApiConfig = serde_json::from_str("{}").unwrap();
+        assert_eq!(missing.host, IpAddr::V4(Ipv4Addr::UNSPECIFIED));
+
+        let local: ApiConfig = serde_json::from_str(r#"{"host":"127.0.0.1"}"#).unwrap();
+        assert_eq!(local.host, IpAddr::V4(Ipv4Addr::LOCALHOST));
+
+        let v6: ApiConfig = serde_json::from_str(r#"{"host":"::1"}"#).unwrap();
+        assert!(v6.host.is_ipv6());
+
+        assert!(serde_json::from_str::<ApiConfig>(r#"{"host":"localhost"}"#).is_err());
     }
 
     #[test]

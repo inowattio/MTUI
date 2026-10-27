@@ -10,6 +10,7 @@ use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
+use std::net::SocketAddr;
 
 const CATEGORY_WIDTH: u16 = 18;
 const LABEL_W: usize = 25;
@@ -129,6 +130,9 @@ fn draw_fields(params: &SettingsParams, app: &App, frame: &mut Frame, area: Rect
                     format!("  {:<LABEL_W$} {}", "", app.writes_log_path().display()),
                     theme.dim_style(),
                 )));
+            }
+            if field == SettingsField::ApiPort {
+                lines.push(disabled_row(theme, "Status", api_server_state(app), false));
             }
             index += 1;
         }
@@ -340,6 +344,7 @@ fn field_value(
         SettingsField::ReadOnly => (on_off(device.read_only), None),
         SettingsField::WriteWaitsForRead => (on_off(device.write_waits_for_read), None),
         SettingsField::ApiEnabled => (on_off(device.api.enabled), None),
+        SettingsField::ApiHost => (api_host_view(params, app), None),
         SettingsField::ApiPort => (api_port_view(params, app), None),
         SettingsField::ApiUnitIdOverride => (on_off(device.api.unit_id_override), None),
         SettingsField::ApiRawFunction => (on_off(device.api.raw_function), None),
@@ -486,25 +491,36 @@ fn draw_keybinds(params: &SettingsParams, app: &App, frame: &mut Frame, area: Re
     render_footer(frame, footer, vec![hint]);
 }
 
+fn api_host_view(params: &SettingsParams, app: &App) -> String {
+    params
+        .api_host_draft
+        .clone()
+        .unwrap_or_else(|| app.config.api.host.to_string())
+}
+
 fn api_port_view(params: &SettingsParams, app: &App) -> String {
-    let api = app.config.api;
-    let port = match params.api_port_draft.unwrap_or(api.port) {
+    match params.api_port_draft.unwrap_or(app.config.api.port) {
         0 => "any".to_string(),
         n => n.to_string(),
-    };
-    if params.api_port_draft.is_some() || !api.enabled {
-        return port;
+    }
+}
+
+fn api_server_state(app: &App) -> String {
+    let api = app.config.api;
+    if !api.enabled {
+        return "stopped".to_string();
     }
     if cfg!(target_arch = "wasm32") {
-        return format!("{port} (not available)");
+        return "not available".to_string();
     }
-    let state = match (app.api_bind_state(), app.api_bound_port()) {
+    match (app.api_bind_state(), app.api_bound_port()) {
         (ApiBindState::Pending, _) => "starting".to_string(),
         (ApiBindState::Failed, _) => "bind failed".to_string(),
-        (ApiBindState::Bound, Some(bound)) if api.port == 0 => format!("listening on :{bound}"),
-        (ApiBindState::Bound, _) => "listening".to_string(),
-    };
-    format!("{port} ({state})")
+        (ApiBindState::Bound, Some(port)) => {
+            format!("listening on {}", SocketAddr::new(api.host, port))
+        }
+        (ApiBindState::Bound, None) => "listening".to_string(),
+    }
 }
 
 #[cfg(test)]

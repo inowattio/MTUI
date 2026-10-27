@@ -351,6 +351,9 @@ impl App {
                 self.refresh_writes_log_state();
                 self.refresh_dirty();
             }
+            SettingsField::ApiHost if c.is_ascii_hexdigit() || c == '.' || c == ':' => {
+                self.edit_api_host_draft(|draft| draft.push(c));
+            }
             _ => {}
         }
     }
@@ -379,6 +382,12 @@ impl App {
             self.config.write_log.directory.pop();
             self.refresh_writes_log_state();
             self.refresh_dirty();
+            return;
+        }
+        if field == SettingsField::ApiHost {
+            self.edit_api_host_draft(|draft| {
+                draft.pop();
+            });
             return;
         }
         if field.is_theme_color() {

@@ -14,7 +14,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
-use std::net::{Ipv4Addr, SocketAddr};
+use std::net::SocketAddr;
 use std::sync::atomic::Ordering;
 use tokio::net::{TcpListener, TcpSocket};
 use tokio_modbus::ExceptionCode;
@@ -108,7 +108,7 @@ struct HealthResponse {
     raw_function: bool,
 }
 
-pub async fn serve(port: u16, state: ApiState) {
+pub async fn serve(addr: SocketAddr, state: ApiState) {
     let bound = state.bound.clone();
     let bind = state.bind.clone();
     let router = Router::new()
@@ -119,10 +119,10 @@ pub async fn serve(port: u16, state: ApiState) {
         .layer(middleware::from_fn(log_requests))
         .with_state(state);
 
-    let listener = match bind_requested(port) {
+    let listener = match bind_requested(addr) {
         Ok(listener) => listener,
         Err(e) => {
-            log::error!("API server failed to bind port {port}: {e}");
+            log::error!("API server failed to bind {addr}: {e}");
             bind.store(ApiBindState::Failed.code(), Ordering::Relaxed);
             return;
         }
@@ -309,23 +309,27 @@ async fn health_handler(State(state): State<ApiState>) -> Response {
     (http, body).into_response()
 }
 
-fn bind_requested(port: u16) -> std::io::Result<TcpListener> {
-    if port != 0 {
-        return bind_reusable(SocketAddr::from((Ipv4Addr::UNSPECIFIED, port)));
+fn bind_requested(addr: SocketAddr) -> std::io::Result<TcpListener> {
+    if addr.port() != 0 {
+        return bind_reusable(addr);
     }
-    match bind_reusable(SocketAddr::from((Ipv4Addr::UNSPECIFIED, DEFAULT_PORT))) {
+    match bind_reusable(SocketAddr::new(addr.ip(), DEFAULT_PORT)) {
         Ok(listener) => Ok(listener),
         Err(e) => {
             log::warn!(
                 "API server could not bind default port {DEFAULT_PORT}: {e}; picking any free port"
             );
-            bind_reusable(SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0)))
+            bind_reusable(SocketAddr::new(addr.ip(), 0))
         }
     }
 }
 
 fn bind_reusable(addr: SocketAddr) -> std::io::Result<TcpListener> {
-    let socket = TcpSocket::new_v4()?;
+    let socket = if addr.is_ipv4() {
+        TcpSocket::new_v4()?
+    } else {
+        TcpSocket::new_v6()?
+    };
     socket.set_reuseaddr(true)?;
     socket.bind(addr)?;
     socket.listen(1024)
@@ -354,13 +358,17 @@ fn unit_override_forbidden(state: &ApiState, unit: Option<u8>) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{ApiState, FailureResponse, RawRequest, RawResponse, health_handler, raw_handler};
+    use super::{
+        ApiState, FailureResponse, RawRequest, RawResponse, bind_requested, health_handler,
+        raw_handler,
+    };
     use crate::compat::Elapsed;
     use crate::modbus::{DeviceConfig, ModbusDevice, exception_error};
     use crate::writes_log::WritesLogState;
     use axum::extract::State;
     use axum::http::StatusCode;
     use axum::{Json, body};
+    use std::net::{Ipv4Addr, SocketAddr};
     use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU16, Ordering};
     use std::sync::{Arc, Mutex};
     use tokio_modbus::ExceptionCode;
@@ -457,6 +465,18 @@ mod tests {
         *state.device.lock().unwrap() = None;
         let body = health(state).await;
         assert!(body["unit_id"].is_null());
+    }
+
+    #[tokio::test]
+    async fn the_server_binds_to_the_configured_host() {
+        let free = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = free.local_addr().unwrap().port();
+        drop(free);
+
+        let listener = bind_requested(SocketAddr::from((Ipv4Addr::LOCALHOST, port))).unwrap();
+        let bound = listener.local_addr().unwrap();
+        assert_eq!(bound.ip(), Ipv4Addr::LOCALHOST);
+        assert_eq!(bound.port(), port);
     }
 
     #[test]

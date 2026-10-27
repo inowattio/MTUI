@@ -18,7 +18,7 @@ use chrono::{DateTime, Utc};
 use std::collections::{BTreeMap, VecDeque};
 use std::io::Write as _;
 #[cfg(not(target_arch = "wasm32"))]
-use std::net::{IpAddr, Ipv4Addr};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::{Path, PathBuf};
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::atomic::Ordering;
@@ -522,7 +522,7 @@ pub struct App {
     #[cfg(not(target_arch = "wasm32"))]
     api_server: Option<tokio::task::JoinHandle<()>>,
     #[cfg(not(target_arch = "wasm32"))]
-    api_server_port: Option<u16>,
+    api_server_addr: Option<SocketAddr>,
     #[cfg(not(target_arch = "wasm32"))]
     clipboard: Option<ClipboardHandle>,
 }
