@@ -81,10 +81,16 @@ paths:
                   summary: coil/discrete values (0 or 1)
                   value:
                     values: [1, 1, 1, 1, 0, 1, 1, 0]
+        "400":
+          $ref: "#/components/responses/MalformedJson"
         "403":
           description: |
             A `unit_id` was specified but the "API unit id override" setting
             is disabled.
+        "415":
+          $ref: "#/components/responses/MissingJsonContentType"
+        "422":
+          $ref: "#/components/responses/InvalidJsonBody"
         "503":
           description: No device is currently connected
         "502":
@@ -147,12 +153,23 @@ paths:
         "204":
           description: Values written successfully (no body)
         "400":
-          description: The requested type is read-only (input or discrete)
+          description: |
+            The requested type is read-only (input or discrete), with no body.
+            Also returned with a `text/plain` explanation when the body is not
+            valid JSON.
+          content:
+            text/plain:
+              schema:
+                type: string
         "403":
           description: |
             The write is forbidden: the server is in read-only mode, or a
             `unit_id` was specified while the "API unit id override" setting
             is disabled.
+        "415":
+          $ref: "#/components/responses/MissingJsonContentType"
+        "422":
+          $ref: "#/components/responses/InvalidJsonBody"
         "503":
           description: No device is currently connected
         "502":
@@ -214,10 +231,19 @@ paths:
                 echo:
                   value:
                     data: [0, 0, 18, 52]
+        "400":
+          $ref: "#/components/responses/MalformedJson"
+        "415":
+          $ref: "#/components/responses/MissingJsonContentType"
         "422":
           description: |
             A `unit_id` was specified but the "API unit id override" setting
-            is disabled.
+            is disabled, with no body. Also returned with a `text/plain`
+            explanation when the JSON body does not match the request schema.
+          content:
+            text/plain:
+              schema:
+                type: string
         "501":
           description: The "API raw function" setting is disabled
         "503":
@@ -252,6 +278,7 @@ paths:
               examples:
                 connected:
                   value:
+                    version: 1.6.0
                     status: connected
                     device_present: true
                     read_only: false
@@ -264,11 +291,34 @@ paths:
               examples:
                 disconnected:
                   value:
+                    version: 1.6.0
                     status: error
                     device_present: false
                     read_only: false
 
 components:
+  responses:
+    MalformedJson:
+      description: The request body is not valid JSON.
+      content:
+        text/plain:
+          schema:
+            type: string
+    MissingJsonContentType:
+      description: "The request is missing a `Content-Type: application/json` header."
+      content:
+        text/plain:
+          schema:
+            type: string
+    InvalidJsonBody:
+      description: |
+        The JSON body does not match the request schema (missing field, wrong
+        type, out-of-range number or unknown `type`).
+      content:
+        text/plain:
+          schema:
+            type: string
+
   schemas:
     RegisterType:
       type: string
@@ -317,11 +367,10 @@ components:
       required: [exception, timed_out]
       properties:
         exception:
-          type: integer
+          type: [integer, "null"]
           format: uint8
           minimum: 0
           maximum: 255
-          nullable: true
           description: |
             Modbus exception code answered by the device, or `null` when the
             failure was not a Modbus exception (timeout, transport error).
