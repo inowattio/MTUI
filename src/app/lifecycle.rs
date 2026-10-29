@@ -623,6 +623,7 @@ impl App {
             )
         {
             self.read_mut().finish_read();
+            self.settle_connection(result.error.as_ref());
             return;
         }
 
