@@ -489,7 +489,7 @@ impl App {
         let register_type = self.read().register_type;
         let runs = custom_runs(&self.custom_rules, register_type);
         let (start, end) = cover_runs(start, start + (amount - 1), &runs);
-        (start, end - start + 1)
+        (start, (end - start).saturating_add(1))
     }
 
     pub fn main_extra_cells(&self) -> Vec<RegisterCell> {
