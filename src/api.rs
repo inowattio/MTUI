@@ -1,6 +1,6 @@
 use crate::app::{
-    AllowRawFlag, AllowUnitFlag, ApiBindState, ApiDevice, BindStateFlag, BoundPort, ReadOnlyFlag,
-    StatusFlag,
+    AllowRawFlag, AllowUnitFlag, ApiBindState, ApiDevice, BindStateFlag, BoundPort, CommStats,
+    ReadOnlyFlag, SharedStats, StatTarget, StatusFlag,
 };
 use crate::compat::Elapsed;
 use crate::modbus::ModbusDevice;
@@ -16,6 +16,7 @@ use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::sync::atomic::Ordering;
+use std::sync::{MutexGuard, PoisonError};
 use tokio::net::{TcpListener, TcpSocket};
 use tokio_modbus::ExceptionCode;
 
@@ -31,6 +32,7 @@ pub struct ApiState {
     pub allow_raw: AllowRawFlag,
     pub status: StatusFlag,
     pub bind: BindStateFlag,
+    pub stats: SharedStats,
 }
 
 #[derive(Deserialize)]
@@ -166,7 +168,7 @@ async fn read_handler(State(state): State<ApiState>, Json(request): Json<ReadReq
         return StatusCode::SERVICE_UNAVAILABLE.into_response();
     };
     let result = device
-        .read_typed(
+        .read_timed(
             request.unit_id,
             request.register_type,
             request.address,
@@ -174,14 +176,23 @@ async fn read_handler(State(state): State<ApiState>, Json(request): Json<ReadReq
         )
         .await;
     match result {
-        Ok(values) => {
+        Ok((values, latency)) => {
             record_outcome(&state, true);
+            stats(&state).reads.record_ok(latency);
             Json(ReadResponse { values }).into_response()
         }
         Err(_) if device.is_closed() => StatusCode::SERVICE_UNAVAILABLE.into_response(),
         Err(e) => {
             log::error!("API read failed: {e}");
             record_outcome(&state, false);
+            stats(&state).reads.record_error(
+                &e.to_string(),
+                Some(StatTarget::Read(
+                    request.register_type,
+                    request.address,
+                    request.count,
+                )),
+            );
             failure(&e)
         }
     }
@@ -217,7 +228,7 @@ async fn write_handler(
         return StatusCode::SERVICE_UNAVAILABLE.into_response();
     };
     let result = device
-        .write_typed(
+        .write_timed(
             request.unit_id,
             request.register_type,
             request.address,
@@ -225,8 +236,9 @@ async fn write_handler(
         )
         .await;
     match result {
-        Ok(()) => {
+        Ok(((), latency)) => {
             record_outcome(&state, true);
+            stats(&state).writes.record_ok(latency);
             writes_log::append(
                 &state.writes_log,
                 request.unit_id.unwrap_or_else(|| device.unit()),
@@ -245,6 +257,14 @@ async fn write_handler(
         Err(e) => {
             log::error!("API write failed: {e}");
             record_outcome(&state, false);
+            stats(&state).writes.record_error(
+                &e.to_string(),
+                Some(StatTarget::Write(
+                    request.register_type,
+                    request.address,
+                    request.values.len() as u16,
+                )),
+            );
             failure(&e)
         }
     }
@@ -269,17 +289,21 @@ async fn raw_handler(State(state): State<ApiState>, Json(request): Json<RawReque
         return StatusCode::SERVICE_UNAVAILABLE.into_response();
     };
     let result = device
-        .custom(request.unit_id, request.code, &request.data)
+        .custom_timed(request.unit_id, request.code, &request.data)
         .await;
     match result {
-        Ok(data) => {
+        Ok((data, latency)) => {
             record_outcome(&state, true);
+            stats(&state).others.record_ok(latency);
             Json(RawResponse { data }).into_response()
         }
         Err(_) if device.is_closed() => StatusCode::SERVICE_UNAVAILABLE.into_response(),
         Err(e) => {
             log::error!("API raw failed: {e}");
             record_outcome(&state, false);
+            stats(&state)
+                .others
+                .record_error(&e.to_string(), Some(StatTarget::Function(request.code)));
             failure(&e)
         }
     }
@@ -339,6 +363,10 @@ fn current(device: &ApiDevice) -> Option<ModbusDevice> {
     device.lock().ok().and_then(|guard| guard.clone())
 }
 
+fn stats(state: &ApiState) -> MutexGuard<'_, CommStats> {
+    state.stats.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
 fn describe_unit(unit: Option<u8>) -> String {
     unit.map_or_else(|| "default".to_string(), |id| id.to_string())
 }
@@ -359,11 +387,13 @@ fn unit_override_forbidden(state: &ApiState, unit: Option<u8>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        ApiState, FailureResponse, RawRequest, RawResponse, bind_requested, health_handler,
-        raw_handler,
+        ApiState, FailureResponse, RawRequest, RawResponse, ReadRequest, bind_requested,
+        health_handler, raw_handler, read_handler,
     };
+    use crate::app::{CommStats, StatTarget};
     use crate::compat::Elapsed;
     use crate::modbus::{DeviceConfig, ModbusDevice, exception_error};
+    use crate::register::RegisterType;
     use crate::writes_log::WritesLogState;
     use axum::extract::State;
     use axum::http::StatusCode;
@@ -384,6 +414,7 @@ mod tests {
             allow_raw: Arc::new(AtomicBool::new(false)),
             status: Arc::new(AtomicU8::new(0)),
             bind: Arc::new(AtomicU8::new(0)),
+            stats: Arc::new(Mutex::new(CommStats::default())),
         }
     }
 
@@ -438,6 +469,29 @@ mod tests {
         state.read_only.store(true, Ordering::Relaxed);
         let response = raw_handler(State(state), raw(0x08, &[], None)).await;
         assert_eq!(response.status(), StatusCode::OK, "read-only is ignored");
+    }
+
+    #[tokio::test]
+    async fn api_reads_count_towards_the_shared_stats() {
+        let state = mock_state().await;
+        let read = |address, count| {
+            Json(ReadRequest {
+                register_type: RegisterType::Holding,
+                address,
+                count,
+                unit_id: None,
+            })
+        };
+
+        read_handler(State(state.clone()), read(0, 1)).await;
+        read_handler(State(state.clone()), read(1108, 2)).await;
+
+        let reads = state.stats.lock().unwrap().reads.clone();
+        assert_eq!((reads.ok, reads.errors), (1, 1));
+        assert_eq!(
+            reads.last_error().and_then(|e| e.target),
+            Some(StatTarget::Read(RegisterType::Holding, 1108, 2))
+        );
     }
 
     async fn health(state: ApiState) -> serde_json::Value {

@@ -1219,15 +1219,15 @@ mod tests {
     #[tokio::test]
     async fn the_stats_popup_clears_the_counters_in_place() {
         let mut app = app().await;
-        app.stats
+        app.stats()
             .reads
             .record_ok(std::time::Duration::from_millis(5));
         app.open_stats();
         assert_eq!(app.popup_kind(), Some(PopupKind::Stats));
 
         handle_key_events(KeyEvent::new(app.config.keybinds.clear_session), &mut app).await;
-        assert_eq!(app.stats.reads.ok, 0);
-        assert_eq!(app.stats.reads.latency(), None);
+        assert_eq!(app.stats().reads.ok, 0);
+        assert_eq!(app.stats().reads.latency(), None);
         assert_eq!(
             app.popup_kind(),
             Some(PopupKind::Stats),
@@ -1268,16 +1268,16 @@ mod tests {
     #[tokio::test]
     async fn the_stats_popup_names_where_the_last_error_happened() {
         let mut app = app().await;
-        app.stats.writes.record_error(
+        app.stats().writes.record_error(
             "Illegal data address",
             Some(StatTarget::Write(RegisterType::Holding, 16, 2)),
         );
         app.open_stats();
 
-        app.stats
+        app.stats()
             .reads
             .record_ok(std::time::Duration::from_micros(850));
-        app.stats
+        app.stats()
             .reads
             .record_ok(std::time::Duration::from_micros(1150));
 

@@ -961,20 +961,20 @@ impl ModbusDevice {
         outcome??.map_err(exception_error)
     }
 
-    pub async fn write_typed(
+    pub async fn write_timed(
         &self,
         unit: Option<UnitId>,
         register_type: RegisterType,
         address: u16,
         values: &[u16],
-    ) -> Result<()> {
+    ) -> Result<((), Duration)> {
         let desc = format!("Write {register_type:?} @ {address} with values {values:?}");
         match register_type {
             RegisterType::Coil => {
                 let coils: Vec<bool> = values.iter().map(|&v| v != 0).collect();
-                timeout_as!(self, unit, write_multiple_coils, (address, &coils), desc)
+                timed_as!(self, unit, write_multiple_coils, (address, &coils), desc)
             }
-            _ => timeout_as!(
+            _ => timed_as!(
                 self,
                 unit,
                 write_multiple_registers,

@@ -127,17 +127,17 @@ impl App {
             Some(RawTaskResult {
                 result: Ok((_, latency)),
                 ..
-            }) => self.stats.others.record_ok(*latency),
+            }) => self.stats().others.record_ok(*latency),
             Some(RawTaskResult {
                 code,
                 result: Err(e),
                 ..
             }) => self
-                .stats
+                .stats()
                 .others
                 .record_error(e, Some(StatTarget::Function(*code))),
             None => self
-                .stats
+                .stats()
                 .others
                 .record_error("raw task stopped unexpectedly", None),
         }
@@ -200,7 +200,7 @@ mod tests {
         app.apply_raw_result(outcome(Ok((vec![0x01], Duration::from_millis(3)))));
         app.apply_raw_result(outcome(Err("Illegal function".to_string())));
 
-        let others = &app.stats.others;
+        let others = app.stats().others.clone();
         assert_eq!((others.ok, others.errors), (1, 1));
         assert_eq!(
             others.latency().map(|(min, _, _)| min),
@@ -208,14 +208,13 @@ mod tests {
         );
         let error = others.last_error().expect("the failure is kept");
         assert_eq!(error.target, Some(StatTarget::Function(0x41)));
-        assert_eq!(app.stats.reads.ok + app.stats.writes.ok, 0);
+        let stats = app.stats();
+        assert_eq!(stats.reads.ok + stats.writes.ok, 0);
+        drop(stats);
 
         app.apply_raw_result(None);
-        let error = app
-            .stats
-            .others
-            .last_error()
-            .expect("the dead task is kept");
+        let others = app.stats().others.clone();
+        let error = others.last_error().expect("the dead task is kept");
         assert_eq!(error.message, "raw task stopped unexpectedly");
         assert_eq!(error.target, None);
     }

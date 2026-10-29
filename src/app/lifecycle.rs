@@ -62,7 +62,7 @@ impl App {
             dirty: false,
             saved_config: String::new(),
             sweep: SweepState::default(),
-            stats: CommStats::default(),
+            stats: Arc::new(Mutex::new(CommStats::default())),
             reconnect: ReconnectState::default(),
             layout: ScreenLayout::default(),
             viewport_width: 0,
@@ -169,7 +169,7 @@ impl App {
         self.changed.clear();
         self.read_log.clear();
         self.value_history.clear();
-        self.stats = CommStats::default();
+        *self.stats() = CommStats::default();
     }
 
     pub(super) fn startup_read_params(&self) -> ReadParams {
@@ -604,10 +604,10 @@ impl App {
 
     fn apply_refresh_result(&mut self, result: RefreshTaskResult) {
         for &latency in &result.trace.latencies {
-            self.stats.reads.record_ok(latency);
+            self.stats().reads.record_ok(latency);
         }
         if let Some(e) = &result.error {
-            self.stats
+            self.stats()
                 .reads
                 .record_error(&e.message, result.trace.attempt);
         }
@@ -777,7 +777,7 @@ impl App {
             Done::Refresh(Some(result)) => self.apply_refresh_result(result),
             Done::Refresh(None) => {
                 let message = "read task stopped unexpectedly".to_string();
-                self.stats.reads.record_error(&message, None);
+                self.stats().reads.record_error(&message, None);
                 let params = self.read_or_previous_mut();
                 params.read_error = Some(message.clone());
                 params.finish_read();
@@ -793,10 +793,10 @@ impl App {
                     read_back: Vec::new(),
                 });
                 if outcome.ok {
-                    self.stats.writes.record_ok(outcome.latency);
+                    self.stats().writes.record_ok(outcome.latency);
                 } else {
                     let target = self.pending_write.as_ref().map(PendingWrite::target);
-                    self.stats.writes.record_error(&outcome.message, target);
+                    self.stats().writes.record_error(&outcome.message, target);
                 }
                 if outcome.ok && !outcome.read_back.is_empty() {
                     self.store_values(&outcome.read_back);
@@ -1373,9 +1373,9 @@ mod tests {
         app.refresh();
         settle(&mut app).await;
 
-        assert_eq!(app.stats.reads.ok, 3, "main window plus two graph runs");
-        assert_eq!(app.stats.reads.errors, 0);
-        assert!(app.stats.reads.latency().is_some());
+        assert_eq!(app.stats().reads.ok, 3, "main window plus two graph runs");
+        assert_eq!(app.stats().reads.errors, 0);
+        assert!(app.stats().reads.latency().is_some());
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -1393,12 +1393,13 @@ mod tests {
         app.refresh();
         settle(&mut app).await;
 
-        assert_eq!(app.stats.reads.ok, 1, "only the main window answered");
+        assert_eq!(app.stats().reads.ok, 1, "only the main window answered");
         assert_eq!(
-            app.stats.reads.errors, 1,
+            app.stats().reads.errors,
+            1,
             "the run after the failure is never sent"
         );
-        let target = app.stats.reads.last_error().and_then(|e| e.target);
+        let target = app.stats().reads.last_error().and_then(|e| e.target);
         assert!(
             matches!(target, Some(StatTarget::Read(RegisterType::Input, 64, _))),
             "the error points at the failing request, got {target:?}"

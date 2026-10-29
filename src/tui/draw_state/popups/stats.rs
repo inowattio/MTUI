@@ -18,7 +18,7 @@ const LABEL_W: usize = 9;
 const VALUE_W: usize = 28;
 
 pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, tab: StatsTab) {
-    let s = app.stats.tab(tab);
+    let s = app.stats().tab(tab);
     let address_mode = app.interpreter.address_mode();
 
     let field = |label: &str, value: String| -> Line<'static> {

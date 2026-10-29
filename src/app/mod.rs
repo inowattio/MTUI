@@ -35,6 +35,7 @@ pub type AllowUnitFlag = Arc<AtomicBool>;
 pub type AllowRawFlag = Arc<AtomicBool>;
 pub type StatusFlag = Arc<AtomicU8>;
 pub type BindStateFlag = Arc<AtomicU8>;
+pub type SharedStats = Arc<Mutex<CommStats>>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ApiBindState {
@@ -491,7 +492,7 @@ pub struct App {
     pub dirty: bool,
     saved_config: String,
     pub sweep: SweepState,
-    pub stats: CommStats,
+    stats: SharedStats,
     reconnect: ReconnectState,
     pub layout: ScreenLayout,
     pub viewport_width: u16,

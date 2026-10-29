@@ -1,4 +1,4 @@
-use super::App;
+use super::{App, CommStats};
 use crate::config::{BatchAnchor, Column};
 use crate::constants::NO_VALUE;
 use crate::custom::{CustomCell, CustomRule};
@@ -8,6 +8,7 @@ use crate::register::{RegisterCell, RegisterType};
 use crate::state::{InspectMode, Popup, ReadPanel, StatsTab};
 use chrono::{DateTime, Utc};
 use std::collections::{BTreeSet, VecDeque};
+use std::sync::{MutexGuard, PoisonError};
 
 const INSPECT_COLUMNS: &[Column] = &[
     Column::U16,
@@ -65,6 +66,10 @@ impl App {
 
     pub fn open_stats(&mut self) {
         self.read_mut().popup = Some(Popup::Stats(StatsTab::default()));
+    }
+
+    pub fn stats(&self) -> MutexGuard<'_, CommStats> {
+        self.stats.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
     pub fn stats_cycle(&mut self) {

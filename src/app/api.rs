@@ -18,6 +18,7 @@ impl App {
             allow_raw: self.api_allow_raw.clone(),
             status: self.api_status.clone(),
             bind: self.api_bind.clone(),
+            stats: self.stats.clone(),
         }
     }
 
