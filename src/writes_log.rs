@@ -87,14 +87,13 @@ pub fn append(
     previous: Option<u64>,
     function: u8,
 ) {
-    let (enabled, path) = match shared.lock() {
-        Ok(state) => (state.enabled, state.path.clone()),
-        Err(_) => return,
+    let Ok(state) = shared.lock() else {
+        return;
     };
-    if !enabled {
+    if !state.enabled {
         return;
     }
-    let Some(path) = path else {
+    let Some(path) = &state.path else {
         return;
     };
 
