@@ -385,6 +385,7 @@ keybinds! {
     PageDown => page_down : "Page down" = PAGE_DOWN,
     BatchDecrease => batch_decrease : "Decrease batch" = BATCH_DECREASE,
     BatchIncrease => batch_increase : "Increase batch" = BATCH_INCREASE,
+    HexLetters => hex_letters : "Type hex letters" = HEX_LETTERS,
 }
 
 impl Keybinds {

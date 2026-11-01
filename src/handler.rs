@@ -41,6 +41,14 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) {
         return;
     }
 
+    if app.hex_letters() {
+        match key_event.code {
+            KeyCode::Char(c @ ('a'..='f' | 'A'..='F')) => return type_address_digit(app, c),
+            KeyCode::Esc => return app.toggle_hex_letters(),
+            _ => {}
+        }
+    }
+
     if app.read().graph && key_event.code == kb.dump {
         app.cycle_graph_interpretation();
         return;
@@ -78,29 +86,27 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) {
         }
         KeyCode::Left => app.scroll_columns(false),
         KeyCode::Right => app.scroll_columns(true),
-        KeyCode::Char(c) => {
-            if !c.is_ascii_digit() {
-                return;
-            }
-            let mode = app.interpreter.address_mode();
-            let Some(position) = mode.push_digit(app.read().position, c) else {
-                app.set_read_status(StatusMessage::warn(format!(
-                    "Can't append {c} - address would go past {}",
-                    mode.display(u16::MAX)
-                )));
-                return;
-            };
-            app.read_mut().position = position;
-            app.scroll_to_cursor();
-        }
+        KeyCode::Char(c) if c.is_ascii_digit() => type_address_digit(app, c),
         KeyCode::Backspace => {
-            let mode = app.interpreter.address_mode();
+            let mode = app.typing_mode();
             let p = app.read_mut();
             p.position = mode.pop_digit(p.position);
             app.scroll_to_cursor();
         }
         _ => {}
     }
+}
+
+fn type_address_digit(app: &mut App, c: char) {
+    let Some(position) = app.typing_mode().push_digit(app.read().position, c) else {
+        app.set_read_status(StatusMessage::warn(format!(
+            "Can't append {c} - address would go past {}",
+            app.interpreter.address_mode().display(u16::MAX)
+        )));
+        return;
+    };
+    app.read_mut().position = position;
+    app.scroll_to_cursor();
 }
 
 const fn step_pos(value: u16, up: bool, step: u16) -> u16 {
@@ -182,6 +188,7 @@ fn run_action(app: &mut App, action: KeybindAction) {
             app.scroll_to_cursor();
         }
         BatchDecrease | BatchIncrease => app.adjust_batch(action == BatchIncrease),
+        HexLetters => app.toggle_hex_letters(),
         PageUp | PageDown => {
             move_read_cursor(app, app.config.keybinds.get(action));
         }
@@ -1777,6 +1784,61 @@ mod tests {
         handle_key_events(KeyEvent::new(KeyCode::Char('0')), &mut app).await;
         assert_eq!(app.read().position, 0x1000);
         assert!(warning(&app).contains("past FFFF"));
+    }
+
+    #[tokio::test]
+    async fn backtick_toggles_hex_letters_as_address_digits() {
+        let mut app = app().await;
+        app.interpreter.set_address_mode(AddressMode::Hex);
+        app.read_mut().position = 0;
+        let kb = app.config.keybinds;
+
+        handle_key_events(KeyEvent::new(kb.hex_letters), &mut app).await;
+        assert!(app.hex_letters());
+        let screen = screen(&mut app);
+        let bottom = screen.lines().last().unwrap();
+        assert!(bottom.contains("HEX "), "{bottom}");
+        assert!(bottom.find("HEX") < bottom.find("Help"), "{bottom}");
+        for c in ['1', 'a', 'B'] {
+            handle_key_events(KeyEvent::new(KeyCode::Char(c)), &mut app).await;
+        }
+        assert_eq!(app.read().position, 0x1AB);
+        assert_eq!(app.popup_kind(), None, "a no longer opens About");
+
+        handle_key_events(KeyEvent::new(kb.hex_letters), &mut app).await;
+        assert!(!app.hex_letters());
+        handle_key_events(KeyEvent::new(KeyCode::Char('a')), &mut app).await;
+        assert_eq!(app.popup_kind(), Some(PopupKind::About));
+    }
+
+    #[tokio::test]
+    async fn escape_leaves_hex_letters_before_quitting() {
+        let mut app = app().await;
+        app.interpreter.set_address_mode(AddressMode::Hex);
+        app.toggle_hex_letters();
+        handle_key_events(KeyEvent::new(KeyCode::Esc), &mut app).await;
+        assert!(!app.hex_letters());
+        assert!(app.running);
+        assert_eq!(app.popup_kind(), None);
+    }
+
+    #[tokio::test]
+    async fn hex_letters_type_hex_digits_in_decimal_mode_too() {
+        let mut app = app().await;
+        app.read_mut().position = 0;
+        app.toggle_hex_letters();
+        for c in ['1', '0', 'f'] {
+            handle_key_events(KeyEvent::new(KeyCode::Char(c)), &mut app).await;
+        }
+        assert_eq!(app.read().position, 0x10F);
+
+        handle_key_events(KeyEvent::new(KeyCode::Backspace), &mut app).await;
+        assert_eq!(app.read().position, 0x10);
+
+        app.read_mut().position = 0x1000;
+        handle_key_events(KeyEvent::new(KeyCode::Char('a')), &mut app).await;
+        assert_eq!(app.read().position, 0x1000);
+        assert!(warning(&app).contains("past 65535"));
     }
 
     #[tokio::test]

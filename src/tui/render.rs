@@ -42,6 +42,9 @@ pub fn render(app: &mut App, frame: &mut Frame) {
             theme.dim_style(),
         ));
     }
+    if matches!(app.state, State::Read(_)) && app.hex_letters() {
+        clock_spans.push(Span::styled("HEX ", theme.warn_style()));
+    }
     let clock_line = Line::from(clock_spans);
 
     let left_top = match &app.state {

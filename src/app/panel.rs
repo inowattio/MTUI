@@ -1,5 +1,5 @@
 use super::{App, CommStats};
-use crate::config::{BatchAnchor, Column};
+use crate::config::{AddressMode, BatchAnchor, Column};
 use crate::constants::NO_VALUE;
 use crate::custom::{CustomCell, CustomRule};
 use crate::interpretator::{LOOKAHEAD, ascii_words, fmt_num, following, graph_value};
@@ -211,6 +211,23 @@ impl App {
             }
         }
         self.read_mut().panel = next;
+    }
+
+    pub fn hex_letters(&self) -> bool {
+        self.read().hex_letters
+    }
+
+    pub fn toggle_hex_letters(&mut self) {
+        let p = self.read_mut();
+        p.hex_letters = !p.hex_letters;
+    }
+
+    pub fn typing_mode(&self) -> AddressMode {
+        if self.hex_letters() {
+            AddressMode::Hex
+        } else {
+            self.interpreter.address_mode()
+        }
     }
 
     pub fn cursor_cell(&self) -> RegisterCell {
