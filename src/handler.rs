@@ -83,7 +83,13 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) {
                 return;
             }
             let digit = c as u8 - b'0';
-            digit_add(&mut app.read_mut().position, digit);
+            if !digit_add(&mut app.read_mut().position, digit) {
+                let max = app.interpreter.address_mode().display(u16::MAX);
+                app.set_read_status(StatusMessage::warn(format!(
+                    "Can't append {c} - address would go past {max}"
+                )));
+                return;
+            }
             app.scroll_to_cursor();
         }
         KeyCode::Backspace => {
@@ -1734,6 +1740,21 @@ mod tests {
             assert_eq!(app.read().position, u16::MAX, "{text}");
             assert!(warning(&app).contains("past 65535"), "{text}");
         }
+    }
+
+    #[tokio::test]
+    async fn a_typed_digit_past_the_last_address_warns_and_keeps_the_position() {
+        let mut app = app().await;
+        app.read_mut().position = 9999;
+        handle_key_events(KeyEvent::new(KeyCode::Char('9')), &mut app).await;
+        assert_eq!(app.read().position, 9999);
+        assert!(warning(&app).contains("Can't append 9"));
+
+        app.read_mut().status = None;
+        app.read_mut().position = 6553;
+        handle_key_events(KeyEvent::new(KeyCode::Char('5')), &mut app).await;
+        assert_eq!(app.read().position, 65535);
+        assert!(app.read().status.is_none());
     }
 
     #[tokio::test]

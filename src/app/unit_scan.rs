@@ -47,8 +47,8 @@ impl App {
                 | UnitField::Repr
                 | UnitField::Exceptions
                 | UnitField::Scan
-                | UnitField::Hit(_) => {}
-            }
+                | UnitField::Hit(_) => false,
+            };
         }
     }
 
