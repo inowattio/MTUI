@@ -460,32 +460,28 @@ pub fn handle_paste(data: String, app: &mut App) {
 }
 
 fn paste_digits(digits: &str, app: &mut App) {
-    let digits = digits.bytes().map(|b| b - b'0');
-
     match app.popup_kind() {
         Some(PopupKind::Write) => {
             if let Some(w) = app.write_mut() {
-                let mut n = 0;
-                for digit in digits {
-                    digit_add(&mut n, digit);
-                }
-
-                w.value = Some(n);
+                w.value = Some(digits.parse().unwrap_or(i64::MAX));
             }
             app.clamp_write_value();
         }
         Some(PopupKind::Search) => {
-            for digit in digits {
-                app.search_input((b'0' + digit) as char);
+            for c in digits.chars() {
+                app.search_input(c);
             }
         }
         None => {
-            let p = app.read_mut();
-            p.position = 0;
-            for digit in digits {
-                digit_add(&mut p.position, digit);
-            }
+            let mode = app.interpreter.address_mode();
+            app.read_mut().position = mode.parse_saturating(digits).unwrap_or(u16::MAX);
             app.scroll_to_cursor();
+            if mode.parse(digits).is_none() {
+                app.set_read_status(StatusMessage::warn(format!(
+                    "Pasted address is past {} - moved to the last one",
+                    mode.display(u16::MAX)
+                )));
+            }
         }
         _ => {}
     }
@@ -1727,6 +1723,41 @@ mod tests {
         handle_key_events(ctrl('c'), &mut app).await;
         assert!(app.running);
         assert!(matches!(&app.state, State::Read(p) if p.popup == Some(Popup::Quit)));
+    }
+
+    #[tokio::test]
+    async fn an_overlong_pasted_address_clamps_to_the_last_one() {
+        let mut app = app().await;
+        for text in ["655361", "70000", "99999999999999999999999"] {
+            app.read_mut().position = 42;
+            paste(&mut app, text);
+            assert_eq!(app.read().position, u16::MAX, "{text}");
+            assert!(warning(&app).contains("past 65535"), "{text}");
+        }
+    }
+
+    #[tokio::test]
+    async fn an_in_range_pasted_address_warns_nothing() {
+        let mut app = app().await;
+        paste(&mut app, "65535");
+        assert_eq!(app.read().position, u16::MAX);
+        assert!(app.read().status.is_none());
+    }
+
+    #[tokio::test]
+    async fn an_overlong_pasted_write_value_clamps_to_the_max() {
+        let mut app = app().await;
+        app.read_mut().register_type = RegisterType::Holding;
+        app.open_write();
+        assert_eq!(app.popup_kind(), Some(PopupKind::Write));
+        for text in ["655361", "99999999999999999999999"] {
+            paste(&mut app, text);
+            assert_eq!(
+                app.write_mut().unwrap().value,
+                Some(i64::from(u16::MAX)),
+                "{text}"
+            );
+        }
     }
 
     #[tokio::test]
