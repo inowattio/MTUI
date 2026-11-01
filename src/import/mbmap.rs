@@ -1,5 +1,7 @@
 use crate::config::Registers;
-use crate::custom::{BitEntry, CustomOp, CustomRepr, CustomRule, EnumEntry, OpKind};
+use crate::custom::{
+    ASCII_REGISTERS_MAX, BitEntry, CustomOp, CustomRepr, CustomRule, EnumEntry, OpKind,
+};
 use crate::modbus::WordOrder;
 use crate::register::{RegisterCell, RegisterType};
 use serde::Deserialize;
@@ -68,6 +70,7 @@ struct Register {
     #[serde(rename = "type")]
     data_type: Option<String>,
     unit: Option<String>,
+    length: Option<Integer>,
     bit: Option<Integer>,
     bits: Option<Integer>,
     scale: Option<f64>,
@@ -88,6 +91,7 @@ fn repr(data_type: Option<&str>) -> Option<CustomRepr> {
         "uint64" => CustomRepr::U64,
         "int64" => CustomRepr::I64,
         "float64" => CustomRepr::F64,
+        "string" => CustomRepr::Ascii,
         _ => return None,
     })
 }
@@ -115,6 +119,11 @@ impl Register {
             Some(unit) => format!("{} [{unit}]", self.name),
             None => self.name.clone(),
         }
+    }
+
+    fn length(&self) -> Option<u8> {
+        let length = self.length.as_ref()?.value().filter(|&n| n >= 1)?;
+        u8::try_from(length.min(ASCII_REGISTERS_MAX.into())).ok()
     }
 
     fn shared_bit(&self, bit: i64) -> Option<u8> {
@@ -145,6 +154,8 @@ impl DeviceMap {
 
     fn rule(&self, register: &Register, address: u16) -> Option<CustomRule> {
         let repr = repr(register.data_type.as_deref())?;
+        let text = repr == CustomRepr::Ascii;
+        let registers = if text { Some(register.length()?) } else { None };
         let ops = [
             register
                 .scale
@@ -156,10 +167,11 @@ impl DeviceMap {
                 .map(|v| CustomOp { op: OpKind::Add, v }),
         ];
         let byte_swap = little(register.byte_order.as_deref(), self.byte_order.as_deref());
-        let word_swap = little(register.word_order.as_deref(), self.word_order.as_deref());
+        let word_swap = !text && little(register.word_order.as_deref(), self.word_order.as_deref());
         Some(CustomRule {
             address,
             repr,
+            registers,
             ops: ops.into_iter().flatten().collect(),
             enum_map: self.enum_map(register),
             suffix: register
@@ -307,11 +319,37 @@ mod tests {
     }
 
     #[test]
+    fn reads_strings_with_length_and_byte_order() {
+        let r = parse(
+            &map(json!([
+                {"name": "Serial", "area": "holding", "address": 0, "type": "string", "length": 3},
+                {"name": "Swapped", "area": "holding", "address": 3, "type": "string", "length": 2, "byte_order": "little"},
+                {"name": "Huge", "area": "holding", "address": 5, "type": "string", "length": 500},
+            ]))
+            .to_string(),
+        )
+        .unwrap();
+        let serial = r.holdings[0].custom.as_ref().unwrap();
+        assert_eq!(
+            (serial.repr, serial.registers, serial.word_order),
+            (CustomRepr::Ascii, Some(3), Some(WordOrder::ABCD))
+        );
+        assert_eq!(
+            serial.evaluate(&[0x4142, 0x4320, 0x0000], WordOrder::ABCD),
+            "ABC"
+        );
+        let swapped = r.holdings[1].custom.as_ref().unwrap();
+        assert_eq!(swapped.word_order, Some(WordOrder::BADC));
+        assert_eq!(swapped.evaluate(&[0x4241, 0x4443], WordOrder::ABCD), "ABCD");
+        assert_eq!(r.holdings[2].custom.as_ref().unwrap().registers, Some(125));
+    }
+
+    #[test]
     fn applies_address_base_and_skips_what_cannot_be_read() {
         let mut value = map(json!([
             {"name": "A", "area": "holding", "address": 1, "type": "uint16"},
             {"name": "Below base", "area": "holding", "address": 0, "type": "uint16"},
-            {"name": "Serial", "area": "holding", "address": 10, "type": "string", "length": 4},
+            {"name": "Serial", "area": "holding", "address": 10, "type": "string"},
             {"name": "Bad", "area": "Holding", "address": 2, "type": "uint16"},
         ]));
         value["address_base"] = json!(1);
