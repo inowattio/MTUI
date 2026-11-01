@@ -9,7 +9,7 @@ where
     *v = *v / ten;
 }
 
-pub fn digit_add<T>(v: &mut T, digit: u8) -> bool
+pub fn digit_add<T>(v: &mut T, digit: u8)
 where
     T: Copy
         + PartialOrd
@@ -19,7 +19,7 @@ where
         + CheckedMul<Output = T>,
 {
     if digit > 9 {
-        return false;
+        return;
     }
 
     let ten = T::from(10u8);
@@ -34,11 +34,9 @@ where
         }
     });
 
-    let Some(c) = next else {
-        return false;
-    };
-    *v = c;
-    true
+    if let Some(c) = next {
+        *v = c;
+    }
 }
 
 pub fn wrap_index(index: u16, len: u16, forward: bool) -> u16 {

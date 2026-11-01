@@ -82,18 +82,21 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) {
             if !c.is_ascii_digit() {
                 return;
             }
-            let digit = c as u8 - b'0';
-            if !digit_add(&mut app.read_mut().position, digit) {
-                let max = app.interpreter.address_mode().display(u16::MAX);
+            let mode = app.interpreter.address_mode();
+            let Some(position) = mode.push_digit(app.read().position, c) else {
                 app.set_read_status(StatusMessage::warn(format!(
-                    "Can't append {c} - address would go past {max}"
+                    "Can't append {c} - address would go past {}",
+                    mode.display(u16::MAX)
                 )));
                 return;
-            }
+            };
+            app.read_mut().position = position;
             app.scroll_to_cursor();
         }
         KeyCode::Backspace => {
-            digit_remove(&mut app.read_mut().position);
+            let mode = app.interpreter.address_mode();
+            let p = app.read_mut();
+            p.position = mode.pop_digit(p.position);
             app.scroll_to_cursor();
         }
         _ => {}
@@ -1755,6 +1758,25 @@ mod tests {
         handle_key_events(KeyEvent::new(KeyCode::Char('5')), &mut app).await;
         assert_eq!(app.read().position, 65535);
         assert!(app.read().status.is_none());
+    }
+
+    #[tokio::test]
+    async fn typed_digits_follow_the_hex_address_mode() {
+        let mut app = app().await;
+        app.interpreter.set_address_mode(AddressMode::Hex);
+        app.read_mut().position = 0;
+        for c in ['1', '0'] {
+            handle_key_events(KeyEvent::new(KeyCode::Char(c)), &mut app).await;
+        }
+        assert_eq!(app.read().position, 0x10);
+
+        handle_key_events(KeyEvent::new(KeyCode::Backspace), &mut app).await;
+        assert_eq!(app.read().position, 0x1);
+
+        app.read_mut().position = 0x1000;
+        handle_key_events(KeyEvent::new(KeyCode::Char('0')), &mut app).await;
+        assert_eq!(app.read().position, 0x1000);
+        assert!(warning(&app).contains("past FFFF"));
     }
 
     #[tokio::test]
