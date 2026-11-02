@@ -510,7 +510,7 @@ pub struct App {
     custom_rules: BTreeMap<RegisterCell, CustomRule>,
     pending_write: Option<PendingWrite>,
     queued_write: Option<QueuedWrite>,
-    pending_import: Option<Registers>,
+    pending_import: Option<Vec<Registers>>,
     logged_connection: ConnectionStatus,
     api_device: ApiDevice,
     api_bound_port: BoundPort,

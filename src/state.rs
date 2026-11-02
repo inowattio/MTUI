@@ -545,11 +545,25 @@ pub enum ImportSource {
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
-pub struct ImportParams {
-    pub source: ImportSource,
+pub struct ImportDevice {
+    pub name: String,
     pub pins: usize,
     pub labels: usize,
     pub rules: usize,
+    pub replaced: usize,
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct ImportParams {
+    pub source: ImportSource,
+    pub devices: Vec<ImportDevice>,
+    pub selected: u16,
+}
+
+impl ImportParams {
+    pub fn device(&self) -> Option<&ImportDevice> {
+        self.devices.get(usize::from(self.selected))
+    }
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]

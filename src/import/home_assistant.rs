@@ -1,3 +1,4 @@
+use super::Device;
 use crate::config::Registers;
 use crate::custom::{CustomOp, CustomRepr, CustomRule, OpKind};
 use crate::modbus::WordOrder;
@@ -10,6 +11,7 @@ use std::collections::BTreeMap;
 #[derive(Default, Deserialize)]
 #[serde(default)]
 struct Hub {
+    name: Option<String>,
     sensors: Vec<Value>,
     binary_sensors: Vec<Value>,
     switches: Vec<Value>,
@@ -200,12 +202,17 @@ impl Reading {
 struct Import {
     labels: BTreeMap<RegisterCell, String>,
     rules: BTreeMap<RegisterCell, CustomRule>,
+    replaced: usize,
 }
 
-fn entities<T: DeserializeOwned>(values: Vec<Value>) -> impl Iterator<Item = T> {
-    values
-        .into_iter()
-        .filter_map(|value| serde_norway::from_value(value).ok())
+fn entities<T: DeserializeOwned>(values: Vec<Value>) -> impl Iterator<Item = (u8, T)> {
+    values.into_iter().filter_map(|value| {
+        let unit = ["slave", "device_address"]
+            .into_iter()
+            .find_map(|key| value.get(key)?.as_u64())
+            .map_or(Some(1), |unit| u8::try_from(unit).ok())?;
+        Some((unit, serde_norway::from_value(value).ok()?))
+    })
 }
 
 fn repeated(name: &str, count: Option<u16>) -> impl Iterator<Item = (u16, String)> + '_ {
@@ -217,7 +224,10 @@ fn repeated(name: &str, count: Option<u16>) -> impl Iterator<Item = (u16, String
 
 impl Import {
     fn label(&mut self, cell: RegisterCell, name: impl Into<String>) {
-        self.labels.insert(cell, name.into());
+        if self.labels.insert(cell, name.into()).is_some() {
+            self.replaced += 1;
+            self.rules.remove(&cell);
+        }
     }
 
     fn reading(&mut self, reading: &Reading, name: String, unit: Option<&str>) {
@@ -311,36 +321,46 @@ impl Import {
     }
 
     fn cover(&mut self, cover: &Cover) {
-        let kind = cover.input_type.map_or(RegisterType::Holding, Into::into);
-        self.label((kind, cover.address), &cover.name);
+        let cell = (
+            cover.input_type.map_or(RegisterType::Holding, Into::into),
+            cover.address,
+        );
+        self.label(cell, &cover.name);
         if let Some(address) = cover.status_register {
-            let kind = cover
-                .status_register_type
-                .map_or(RegisterType::Holding, Into::into);
-            self.label((kind, address), format!("{} status", cover.name));
-        }
-    }
-
-    fn hub(&mut self, hub: Hub) {
-        for sensor in entities(hub.sensors) {
-            self.sensor(sensor);
-        }
-        for sensor in entities::<BinarySensor>(hub.binary_sensors) {
-            self.binary_sensor(&sensor);
-        }
-        for toggle in entities::<Toggle>([hub.switches, hub.lights, hub.fans].concat()) {
-            self.toggle(&toggle);
-        }
-        for climate in entities(hub.climates) {
-            self.climate(climate);
-        }
-        for cover in entities::<Cover>(hub.covers) {
-            self.cover(&cover);
+            let status = (
+                cover
+                    .status_register_type
+                    .map_or(RegisterType::Holding, Into::into),
+                address,
+            );
+            if status != cell {
+                self.label(status, format!("{} status", cover.name));
+            }
         }
     }
 }
 
-pub fn parse(text: &str) -> Option<Registers> {
+fn devices(hub: Hub) -> BTreeMap<u8, Import> {
+    let mut devices: BTreeMap<u8, Import> = BTreeMap::new();
+    for (unit, sensor) in entities(hub.sensors) {
+        devices.entry(unit).or_default().sensor(sensor);
+    }
+    for (unit, sensor) in entities::<BinarySensor>(hub.binary_sensors) {
+        devices.entry(unit).or_default().binary_sensor(&sensor);
+    }
+    for (unit, toggle) in entities::<Toggle>([hub.switches, hub.lights, hub.fans].concat()) {
+        devices.entry(unit).or_default().toggle(&toggle);
+    }
+    for (unit, climate) in entities(hub.climates) {
+        devices.entry(unit).or_default().climate(climate);
+    }
+    for (unit, cover) in entities::<Cover>(hub.covers) {
+        devices.entry(unit).or_default().cover(&cover);
+    }
+    devices
+}
+
+pub fn parse(text: &str) -> Option<Vec<Device>> {
     let value = match serde_norway::from_str(text).ok()? {
         Value::Mapping(mut root) => root.remove("modbus").unwrap_or(Value::Mapping(root)),
         other => other,
@@ -349,24 +369,39 @@ pub fn parse(text: &str) -> Option<Registers> {
         Value::Sequence(hubs) => hubs,
         hub => vec![hub],
     };
-    let mut import = Import::default();
-    for hub in entities(hubs) {
-        import.hub(hub);
-    }
-    let registers = Registers::from_views(&[], &import.labels, &import.rules);
-    (registers.total() > 0).then_some(registers)
+    let devices: Vec<Device> = hubs
+        .into_iter()
+        .filter_map(|hub| serde_norway::from_value::<Hub>(hub).ok())
+        .flat_map(|mut hub| {
+            let name = hub.name.take().unwrap_or_else(|| "modbus_hub".to_string());
+            devices(hub).into_iter().map(move |(unit, import)| Device {
+                name: format!("{name}, unit {unit}"),
+                registers: Registers::from_views(&[], &import.labels, &import.rules),
+                replaced: import.replaced,
+            })
+        })
+        .filter(|device| device.registers.total() > 0)
+        .collect();
+    (!devices.is_empty()).then_some(devices)
 }
 
 #[cfg(test)]
 mod tests {
     use super::parse;
+    use crate::config::Registers;
     use crate::custom::{CustomOp, CustomRepr, OpKind};
     use crate::modbus::WordOrder;
     use crate::register::RegisterType::{Coil, Discrete, Holding, Input};
 
+    fn single(text: &str) -> Registers {
+        let mut devices = parse(text).expect("importable");
+        assert_eq!(devices.len(), 1);
+        devices.remove(0).registers
+    }
+
     #[test]
     fn sensors_become_labels_and_rules() {
-        let registers = parse(
+        let registers = single(
             "
 modbus:
   - name: hub
@@ -396,8 +431,7 @@ modbus:
         data_type: custom
         structure: '>3h'
 ",
-        )
-        .expect("importable");
+        );
 
         let voltage = &registers.inputs[0];
         assert_eq!(voltage.address, 0x10);
@@ -437,7 +471,7 @@ modbus:
 
     #[test]
     fn virtual_counts_repeat_by_the_register_width() {
-        let registers = parse(
+        let registers = single(
             "
 - name: hub
   sensors:
@@ -451,8 +485,7 @@ modbus:
       input_type: discrete_input
       slave_count: 1
 ",
-        )
-        .expect("importable");
+        );
         let holdings: Vec<_> = registers
             .holdings
             .iter()
@@ -469,7 +502,7 @@ modbus:
 
     #[test]
     fn writable_entities_label_their_write_and_state_registers() {
-        let registers = parse(
+        let registers = single(
             "
 name: hub
 switches:
@@ -501,8 +534,7 @@ covers:
     status_register: 51
     status_register_type: input
 ",
-        )
-        .expect("importable");
+        );
         let labels: Vec<_> = registers
             .entries()
             .map(|((kind, address), e)| (kind, address, e.label.clone().unwrap()))
@@ -526,8 +558,70 @@ covers:
     }
 
     #[test]
+    fn entries_are_split_by_hub_and_unit() {
+        let devices = parse(
+            "
+- name: meter
+  sensors:
+    - name: Voltage
+      address: 1
+      data_type: float32
+    - name: Current
+      device_address: 3
+      address: 1
+- name: inverter
+  sensors:
+    - name: Battery
+      slave: 2
+      address: 1
+    - name: Power
+      slave: 2
+      address: 3
+  switches:
+    - name: Relay
+      slave: 2
+      address: 3
+  covers:
+    - name: Blind
+      slave: 2
+      address: 5
+      status_register: 5
+",
+        )
+        .expect("importable");
+        let summary: Vec<_> = devices
+            .iter()
+            .map(|device| {
+                let holdings: Vec<_> = device
+                    .registers
+                    .holdings
+                    .iter()
+                    .map(|e| (e.address, e.label.as_deref().unwrap(), e.custom.is_some()))
+                    .collect();
+                (device.name.as_str(), device.replaced, holdings)
+            })
+            .collect();
+        assert_eq!(
+            summary,
+            [
+                ("meter, unit 1", 0, vec![(1, "Voltage", true)]),
+                ("meter, unit 3", 0, vec![(1, "Current", true)]),
+                (
+                    "inverter, unit 2",
+                    1,
+                    vec![
+                        (1, "Battery", true),
+                        (3, "Relay", false),
+                        (5, "Blind", false)
+                    ]
+                ),
+            ]
+        );
+    }
+
+    #[test]
     fn legacy_data_types_are_sized_by_count() {
-        let registers = parse(
+        let registers = single(
             "
 sensors:
   - name: Energy
@@ -550,8 +644,7 @@ sensors:
     data_type: int
     count: 3
 ",
-        )
-        .expect("importable");
+        );
         let reprs: Vec<_> = registers
             .holdings
             .iter()
@@ -571,7 +664,7 @@ sensors:
 
     #[test]
     fn climate_targets_share_the_reading_and_are_named_by_mode() {
-        let registers = parse(
+        let registers = single(
             "
 climates:
   - name: Room
@@ -583,8 +676,7 @@ climates:
     target_temp_scale: 0.5
     target_temp_register: [40, 40, 41, 41, 41, 41, 42]
 ",
-        )
-        .expect("importable");
+        );
         let ops = |scale: f64| {
             vec![
                 CustomOp {
@@ -623,7 +715,7 @@ climates:
     #[test]
     fn climate_temperature_units() {
         for (unit, suffix) in [("C", " °C"), ("F", " °F"), ("K", " K"), ("X", " °C")] {
-            let registers = parse(&format!(
+            let registers = single(&format!(
                 "
 climates:
   - name: Room
@@ -631,8 +723,7 @@ climates:
     target_temp_register: 2
     temperature_unit: {unit}
 "
-            ))
-            .expect("importable");
+            ));
             let rule = registers.holdings[0].custom.as_ref().expect("rule");
             assert_eq!(rule.suffix, suffix, "{unit}");
         }
@@ -640,15 +731,14 @@ climates:
 
     #[test]
     fn invalid_entities_are_skipped_and_empty_input_is_rejected() {
-        let registers = parse(
+        let registers = single(
             "
 sensors:
   - name: Broken
   - name: Fine
     address: 1
 ",
-        )
-        .expect("importable");
+        );
         assert_eq!(registers.holdings.len(), 1);
         for text in [
             "",

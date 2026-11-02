@@ -2,31 +2,39 @@ use super::{App, BackgroundTask, LoadConfigTaskResult, save_config};
 use crate::compat;
 use crate::config::{Config, Registers, Startup};
 use crate::constants::message;
-use crate::import::{home_assistant, mbmap};
+use crate::import::{Device, home_assistant, mbmap};
 use crate::modbus::ModbusDevice;
+use crate::num_ops::wrap_index;
 use crate::state::{
-    ConnectionStatus, ImportParams, ImportSource, Outcome, Popup, State, StatusMessage,
+    ConnectionStatus, ImportDevice, ImportParams, ImportSource, Outcome, Popup, State,
+    StatusMessage,
 };
 use std::fs;
 use std::path::{Path, PathBuf};
 
-type ImportParser = fn(&str) -> Option<Registers>;
+type ImportParser = fn(&str) -> Option<Vec<Device>>;
 
 struct ParsedImport {
-    registers: Registers,
+    devices: Vec<Device>,
     source: ImportSource,
 }
 
 impl App {
     fn parse_import(data: &str) -> Option<ParsedImport> {
         let parsers: [(ImportParser, ImportSource); 3] = [
-            (Self::parse_json_import, ImportSource::Mtui),
-            (mbmap::parse, ImportSource::Mbmap),
+            (
+                |data| Some(vec![Self::parse_json_import(data)?.into()]),
+                ImportSource::Mtui,
+            ),
+            (
+                |data| Some(vec![mbmap::parse(data)?.into()]),
+                ImportSource::Mbmap,
+            ),
             (home_assistant::parse, ImportSource::HomeAssistant),
         ];
         parsers.into_iter().find_map(|(parse, source)| {
             Some(ParsedImport {
-                registers: parse(data)?,
+                devices: parse(data)?,
                 source,
             })
         })
@@ -40,22 +48,32 @@ impl App {
     }
 
     pub fn paste_import(&mut self, data: &str) -> bool {
-        let Some(ParsedImport {
-            registers: payload,
-            source,
-        }) = Self::parse_import(data)
-        else {
+        let Some(ParsedImport { devices, source }) = Self::parse_import(data) else {
             return false;
         };
         let params = ImportParams {
             source,
-            pins: payload.pins(),
-            labels: payload.labels(),
-            rules: payload.rules(),
+            devices: devices
+                .iter()
+                .map(|device| ImportDevice {
+                    name: device.name.clone(),
+                    pins: device.registers.pins(),
+                    labels: device.registers.labels(),
+                    rules: device.registers.rules(),
+                    replaced: device.replaced,
+                })
+                .collect(),
+            selected: 0,
         };
-        self.pending_import = Some(payload);
+        self.pending_import = Some(devices.into_iter().map(|device| device.registers).collect());
         self.read_mut().popup = Some(Popup::Import(params));
         true
+    }
+
+    pub fn import_move(&mut self, down: bool) {
+        if let Some(p) = self.popup_as_mut::<ImportParams>() {
+            p.selected = wrap_index(p.selected, p.devices.len() as u16, down);
+        }
     }
 
     pub fn cancel_import(&mut self) {
@@ -64,7 +82,14 @@ impl App {
     }
 
     pub fn apply_import(&mut self) {
-        let Some(payload) = self.pending_import.take() else {
+        let selected = self
+            .popup_as::<ImportParams>()
+            .map_or(0, |p| usize::from(p.selected));
+        let Some(payload) = self
+            .pending_import
+            .take()
+            .and_then(|devices| devices.into_iter().nth(selected))
+        else {
             self.close_popup();
             return;
         };
@@ -395,7 +420,12 @@ mod tests {
 
         let parsed = App::parse_import(&json).expect("export is importable");
         assert_eq!(parsed.source, ImportSource::Mtui);
-        let payload = parsed.registers;
+        let payload = parsed
+            .devices
+            .into_iter()
+            .next()
+            .expect("one device")
+            .registers;
         assert_eq!(payload.pins(), 2);
         assert_eq!(payload.labels(), app.labels.len());
         assert_eq!(payload.rules(), app.custom_rules.len());

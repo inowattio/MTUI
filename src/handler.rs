@@ -421,6 +421,8 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
             };
             match key_event.code {
                 KeyCode::Enter => confirm(app),
+                KeyCode::Up if kind == PopupKind::Import => app.import_move(false),
+                KeyCode::Down if kind == PopupKind::Import => app.import_move(true),
                 KeyCode::Char('s') if kind == PopupKind::Quit => app.save_and_quit(),
                 KeyCode::Char('s') if kind == PopupKind::CycleConfig => {
                     app.save_and_cycle_config();
