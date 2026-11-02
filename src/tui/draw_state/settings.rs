@@ -375,6 +375,7 @@ fn field_value(
         SettingsField::CopyConfig => (String::new(), None),
         SettingsField::ShowRuleContinuation => (on_off(device.display.rule_continuation), None),
         SettingsField::ChangedFade => (on_off(device.display.changed_fade), None),
+        SettingsField::ChangedBits => (on_off(device.display.changed_bits), None),
         SettingsField::ChangedTrend => (on_off(device.display.changed_trend), None),
         SettingsField::ChangedTrendColor => (on_off(device.display.changed_trend_color), None),
         SettingsField::ChangedTrendCustom => (on_off(device.display.changed_trend_custom), None),

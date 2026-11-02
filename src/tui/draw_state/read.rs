@@ -87,6 +87,50 @@ fn trend_shade(
     colored.then(|| (at, 1, theme.trend_style(trend, heat)))
 }
 
+const BITS_WIDTH: usize = 19;
+
+const fn bit_flipped_at(flipped: u16, offset: usize) -> bool {
+    if offset % 5 == 4 {
+        return false;
+    }
+    let position = offset - offset / 5;
+    flipped >> (15 - position) & 1 == 1
+}
+
+fn bit_shades(start: usize, flipped: u16, plain: Style, hot: Style) -> Vec<Shade> {
+    let mut shades: Vec<Shade> = Vec::new();
+    for offset in 0..BITS_WIDTH {
+        let style = if bit_flipped_at(flipped, offset) {
+            hot
+        } else {
+            plain
+        };
+        match shades.last_mut() {
+            Some((_, width, last)) if *last == style => *width += 1,
+            _ => shades.push((start + offset, 1, style)),
+        }
+    }
+    shades
+}
+
+fn flip_shades(
+    segment: Option<RowSegment>,
+    lead: u16,
+    (flipped, heat): (u16, f32),
+    zebra: bool,
+    theme: &Theme,
+) -> Vec<Shade> {
+    match segment {
+        Some(segment) if flipped != 0 => bit_shades(
+            lead as usize + segment.start,
+            flipped,
+            theme.row_style(zebra, None),
+            theme.row_style(zebra, Some(heat)),
+        ),
+        _ => Vec::new(),
+    }
+}
+
 fn continuation_shade(segment: RowSegment, lead: u16, style: Style, theme: &Theme) -> Shade {
     (
         segment.start + lead as usize,
@@ -172,6 +216,7 @@ impl TableCtx<'_> {
         let lead = u16::from(show_window);
         let custom_segment = app.interpreter.segment(Column::Custom);
         let trend_at = trend_column(app, lead);
+        let bits_segment = app.interpreter.segment(Column::Bits);
         let colored = app.config.display.changed_trend_color;
         let (read_start, read_amount) = app.read_window();
         let read_end = read_start.saturating_add(read_amount - 1);
@@ -228,6 +273,11 @@ impl TableCtx<'_> {
                 colored && !selected,
                 theme,
             ));
+            if let Some(flip) = changed.map(|c| (c.flipped, c.heat))
+                && !selected
+            {
+                shades.extend(flip_shades(bits_segment, lead, flip, zebra, theme));
+            }
 
             if selected {
                 pick_row = Some(rows.len());
@@ -272,6 +322,7 @@ impl TableCtx<'_> {
         let lead = 2 * u16::from(type_marker) + u16::from(show_window);
         let custom_segment = app.interpreter.segment(Column::Custom);
         let trend_at = trend_column(app, lead);
+        let bits_segment = app.interpreter.segment(Column::Bits);
         let colored = app.config.display.changed_trend_color;
         let mut rows: Vec<(String, Style, Vec<Shade>)> = Vec::with_capacity(cells.len() + 3);
         let mut pick_row = None;
@@ -304,11 +355,12 @@ impl TableCtx<'_> {
                 };
 
             let selected = (top + ord) as u16 == params.pinned_index;
+            let zebra = ord % 2 == 1;
             let style = if selected {
                 pick_row = Some(rows.len());
                 theme.selected_style()
             } else {
-                theme.row_style(ord % 2 == 1, changed.map(|c| c.heat))
+                theme.row_style(zebra, changed.map(|c| c.heat))
             };
             let mut shades: Vec<Shade> = custom_segment
                 .filter(|_| continuation && !selected)
@@ -323,6 +375,11 @@ impl TableCtx<'_> {
                 colored && !selected,
                 theme,
             ));
+            if let Some(flip) = changed.map(|c| (c.flipped, c.heat))
+                && !selected
+            {
+                shades.extend(flip_shades(bits_segment, lead, flip, zebra, theme));
+            }
             rows.push((text, style, shades));
         }
 
@@ -1139,7 +1196,7 @@ fn draw_graph(
 
 #[cfg(test)]
 mod tests {
-    use super::{mark_trend, shaded_row};
+    use super::{bit_flipped_at, bit_shades, mark_trend, shaded_row};
     use crate::app::Trend;
     use ratatui::style::{Color, Style};
 
@@ -1192,5 +1249,33 @@ mod tests {
         assert_eq!(mark_trend(&mut text, 3, Trend::Down), None);
         assert_eq!(mark_trend(&mut text, 40, Trend::Down), None);
         assert_eq!(text, "   12▲34");
+    }
+
+    #[test]
+    fn flipped_bits_map_onto_their_digits_in_the_grouped_column() {
+        let offsets = |flipped: u16| -> Vec<usize> {
+            (0..19).filter(|&o| bit_flipped_at(flipped, o)).collect()
+        };
+        assert_eq!(offsets(0x8000), [0]);
+        assert_eq!(offsets(0x0001), [18]);
+        assert_eq!(offsets(0x0010), [13]);
+        assert_eq!(offsets(0x0800), [5]);
+        assert_eq!(offsets(0xFFFF).len(), 16);
+        assert!(offsets(0xFFFF).iter().all(|o| o % 5 != 4));
+    }
+
+    #[test]
+    fn neighbouring_flipped_bits_share_one_shade() {
+        let (plain, hot) = (Style::default(), Style::default().fg(Color::Yellow));
+        assert_eq!(
+            bit_shades(10, 0b0000_0000_0011_1000, plain, hot),
+            [
+                (10, 12, plain),
+                (22, 2, hot),
+                (24, 1, plain),
+                (25, 1, hot),
+                (26, 3, plain)
+            ]
+        );
     }
 }

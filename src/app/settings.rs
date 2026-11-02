@@ -219,6 +219,9 @@ impl App {
             SettingsField::ChangedFade => {
                 self.config.display.changed_fade = !self.config.display.changed_fade;
             }
+            SettingsField::ChangedBits => {
+                self.config.display.changed_bits = !self.config.display.changed_bits;
+            }
             SettingsField::ChangedTrend => {
                 self.config.display.changed_trend = !self.config.display.changed_trend;
             }

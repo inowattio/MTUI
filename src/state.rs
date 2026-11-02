@@ -1271,6 +1271,7 @@ settings_fields! {
         [
             ChangedExpiry: Number => "Changed highlight (ms)", "How long a changed value stays highlighted, 0 never clears it",
             ChangedFade: Toggle => "Fade changed highlight", "Fade a changed value back to the text color over the highlight time",
+            ChangedBits: Toggle => "Highlight flipped bits", "In the bits column, highlight only the bits that changed",
             ChangedTrend: Toggle => "Show change direction", "Mark a highlighted value with an up or down arrow after its address",
             ChangedTrendColor: Toggle => "Color change direction", "Color the direction arrow with the rising and falling theme colors",
             ChangedTrendCustom: Toggle => "Direction only per custom", "Show one arrow per custom value on its first register, following the decoded value",

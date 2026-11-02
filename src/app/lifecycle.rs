@@ -674,9 +674,16 @@ impl App {
                 time_text: Arc::clone(&time_text),
             };
             let previous = self.read_log.insert(cell, entry);
-            let trend = previous.and_then(|prev| Trend::between(prev.value, value));
-            if let Some(trend) = trend {
-                self.changed.insert(cell, Change { at: read_at, trend });
+            if let Some(prev) = previous
+                && let Some(trend) = Trend::between(prev.value, value)
+            {
+                let flipped = prev.value ^ value;
+                let change = Change {
+                    at: read_at,
+                    trend,
+                    flipped,
+                };
+                self.changed.insert(cell, change);
             }
 
             let history = self.value_history.entry(cell).or_default();
@@ -688,8 +695,12 @@ impl App {
             let after = self.custom_level(owner);
             let trend = before.zip(after).and_then(|(b, a)| Trend::between(b, a));
             if let Some(trend) = trend {
-                self.custom_changed
-                    .insert(owner, Change { at: read_at, trend });
+                let change = Change {
+                    at: read_at,
+                    trend,
+                    flipped: 0,
+                };
+                self.custom_changed.insert(owner, change);
             }
         }
     }

@@ -494,6 +494,7 @@ impl Trend {
 struct Change {
     at: DateTime<Utc>,
     trend: Trend,
+    flipped: u16,
 }
 
 #[derive(Clone, Debug)]

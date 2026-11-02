@@ -47,6 +47,7 @@ enum Markers {
 pub struct Changed {
     pub heat: f32,
     pub trend: Option<Trend>,
+    pub flipped: u16,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -285,8 +286,13 @@ impl App {
                 change.trend,
             ))
         };
-        let own = live(self.changed.get(&cell));
+        let own_change = self.changed.get(&cell);
+        let own = live(own_change);
         let display = &self.config.display;
+        let flipped = own
+            .and(own_change)
+            .filter(|_| display.changed_bits)
+            .map_or(0, |change| change.flipped);
         let per_custom = display.changed_trend && display.changed_trend_custom;
         let (heat, trend) = if per_custom && self.custom_rules.contains_key(&cell) {
             custom_merge(own, live(self.custom_changed.get(&cell)))?
@@ -300,6 +306,7 @@ impl App {
         Some(Changed {
             heat: if display.changed_fade { heat } else { 1.0 },
             trend: trend.filter(|_| display.changed_trend),
+            flipped,
         })
     }
 
