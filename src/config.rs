@@ -132,7 +132,7 @@ impl Default for DisplayConfig {
             changed_fade: false,
             changed_trend: false,
             changed_trend_custom: true,
-            changed_trend_color: false,
+            changed_trend_color: true,
             mock_device: true,
             padding: Padding::default(),
         }
