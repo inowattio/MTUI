@@ -110,16 +110,30 @@ struct Cover {
     status_register_type: Option<Table>,
 }
 
-fn repr(data_type: Option<&str>) -> Option<CustomRepr> {
+fn sized(count: Option<u8>, [one, two, four]: [CustomRepr; 3]) -> Option<CustomRepr> {
+    match count.unwrap_or(1) {
+        1 => Some(one),
+        2 => Some(two),
+        4 => Some(four),
+        _ => None,
+    }
+}
+
+fn repr(data_type: Option<&str>, count: Option<u8>) -> Option<CustomRepr> {
     Some(match data_type.unwrap_or("int16") {
-        "int16" | "int" | "integer" => CustomRepr::I16,
-        "uint16" | "uint" => CustomRepr::U16,
+        "int" | "integer" => {
+            return sized(count, [CustomRepr::I16, CustomRepr::I32, CustomRepr::I64]);
+        }
+        "uint" => return sized(count, [CustomRepr::U16, CustomRepr::U32, CustomRepr::U64]),
+        "float" => return sized(count, [CustomRepr::F16, CustomRepr::F32, CustomRepr::F64]),
+        "int16" => CustomRepr::I16,
+        "uint16" => CustomRepr::U16,
         "int32" => CustomRepr::I32,
         "uint32" => CustomRepr::U32,
         "int64" => CustomRepr::I64,
         "uint64" => CustomRepr::U64,
         "float16" => CustomRepr::F16,
-        "float32" | "float" => CustomRepr::F32,
+        "float32" => CustomRepr::F32,
         "float64" => CustomRepr::F64,
         "string" => CustomRepr::Ascii,
         _ => return None,
@@ -144,7 +158,7 @@ impl Reading {
     }
 
     fn rule(&self, unit: Option<&str>) -> Option<CustomRule> {
-        let repr = repr(self.data_type.as_deref())?;
+        let repr = repr(self.data_type.as_deref(), self.count)?;
         let ascii = repr == CustomRepr::Ascii;
         let ops = [
             self.scale
@@ -471,6 +485,50 @@ covers:
         let room = registers.inputs[0].custom.as_ref().expect("rule");
         assert_eq!(room.repr, CustomRepr::I16);
         assert_eq!(room.suffix, " °F");
+    }
+
+    #[test]
+    fn legacy_data_types_are_sized_by_count() {
+        let registers = parse(
+            "
+sensors:
+  - name: Energy
+    address: 1
+    data_type: int
+    count: 2
+  - name: Total
+    address: 10
+    data_type: uint
+    count: 4
+  - name: Power
+    address: 20
+    data_type: float
+    count: 2
+  - name: Half
+    address: 30
+    data_type: float
+  - name: Odd
+    address: 40
+    data_type: int
+    count: 3
+",
+        )
+        .expect("importable");
+        let reprs: Vec<_> = registers
+            .holdings
+            .iter()
+            .map(|e| (e.address, e.custom.as_ref().map(|rule| rule.repr)))
+            .collect();
+        assert_eq!(
+            reprs,
+            [
+                (1, Some(CustomRepr::I32)),
+                (10, Some(CustomRepr::U64)),
+                (20, Some(CustomRepr::F32)),
+                (30, Some(CustomRepr::F16)),
+                (40, None),
+            ]
+        );
     }
 
     #[test]
