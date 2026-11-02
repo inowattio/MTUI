@@ -386,6 +386,14 @@ fn field_value(
         SettingsField::ShowConnectionLabel => (on_off(device.display.connection_label), None),
         SettingsField::ShowAsciiStrip => (on_off(device.display.ascii_strip), None),
         SettingsField::ShowInactiveTabs => (on_off(device.display.inactive_tabs), None),
+        SettingsField::SelectedHighlight => (
+            if device.display.select_address_only {
+                "address".to_string()
+            } else {
+                "row".to_string()
+            },
+            None,
+        ),
         SettingsField::ShowReadWindow => (on_off(device.display.read_window), None),
         SettingsField::ShowMatrixContext => (on_off(device.matrix.show_context), None),
         SettingsField::GraphTimeAxis => (

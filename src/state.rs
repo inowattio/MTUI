@@ -1263,6 +1263,7 @@ settings_fields! {
             CustomWidth: Number => "Custom width", "Characters the custom column takes, auto fits the longest value",
         ],
         [
+            SelectedHighlight: Toggle => "Selected highlight", "Highlight the whole selected row, or only its address and read marker",
             ShowReadWindow: Toggle => "Show read window", "Highlight the address range covered by the current read batch",
             ShowMatrixContext: Toggle => "Show matrix context", "Show the custom value and label of the selected register under the Matrix panel",
             GraphTimeAxis: Toggle => "Graph time axis", "Plot the graph against time instead of sample count",
