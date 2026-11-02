@@ -17,6 +17,20 @@ exclude = [".github/"]
 pkg-url = "{ repo }/releases/download/v{ version }/{ name }-v{ version }-{ target }{ binary-ext }"
 pkg-fmt = "bin"
 
+[package.metadata.deb]
+maintainer = "inowattio <cosmin.patrinjan@inowattio.com>"
+copyright = "inowattio"
+extended-description = """\
+MTUI is an extensive Modbus client that runs in pretty much any terminal, \
+written in pure safe Rust on top of tokio-modbus and ratatui."""
+section = "net"
+priority = "optional"
+depends = "libc6 (>= 2.35), libgcc-s1"
+assets = [
+    ["target/release/mtui", "usr/bin/", "755"],
+    ["README.md", "usr/share/doc/mtui/README", "644"],
+]
+
 [[bin]]
 name = "mtui"
 path = "src/main.rs"

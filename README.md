@@ -25,6 +25,7 @@ Press `h` inside the app for all available keybinds.
 ## Running
 Multiple options are available:
 * (Linux) install via `snap install mtui`
+* (Debian/Ubuntu) download the `.deb` from [releases](https://github.com/inowattio/mtui/releases) and `sudo apt install ./mtui_*.deb`
 * download a binary from [releases](https://github.com/inowattio/mtui/releases)
 * with cargo via `cargo install mtui`
 * clone the repository and then `cargo run`
