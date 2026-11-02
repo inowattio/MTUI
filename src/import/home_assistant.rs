@@ -241,10 +241,11 @@ impl Import {
 
     fn climate(&mut self, climate: &Climate) {
         let name = &climate.reading.name;
-        let unit = climate
-            .temperature_unit
-            .as_deref()
-            .map_or("°C", |unit| if unit == "F" { "°F" } else { "°C" });
+        let unit = match climate.temperature_unit.as_deref() {
+            Some("F") => "°F",
+            Some("K") => "K",
+            _ => "°C",
+        };
         self.reading(&climate.reading, format!("{name} temperature"), Some(unit));
         let targets = match &climate.target_temp_register {
             Some(Registers16::One(address)) => vec![*address],
@@ -470,6 +471,24 @@ covers:
         let room = registers.inputs[0].custom.as_ref().expect("rule");
         assert_eq!(room.repr, CustomRepr::I16);
         assert_eq!(room.suffix, " °F");
+    }
+
+    #[test]
+    fn climate_temperature_units() {
+        for (unit, suffix) in [("C", " °C"), ("F", " °F"), ("K", " K"), ("X", " °C")] {
+            let registers = parse(&format!(
+                "
+climates:
+  - name: Room
+    address: 1
+    target_temp_register: 2
+    temperature_unit: {unit}
+"
+            ))
+            .expect("importable");
+            let rule = registers.holdings[0].custom.as_ref().expect("rule");
+            assert_eq!(rule.suffix, suffix, "{unit}");
+        }
     }
 
     #[test]
