@@ -1,6 +1,6 @@
 use crate::app::{
-    AllowRawFlag, AllowUnitFlag, ApiBindState, ApiDevice, BindStateFlag, BoundPort, CommStats,
-    ReadOnlyFlag, SharedStats, StatTarget, StatusFlag,
+    AllowMcpFlag, AllowRawFlag, AllowUnitFlag, ApiBindState, ApiDevice, BindStateFlag, BoundPort,
+    CommStats, ReadOnlyFlag, SharedStats, StatTarget, StatusFlag,
 };
 use crate::compat::Elapsed;
 use crate::modbus::ModbusDevice;
@@ -30,13 +30,14 @@ pub struct ApiState {
     pub read_only: ReadOnlyFlag,
     pub allow_unit_id: AllowUnitFlag,
     pub allow_raw: AllowRawFlag,
+    pub allow_mcp: AllowMcpFlag,
     pub status: StatusFlag,
     pub bind: BindStateFlag,
     pub stats: SharedStats,
 }
 
 #[derive(Deserialize)]
-struct ReadRequest {
+pub(crate) struct ReadRequest {
     #[serde(rename = "type")]
     register_type: RegisterType,
     address: u16,
@@ -76,17 +77,17 @@ fn failure(error: &anyhow::Error) -> Response {
 }
 
 #[derive(Deserialize)]
-struct WriteRequest {
+pub(crate) struct WriteRequest {
     #[serde(rename = "type")]
     register_type: RegisterType,
     address: u16,
-    values: Vec<u16>,
+    pub(crate) values: Vec<u16>,
     #[serde(default)]
     unit_id: Option<u8>,
 }
 
 #[derive(Deserialize)]
-struct RawRequest {
+pub(crate) struct RawRequest {
     code: u8,
     #[serde(default)]
     data: Vec<u8>,
@@ -118,6 +119,7 @@ pub async fn serve(addr: SocketAddr, state: ApiState) {
         .route("/write", post(write_handler))
         .route("/raw", post(raw_handler))
         .route("/health", get(health_handler))
+        .route("/mcp", post(crate::mcp::handler))
         .layer(middleware::from_fn(log_requests))
         .with_state(state);
 
@@ -152,7 +154,10 @@ async fn log_requests(request: Request, next: Next) -> Response {
     response
 }
 
-async fn read_handler(State(state): State<ApiState>, Json(request): Json<ReadRequest>) -> Response {
+pub(crate) async fn read_handler(
+    State(state): State<ApiState>,
+    Json(request): Json<ReadRequest>,
+) -> Response {
     log::info!(
         "API read {:?}@{}:{} unit={}",
         request.register_type,
@@ -198,7 +203,7 @@ async fn read_handler(State(state): State<ApiState>, Json(request): Json<ReadReq
     }
 }
 
-async fn write_handler(
+pub(crate) async fn write_handler(
     State(state): State<ApiState>,
     Json(request): Json<WriteRequest>,
 ) -> Response {
@@ -270,7 +275,10 @@ async fn write_handler(
     }
 }
 
-async fn raw_handler(State(state): State<ApiState>, Json(request): Json<RawRequest>) -> Response {
+pub(crate) async fn raw_handler(
+    State(state): State<ApiState>,
+    Json(request): Json<RawRequest>,
+) -> Response {
     log::info!(
         "API raw {:#04X} unit={} {} byte(s)",
         request.code,
@@ -309,7 +317,7 @@ async fn raw_handler(State(state): State<ApiState>, Json(request): Json<RawReque
     }
 }
 
-async fn health_handler(State(state): State<ApiState>) -> Response {
+pub(crate) async fn health_handler(State(state): State<ApiState>) -> Response {
     let device = current(&state.device);
     let device_present = device.is_some();
     let code = state.status.load(Ordering::Relaxed);
@@ -385,7 +393,7 @@ fn unit_override_forbidden(state: &ApiState, unit: Option<u8>) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::{
         ApiState, FailureResponse, RawRequest, RawResponse, ReadRequest, bind_requested,
         health_handler, raw_handler, read_handler,
@@ -403,7 +411,7 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use tokio_modbus::ExceptionCode;
 
-    async fn mock_state() -> ApiState {
+    pub async fn mock_state() -> ApiState {
         let device = ModbusDevice::new(&DeviceConfig::default()).await.unwrap();
         ApiState {
             device: Arc::new(Mutex::new(Some(device))),
@@ -412,6 +420,7 @@ mod tests {
             read_only: Arc::new(AtomicBool::new(false)),
             allow_unit_id: Arc::new(AtomicBool::new(false)),
             allow_raw: Arc::new(AtomicBool::new(false)),
+            allow_mcp: Arc::new(AtomicBool::new(false)),
             status: Arc::new(AtomicU8::new(0)),
             bind: Arc::new(AtomicU8::new(0)),
             stats: Arc::new(Mutex::new(CommStats::default())),

@@ -153,6 +153,7 @@ pub struct ApiConfig {
     pub port: u16,
     pub unit_id_override: bool,
     pub raw_function: bool,
+    pub mcp: bool,
 }
 
 impl Default for ApiConfig {
@@ -163,6 +164,7 @@ impl Default for ApiConfig {
             port: 0,
             unit_id_override: false,
             raw_function: false,
+            mcp: false,
         }
     }
 }

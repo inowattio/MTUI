@@ -16,6 +16,7 @@ impl App {
             read_only: self.api_read_only.clone(),
             allow_unit_id: self.api_allow_unit_id.clone(),
             allow_raw: self.api_allow_raw.clone(),
+            allow_mcp: self.api_allow_mcp.clone(),
             status: self.api_status.clone(),
             bind: self.api_bind.clone(),
             stats: self.stats.clone(),
@@ -39,6 +40,11 @@ impl App {
     pub(super) fn sync_api_allow_raw(&self) {
         self.api_allow_raw
             .store(self.config.api.raw_function, Ordering::Relaxed);
+    }
+
+    pub(super) fn sync_api_allow_mcp(&self) {
+        self.api_allow_mcp
+            .store(self.config.api.mcp, Ordering::Relaxed);
     }
 
     pub(super) fn sync_api_status(&self) {

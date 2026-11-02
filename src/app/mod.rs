@@ -33,6 +33,7 @@ pub type BoundPort = Arc<AtomicU16>;
 pub type ReadOnlyFlag = Arc<AtomicBool>;
 pub type AllowUnitFlag = Arc<AtomicBool>;
 pub type AllowRawFlag = Arc<AtomicBool>;
+pub type AllowMcpFlag = Arc<AtomicBool>;
 pub type StatusFlag = Arc<AtomicU8>;
 pub type BindStateFlag = Arc<AtomicU8>;
 pub type SharedStats = Arc<Mutex<CommStats>>;
@@ -517,6 +518,7 @@ pub struct App {
     api_read_only: ReadOnlyFlag,
     api_allow_unit_id: AllowUnitFlag,
     api_allow_raw: AllowRawFlag,
+    api_allow_mcp: AllowMcpFlag,
     api_status: StatusFlag,
     api_bind: BindStateFlag,
     writes_log: SharedWritesLog,

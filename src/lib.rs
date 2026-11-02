@@ -13,6 +13,8 @@ pub mod import;
 pub mod input;
 pub mod interpretator;
 pub mod logger;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod mcp;
 pub mod mock;
 pub mod modbus;
 pub mod num_ops;

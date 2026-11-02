@@ -1235,6 +1235,9 @@ settings_fields! {
             ApiUnitIdOverride: Toggle => "Unit ID set", "Let API requests target a unit id other than the configured one",
             ApiRawFunction: Toggle => "Raw function", "Let the API send any function code with raw bytes through POST /raw",
         ],
+        [
+            ApiMcp: Toggle => "MCP", "Serve the Model Context Protocol on /mcp so AI assistants can use the device",
+        ],
     }
     Display {
         [

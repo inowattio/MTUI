@@ -200,6 +200,7 @@ impl App {
             SettingsField::ApiRawFunction => {
                 self.config.api.raw_function = !self.config.api.raw_function;
             }
+            SettingsField::ApiMcp => self.config.api.mcp = !self.config.api.mcp,
             SettingsField::WriteLogEnabled => {
                 self.config.write_log.enabled = !self.config.write_log.enabled;
             }
@@ -293,6 +294,7 @@ impl App {
         self.sync_api_read_only();
         self.sync_api_allow_unit_id();
         self.sync_api_allow_raw();
+        self.sync_api_allow_mcp();
         self.refresh_dirty();
     }
 

@@ -4,7 +4,8 @@ info:
   description: |
     HTTP API exposed by MTUI for reading and writing Modbus
     registers on the currently connected device, sending raw function
-    codes, plus a health probe.
+    codes, plus a health probe. The same operations are offered as MCP
+    tools at `/mcp`.
 
     The server binds to the configured `api.host` (`0.0.0.0` by default) on 
     a configurable port and proxies requests to the live Modbus device 
@@ -303,6 +304,135 @@ paths:
                     unit_id_override: false
                     raw_function: false
 
+  /mcp:
+    post:
+      summary: Model Context Protocol endpoint
+      description: |
+        Stateless [MCP](https://modelcontextprotocol.io) server using the
+        Streamable HTTP transport. Each request body is a single JSON-RPC 2.0
+        message; batches are not supported. Responses are always plain JSON,
+        never an SSE stream, and no `Mcp-Session-Id` is issued.
+
+        The endpoint is disabled by default and answers `404` until the
+        "MCP" API setting is enabled.
+
+        Supported protocol versions are `2025-11-25`, `2025-06-18` and
+        `2024-11-05`; `initialize` echoes the requested version when
+        supported and answers `2025-11-25` otherwise. `2025-03-26` is not
+        supported as it requires batching. A request whose
+        `MCP-Protocol-Version` header names an unsupported version is
+        rejected with `400`.
+
+        Every message must carry `jsonrpc: "2.0"`, and a request `id` must be
+        a string or a number; anything else is an invalid request (`-32600`).
+
+        Supported methods are `initialize`, `ping`, `tools/list` and
+        `tools/call`. The tools mirror the HTTP endpoints and obey the same
+        settings:
+
+        - `device_status`: the `/health` body
+        - `read_registers`: arguments as `ReadRequest`, result `{"values": [...]}`
+        - `write_registers`: arguments as `WriteRequest`, result `{"written": n}`
+        - `raw_function`: arguments as `RawRequest`, result `{"data": [...]}`
+
+        A rejected or failed tool call is a regular result with
+        `isError: true` and a text explanation, not a JSON-RPC error.
+
+        Requests carrying an `Origin` header whose host is not `localhost`,
+        `127.0.0.1` or `[::1]` are rejected with `403` to prevent DNS
+        rebinding. `GET` is answered with `405` as no server-initiated stream
+        is offered.
+      operationId: mcp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JsonRpcMessage"
+            examples:
+              initialize:
+                summary: Start a session
+                value:
+                  jsonrpc: "2.0"
+                  id: 1
+                  method: initialize
+                  params:
+                    protocolVersion: "2025-06-18"
+                    capabilities: {}
+                    clientInfo:
+                      name: example
+                      version: "1.0"
+              initialized:
+                summary: Notification, answered with 202
+                value:
+                  jsonrpc: "2.0"
+                  method: notifications/initialized
+              read:
+                summary: Read 3 holding registers from address 50
+                value:
+                  jsonrpc: "2.0"
+                  id: 2
+                  method: tools/call
+                  params:
+                    name: read_registers
+                    arguments:
+                      type: holding
+                      address: 50
+                      count: 3
+      responses:
+        "200":
+          description: |
+            JSON-RPC response to a request. Parse errors (`-32700`), invalid
+            messages (`-32600`), unknown methods (`-32601`) and unknown tools
+            (`-32602`) are reported in its `error` member.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JsonRpcResponse"
+              examples:
+                read:
+                  summary: Successful read_registers call
+                  value:
+                    jsonrpc: "2.0"
+                    id: 2
+                    result:
+                      content:
+                        - type: text
+                          text: '{"values":[2300,1500,15]}'
+                      structuredContent:
+                        values: [2300, 1500, 15]
+                      isError: false
+                rejected:
+                  summary: Tool call rejected by a setting
+                  value:
+                    jsonrpc: "2.0"
+                    id: 3
+                    result:
+                      content:
+                        - type: text
+                          text: 'raw functions are disabled: enable "API raw function" in mtui''s settings'
+                      isError: true
+                unknown_method:
+                  summary: Unknown method
+                  value:
+                    jsonrpc: "2.0"
+                    id: 4
+                    error:
+                      code: -32601
+                      message: unknown method resources/list
+        "202":
+          description: The message was a notification or a response; no body.
+        "400":
+          description: The `MCP-Protocol-Version` header names an unsupported version.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JsonRpcResponse"
+        "403":
+          description: The `Origin` header is not a local origin.
+        "404":
+          description: The "MCP" setting is disabled.
+
 components:
   responses:
     MalformedJson:
@@ -528,3 +658,46 @@ components:
           description: |
             Whether the "API raw function" setting is enabled, i.e. whether
             `/raw` accepts requests instead of answering `501`.
+
+    JsonRpcMessage:
+      type: object
+      required: [jsonrpc]
+      description: |
+        A JSON-RPC 2.0 request (with `id` and `method`), notification
+        (`method` without `id`) or response (`id` with `result` or `error`).
+      properties:
+        jsonrpc:
+          type: string
+          const: "2.0"
+        id:
+          type: [integer, string]
+        method:
+          type: string
+          enum:
+            - initialize
+            - ping
+            - tools/list
+            - tools/call
+            - notifications/initialized
+        params:
+          type: object
+
+    JsonRpcResponse:
+      type: object
+      required: [jsonrpc, id]
+      properties:
+        jsonrpc:
+          type: string
+          const: "2.0"
+        id:
+          type: [integer, string, "null"]
+        result:
+          type: object
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: integer
+            message:
+              type: string
