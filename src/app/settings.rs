@@ -219,6 +219,10 @@ impl App {
             SettingsField::ChangedFade => {
                 self.config.display.changed_fade = !self.config.display.changed_fade;
             }
+            SettingsField::SelectedAddressOnly => {
+                self.config.display.selected_address_only =
+                    !self.config.display.selected_address_only;
+            }
             SettingsField::ChangedBits => {
                 self.config.display.changed_bits = !self.config.display.changed_bits;
             }

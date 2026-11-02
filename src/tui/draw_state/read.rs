@@ -131,6 +131,14 @@ fn flip_shades(
     }
 }
 
+fn selection_shade(address: RowSegment, lead: u16, theme: &Theme) -> Shade {
+    (
+        lead as usize + address.start,
+        address.width,
+        theme.selected_style(),
+    )
+}
+
 fn continuation_shade(segment: RowSegment, lead: u16, style: Style, theme: &Theme) -> Shade {
     (
         segment.start + lead as usize,
@@ -218,6 +226,8 @@ impl TableCtx<'_> {
         let trend_at = trend_column(app, lead);
         let bits_segment = app.interpreter.segment(Column::Bits);
         let colored = app.config.display.changed_trend_color;
+        let address_segment = app.interpreter.segment(Column::Address);
+        let address_only = app.config.display.selected_address_only && address_segment.is_some();
         let (read_start, read_amount) = app.read_window();
         let read_end = read_start.saturating_add(read_amount - 1);
         let extra = if show_window {
@@ -255,13 +265,14 @@ impl TableCtx<'_> {
                         None,
                     ),
                 };
-            let style = if selected {
+            let full = selected && !address_only;
+            let style = if full {
                 theme.selected_style()
             } else {
                 base_style
             };
             let mut shades: Vec<Shade> = custom_segment
-                .filter(|_| continuation && !selected)
+                .filter(|_| continuation && !full)
                 .map(|segment| continuation_shade(segment, lead, style, theme))
                 .into_iter()
                 .collect();
@@ -270,13 +281,16 @@ impl TableCtx<'_> {
                 &mut text,
                 trend_at,
                 trend,
-                colored && !selected,
+                colored && !full,
                 theme,
             ));
             if let Some(flip) = changed.map(|c| (c.flipped, c.heat))
-                && !selected
+                && !full
             {
                 shades.extend(flip_shades(bits_segment, lead, flip, zebra, theme));
+            }
+            if selected && !full {
+                shades.extend(address_segment.map(|segment| selection_shade(segment, lead, theme)));
             }
 
             if selected {
@@ -324,6 +338,8 @@ impl TableCtx<'_> {
         let trend_at = trend_column(app, lead);
         let bits_segment = app.interpreter.segment(Column::Bits);
         let colored = app.config.display.changed_trend_color;
+        let address_segment = app.interpreter.segment(Column::Address);
+        let address_only = app.config.display.selected_address_only && address_segment.is_some();
         let mut rows: Vec<(String, Style, Vec<Shade>)> = Vec::with_capacity(cells.len() + 3);
         let mut pick_row = None;
         let mut prev_kind: Option<RegisterType> = None;
@@ -356,14 +372,17 @@ impl TableCtx<'_> {
 
             let selected = (top + ord) as u16 == params.pinned_index;
             let zebra = ord % 2 == 1;
-            let style = if selected {
+            let full = selected && !address_only;
+            if selected {
                 pick_row = Some(rows.len());
+            }
+            let style = if full {
                 theme.selected_style()
             } else {
                 theme.row_style(zebra, changed.map(|c| c.heat))
             };
             let mut shades: Vec<Shade> = custom_segment
-                .filter(|_| continuation && !selected)
+                .filter(|_| continuation && !full)
                 .map(|segment| continuation_shade(segment, lead, style, theme))
                 .into_iter()
                 .collect();
@@ -372,13 +391,16 @@ impl TableCtx<'_> {
                 &mut text,
                 trend_at,
                 trend,
-                colored && !selected,
+                colored && !full,
                 theme,
             ));
             if let Some(flip) = changed.map(|c| (c.flipped, c.heat))
-                && !selected
+                && !full
             {
                 shades.extend(flip_shades(bits_segment, lead, flip, zebra, theme));
+            }
+            if selected && !full {
+                shades.extend(address_segment.map(|segment| selection_shade(segment, lead, theme)));
             }
             rows.push((text, style, shades));
         }
@@ -1196,8 +1218,12 @@ fn draw_graph(
 
 #[cfg(test)]
 mod tests {
-    use super::{bit_flipped_at, bit_shades, mark_trend, shaded_row};
+    use super::{bit_flipped_at, bit_shades, mark_trend, selection_shade, shaded_row};
     use crate::app::Trend;
+    use crate::config::{Column, InterpretorConfig};
+    use crate::interpretator::Interpretor;
+    use crate::modbus::WordOrder;
+    use crate::tui::theme::Theme;
     use ratatui::style::{Color, Style};
 
     #[test]
@@ -1276,6 +1302,22 @@ mod tests {
                 (25, 1, hot),
                 (26, 3, plain)
             ]
+        );
+    }
+
+    #[test]
+    fn an_address_only_selection_covers_just_the_address() {
+        let interpreter = Interpretor::new(InterpretorConfig::default(), WordOrder::ABCD);
+        let address = interpreter.segment(Column::Address).expect("address");
+        let theme = Theme::default();
+        let style = theme.selected_style();
+        assert_eq!(
+            selection_shade(address, 1, &theme),
+            (1 + address.start, address.width, style)
+        );
+        assert_eq!(
+            selection_shade(address, 3, &theme),
+            (3 + address.start, address.width, style)
         );
     }
 }
