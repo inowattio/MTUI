@@ -1,5 +1,5 @@
 use super::popups::draw_popup;
-use crate::app::App;
+use crate::app::{App, Trend};
 use crate::config::{Column, Config};
 use crate::constants::{NO_VALUE, UNINTERPRETABLE};
 use crate::input::KeyCode;
@@ -38,18 +38,53 @@ fn ascii_title(ascii: &str, theme: &Theme) -> Line<'static> {
 
 type Shade = (usize, usize, Style);
 
-fn shaded_row(text: String, style: Style, (start, width, shade): Shade) -> TableRow {
-    let chars: Vec<char> = text.chars().collect();
-    let start = start.min(chars.len());
-    let end = start.saturating_add(width).min(chars.len());
-    TableRow {
-        spans: vec![
-            Span::styled(chars[..start].iter().collect::<String>(), style),
-            Span::styled(chars[start..end].iter().collect::<String>(), shade),
-            Span::styled(chars[end..].iter().collect::<String>(), style),
-        ],
-        style,
+fn shaded_row(text: String, style: Style, mut shades: Vec<Shade>) -> TableRow {
+    if shades.is_empty() {
+        return TableRow::plain(text, style);
     }
+    shades.sort_by_key(|&(start, _, _)| start);
+    let chars: Vec<char> = text.chars().collect();
+    let mut spans = Vec::with_capacity(shades.len() * 2 + 1);
+    let mut cursor = 0;
+    for (start, width, shade) in shades {
+        let end = start.saturating_add(width).clamp(cursor, chars.len());
+        let start = start.clamp(cursor, end);
+        spans.push(Span::styled(
+            chars[cursor..start].iter().collect::<String>(),
+            style,
+        ));
+        spans.push(Span::styled(
+            chars[start..end].iter().collect::<String>(),
+            shade,
+        ));
+        cursor = end;
+    }
+    spans.push(Span::styled(
+        chars[cursor..].iter().collect::<String>(),
+        style,
+    ));
+    TableRow { spans, style }
+}
+
+fn mark_trend(text: &mut String, at: usize, trend: Trend) -> Option<usize> {
+    let (index, ' ') = text.char_indices().nth(at)? else {
+        return None;
+    };
+    let mut arrow = [0; 4];
+    text.replace_range(index..=index, trend.arrow().encode_utf8(&mut arrow));
+    Some(at)
+}
+
+fn trend_shade(
+    text: &mut String,
+    at: Option<usize>,
+    trend: Option<(Trend, f32)>,
+    colored: bool,
+    theme: &Theme,
+) -> Option<Shade> {
+    let (trend, heat) = trend?;
+    let at = mark_trend(text, at?, trend)?;
+    colored.then(|| (at, 1, theme.trend_style(trend, heat)))
 }
 
 fn continuation_shade(segment: RowSegment, lead: u16, style: Style, theme: &Theme) -> Shade {
@@ -58,6 +93,11 @@ fn continuation_shade(segment: RowSegment, lead: u16, style: Style, theme: &Them
         segment.width,
         style.patch(theme.dim_style()),
     )
+}
+
+fn trend_column(app: &App, lead: u16) -> Option<usize> {
+    let address = app.interpreter.segment(Column::Address)?;
+    Some(lead as usize + address.start + address.width)
 }
 
 fn rows_table(
@@ -80,7 +120,7 @@ struct TableCtx<'a> {
 impl TableCtx<'_> {
     fn horizontal_offset(
         &mut self,
-        rows: &[(String, Style, Option<Shade>)],
+        rows: &[(String, Style, Vec<Shade>)],
         header: &str,
         prefix: u16,
     ) -> u16 {
@@ -95,7 +135,7 @@ impl TableCtx<'_> {
 
     fn scrollable_table(
         &mut self,
-        rows: Vec<(String, Style, Option<Shade>)>,
+        rows: Vec<(String, Style, Vec<Shade>)>,
         header: &str,
         prefix: u16,
         block: Block<'static>,
@@ -105,17 +145,13 @@ impl TableCtx<'_> {
         let table_rows = rows
             .into_iter()
             .enumerate()
-            .map(|(index, (text, style, shade))| {
-                let shade = match pick {
-                    Some((row, start, width)) if row == index => {
-                        Some((start, width, style.add_modifier(Modifier::REVERSED)))
-                    }
-                    _ => shade,
-                };
-                match shade {
-                    Some(shade) => shaded_row(text, style, shade),
-                    None => TableRow::plain(text, style),
+            .map(|(index, (text, style, mut shades))| {
+                if let Some((row, start, width)) = pick
+                    && row == index
+                {
+                    shades.push((start, width, style.add_modifier(Modifier::REVERSED)));
                 }
+                shaded_row(text, style, shades)
             })
             .collect();
         rows_table(table_rows, header.to_string(), self.theme, block).hscroll(prefix, h_off)
@@ -129,12 +165,14 @@ impl TableCtx<'_> {
     fn main_table(&mut self, visible: u16, header: &str, ascii: Option<&str>) -> RowsTable {
         let (params, app, theme) = (self.params, self.app, self.theme);
         let now = Utc::now();
-        let mut rows: Vec<(String, Style, Option<Shade>)> = Vec::with_capacity(visible as usize);
+        let mut rows: Vec<(String, Style, Vec<Shade>)> = Vec::with_capacity(visible as usize);
         let mut pick_row = None;
 
         let show_window = app.config.display.read_window;
         let lead = u16::from(show_window);
         let custom_segment = app.interpreter.segment(Column::Custom);
+        let trend_at = trend_column(app, lead);
+        let colored = app.config.display.changed_trend_color;
         let (read_start, read_amount) = app.read_window();
         let read_end = read_start.saturating_add(read_amount - 1);
         let extra = if show_window {
@@ -156,26 +194,45 @@ impl TableCtx<'_> {
                 let in_window = (read_start..=read_end).contains(&addr) || extra.contains(&cell);
                 text.push(if in_window { '|' } else { ' ' });
             }
-            let (base_style, continuation) = match app.cell_row_into(&mut text, cell, now, true) {
-                Some(flags) => (theme.row_style(zebra, flags.changed), flags.continuation),
-                None => (
-                    theme.placeholder_style(zebra),
-                    app.placeholder_row_into(&mut text, cell, true),
-                ),
-            };
+            let (base_style, continuation, changed) =
+                match app.cell_row_into(&mut text, cell, now, true) {
+                    Some(flags) => {
+                        let heat = flags.changed.map(|c| c.heat);
+                        (
+                            theme.row_style(zebra, heat),
+                            flags.continuation,
+                            flags.changed,
+                        )
+                    }
+                    None => (
+                        theme.placeholder_style(zebra),
+                        app.placeholder_row_into(&mut text, cell, true),
+                        None,
+                    ),
+                };
             let style = if selected {
                 theme.selected_style()
             } else {
                 base_style
             };
-            let shade = custom_segment
+            let mut shades: Vec<Shade> = custom_segment
                 .filter(|_| continuation && !selected)
-                .map(|segment| continuation_shade(segment, lead, style, theme));
+                .map(|segment| continuation_shade(segment, lead, style, theme))
+                .into_iter()
+                .collect();
+            let trend = changed.and_then(|c| Some((c.trend?, c.heat)));
+            shades.extend(trend_shade(
+                &mut text,
+                trend_at,
+                trend,
+                colored && !selected,
+                theme,
+            ));
 
             if selected {
                 pick_row = Some(rows.len());
             }
-            rows.push((text, style, shade));
+            rows.push((text, style, shades));
         }
 
         let mut block = panel_block(theme, ReadPanel::Main, &app.config);
@@ -214,12 +271,14 @@ impl TableCtx<'_> {
 
         let lead = 2 * u16::from(type_marker) + u16::from(show_window);
         let custom_segment = app.interpreter.segment(Column::Custom);
-        let mut rows: Vec<(String, Style, Option<Shade>)> = Vec::with_capacity(cells.len() + 3);
+        let trend_at = trend_column(app, lead);
+        let colored = app.config.display.changed_trend_color;
+        let mut rows: Vec<(String, Style, Vec<Shade>)> = Vec::with_capacity(cells.len() + 3);
         let mut pick_row = None;
         let mut prev_kind: Option<RegisterType> = None;
         for (ord, &(kind, address)) in cells.iter().enumerate() {
             if prev_kind.is_some_and(|pk| pk != kind) {
-                rows.push((String::new(), theme.base(), None));
+                rows.push((String::new(), theme.base(), Vec::new()));
             }
             prev_kind = Some(kind);
 
@@ -239,7 +298,7 @@ impl TableCtx<'_> {
                 match app.cell_row_into(&mut text, (kind, address), now, false) {
                     Some(flags) => (flags.changed, flags.continuation),
                     None => (
-                        false,
+                        None,
                         app.placeholder_row_into(&mut text, (kind, address), false),
                     ),
                 };
@@ -249,12 +308,22 @@ impl TableCtx<'_> {
                 pick_row = Some(rows.len());
                 theme.selected_style()
             } else {
-                theme.row_style(ord % 2 == 1, changed)
+                theme.row_style(ord % 2 == 1, changed.map(|c| c.heat))
             };
-            let shade = custom_segment
+            let mut shades: Vec<Shade> = custom_segment
                 .filter(|_| continuation && !selected)
-                .map(|segment| continuation_shade(segment, lead, style, theme));
-            rows.push((text, style, shade));
+                .map(|segment| continuation_shade(segment, lead, style, theme))
+                .into_iter()
+                .collect();
+            let trend = changed.and_then(|c| Some((c.trend?, c.heat)));
+            shades.extend(trend_shade(
+                &mut text,
+                trend_at,
+                trend,
+                colored && !selected,
+                theme,
+            ));
+            rows.push((text, style, shades));
         }
 
         let mut block = panel_block(theme, params.panel, &app.config);
@@ -281,6 +350,7 @@ impl TableCtx<'_> {
             Vec::new()
         };
 
+        let colored = app.config.display.changed_trend_color;
         let address_mode = app.interpreter.address_mode();
         let mut header = format!("{: >5}  ", "");
         for c in 0..cols {
@@ -305,9 +375,11 @@ impl TableCtx<'_> {
                     break;
                 };
                 let cell = (params.register_type, addr);
+                let changed = app.cell_changed(cell);
+                let heat = changed.map(|c| c.heat);
                 let (text, mut style) = match app.cell_value(cell) {
                     Some(value) => {
-                        let style = theme.row_style(zebra, app.cell_changed(cell));
+                        let style = theme.row_style(zebra, heat);
                         (format!("{value: >5}"), style)
                     }
                     None => (format!("{NO_VALUE: >5}"), theme.placeholder_style(zebra)),
@@ -322,7 +394,16 @@ impl TableCtx<'_> {
                     style = style.add_modifier(Modifier::UNDERLINED);
                 }
                 spans.push(Span::styled(text, style));
-                spans.push(Span::raw(" "));
+                spans.push(match changed.and_then(|c| Some((c.trend?, c.heat))) {
+                    Some((trend, heat)) if colored => {
+                        Span::styled(trend.arrow().to_string(), theme.trend_style(trend, heat))
+                    }
+                    Some((trend, heat)) => Span::styled(
+                        trend.arrow().to_string(),
+                        theme.row_style(false, Some(heat)),
+                    ),
+                    None => Span::raw(" "),
+                });
             }
             table_rows.push(TableRow {
                 spans,
@@ -1054,4 +1135,62 @@ fn draw_graph(
         Span::styled(format!("{count}"), theme.base()),
     ]);
     frame.render_widget(Paragraph::new(Line::from(spans)), chunks[3]);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{mark_trend, shaded_row};
+    use crate::app::Trend;
+    use ratatui::style::{Color, Style};
+
+    #[test]
+    fn shades_split_the_row_in_order_whatever_order_they_come_in() {
+        let (base, red, blue) = (
+            Style::default(),
+            Style::default().fg(Color::Red),
+            Style::default().fg(Color::Blue),
+        );
+        let row = shaded_row(
+            "abcdefgh".to_string(),
+            base,
+            vec![(5, 2, blue), (1, 1, red)],
+        );
+        let parts: Vec<(&str, Style)> = row
+            .spans
+            .iter()
+            .map(|span| (span.content.as_ref(), span.style))
+            .collect();
+        assert_eq!(
+            parts,
+            [
+                ("a", base),
+                ("b", red),
+                ("cde", base),
+                ("fg", blue),
+                ("h", base)
+            ]
+        );
+    }
+
+    #[test]
+    fn an_overlapping_shade_starts_where_the_previous_one_ended() {
+        let style = Style::default().fg(Color::Red);
+        let row = shaded_row(
+            "abcdef".to_string(),
+            Style::default(),
+            vec![(1, 3, style), (2, 3, style)],
+        );
+        let text: Vec<&str> = row.spans.iter().map(|span| span.content.as_ref()).collect();
+        assert_eq!(text, ["a", "bcd", "", "e", "f"]);
+    }
+
+    #[test]
+    fn the_arrow_only_takes_the_place_of_a_space() {
+        let mut text = "   12 34".to_string();
+        assert_eq!(mark_trend(&mut text, 5, Trend::Up), Some(5));
+        assert_eq!(text, "   12▲34");
+        assert_eq!(mark_trend(&mut text, 3, Trend::Down), None);
+        assert_eq!(mark_trend(&mut text, 40, Trend::Down), None);
+        assert_eq!(text, "   12▲34");
+    }
 }

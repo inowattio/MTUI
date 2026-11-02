@@ -109,6 +109,10 @@ pub struct DisplayConfig {
     pub inactive_tabs: bool,
     pub read_window: bool,
     pub rule_continuation: bool,
+    pub changed_fade: bool,
+    pub changed_trend: bool,
+    pub changed_trend_custom: bool,
+    pub changed_trend_color: bool,
     pub mock_device: bool,
     pub padding: Padding,
 }
@@ -125,6 +129,10 @@ impl Default for DisplayConfig {
             inactive_tabs: true,
             read_window: true,
             rule_continuation: false,
+            changed_fade: false,
+            changed_trend: false,
+            changed_trend_custom: true,
+            changed_trend_color: false,
             mock_device: true,
             padding: Padding::default(),
         }

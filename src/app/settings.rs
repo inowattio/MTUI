@@ -16,6 +16,8 @@ const fn theme_field(theme: &mut Theme, field: SettingsField) -> Option<&mut Col
         SettingsField::ThemeText => &mut theme.text,
         SettingsField::ThemeDim => &mut theme.dim,
         SettingsField::ThemeChanged => &mut theme.changed,
+        SettingsField::ThemeTrendUp => &mut theme.trend_up,
+        SettingsField::ThemeTrendDown => &mut theme.trend_down,
         SettingsField::ThemeZebra => &mut theme.zebra,
         SettingsField::ThemeOk => &mut theme.ok,
         SettingsField::ThemeWarning => &mut theme.warning,
@@ -213,6 +215,19 @@ impl App {
             }
             SettingsField::ShowRuleContinuation => {
                 self.config.display.rule_continuation = !self.config.display.rule_continuation;
+            }
+            SettingsField::ChangedFade => {
+                self.config.display.changed_fade = !self.config.display.changed_fade;
+            }
+            SettingsField::ChangedTrend => {
+                self.config.display.changed_trend = !self.config.display.changed_trend;
+            }
+            SettingsField::ChangedTrendColor => {
+                self.config.display.changed_trend_color = !self.config.display.changed_trend_color;
+            }
+            SettingsField::ChangedTrendCustom => {
+                self.config.display.changed_trend_custom =
+                    !self.config.display.changed_trend_custom;
             }
             SettingsField::ShowClock => self.config.display.clock = !self.config.display.clock,
             SettingsField::ClockMillis => {

@@ -467,6 +467,35 @@ impl fmt::Debug for ClipboardHandle {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Trend {
+    Up,
+    Down,
+}
+
+impl Trend {
+    fn between<T: PartialOrd>(before: T, after: T) -> Option<Self> {
+        match after.partial_cmp(&before)? {
+            std::cmp::Ordering::Greater => Some(Self::Up),
+            std::cmp::Ordering::Less => Some(Self::Down),
+            std::cmp::Ordering::Equal => None,
+        }
+    }
+
+    pub const fn arrow(self) -> char {
+        match self {
+            Self::Up => '▲',
+            Self::Down => '▼',
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct Change {
+    at: DateTime<Utc>,
+    trend: Trend,
+}
+
 #[derive(Clone, Debug)]
 pub struct ReadEntry {
     pub value: u16,
@@ -504,7 +533,8 @@ pub struct App {
     network_scan_task: Option<TaskHandle<Result<Vec<FoundHost>, String>>>,
     #[cfg(not(target_arch = "wasm32"))]
     ports_task: Option<TaskHandle<Vec<String>>>,
-    changed: BTreeMap<RegisterCell, DateTime<Utc>>,
+    changed: BTreeMap<RegisterCell, Change>,
+    custom_changed: BTreeMap<RegisterCell, Change>,
     read_log: BTreeMap<RegisterCell, ReadEntry>,
     value_history: BTreeMap<RegisterCell, VecDeque<(u16, DateTime<Utc>)>>,
     labels: BTreeMap<RegisterCell, String>,

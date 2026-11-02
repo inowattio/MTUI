@@ -29,7 +29,7 @@ fn mark_style(theme: &Theme, mark: DiffMark, zebra: bool) -> Style {
     match mark {
         DiffMark::Before => theme.err_style(),
         DiffMark::After => theme.ok_style(),
-        DiffMark::Same => theme.row_style(zebra, false),
+        DiffMark::Same => theme.row_style(zebra, None),
         DiffMark::Unread => theme.dim_style(),
     }
 }

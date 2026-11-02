@@ -8,6 +8,7 @@ use crate::modbus::WordOrder;
 use crate::num_ops::{cycle, wrap_index};
 use crate::register::RegisterCell;
 use crate::state::{CustomField, CustomParams, Popup};
+use std::collections::BTreeSet;
 
 const PREVIEW_WORDS: usize = 8;
 
@@ -296,6 +297,35 @@ impl App {
         }
         let formatted = rule.evaluate(&words, self.config.device.word_order);
         (!formatted.is_empty()).then_some(CustomCell::Value(formatted))
+    }
+
+    pub(super) fn custom_owners_reading(
+        &self,
+        values: &[(RegisterCell, u16)],
+    ) -> Vec<RegisterCell> {
+        let read: BTreeSet<RegisterCell> = values.iter().map(|&(cell, _)| cell).collect();
+        self.custom_rules
+            .iter()
+            .filter(|&(&(kind, _), rule)| rule.word_addresses().any(|a| read.contains(&(kind, a))))
+            .map(|(&cell, _)| cell)
+            .collect()
+    }
+
+    pub(super) fn custom_level(&self, (kind, address): RegisterCell) -> Option<f64> {
+        let rule = self.custom_rules.get(&(kind, address))?;
+        let words: Vec<u16> = rule
+            .word_addresses()
+            .map(|a| self.read_log.get(&(kind, a)).map(|entry| entry.value))
+            .collect::<Option<_>>()?;
+        let order = self.config.device.word_order;
+        rule.numeric(&words, order)
+            .or_else(|| rule.raw(&words, order).map(|raw| raw as f64))
+    }
+
+    pub(super) fn is_custom_part(&self, (kind, address): RegisterCell) -> bool {
+        self.custom_rules
+            .range((kind, 0)..=(kind, u16::MAX))
+            .any(|(_, rule)| rule.continuation(address).is_some())
     }
 
     pub(super) fn custom_part_of(&self, (kind, address): RegisterCell) -> Option<CustomCell> {

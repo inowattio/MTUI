@@ -1,8 +1,8 @@
 use super::{
-    App, BackgroundTask, CommStats, ConfigError, ConnectTaskResult, DeviceIdTaskResult,
+    App, BackgroundTask, Change, CommStats, ConfigError, ConnectTaskResult, DeviceIdTaskResult,
     LoadConfigTaskResult, PendingWrite, RawTaskResult, ReadEntry, ReadError, ReadFailure,
-    ReconnectState, RefreshTaskResult, RequestTrace, StatTarget, SweepState, UnitScanTaskResult,
-    WriteOutcome, default_config_path, load_config, reconnect_backoff,
+    ReconnectState, RefreshTaskResult, RequestTrace, StatTarget, SweepState, Trend,
+    UnitScanTaskResult, WriteOutcome, default_config_path, load_config, reconnect_backoff,
 };
 use crate::compat::{self, Instant, TaskPoll};
 use crate::config::{AddressMode, BatchAnchor, Config, RegisterViews};
@@ -74,6 +74,7 @@ impl App {
             #[cfg(not(target_arch = "wasm32"))]
             ports_task: None,
             changed: BTreeMap::new(),
+            custom_changed: BTreeMap::new(),
             read_log: BTreeMap::new(),
             value_history: BTreeMap::new(),
             pending_write: None,
@@ -170,6 +171,7 @@ impl App {
 
     pub(super) fn clear_read_accumulation(&mut self) {
         self.changed.clear();
+        self.custom_changed.clear();
         self.read_log.clear();
         self.value_history.clear();
         *self.stats() = CommStats::default();
@@ -654,6 +656,16 @@ impl App {
             .to_string()
             .into();
         let history_cap = (self.config.graph.history as usize).max(1);
+        let display = &self.config.display;
+        let owners = if display.changed_trend && display.changed_trend_custom {
+            self.custom_owners_reading(values)
+        } else {
+            Vec::new()
+        };
+        let levels: Vec<_> = owners
+            .into_iter()
+            .map(|owner| (owner, self.custom_level(owner)))
+            .collect();
 
         for &(cell, value) in values {
             let entry = ReadEntry {
@@ -662,13 +674,23 @@ impl App {
                 time_text: Arc::clone(&time_text),
             };
             let previous = self.read_log.insert(cell, entry);
-            if previous.is_some_and(|prev| prev.value != value) {
-                self.changed.insert(cell, read_at);
+            let trend = previous.and_then(|prev| Trend::between(prev.value, value));
+            if let Some(trend) = trend {
+                self.changed.insert(cell, Change { at: read_at, trend });
             }
 
             let history = self.value_history.entry(cell).or_default();
             history.push_back((value, read_at));
             history.retain_back(history_cap);
+        }
+
+        for (owner, before) in levels {
+            let after = self.custom_level(owner);
+            let trend = before.zip(after).and_then(|(b, a)| Trend::between(b, a));
+            if let Some(trend) = trend {
+                self.custom_changed
+                    .insert(owner, Change { at: read_at, trend });
+            }
         }
     }
 

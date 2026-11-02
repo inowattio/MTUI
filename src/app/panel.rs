@@ -1,4 +1,4 @@
-use super::{App, CommStats};
+use super::{App, Change, CommStats, Trend};
 use crate::config::{AddressMode, BatchAnchor, Column};
 use crate::constants::NO_VALUE;
 use crate::custom::{CustomCell, CustomRule};
@@ -43,10 +43,35 @@ enum Markers {
     Detached,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Changed {
+    pub heat: f32,
+    pub trend: Option<Trend>,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct RowFlags {
-    pub changed: bool,
+    pub changed: Option<Changed>,
     pub continuation: bool,
+}
+
+fn custom_merge(
+    own: Option<(f32, Trend)>,
+    custom: Option<(f32, Trend)>,
+) -> Option<(f32, Option<Trend>)> {
+    match (own, custom) {
+        (own, Some((heat, trend))) => Some((own.map_or(heat, |(h, _)| h.max(heat)), Some(trend))),
+        (Some((heat, _)), None) => Some((heat, None)),
+        (None, None) => None,
+    }
+}
+
+fn change_heat(elapsed_ms: i64, expiry_ms: u64) -> Option<f32> {
+    if expiry_ms == 0 {
+        return Some(1.0);
+    }
+    let left = expiry_ms as i64 - elapsed_ms.max(0);
+    (left > 0).then(|| left as f32 / expiry_ms as f32)
 }
 
 impl App {
@@ -247,18 +272,35 @@ impl App {
         self.read_log.get(&cell).map(|entry| entry.value)
     }
 
-    pub fn cell_changed(&self, cell: RegisterCell) -> bool {
+    pub fn cell_changed(&self, cell: RegisterCell) -> Option<Changed> {
         self.changed_since(cell, Utc::now())
     }
 
-    fn changed_since(&self, cell: RegisterCell, now: DateTime<Utc>) -> bool {
-        let Some(&at) = self.changed.get(&cell) else {
-            return false;
+    fn changed_since(&self, cell: RegisterCell, now: DateTime<Utc>) -> Option<Changed> {
+        let live = |change: Option<&Change>| {
+            let change = change?;
+            let elapsed = now.signed_duration_since(change.at).num_milliseconds();
+            Some((
+                change_heat(elapsed, self.config.changed_expiry_ms)?,
+                change.trend,
+            ))
         };
-        match self.config.changed_expiry_ms {
-            0 => true,
-            ms => now.signed_duration_since(at).num_milliseconds() < ms as i64,
-        }
+        let own = live(self.changed.get(&cell));
+        let display = &self.config.display;
+        let per_custom = display.changed_trend && display.changed_trend_custom;
+        let (heat, trend) = if per_custom && self.custom_rules.contains_key(&cell) {
+            custom_merge(own, live(self.custom_changed.get(&cell)))?
+        } else {
+            let (heat, trend) = own?;
+            (
+                heat,
+                (!per_custom || !self.is_custom_part(cell)).then_some(trend),
+            )
+        };
+        Some(Changed {
+            heat: if display.changed_fade { heat } else { 1.0 },
+            trend: trend.filter(|_| display.changed_trend),
+        })
     }
 
     pub fn inspect_lines(&self, mode: InspectMode) -> Vec<(&'static str, String)> {
@@ -406,7 +448,7 @@ impl App {
     pub fn cell_row(&self, cell: RegisterCell, now: DateTime<Utc>) -> Option<(String, bool)> {
         let mut row = self.interpreter.row_buffer();
         let flags = self.write_cell_row(&mut row, cell, now, Markers::Hidden)?;
-        Some((row, flags.changed))
+        Some((row, flags.changed.is_some()))
     }
 
     pub fn cell_row_into(
@@ -600,8 +642,46 @@ mod panel_tests {
 
 #[cfg(test)]
 mod tests {
-    use super::sized_window;
+    use super::{change_heat, custom_merge, sized_window};
+    use crate::app::Trend;
     use crate::config::BatchAnchor;
+
+    #[test]
+    fn a_custom_value_takes_its_own_direction_and_the_warmer_highlight() {
+        let own = Some((0.2, Trend::Down));
+        let custom = Some((0.6, Trend::Up));
+        assert_eq!(custom_merge(own, custom), Some((0.6, Some(Trend::Up))));
+        assert_eq!(
+            custom_merge(Some((0.9, Trend::Down)), custom),
+            Some((0.9, Some(Trend::Up)))
+        );
+        assert_eq!(custom_merge(None, custom), Some((0.6, Some(Trend::Up))));
+    }
+
+    #[test]
+    fn an_unchanged_custom_value_shows_no_direction() {
+        assert_eq!(
+            custom_merge(Some((0.5, Trend::Down)), None),
+            Some((0.5, None))
+        );
+        assert_eq!(custom_merge(None, None), None);
+    }
+
+    #[test]
+    fn heat_cools_from_full_to_gone_over_the_expiry() {
+        assert_eq!(change_heat(0, 1000), Some(1.0));
+        assert_eq!(change_heat(-50, 1000), Some(1.0));
+        assert_eq!(change_heat(250, 1000), Some(0.75));
+        assert_eq!(change_heat(999, 1000), Some(0.001));
+        assert_eq!(change_heat(1000, 1000), None);
+        assert_eq!(change_heat(5000, 1000), None);
+    }
+
+    #[test]
+    fn a_never_expiring_highlight_stays_at_full_heat() {
+        assert_eq!(change_heat(0, 0), Some(1.0));
+        assert_eq!(change_heat(i64::MAX, 0), Some(1.0));
+    }
 
     #[test]
     fn fitted_columns_fill_the_width_and_never_drop_below_one() {

@@ -1,3 +1,4 @@
+use crate::app::Trend;
 use crate::state::{ConnectionStatus, MessageKind, StatusMessage};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -35,6 +36,8 @@ pub struct Theme {
     pub text: Color,
     pub dim: Color,
     pub changed: Color,
+    pub trend_up: Color,
+    pub trend_down: Color,
     pub zebra: Color,
     pub ok: Color,
     pub warning: Color,
@@ -53,6 +56,8 @@ const DEFAULT: Theme = Theme {
     text: Color::White,
     dim: Color::DarkGray,
     changed: Color::Yellow,
+    trend_up: Color::Green,
+    trend_down: Color::Red,
     zebra: Color::Indexed(235),
     ok: Color::LightGreen,
     warning: Color::Yellow,
@@ -71,6 +76,8 @@ const LIGHT: Theme = Theme {
     text: Color::Black,
     dim: Color::DarkGray,
     changed: Color::Indexed(166),
+    trend_up: Color::Green,
+    trend_down: Color::Red,
     zebra: Color::Indexed(253),
     ok: Color::Green,
     warning: Color::Indexed(130),
@@ -89,6 +96,8 @@ const AMBER: Theme = Theme {
     text: Color::Indexed(223),
     dim: Color::Indexed(94),
     changed: Color::Indexed(229),
+    trend_up: Color::Green,
+    trend_down: Color::Red,
     zebra: Color::Indexed(236),
     ok: Color::Indexed(142),
     warning: Color::Indexed(208),
@@ -140,17 +149,35 @@ impl Theme {
             .add_modifier(Modifier::BOLD)
     }
 
-    pub fn row_style(&self, zebra: bool, changed: bool) -> Style {
+    fn heated(&self, color: Color, heat: f32) -> Color {
+        if heat >= 1.0 {
+            return color;
+        }
+        blend(self.text, color, heat, truecolor()).unwrap_or(color)
+    }
+
+    pub fn changed_color(&self, heat: f32) -> Color {
+        self.heated(self.changed, heat)
+    }
+
+    pub fn trend_style(&self, trend: Trend, heat: f32) -> Style {
+        let color = match trend {
+            Trend::Up => self.trend_up,
+            Trend::Down => self.trend_down,
+        };
+        Style::default().fg(self.heated(color, heat))
+    }
+
+    pub fn row_style(&self, zebra: bool, heat: Option<f32>) -> Style {
         let base = if zebra {
             Style::default().fg(self.text).bg(self.zebra)
         } else {
             self.base()
         };
 
-        if changed {
-            base.patch(self.changed_style())
-        } else {
-            base
+        match heat {
+            Some(heat) => base.fg(self.changed_color(heat)),
+            None => base,
         }
     }
 
@@ -278,6 +305,121 @@ pub fn status_parts(
     )
 }
 
+const ANSI_RGB: [(u8, u8, u8); 16] = [
+    (0, 0, 0),
+    (205, 0, 0),
+    (0, 205, 0),
+    (205, 205, 0),
+    (0, 0, 238),
+    (205, 0, 205),
+    (0, 205, 205),
+    (229, 229, 229),
+    (127, 127, 127),
+    (255, 0, 0),
+    (0, 255, 0),
+    (255, 255, 0),
+    (92, 92, 255),
+    (255, 0, 255),
+    (0, 255, 255),
+    (255, 255, 255),
+];
+
+const CUBE_LEVELS: [u8; 6] = [0, 95, 135, 175, 215, 255];
+
+#[cfg(target_arch = "wasm32")]
+const fn truecolor() -> bool {
+    true
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn truecolor() -> bool {
+    static TRUECOLOR: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *TRUECOLOR.get_or_init(|| {
+        std::env::var("COLORTERM")
+            .is_ok_and(|value| matches!(value.as_str(), "truecolor" | "24bit"))
+    })
+}
+
+const fn indexed_rgb(index: u8) -> (u8, u8, u8) {
+    match index {
+        0..=15 => ANSI_RGB[index as usize],
+        16..=231 => {
+            let i = index - 16;
+            (
+                CUBE_LEVELS[(i / 36) as usize],
+                CUBE_LEVELS[(i / 6 % 6) as usize],
+                CUBE_LEVELS[(i % 6) as usize],
+            )
+        }
+        _ => {
+            let level = 8 + 10 * (index - 232);
+            (level, level, level)
+        }
+    }
+}
+
+const fn color_rgb(color: Color) -> Option<(u8, u8, u8)> {
+    let index = match color {
+        Color::Reset => return None,
+        Color::Rgb(r, g, b) => return Some((r, g, b)),
+        Color::Indexed(index) => index,
+        Color::Black => 0,
+        Color::Red => 1,
+        Color::Green => 2,
+        Color::Yellow => 3,
+        Color::Blue => 4,
+        Color::Magenta => 5,
+        Color::Cyan => 6,
+        Color::Gray => 7,
+        Color::DarkGray => 8,
+        Color::LightRed => 9,
+        Color::LightGreen => 10,
+        Color::LightYellow => 11,
+        Color::LightBlue => 12,
+        Color::LightMagenta => 13,
+        Color::LightCyan => 14,
+        Color::White => 15,
+    };
+    Some(indexed_rgb(index))
+}
+
+fn distance((r1, g1, b1): (u8, u8, u8), (r2, g2, b2): (u8, u8, u8)) -> u32 {
+    let d = |a: u8, b: u8| (i32::from(a) - i32::from(b)).unsigned_abs().pow(2);
+    d(r1, r2) + d(g1, g2) + d(b1, b2)
+}
+
+fn nearest_indexed(rgb: (u8, u8, u8)) -> u8 {
+    let level = |v: u8| {
+        (0..CUBE_LEVELS.len())
+            .min_by_key(|&i| (i32::from(CUBE_LEVELS[i]) - i32::from(v)).unsigned_abs())
+            .unwrap_or(0) as u8
+    };
+    let cube = 16 + 36 * level(rgb.0) + 6 * level(rgb.1) + level(rgb.2);
+    let average = (u32::from(rgb.0) + u32::from(rgb.1) + u32::from(rgb.2)) / 3;
+    let gray = 232 + (average.saturating_sub(3) / 10).min(23) as u8;
+    if distance(indexed_rgb(gray), rgb) < distance(indexed_rgb(cube), rgb) {
+        gray
+    } else {
+        cube
+    }
+}
+
+fn blend(from: Color, to: Color, amount: f32, truecolor: bool) -> Option<Color> {
+    let (from, to) = (color_rgb(from)?, color_rgb(to)?);
+    let amount = amount.clamp(0.0, 1.0);
+    let mix = |a: u8, b: u8| {
+        (f32::from(b) - f32::from(a))
+            .mul_add(amount, f32::from(a))
+            .round() as u8
+    };
+    let rgb = (mix(from.0, to.0), mix(from.1, to.1), mix(from.2, to.2));
+    Some(if truecolor {
+        Color::Rgb(rgb.0, rgb.1, rgb.2)
+    } else {
+        Color::Indexed(nearest_indexed(rgb))
+    })
+}
+
 pub fn status_span(status: &ConnectionStatus, theme: &Theme) -> Span<'static> {
     let (symbol, label, style) = status_parts(status, theme);
     Span::styled(format!("{symbol} {label} "), style)
@@ -285,7 +427,52 @@ pub fn status_span(status: &ConnectionStatus, theme: &Theme) -> Span<'static> {
 
 #[cfg(test)]
 mod tests {
-    use super::Theme;
+    use super::{Theme, blend, nearest_indexed};
+    use ratatui::style::Color;
+
+    #[test]
+    fn a_blend_moves_from_the_first_color_to_the_second() {
+        let (black, white) = (Color::Rgb(0, 0, 0), Color::Rgb(200, 100, 50));
+        assert_eq!(blend(black, white, 0.0, true), Some(black));
+        assert_eq!(blend(black, white, 1.0, true), Some(white));
+        assert_eq!(
+            blend(black, white, 0.5, true),
+            Some(Color::Rgb(100, 50, 25))
+        );
+    }
+
+    #[test]
+    fn named_and_indexed_colors_blend_through_their_palette_values() {
+        assert_eq!(
+            blend(Color::White, Color::Yellow, 1.0, true),
+            Some(Color::Rgb(205, 205, 0))
+        );
+        assert_eq!(
+            blend(Color::Indexed(16), Color::Indexed(231), 1.0, true),
+            Some(Color::Rgb(255, 255, 255))
+        );
+        assert_eq!(
+            blend(Color::Indexed(232), Color::Indexed(255), 0.0, true),
+            Some(Color::Rgb(8, 8, 8))
+        );
+    }
+
+    #[test]
+    fn the_default_color_cannot_be_blended() {
+        assert_eq!(blend(Color::Reset, Color::Yellow, 0.5, true), None);
+        assert_eq!(blend(Color::White, Color::Reset, 0.5, true), None);
+    }
+
+    #[test]
+    fn without_truecolor_a_blend_lands_on_the_closest_palette_entry() {
+        assert_eq!(nearest_indexed((255, 255, 0)), 226);
+        assert_eq!(nearest_indexed((128, 128, 128)), 244);
+        assert_eq!(nearest_indexed((0, 0, 0)), 16);
+        assert_eq!(
+            blend(Color::Rgb(0, 0, 0), Color::Rgb(255, 0, 0), 1.0, false),
+            Some(Color::Indexed(196))
+        );
+    }
 
     #[test]
     fn every_preset_keeps_its_graph_series_apart_from_each_other_and_the_primary() {
