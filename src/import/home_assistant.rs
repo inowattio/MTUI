@@ -99,7 +99,21 @@ struct Climate {
     reading: Reading,
     target_temp_register: Option<Registers16>,
     temperature_unit: Option<String>,
+    current_temp_scale: Option<f64>,
+    current_temp_offset: Option<f64>,
+    target_temp_scale: Option<f64>,
+    target_temp_offset: Option<f64>,
 }
+
+const HVAC_MODES: [&str; 7] = [
+    "auto",
+    "cool",
+    "dry",
+    "fan only",
+    "heat",
+    "heat/cool",
+    "off",
+];
 
 #[derive(Deserialize)]
 struct Cover {
@@ -253,21 +267,46 @@ impl Import {
         }
     }
 
-    fn climate(&mut self, climate: &Climate) {
-        let name = &climate.reading.name;
-        let unit = match climate.temperature_unit.as_deref() {
+    fn climate(&mut self, climate: Climate) {
+        let Climate {
+            mut reading,
+            target_temp_register,
+            temperature_unit,
+            current_temp_scale,
+            current_temp_offset,
+            target_temp_scale,
+            target_temp_offset,
+        } = climate;
+        let unit = match temperature_unit.as_deref() {
             Some("F") => "°F",
             Some("K") => "K",
             _ => "°C",
         };
-        self.reading(&climate.reading, format!("{name} temperature"), Some(unit));
-        let targets = match &climate.target_temp_register {
-            Some(Registers16::One(address)) => vec![*address],
-            Some(Registers16::Many(addresses)) => addresses.clone(),
+        let (scale, offset) = (reading.scale, reading.offset);
+        let name = std::mem::take(&mut reading.name);
+        reading.scale = current_temp_scale.or(scale);
+        reading.offset = current_temp_offset.or(offset);
+        self.reading(&reading, format!("{name} temperature"), Some(unit));
+        let targets = match target_temp_register {
+            Some(Registers16::One(address)) => vec![address; HVAC_MODES.len()],
+            Some(Registers16::Many(addresses)) => addresses,
             None => Vec::new(),
         };
-        for address in targets {
-            self.label((RegisterType::Holding, address), format!("{name} target"));
+        let mut modes: BTreeMap<u16, Vec<&str>> = BTreeMap::new();
+        for (i, address) in targets.into_iter().enumerate() {
+            modes.entry(address).or_default().extend(HVAC_MODES.get(i));
+        }
+        reading.input_type = Some(Table::Holding);
+        reading.scale = target_temp_scale.or(scale);
+        reading.offset = target_temp_offset.or(offset);
+        for (address, modes) in modes {
+            reading.address = address;
+            let label = if modes.is_empty() || modes.len() == HVAC_MODES.len() {
+                format!("{name} target")
+            } else {
+                format!("{name} target ({})", modes.join(", "))
+            };
+            self.reading(&reading, label, Some(unit));
         }
     }
 
@@ -292,8 +331,8 @@ impl Import {
         for toggle in entities::<Toggle>([hub.switches, hub.lights, hub.fans].concat()) {
             self.toggle(&toggle);
         }
-        for climate in entities::<Climate>(hub.climates) {
-            self.climate(&climate);
+        for climate in entities(hub.climates) {
+            self.climate(climate);
         }
         for cover in entities::<Cover>(hub.covers) {
             self.cover(&cover);
@@ -455,7 +494,7 @@ climates:
     data_type: int16
     scale: 0.1
     temperature_unit: F
-    target_temp_register: [40, 41]
+    target_temp_register: 40
 covers:
   - name: Blind
     address: 50
@@ -474,7 +513,6 @@ covers:
                 (Holding, 5, "Lamp".to_string()),
                 (Holding, 6, "Fan".to_string()),
                 (Holding, 40, "Room target".to_string()),
-                (Holding, 41, "Room target".to_string()),
                 (Holding, 50, "Blind".to_string()),
                 (Input, 30, "Room temperature".to_string()),
                 (Input, 51, "Blind status".to_string()),
@@ -529,6 +567,57 @@ sensors:
                 (40, None),
             ]
         );
+    }
+
+    #[test]
+    fn climate_targets_share_the_reading_and_are_named_by_mode() {
+        let registers = parse(
+            "
+climates:
+  - name: Room
+    address: 30
+    input_type: input
+    precision: 1
+    offset: 2
+    current_temp_scale: 0.1
+    target_temp_scale: 0.5
+    target_temp_register: [40, 40, 41, 41, 41, 41, 42]
+",
+        )
+        .expect("importable");
+        let ops = |scale: f64| {
+            vec![
+                CustomOp {
+                    op: OpKind::Mul,
+                    v: scale,
+                },
+                CustomOp {
+                    op: OpKind::Add,
+                    v: 2.0,
+                },
+            ]
+        };
+        let current = registers.inputs[0].custom.as_ref().expect("rule");
+        assert_eq!(current.ops, ops(0.1));
+        let targets: Vec<_> = registers
+            .holdings
+            .iter()
+            .map(|e| (e.address, e.label.as_deref().unwrap()))
+            .collect();
+        assert_eq!(
+            targets,
+            [
+                (40, "Room target (auto, cool)"),
+                (41, "Room target (dry, fan only, heat, heat/cool)"),
+                (42, "Room target (off)"),
+            ]
+        );
+        for target in &registers.holdings {
+            let rule = target.custom.as_ref().expect("rule");
+            assert_eq!(rule.ops, ops(0.5));
+            assert_eq!(rule.decimals, Some(1));
+            assert_eq!(rule.suffix, " °C");
+        }
     }
 
     #[test]
