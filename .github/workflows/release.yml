@@ -239,9 +239,6 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - name: Install libudev (serialport build dependency)
-        run: sudo apt-get update && sudo apt-get install -y libudev-dev pkg-config
-
       - name: Verify packaging
         if: env.RELEASE_TAG == ''
         run: cargo publish --dry-run

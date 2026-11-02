@@ -70,11 +70,6 @@ parts:
   mtui:
     plugin: rust
     source: .
-    build-packages:
-      - libudev-dev   # tokio-serial / serialport: serial port enumeration
-      - pkg-config
-    stage-packages:
-      - libudev1      # runtime counterpart of libudev-dev
     override-pull: |
       craftctl default
       # Take the snap version straight from Cargo.toml's [package] version.
