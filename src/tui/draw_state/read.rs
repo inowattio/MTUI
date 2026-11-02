@@ -131,21 +131,12 @@ fn flip_shades(
     }
 }
 
-fn selection_shades(
-    address: Option<RowSegment>,
-    lead: u16,
-    show_window: bool,
-    theme: &Theme,
-) -> Vec<Shade> {
-    let style = theme.selected_style();
-    let mut shades = Vec::with_capacity(2);
-    if show_window {
-        shades.push((0, 1, style));
-    }
-    if let Some(address) = address {
-        shades.push((lead as usize + address.start, address.width, style));
-    }
-    shades
+fn selection_shade(address: RowSegment, lead: u16, theme: &Theme) -> Shade {
+    (
+        lead as usize + address.start,
+        address.width,
+        theme.selected_style(),
+    )
 }
 
 fn continuation_shade(segment: RowSegment, lead: u16, style: Style, theme: &Theme) -> Shade {
@@ -299,7 +290,7 @@ impl TableCtx<'_> {
                 shades.extend(flip_shades(bits_segment, lead, flip, zebra, theme));
             }
             if selected && !full {
-                shades.extend(selection_shades(address_segment, lead, show_window, theme));
+                shades.extend(address_segment.map(|segment| selection_shade(segment, lead, theme)));
             }
 
             if selected {
@@ -409,7 +400,7 @@ impl TableCtx<'_> {
                 shades.extend(flip_shades(bits_segment, lead, flip, zebra, theme));
             }
             if selected && !full {
-                shades.extend(selection_shades(address_segment, lead, show_window, theme));
+                shades.extend(address_segment.map(|segment| selection_shade(segment, lead, theme)));
             }
             rows.push((text, style, shades));
         }
@@ -1227,7 +1218,7 @@ fn draw_graph(
 
 #[cfg(test)]
 mod tests {
-    use super::{bit_flipped_at, bit_shades, mark_trend, selection_shades, shaded_row};
+    use super::{bit_flipped_at, bit_shades, mark_trend, selection_shade, shaded_row};
     use crate::app::Trend;
     use crate::config::{Column, InterpretorConfig};
     use crate::interpretator::Interpretor;
@@ -1315,19 +1306,18 @@ mod tests {
     }
 
     #[test]
-    fn an_address_only_selection_covers_the_read_marker_and_the_address() {
+    fn an_address_only_selection_covers_just_the_address() {
         let interpreter = Interpretor::new(InterpretorConfig::default(), WordOrder::ABCD);
         let address = interpreter.segment(Column::Address).expect("address");
         let theme = Theme::default();
         let style = theme.selected_style();
         assert_eq!(
-            selection_shades(Some(address), 1, true, &theme),
-            [(0, 1, style), (1 + address.start, address.width, style)]
+            selection_shade(address, 1, &theme),
+            (1 + address.start, address.width, style)
         );
         assert_eq!(
-            selection_shades(Some(address), 3, false, &theme),
-            [(3 + address.start, address.width, style)]
+            selection_shade(address, 3, &theme),
+            (3 + address.start, address.width, style)
         );
-        assert!(selection_shades(None, 0, false, &theme).is_empty());
     }
 }
