@@ -236,7 +236,7 @@ impl TableCtx<'_> {
         let bits_segment = app.interpreter.segment(Column::Bits);
         let colored = app.config.display.changed_trend_color;
         let address_segment = app.interpreter.segment(Column::Address);
-        let address_only = app.config.display.select_address_only && address_segment.is_some();
+        let address_only = app.config.display.selected_address_only && address_segment.is_some();
         let (read_start, read_amount) = app.read_window();
         let read_end = read_start.saturating_add(read_amount - 1);
         let extra = if show_window {
@@ -348,7 +348,7 @@ impl TableCtx<'_> {
         let bits_segment = app.interpreter.segment(Column::Bits);
         let colored = app.config.display.changed_trend_color;
         let address_segment = app.interpreter.segment(Column::Address);
-        let address_only = app.config.display.select_address_only && address_segment.is_some();
+        let address_only = app.config.display.selected_address_only && address_segment.is_some();
         let mut rows: Vec<(String, Style, Vec<Shade>)> = Vec::with_capacity(cells.len() + 3);
         let mut pick_row = None;
         let mut prev_kind: Option<RegisterType> = None;
