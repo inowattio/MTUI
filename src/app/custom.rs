@@ -270,6 +270,7 @@ impl App {
         if self.custom_rules.remove(&cell).is_some() {
             self.sync_auto_widths();
             self.refresh_dirty();
+            self.clamp_panel_cursor();
             log::info!("Custom rule removed | {:?}@{}", cell.0, cell.1);
         }
         self.read_mut().popup = None;
