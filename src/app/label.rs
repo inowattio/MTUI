@@ -49,6 +49,13 @@ impl App {
         self.read_mut().popup = None;
     }
 
+    pub fn remove_label(&mut self) {
+        if let Some(l) = self.popup_as_mut::<LabelParams>() {
+            l.text.clear();
+        }
+        self.commit_label();
+    }
+
     pub fn clear_labels(&mut self) {
         let n = self.labels.len();
         self.labels.clear();

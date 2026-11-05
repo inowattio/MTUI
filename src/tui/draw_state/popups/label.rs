@@ -26,6 +26,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, label: &LabelPa
         theme,
         [
             Hint::key(KeyCode::Enter, "Set"),
+            Hint::key(KeyCode::Delete, "Remove"),
             Hint::key(KeyCode::Esc, "Cancel"),
         ],
     );

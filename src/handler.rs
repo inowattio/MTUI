@@ -362,6 +362,7 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
         PopupKind::Label => match key_event.code {
             KeyCode::Esc => app.close_popup(),
             KeyCode::Enter => app.commit_label(),
+            KeyCode::Delete => app.remove_label(),
             KeyCode::Backspace => app.label_backspace(),
             KeyCode::Char(c) => app.label_input(c),
             _ => {}
