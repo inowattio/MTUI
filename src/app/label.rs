@@ -44,6 +44,7 @@ impl App {
         }
         self.sync_auto_widths();
         self.refresh_dirty();
+        self.clamp_panel_cursor();
 
         self.read_mut().popup = None;
     }
