@@ -1154,18 +1154,7 @@ impl ModbusDevice {
     }
 
     pub async fn function_timed(&self, code: u8, data: &[u8]) -> Result<(Vec<u8>, Duration)> {
-        if code != 0x11 || !data.is_empty() {
-            return self.custom_timed(None, code, data).await;
-        }
-        let (response, elapsed) = timed!(
-            self,
-            call,
-            (Request::ReportServerId),
-            format!("Function 0x{code:02X} with data {data:?}")
-        )?;
-        let mut bytes = response_pdu(code, &Ok(response));
-        bytes.remove(0);
-        Ok((bytes, elapsed))
+        self.custom_timed(None, code, data).await
     }
 
     pub async fn custom(&self, unit: Option<UnitId>, code: u8, data: &[u8]) -> Result<Vec<u8>> {
@@ -1180,15 +1169,25 @@ impl ModbusDevice {
         code: u8,
         data: &[u8],
     ) -> Result<(Vec<u8>, Duration)> {
+        let request = if code == 0x11 && data.is_empty() {
+            Request::ReportServerId
+        } else {
+            Request::Custom(code, data.into())
+        };
         let (response, elapsed) = timed_as!(
             self,
             unit,
             call,
-            (Request::Custom(code, data.into())),
+            (request),
             format!("Raw function 0x{code:02X} with data {data:?}")
         )?;
         match response {
             Response::Custom(_, bytes) => Ok((bytes.to_vec(), elapsed)),
+            response @ Response::ReportServerId(..) => {
+                let mut bytes = response_pdu(code, &Ok(response));
+                bytes.remove(0);
+                Ok((bytes, elapsed))
+            }
             _ => anyhow::bail!("Unexpected response type."),
         }
     }
