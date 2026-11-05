@@ -271,12 +271,12 @@ impl App {
     pub(super) fn apply_function_result(&mut self, result: Option<FunctionTaskResult>) {
         match &result {
             Some(FunctionTaskResult {
-                result: Ok((latency, _)),
+                result: Ok((latency, Ok(_))),
                 ..
             }) => self.stats().others.record_ok(*latency),
             Some(FunctionTaskResult {
                 request,
-                result: Err(e),
+                result: Err(e) | Ok((_, Err(e))),
             }) => self
                 .stats()
                 .others
