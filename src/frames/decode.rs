@@ -103,11 +103,16 @@ pub const fn function_name(code: u8) -> &'static str {
         0x06 => "Write Single Register",
         0x07 => "Read Exception Status",
         0x08 => "Diagnostics",
+        0x0B => "Get Comm Event Counter",
+        0x0C => "Get Comm Event Log",
         0x0F => "Write Multiple Coils",
         0x10 => "Write Multiple Registers",
         0x11 => "Report Server ID",
+        0x14 => "Read File Record",
+        0x15 => "Write File Record",
         0x16 => "Mask Write Register",
         0x17 => "Read/Write Registers",
+        0x18 => "Read FIFO Queue",
         0x2B => "Encapsulated Interface",
         _ => "Unknown function",
     }
@@ -126,6 +131,50 @@ const fn exception_name(code: u8) -> &'static str {
         0x0B => "Gateway Target No Response",
         _ => "Unknown exception",
     }
+}
+
+const fn diagnostic_name(code: u16) -> Option<&'static str> {
+    Some(match code {
+        0x00 => "Return Query Data",
+        0x01 => "Restart Communications",
+        0x02 => "Diagnostic Register",
+        0x03 => "Change ASCII Delimiter",
+        0x04 => "Force Listen Only",
+        0x0A => "Clear Counters",
+        0x0B => "Bus Message Count",
+        0x0C => "Bus Comm Error Count",
+        0x0D => "Bus Exception Count",
+        0x0E => "Server Message Count",
+        0x0F => "Server No Response Count",
+        0x10 => "Server NAK Count",
+        0x11 => "Server Busy Count",
+        0x12 => "Char Overrun Count",
+        0x14 => "Clear Overrun",
+        _ => return None,
+    })
+}
+
+fn comm_status(status: u16) -> String {
+    match status {
+        0xFFFF => "status busy".to_owned(),
+        0x0000 => "status ready".to_owned(),
+        _ => format!("status 0x{status:04X}"),
+    }
+}
+
+fn comm_event(event: u8) -> String {
+    let kind = if event & 0x80 != 0 {
+        "receive"
+    } else if event & 0x40 != 0 {
+        "send"
+    } else if event == 0x04 {
+        "listen only"
+    } else if event == 0x00 {
+        "restart"
+    } else {
+        "event"
+    };
+    format!("{kind} {event:08b}")
 }
 
 fn raw(fields: &mut Vec<Field>, bytes: &[u8], label: &str, tone: Tone) {
@@ -223,16 +272,20 @@ fn pdu_len(pdu: &[u8], direction: Direction) -> Option<usize> {
     let counted = |at: usize| Some(at + 1 + pdu.get(at).map_or(0, |&n| usize::from(n)));
     match (direction, function) {
         (Direction::Rx, f) if f & 0x80 != 0 => Some(2),
+        (_, 0x08) if be(pdu, 1) == Some(0x00) => None,
         (Direction::Tx, 0x01..=0x06 | 0x08) => Some(5),
-        (Direction::Tx, 0x07 | 0x11) => Some(1),
+        (Direction::Tx, 0x07 | 0x0B | 0x0C | 0x11) => Some(1),
         (Direction::Tx, 0x0F | 0x10) => counted(5),
+        (Direction::Tx, 0x14 | 0x15) => counted(1),
         (Direction::Tx, 0x16) => Some(7),
         (Direction::Tx, 0x17) => counted(9),
+        (Direction::Tx, 0x18) => Some(3),
         (Direction::Tx, 0x2B) => Some(4),
-        (Direction::Rx, 0x01..=0x04 | 0x11 | 0x17) => counted(1),
-        (Direction::Rx, 0x05 | 0x06 | 0x08 | 0x0F | 0x10) => Some(5),
+        (Direction::Rx, 0x01..=0x04 | 0x0C | 0x11 | 0x14 | 0x15 | 0x17) => counted(1),
+        (Direction::Rx, 0x05 | 0x06 | 0x08 | 0x0B | 0x0F | 0x10) => Some(5),
         (Direction::Rx, 0x07) => Some(2),
         (Direction::Rx, 0x16) => Some(7),
+        (Direction::Rx, 0x18) => Some(3 + be(pdu, 1).map_or(0, usize::from)),
         _ => None,
     }
 }
@@ -360,10 +413,6 @@ impl<'a> Reader<'a> {
                 self.address("address")?;
                 self.word(|v| format!("value {v}"))?;
             }
-            0x08 => {
-                self.word(|s| format!("sub-function {s}"))?;
-                self.data("data");
-            }
             0x16 => {
                 self.address("address")?;
                 self.word(|m| format!("and {m:016b}"))?;
@@ -406,7 +455,20 @@ impl<'a> Reader<'a> {
                 self.byte(|c| format!("read code {c}"))?;
                 self.byte(|o| format!("object 0x{o:02X}"))?;
             }
-            0x07 | 0x11 => {}
+            0x08 => self.diagnostic(false)?,
+            0x14 => {
+                self.byte_count()?;
+                while self.rest.len() >= 7 {
+                    self.reference()?;
+                    self.quantity("file")?;
+                    self.quantity("record")?;
+                    self.quantity("length")?;
+                }
+            }
+            0x18 => {
+                self.address("FIFO pointer")?;
+            }
+            0x07 | 0x0B | 0x0C | 0x11 => {}
             _ => self.echo(function)?,
         }
         Some(())
@@ -448,10 +510,70 @@ impl<'a> Reader<'a> {
                 self.byte_count()?;
                 self.data("server id");
             }
+            0x08 => self.diagnostic(true)?,
+            0x0B => {
+                self.word(comm_status)?;
+                self.quantity("event count")?;
+            }
+            0x0C => {
+                self.byte_count()?;
+                self.word(comm_status)?;
+                self.quantity("event count")?;
+                self.quantity("message count")?;
+                while !self.rest.is_empty() {
+                    self.byte(comm_event)?;
+                }
+            }
+            0x14 => {
+                self.byte_count()?;
+                while !self.rest.is_empty() {
+                    self.file_response()?;
+                }
+            }
+            0x18 => {
+                self.word(|n| format!("{n} bytes follow"))?;
+                self.quantity("FIFO count")?;
+                self.words(None);
+            }
             0x2B => self.device_id()?,
             _ => self.echo(function)?,
         }
         Some(())
+    }
+
+    fn diagnostic(&mut self, response: bool) -> Option<()> {
+        let sub = self.word(|s| {
+            diagnostic_name(s).map_or_else(|| format!("sub-function 0x{s:04X}"), str::to_owned)
+        })?;
+        match (response, sub, self.rest.len()) {
+            (true, 0x02, 2) => {
+                self.word(|r| format!("register {r:016b}"))?;
+            }
+            (true, 0x0B..=0x12, 2) => {
+                self.quantity("count")?;
+            }
+            _ => self.data("data"),
+        }
+        Some(())
+    }
+
+    fn reference(&mut self) -> Option<()> {
+        let kind = self.byte(|t| format!("reference type {t}"))?;
+        if kind != 6 {
+            self.mark(Tone::Bad);
+        }
+        Some(())
+    }
+
+    fn file_response(&mut self) -> Option<()> {
+        let len = self.byte(|n| format!("{n} bytes in record"))?;
+        let body = self.take(usize::from(len))?;
+        let rest = std::mem::replace(&mut self.rest, body);
+        let done = self.reference();
+        self.words(None);
+        let odd = std::mem::replace(&mut self.rest, rest);
+        raw(&mut self.fields, odd, "unexpected", Tone::Bad);
+        done
     }
 
     fn device_id(&mut self) -> Option<()> {
@@ -664,5 +786,186 @@ mod tests {
             fields[6].label,
             format!("start {}", AddressMode::Hex.display(0x10))
         );
+    }
+
+    fn labels(direction: Direction, pdu: &[u8]) -> Vec<(String, String)> {
+        let frame = frame(direction, Framing::Rtu, rtu(1, pdu));
+        let fields = breakdown(&frame, None, AddressMode::Dec);
+        let rows = rows(&fields);
+        rows[2..rows.len() - 1].to_vec()
+    }
+
+    #[test]
+    fn diagnostics_name_the_sub_function_and_counters() {
+        assert_eq!(
+            labels(Direction::Tx, &[0x08, 0x00, 0x0E, 0x00, 0x00]),
+            vec![
+                row("08", "Diagnostics"),
+                row("00 0E", "Server Message Count"),
+                row("00 00", "data"),
+            ]
+        );
+        assert_eq!(
+            labels(Direction::Rx, &[0x08, 0x00, 0x0E, 0x01, 0x02]),
+            vec![
+                row("08", "Diagnostics"),
+                row("00 0E", "Server Message Count"),
+                row("01 02", "count 258"),
+            ]
+        );
+        assert_eq!(
+            labels(Direction::Rx, &[0x08, 0x00, 0x02, 0x80, 0x01])[2],
+            row("80 01", "register 1000000000000001")
+        );
+        assert_eq!(
+            labels(Direction::Tx, &[0x08, 0x00, 0x99, 0x00, 0x00])[1],
+            row("00 99", "sub-function 0x0099")
+        );
+    }
+
+    #[test]
+    fn return_query_data_keeps_its_whole_payload() {
+        let pdu = [0x08, 0x00, 0x00, 1, 2, 3, 4, 5, 6];
+        let tx = frame(Direction::Tx, Framing::Rtu, rtu(1, &pdu));
+        let fields = breakdown(&tx, None, AddressMode::Dec);
+        assert_eq!(
+            rows(&fields)[3..6],
+            [
+                row("00 00", "Return Query Data"),
+                row("01 02 03 04", "data"),
+                row("05 06", ""),
+            ]
+        );
+        assert_eq!(fields.last().unwrap().label, "CRC ok");
+    }
+
+    #[test]
+    fn comm_event_counter_and_log_responses() {
+        assert_eq!(
+            labels(Direction::Tx, &[0x0B]),
+            vec![row("0B", "Get Comm Event Counter")]
+        );
+        assert_eq!(
+            labels(Direction::Rx, &[0x0B, 0xFF, 0xFF, 0x01, 0x08]),
+            vec![
+                row("0B", "Get Comm Event Counter"),
+                row("FF FF", "status busy"),
+                row("01 08", "event count 264"),
+            ]
+        );
+        assert_eq!(
+            labels(
+                Direction::Rx,
+                &[0x0C, 0x08, 0x00, 0x00, 0x01, 0x08, 0x01, 0x21, 0x20, 0x00]
+            ),
+            vec![
+                row("0C", "Get Comm Event Log"),
+                row("08", "8 bytes follow"),
+                row("00 00", "status ready"),
+                row("01 08", "event count 264"),
+                row("01 21", "message count 289"),
+                row("20", "event 00100000"),
+                row("00", "restart 00000000"),
+            ]
+        );
+    }
+
+    #[test]
+    fn read_file_record_requests_and_responses() {
+        assert_eq!(
+            labels(
+                Direction::Tx,
+                &[0x14, 0x07, 0x06, 0x00, 0x04, 0x00, 0x01, 0x00, 0x02]
+            ),
+            vec![
+                row("14", "Read File Record"),
+                row("07", "7 bytes follow"),
+                row("06", "reference type 6"),
+                row("00 04", "file 4"),
+                row("00 01", "record 1"),
+                row("00 02", "length 2"),
+            ]
+        );
+        assert_eq!(
+            labels(
+                Direction::Rx,
+                &[0x14, 0x06, 0x05, 0x06, 0x0D, 0xFE, 0x00, 0x20]
+            ),
+            vec![
+                row("14", "Read File Record"),
+                row("06", "6 bytes follow"),
+                row("05", "5 bytes in record"),
+                row("06", "reference type 6"),
+                row("0D FE", "[0] = 3582"),
+                row("00 20", "[1] = 32"),
+            ]
+        );
+        let tx = frame(
+            Direction::Tx,
+            Framing::Rtu,
+            rtu(1, &[0x14, 0x07, 0x05, 0x00, 0x04, 0x00, 0x01, 0x00, 0x02]),
+        );
+        assert_eq!(breakdown(&tx, None, AddressMode::Dec)[4].tone, Tone::Bad);
+    }
+
+    #[test]
+    fn read_fifo_queue_requests_and_responses() {
+        assert_eq!(
+            labels(Direction::Tx, &[0x18, 0x04, 0xDE]),
+            vec![
+                row("18", "Read FIFO Queue"),
+                row("04 DE", "FIFO pointer 1246")
+            ]
+        );
+        assert_eq!(
+            labels(
+                Direction::Rx,
+                &[0x18, 0x00, 0x06, 0x00, 0x02, 0x01, 0xB8, 0x12, 0x84]
+            ),
+            vec![
+                row("18", "Read FIFO Queue"),
+                row("00 06", "6 bytes follow"),
+                row("00 02", "FIFO count 2"),
+                row("01 B8", "[0] = 440"),
+                row("12 84", "[1] = 4740"),
+            ]
+        );
+    }
+
+    #[test]
+    fn truncated_new_function_frames_degrade_without_panicking() {
+        let pdus: [&[u8]; 6] = [
+            &[0x08, 0x00, 0x0B, 0x00, 0x07],
+            &[0x0B, 0x00, 0x00, 0x00, 0x03],
+            &[0x0C, 0x07, 0x00, 0x00, 0x00, 0x01, 0x00, 0x02, 0x40],
+            &[0x14, 0x06, 0x05, 0x06, 0x0D, 0xFE, 0x00, 0x20],
+            &[0x14, 0x07, 0x06, 0x00, 0x04, 0x00, 0x01, 0x00, 0x02],
+            &[0x18, 0x00, 0x04, 0x00, 0x01, 0x00, 0x09],
+        ];
+        for pdu in pdus {
+            for len in 1..=pdu.len() {
+                for direction in [Direction::Tx, Direction::Rx] {
+                    for framing in [Framing::Rtu, Framing::Tcp] {
+                        let bytes = match framing {
+                            Framing::Rtu => rtu(1, &pdu[..len]),
+                            Framing::Tcp => {
+                                let length = u16::try_from(len + 1).unwrap().to_be_bytes();
+                                [&[0, 1, 0, 0, length[0], length[1], 1], &pdu[..len]].concat()
+                            }
+                        };
+                        let fields =
+                            breakdown(&frame(direction, framing, bytes), None, AddressMode::Dec);
+                        assert!(!fields.is_empty());
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn short_file_record_sub_responses_are_flagged() {
+        let fields = labels(Direction::Rx, &[0x14, 0x04, 0x05, 0x06, 0x0D, 0xFE]);
+        assert_eq!(fields[2], row("05", "5 bytes in record"));
+        assert_eq!(fields[3], row("06 0D FE", "unexpected"));
     }
 }

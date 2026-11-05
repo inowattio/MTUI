@@ -1,5 +1,5 @@
 use super::{
-    App, BackgroundTask, Change, CommStats, ConfigError, ConnectTaskResult, DeviceIdTaskResult,
+    App, BackgroundTask, Change, CommStats, ConfigError, ConnectTaskResult, FunctionTaskResult,
     LoadConfigTaskResult, PendingWrite, RawTaskResult, ReadEntry, ReadError, ReadFailure,
     ReconnectState, RefreshTaskResult, RequestTrace, StatTarget, SweepState, Trend,
     UnitScanTaskResult, WriteOutcome, default_config_path, load_config, reconnect_backoff,
@@ -774,8 +774,8 @@ impl App {
             Write(Option<WriteOutcome>),
             Reconnect(Option<Result<ModbusDevice, String>>),
             Connect(Option<ConnectTaskResult>),
-            DeviceId(Option<DeviceIdTaskResult>),
             Raw(Option<RawTaskResult>),
+            Function(Option<FunctionTaskResult>),
             UnitScan(Option<UnitScanTaskResult>),
             LoadConfig(Option<LoadConfigTaskResult>),
         }
@@ -796,8 +796,8 @@ impl App {
             Some(BackgroundTask::Write(handle)) => poll_task!(handle, Done::Write),
             Some(BackgroundTask::Reconnect(handle)) => poll_task!(handle, Done::Reconnect),
             Some(BackgroundTask::Connect(handle)) => poll_task!(handle, Done::Connect),
-            Some(BackgroundTask::DeviceId(handle)) => poll_task!(handle, Done::DeviceId),
             Some(BackgroundTask::Raw(handle)) => poll_task!(handle, Done::Raw),
+            Some(BackgroundTask::Function(handle)) => poll_task!(handle, Done::Function),
             Some(BackgroundTask::UnitScan(handle)) => poll_task!(handle, Done::UnitScan),
             Some(BackgroundTask::LoadConfig(handle)) => poll_task!(handle, Done::LoadConfig),
         };
@@ -806,8 +806,8 @@ impl App {
         match done {
             Done::Reconnect(result) => self.apply_reconnect_result(result),
             Done::Connect(result) => self.apply_connect_result(result),
-            Done::DeviceId(result) => self.apply_device_id_result(result),
             Done::Raw(result) => self.apply_raw_result(result),
+            Done::Function(result) => self.apply_function_result(result),
             Done::UnitScan(result) => self.apply_unit_scan_result(result),
             Done::LoadConfig(result) => self.apply_load_config_result(result),
             Done::Refresh(Some(result)) => self.apply_refresh_result(result),
@@ -870,6 +870,7 @@ impl App {
         if let Some(queued) = self.queued_write.take() {
             self.start_write(queued);
         }
+        self.function_retry_pending();
     }
 }
 

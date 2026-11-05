@@ -383,6 +383,7 @@ keybinds! {
     WordOrder => word_order : "Cycle word order" = WORD_ORDER,
     UnitId => unit_id : "Set unit id" = UNIT_ID,
     Inspect => inspect : "Inspect register" = INSPECT,
+    OtherFunctions => other_functions : "Other functions" = OTHER_FUNCTIONS,
     DeviceId => device_id : "Device identification" = DEVICE_ID,
     RawRequest => raw_request : "Raw request" = RAW_REQUEST,
     Graph => graph : "Value graph" = GRAPH,

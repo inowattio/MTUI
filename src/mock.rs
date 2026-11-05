@@ -88,6 +88,9 @@ pub struct MockContext {
     written_coils: HashMap<u16, bool>,
     write_count: u16,
     unit_id: UnitId,
+    served: u16,
+    exceptions: u16,
+    events: u16,
 }
 
 const KNOWN_UNITS: RangeInclusive<UnitId> = 0..=9;
@@ -117,6 +120,9 @@ const HOLDING_SILENT: RangeInclusive<u16> = 1104..=1105;
 const INPUT_SILENT: RangeInclusive<u16> = 68..=69;
 
 const MODEL_NAME: &[u8; 16] = b"MTUI SIMULATOR  ";
+const SERVER_ID: u8 = 0x4D;
+const FILE_RECORDS: u16 = 10_000;
+const MAX_PDU_DATA: usize = 0xF5;
 const VENDOR_NAME: &[u8; 32] = b"      POWER BUS SIMULATOR!      ";
 const THIRD_PHASE: f64 = 2.0944;
 
@@ -152,6 +158,9 @@ impl MockContext {
             written_coils: HashMap::new(),
             write_count: 0,
             unit_id: 0,
+            served: 0,
+            exceptions: 0,
+            events: 0,
         });
         client.into()
     }
@@ -485,6 +494,112 @@ impl MockContext {
         ))
     }
 
+    fn server_id(&self) -> (u8, Vec<u8>) {
+        (
+            SERVER_ID,
+            format!("MTUI-SIM v1.42 POWER BUS SIMULATOR unit {}", self.unit_id).into_bytes(),
+        )
+    }
+
+    fn exception_status(&self, t: f64) -> u8 {
+        (self.status_word(t) & 0b111) as u8
+            | u8::from(self.heartbeat(t)) << 3
+            | u8::from(self.setpoint(53) != 0) << 4
+    }
+
+    fn diagnostic_counter(&self, sub: u16) -> Option<u16> {
+        match sub {
+            0x0B | 0x0E => Some(self.served),
+            0x0C => Some(u16::from(self.unit_id % 3)),
+            0x0D => Some(self.exceptions),
+            0x0F..=0x12 => Some(0),
+            _ => None,
+        }
+    }
+
+    fn diagnostics(&self, data: &[u8], t: f64) -> Result<Vec<u8>, ExceptionCode> {
+        let [hi, lo, rest @ ..] = data else {
+            return Err(ExceptionCode::IllegalDataValue);
+        };
+        let sub = u16::from_be_bytes([*hi, *lo]);
+        if sub == 0x00 {
+            return Ok(data.to_vec());
+        }
+        let value = match sub {
+            0x02 => u16::from(self.warning(t)) | u16::from(!self.grid_present(t)) << 1,
+            _ => self
+                .diagnostic_counter(sub)
+                .ok_or(ExceptionCode::IllegalFunction)?,
+        };
+        if rest.len() != 2 {
+            return Err(ExceptionCode::IllegalDataValue);
+        }
+        let mut out = sub.to_be_bytes().to_vec();
+        out.extend(value.to_be_bytes());
+        Ok(out)
+    }
+
+    fn comm_event_counter(&self) -> Vec<u8> {
+        let mut out = 0u16.to_be_bytes().to_vec();
+        out.extend(self.events.to_be_bytes());
+        out
+    }
+
+    fn comm_event_log(&self) -> Vec<u8> {
+        let mut log = Vec::new();
+        for i in 0..self.events.min(6) {
+            log.push(if i % 3 == 2 { 0x41 } else { 0x40 });
+            log.push(0x80);
+        }
+        log.push(0x00);
+        let mut out = vec![(6 + log.len()) as u8];
+        out.extend(0u16.to_be_bytes());
+        out.extend(self.events.to_be_bytes());
+        out.extend(self.served.to_be_bytes());
+        out.extend(log);
+        out
+    }
+
+    fn fifo_queue(&self, addr: u16, t: f64) -> Vec<u16> {
+        match addr {
+            0 => (0..3).map(|i| self.input_value(i, t)).collect(),
+            1 => (0..4).map(|i| self.holding_value(320 + 2 * i, t)).collect(),
+            _ => Vec::new(),
+        }
+    }
+
+    fn read_fifo(&self, data: &[u8], t: f64) -> Result<Vec<u8>, ExceptionCode> {
+        let [hi, lo] = data else {
+            return Err(ExceptionCode::IllegalDataValue);
+        };
+        let queue = self.fifo_queue(u16::from_be_bytes([*hi, *lo]), t);
+        let count = queue.len() as u16;
+        let mut out = (2 + 2 * count).to_be_bytes().to_vec();
+        out.extend(count.to_be_bytes());
+        for value in queue {
+            out.extend(value.to_be_bytes());
+        }
+        Ok(out)
+    }
+
+    fn custom_payload(&self, code: u8, data: &[u8], t: f64) -> Result<Vec<u8>, ExceptionCode> {
+        match code {
+            0x07 => Ok(vec![self.exception_status(t)]),
+            0x08 => self.diagnostics(data, t),
+            0x0B => Ok(self.comm_event_counter()),
+            0x0C => Ok(self.comm_event_log()),
+            0x11 => {
+                let (id, extra) = self.server_id();
+                let mut out = vec![(2 + extra.len()) as u8, id, 0xFF];
+                out.extend(extra);
+                Ok(out)
+            }
+            0x14 => read_file_record(data),
+            0x18 => self.read_fifo(data, t),
+            _ => Ok(data.to_vec()),
+        }
+    }
+
     async fn simulate_latency(&self) {
         let jitter = (self.started.elapsed().as_micros() as u64).wrapping_mul(2_654_435_761) % 12;
         compat::sleep(Duration::from_millis(4 + jitter)).await;
@@ -500,6 +615,47 @@ fn mapped(zones: &[RangeInclusive<u16>], addr: u16, count: u16) -> bool {
 
 fn touches(zone: &RangeInclusive<u16>, addr: u16, count: u16) -> bool {
     (0..count).any(|i| addr.checked_add(i).is_some_and(|a| zone.contains(&a)))
+}
+
+const fn file_word(file: u16, record: u16, index: u16) -> u16 {
+    file.wrapping_mul(100)
+        .wrapping_add(record)
+        .wrapping_add(index)
+}
+
+fn read_file_record(data: &[u8]) -> Result<Vec<u8>, ExceptionCode> {
+    let [count, groups @ ..] = data else {
+        return Err(ExceptionCode::IllegalDataValue);
+    };
+    let count = usize::from(*count);
+    if !(7..=MAX_PDU_DATA).contains(&count) || !count.is_multiple_of(7) || groups.len() != count {
+        return Err(ExceptionCode::IllegalDataValue);
+    }
+    let mut body = Vec::new();
+    for &[kind, f0, f1, r0, r1, l0, l1] in groups.as_chunks::<7>().0 {
+        let file = u16::from_be_bytes([f0, f1]);
+        let record = u16::from_be_bytes([r0, r1]);
+        let length = u16::from_be_bytes([l0, l1]);
+        if kind != 6
+            || file == 0
+            || record >= FILE_RECORDS
+            || length == 0
+            || u32::from(record) + u32::from(length) > u32::from(FILE_RECORDS)
+        {
+            return Err(ExceptionCode::IllegalDataAddress);
+        }
+        if body.len() + 2 + 2 * usize::from(length) > MAX_PDU_DATA - 1 {
+            return Err(ExceptionCode::IllegalDataValue);
+        }
+        body.push((1 + 2 * length) as u8);
+        body.push(6);
+        for i in 0..length {
+            body.extend(file_word(file, record, i).to_be_bytes());
+        }
+    }
+    let mut out = vec![body.len() as u8];
+    out.extend(body);
+    Ok(out)
 }
 
 fn stalls(request: &Request<'_>) -> bool {
@@ -621,7 +777,14 @@ impl MockContext {
                 self.device_id_response(read_code, object_id)
             }
 
-            Request::Custom(code, data) => Ok(Response::Custom(code, data.into_owned().into())),
+            Request::ReportServerId => {
+                let (id, extra) = self.server_id();
+                Ok(Response::ReportServerId(id, true, extra))
+            }
+
+            Request::Custom(code, data) => self
+                .custom_payload(code, &data, t)
+                .map(|bytes| Response::Custom(code, bytes.into())),
 
             _ => Err(ExceptionCode::IllegalFunction),
         }
@@ -644,7 +807,13 @@ impl Client for MockContext {
 
         self.simulate_latency().await;
         let t = self.time();
+        self.served = self.served.wrapping_add(1);
         let response = self.respond(request, t);
+        match response {
+            Err(_) => self.exceptions = self.exceptions.wrapping_add(1),
+            Ok(_) if !matches!(function, 0x0B | 0x0C) => self.events = self.events.wrapping_add(1),
+            Ok(_) => {}
+        }
         frames::record(
             Direction::Rx,
             Framing::Rtu,
@@ -870,5 +1039,211 @@ mod tests {
         assert!(mock.read_coils(8, 8).await.unwrap().is_ok());
         assert!(mock.read_discrete_inputs(0, 4).await.unwrap().is_ok());
         assert!(mock.read_discrete_inputs(7, 8).await.unwrap().is_ok());
+    }
+
+    async fn custom(
+        mock: &mut tokio_modbus::client::Context,
+        code: u8,
+        data: &[u8],
+    ) -> Result<Vec<u8>, ExceptionCode> {
+        use tokio_modbus::client::Client;
+        use tokio_modbus::{Request, Response};
+        match mock
+            .call(Request::Custom(code, data.to_vec().into()))
+            .await
+            .unwrap()
+        {
+            Ok(Response::Custom(answered, bytes)) => {
+                assert_eq!(answered, code);
+                Ok(bytes.to_vec())
+            }
+            Ok(other) => panic!("unexpected response {other:?}"),
+            Err(code) => Err(code),
+        }
+    }
+
+    #[tokio::test]
+    async fn report_server_id_names_the_simulator() {
+        use tokio_modbus::client::Client;
+        use tokio_modbus::{Request, Response};
+        let mut mock = MockContext::make();
+        let Ok(Response::ReportServerId(id, running, extra)) =
+            mock.call(Request::ReportServerId).await.unwrap()
+        else {
+            panic!("expected a server id");
+        };
+        assert_eq!(id, super::SERVER_ID);
+        assert!(running);
+        assert!(extra.starts_with(b"MTUI-SIM"));
+        assert!(extra.is_ascii());
+
+        let raw = custom(&mut mock, 0x11, &[]).await.unwrap();
+        assert_eq!(usize::from(raw[0]), raw.len() - 1);
+        assert_eq!(raw[1..3], [super::SERVER_ID, 0xFF]);
+        assert_eq!(raw[3..], extra[..]);
+    }
+
+    #[tokio::test]
+    async fn exception_status_is_one_byte_with_the_run_bit() {
+        let mut mock = MockContext::make();
+        let status = custom(&mut mock, 0x07, &[]).await.unwrap();
+        assert_eq!(status.len(), 1);
+        assert_eq!(status[0] & 1, 1);
+        assert_eq!(status[0] & 0xE0, 0);
+    }
+
+    #[tokio::test]
+    async fn diagnostics_echo_and_count_the_bus_messages() {
+        let mut mock = MockContext::make();
+        assert_eq!(
+            custom(&mut mock, 0x08, &[0, 0, 0xA5, 0x5A, 0x01]).await,
+            Ok(vec![0, 0, 0xA5, 0x5A, 0x01])
+        );
+        assert_eq!(
+            custom(&mut mock, 0x08, &[0, 0x0B, 0, 0]).await,
+            Ok(vec![0, 0x0B, 0, 2])
+        );
+        mock.read_holding_registers(0, 1).await.unwrap().unwrap();
+        assert_eq!(
+            custom(&mut mock, 0x08, &[0, 0x0B, 0, 0]).await,
+            Ok(vec![0, 0x0B, 0, 4])
+        );
+        assert_eq!(
+            custom(&mut mock, 0x08, &[0, 0x0F, 0, 0]).await,
+            Ok(vec![0, 0x0F, 0, 0])
+        );
+        assert_eq!(
+            custom(&mut mock, 0x08, &[0, 0x02, 0, 0]).await.unwrap()[..2],
+            [0, 0x02]
+        );
+    }
+
+    #[tokio::test]
+    async fn diagnostics_count_the_exceptions_sent() {
+        let mut mock = MockContext::make();
+        assert_eq!(
+            mock.read_holding_registers(16, 1).await.unwrap(),
+            Err(RESERVED)
+        );
+        assert_eq!(
+            custom(&mut mock, 0x08, &[0, 0x0D, 0, 0]).await,
+            Ok(vec![0, 0x0D, 0, 1])
+        );
+    }
+
+    #[tokio::test]
+    async fn diagnostics_reject_unknown_sub_functions_and_bad_data() {
+        let mut mock = MockContext::make();
+        let illegal = ExceptionCode::IllegalFunction;
+        let bad = ExceptionCode::IllegalDataValue;
+        assert_eq!(
+            custom(&mut mock, 0x08, &[0, 0x01, 0, 0]).await,
+            Err(illegal)
+        );
+        assert_eq!(custom(&mut mock, 0x08, &[0x12, 0x34]).await, Err(illegal));
+        assert_eq!(custom(&mut mock, 0x08, &[]).await, Err(bad));
+        assert_eq!(custom(&mut mock, 0x08, &[0]).await, Err(bad));
+        assert_eq!(custom(&mut mock, 0x08, &[0, 0x0B]).await, Err(bad));
+        assert_eq!(custom(&mut mock, 0x08, &[0, 0x0B, 0, 0, 0]).await, Err(bad));
+    }
+
+    #[tokio::test]
+    async fn comm_event_counter_and_log_skip_exceptions_and_themselves() {
+        let mut mock = MockContext::make();
+        mock.read_holding_registers(0, 1).await.unwrap().unwrap();
+        assert_eq!(
+            mock.read_holding_registers(16, 1).await.unwrap(),
+            Err(RESERVED)
+        );
+        assert_eq!(custom(&mut mock, 0x0B, &[]).await, Ok(vec![0, 0, 0, 1]));
+        assert_eq!(
+            custom(&mut mock, 0x0C, &[]).await,
+            Ok(vec![9, 0, 0, 0, 1, 0, 4, 0x40, 0x80, 0x00])
+        );
+    }
+
+    #[tokio::test]
+    async fn comm_event_log_keeps_a_handful_of_events() {
+        let mut mock = MockContext::make();
+        for _ in 0..10 {
+            mock.read_coils(0, 1).await.unwrap().unwrap();
+        }
+        let log = custom(&mut mock, 0x0C, &[]).await.unwrap();
+        assert_eq!(usize::from(log[0]), log.len() - 1);
+        assert_eq!(log[3..7], [0, 10, 0, 11]);
+        assert_eq!(log.len(), 7 + 13);
+        assert!(log[7..].contains(&0x41));
+        assert_eq!(log.last(), Some(&0x00));
+    }
+
+    #[tokio::test]
+    async fn read_file_record_answers_words_from_file_and_record() {
+        let mut mock = MockContext::make();
+        assert_eq!(
+            custom(&mut mock, 0x14, &[7, 6, 0, 2, 0, 10, 0, 3]).await,
+            Ok(vec![8, 7, 6, 0, 210, 0, 211, 0, 212])
+        );
+        let two = custom(
+            &mut mock,
+            0x14,
+            &[14, 6, 0, 1, 0, 0, 0, 1, 6, 0, 3, 0x27, 0x0F, 0, 1],
+        )
+        .await
+        .unwrap();
+        assert_eq!(two, vec![8, 3, 6, 0, 100, 3, 6, 0x28, 0x3B]);
+        let longest = custom(&mut mock, 0x14, &[7, 6, 0, 1, 0, 0, 0, 121])
+            .await
+            .unwrap();
+        assert_eq!(longest.len(), 1 + 2 + 242);
+    }
+
+    #[tokio::test]
+    async fn read_file_record_rejects_bad_requests() {
+        let mut mock = MockContext::make();
+        let address = ExceptionCode::IllegalDataAddress;
+        let value = ExceptionCode::IllegalDataValue;
+        let cases: [(&[u8], _); 10] = [
+            (&[], value),
+            (&[6, 6, 0, 1, 0, 0, 0, 1], value),
+            (&[7, 6, 0, 1, 0, 0, 0], value),
+            (&[7, 6, 0, 1, 0, 0, 0, 1, 0], value),
+            (&[7, 6, 0, 1, 0, 0, 0, 122], value),
+            (&[7, 5, 0, 1, 0, 0, 0, 1], address),
+            (&[7, 6, 0, 0, 0, 0, 0, 1], address),
+            (&[7, 6, 0, 1, 0x27, 0x10, 0, 1], address),
+            (&[7, 6, 0, 1, 0, 0, 0, 0], address),
+            (&[7, 6, 0, 1, 0x27, 0x0F, 0, 2], address),
+        ];
+        for (data, expected) in cases {
+            assert_eq!(
+                custom(&mut mock, 0x14, data).await,
+                Err(expected),
+                "{data:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn fifo_queues_hold_values_at_their_pointer_only() {
+        let mut mock = MockContext::make();
+        let voltages = custom(&mut mock, 0x18, &[0, 0]).await.unwrap();
+        assert_eq!(voltages[..4], [0, 8, 0, 3]);
+        assert_eq!(voltages.len(), 4 + 6);
+        assert_eq!(
+            custom(&mut mock, 0x18, &[0, 1]).await,
+            Ok(vec![0, 10, 0, 4, 0, 3, 0, 7, 0, 2, 0, 9])
+        );
+        assert_eq!(custom(&mut mock, 0x18, &[0, 9]).await, Ok(vec![0, 2, 0, 0]));
+        assert_eq!(
+            custom(&mut mock, 0x18, &[0]).await,
+            Err(ExceptionCode::IllegalDataValue)
+        );
+    }
+
+    #[tokio::test]
+    async fn other_custom_functions_echo_the_payload() {
+        let mut mock = MockContext::make();
+        assert_eq!(custom(&mut mock, 0x41, &[1, 2, 3]).await, Ok(vec![1, 2, 3]));
+        assert_eq!(custom(&mut mock, 0x65, &[]).await, Ok(vec![]));
     }
 }

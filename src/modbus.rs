@@ -1,4 +1,5 @@
 use crate::compat;
+use crate::frames::response_pdu;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::frames::{Framing, Tap};
 use crate::mock::MockContext;
@@ -19,7 +20,7 @@ use tokio_modbus::client::{Client, Context, Reader, Writer};
 use tokio_modbus::client::{rtu, tcp};
 use tokio_modbus::prelude::{ReadCode, ReadDeviceIdentificationResponse};
 use tokio_modbus::slave::{Slave as Unit, SlaveContext, SlaveId as UnitId};
-use tokio_modbus::{ExceptionCode, Request, Response};
+use tokio_modbus::{ExceptionCode, ExceptionResponse, ProtocolError, Request, Response};
 #[cfg(not(target_arch = "wasm32"))]
 use tokio_serial::SerialStream;
 
@@ -306,6 +307,60 @@ mod tests {
             known.downcast_ref::<ExceptionCode>(),
             Some(&ExceptionCode::IllegalDataAddress)
         );
+    }
+
+    #[test]
+    fn exceptions_on_standard_codes_sent_as_custom_are_recovered() {
+        use super::mismatched_exception;
+        use tokio_modbus::{
+            Error, ExceptionCode, ExceptionResponse, FunctionCode, ProtocolError, Response,
+        };
+
+        let mismatch = |request, result| {
+            Error::Protocol(ProtocolError::FunctionCodeMismatch { request, result })
+        };
+
+        for code in [0x07, 0x08, 0x0B, 0x0C, 0x14, 0x18, 0x03] {
+            let error = mismatch(
+                FunctionCode::Custom(code),
+                Err(ExceptionResponse {
+                    function: FunctionCode::new(code),
+                    exception: ExceptionCode::IllegalFunction,
+                }),
+            );
+            assert_eq!(
+                mismatched_exception(&error),
+                Some(ExceptionCode::IllegalFunction),
+                "0x{code:02X}"
+            );
+        }
+
+        let other_function = mismatch(
+            FunctionCode::Custom(0x08),
+            Err(ExceptionResponse {
+                function: FunctionCode::ReadHoldingRegisters,
+                exception: ExceptionCode::IllegalDataAddress,
+            }),
+        );
+        assert_eq!(mismatched_exception(&other_function), None);
+
+        let other_response = mismatch(
+            FunctionCode::Custom(0x11),
+            Ok(Response::ReportServerId(1, true, vec![])),
+        );
+        assert_eq!(mismatched_exception(&other_response), None);
+
+        let header = Error::Protocol(ProtocolError::HeaderMismatch {
+            message: String::new(),
+            result: Err(ExceptionResponse {
+                function: FunctionCode::Diagnostics,
+                exception: ExceptionCode::IllegalFunction,
+            }),
+        });
+        assert_eq!(mismatched_exception(&header), None);
+
+        let transport = Error::Transport(std::io::Error::other("closed"));
+        assert_eq!(mismatched_exception(&transport), None);
     }
 
     #[test]
@@ -722,8 +777,12 @@ macro_rules! timed_as {
                     Err(error)
                 }
                 Ok(Err(error)) => {
+                    let error = match mismatched_exception(&error) {
+                        Some(code) => exception_error(code),
+                        None => anyhow::Error::from(error),
+                    };
                     log::warn!("{desc} | {error}");
-                    Err(anyhow::Error::from(error))
+                    Err(error)
                 }
                 Err(error) => {
                     $this.poisoned.store(true, Ordering::Relaxed);
@@ -769,6 +828,20 @@ pub fn exception_message(code: ExceptionCode, raw: bool) -> String {
 pub fn exception_error(code: ExceptionCode) -> anyhow::Error {
     let message = exception_message(code, RAW_EXCEPTIONS.load(Ordering::Relaxed));
     anyhow::Error::from(code).context(message)
+}
+
+const fn mismatched_exception(error: &tokio_modbus::Error) -> Option<ExceptionCode> {
+    match error {
+        tokio_modbus::Error::Protocol(ProtocolError::FunctionCodeMismatch {
+            request,
+            result:
+                Err(ExceptionResponse {
+                    function,
+                    exception,
+                }),
+        }) if function.value() == request.value() => Some(*exception),
+        _ => None,
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -1078,6 +1151,21 @@ impl ModbusDevice {
         }
 
         Ok(objects)
+    }
+
+    pub async fn function_timed(&self, code: u8, data: &[u8]) -> Result<(Vec<u8>, Duration)> {
+        if code != 0x11 || !data.is_empty() {
+            return self.custom_timed(None, code, data).await;
+        }
+        let (response, elapsed) = timed!(
+            self,
+            call,
+            (Request::ReportServerId),
+            format!("Function 0x{code:02X} with data {data:?}")
+        )?;
+        let mut bytes = response_pdu(code, &Ok(response));
+        bytes.remove(0);
+        Ok((bytes, elapsed))
     }
 
     pub async fn custom(&self, unit: Option<UnitId>, code: u8, data: &[u8]) -> Result<Vec<u8>> {

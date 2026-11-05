@@ -438,11 +438,11 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn raw_is_not_implemented_until_the_setting_is_on() {
         let state = mock_state().await;
-        let response = raw_handler(State(state.clone()), raw(0x08, &[0, 0], None)).await;
+        let response = raw_handler(State(state.clone()), raw(0x41, &[0, 0], None)).await;
         assert_eq!(response.status(), StatusCode::NOT_IMPLEMENTED);
 
         state.allow_raw.store(true, Ordering::Relaxed);
-        let response = raw_handler(State(state), raw(0x08, &[0, 0], None)).await;
+        let response = raw_handler(State(state), raw(0x41, &[0, 0], None)).await;
         assert_eq!(response.status(), StatusCode::OK);
     }
 
@@ -450,7 +450,7 @@ pub(crate) mod tests {
     async fn raw_echoes_the_mock_payload() {
         let state = mock_state().await;
         state.allow_raw.store(true, Ordering::Relaxed);
-        let response = raw_handler(State(state), raw(0x08, &[0x12, 0x34], None)).await;
+        let response = raw_handler(State(state), raw(0x41, &[0x12, 0x34], None)).await;
         assert_eq!(response.status(), StatusCode::OK);
         let bytes = body::to_bytes(response.into_body(), usize::MAX)
             .await
@@ -464,7 +464,7 @@ pub(crate) mod tests {
         let state = mock_state().await;
         state.allow_raw.store(true, Ordering::Relaxed);
 
-        let response = raw_handler(State(state.clone()), raw(0x08, &[], Some(5))).await;
+        let response = raw_handler(State(state.clone()), raw(0x41, &[], Some(5))).await;
         assert_eq!(
             response.status(),
             StatusCode::UNPROCESSABLE_ENTITY,
@@ -472,11 +472,11 @@ pub(crate) mod tests {
         );
 
         state.allow_unit_id.store(true, Ordering::Relaxed);
-        let response = raw_handler(State(state.clone()), raw(0x08, &[], Some(5))).await;
+        let response = raw_handler(State(state.clone()), raw(0x41, &[], Some(5))).await;
         assert_eq!(response.status(), StatusCode::OK, "unit override on");
 
         state.read_only.store(true, Ordering::Relaxed);
-        let response = raw_handler(State(state), raw(0x08, &[], None)).await;
+        let response = raw_handler(State(state), raw(0x41, &[], None)).await;
         assert_eq!(response.status(), StatusCode::OK, "read-only is ignored");
     }
 

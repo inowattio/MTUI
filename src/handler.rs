@@ -4,9 +4,9 @@ use crate::input::{KeyCode, KeyEvent};
 use crate::modbus::{DataBits, Parity, StopBits, WordOrder};
 use crate::num_ops::{cycle, digit_add, digit_remove, wrap_index};
 use crate::state::{
-    CustomParams, DiscoveryField, DiscoveryParams, InterfaceKind, PopupKind, ReadPanel,
-    SettingsCategory, SettingsField, SettingsFocus, StatusMessage, SweepConfigParams, SweepField,
-    UnitField, UnitParams,
+    CustomParams, DiscoveryField, DiscoveryParams, FunctionsParams, InterfaceKind, PopupKind,
+    ReadPanel, SettingsCategory, SettingsField, SettingsFocus, StatusMessage, SweepConfigParams,
+    SweepField, UnitField, UnitParams,
 };
 
 pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) {
@@ -163,6 +163,7 @@ fn run_action(app: &mut App, action: KeybindAction) {
         WordOrder => app.toggle_word_order(),
         UnitId => app.open_unit(),
         Inspect => app.open_inspect(),
+        OtherFunctions => app.open_functions(),
         DeviceId => app.open_device_id(),
         RawRequest => app.open_raw(),
         Graph => app.toggle_graph(),
@@ -239,14 +240,39 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
             _ => {}
         },
 
-        PopupKind::DeviceId => match key_event.code {
-            c if c == KeyCode::Esc || c == kb.device_id => app.close_popup(),
-            c if c == kb.refresh => app.device_id_refresh(),
-            c if c == kb.panel => app.device_id_cycle(),
-            KeyCode::Left => app.device_id_hscroll(false),
-            KeyCode::Right => app.device_id_hscroll(true),
-            _ => {}
-        },
+        PopupKind::Functions => {
+            let detail = app
+                .popup_as::<FunctionsParams>()
+                .is_some_and(|params| params.detail);
+            if detail {
+                match key_event.code {
+                    KeyCode::Esc | KeyCode::Tab => app.functions_focus(false),
+                    KeyCode::Char(c) if app.function_accepts(c) => app.function_input(c),
+                    KeyCode::Enter => app.function_send(),
+                    KeyCode::Up => app.function_move(false),
+                    KeyCode::Down => app.function_move(true),
+                    KeyCode::Left => app.function_cycle(false),
+                    KeyCode::Right => app.function_cycle(true),
+                    c if c == kb.page_up => app.function_scroll(false),
+                    c if c == kb.page_down => app.function_scroll(true),
+                    KeyCode::Backspace => app.function_backspace(),
+                    KeyCode::Char(c) => app.function_input(c),
+                    _ => {}
+                }
+            } else {
+                match key_event.code {
+                    KeyCode::Right | KeyCode::Tab => app.functions_focus(true),
+                    c if c == KeyCode::Esc || c == kb.other_functions => app.close_popup(),
+                    KeyCode::Up => app.functions_select(false),
+                    KeyCode::Down => app.functions_select(true),
+                    KeyCode::Enter => app.functions_enter(),
+                    c if c == kb.refresh => app.function_send(),
+                    c if c == kb.page_up => app.function_scroll(false),
+                    c if c == kb.page_down => app.function_scroll(true),
+                    _ => {}
+                }
+            }
+        }
 
         PopupKind::Raw => match key_event.code {
             KeyCode::Esc => app.close_popup(),

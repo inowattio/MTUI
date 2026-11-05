@@ -48,8 +48,8 @@ pub mod message {
     pub const DWORD_NOT_CONTIGUOUS: &str = "Words aren't adjacent, write each in Word mode";
     pub const WRITING: &str = "Writing...";
     pub const READING: &str = "Reading...";
-    pub const READ_TASK_STOPPED: &str = "Read failed: task stopped unexpectedly";
-    pub const NO_ID_OBJECTS: &str = "No identification objects returned";
+    pub const FUNCTION_INPUTS_CHANGED: &str =
+        "Inputs changed since sending; press Enter to send again";
     pub const NOTHING_READ_HERE: &str = "Nothing read here yet";
     pub const GRAPH_CLEARED: &str = "Cleared graph history";
     pub const NOTHING_TO_DUMP: &str = "Nothing read yet to dump.";
@@ -76,6 +76,7 @@ pub mod keybind {
     pub const WORD_ORDER: KeyCode = KeyCode::Char('o');
     pub const UNIT_ID: KeyCode = KeyCode::Char('i');
     pub const INSPECT: KeyCode = KeyCode::Char('v');
+    pub const OTHER_FUNCTIONS: KeyCode = KeyCode::Char('b');
     pub const DEVICE_ID: KeyCode = KeyCode::Char('D');
     pub const RAW_REQUEST: KeyCode = KeyCode::Char('f');
     pub const GRAPH: KeyCode = KeyCode::Char('g');

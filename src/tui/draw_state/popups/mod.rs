@@ -1,9 +1,9 @@
 mod about;
 mod columns;
 mod custom;
-mod device_id;
 mod discovery;
 mod dump;
+mod functions;
 mod help;
 mod import;
 mod inspect;
@@ -62,7 +62,7 @@ pub fn draw_popup(
         Popup::Inspect(mode) => inspect::draw(frame, area, theme, app, *mode),
         Popup::About => about::draw(frame, area, theme),
         Popup::Stats(tab) => stats::draw(frame, area, theme, app, *tab),
-        Popup::DeviceId(params) => device_id::draw(frame, area, theme, app, params, layout),
+        Popup::Functions(params) => functions::draw(frame, area, theme, app, params, layout),
         Popup::Raw(params) => raw::draw(frame, area, theme, params),
         Popup::Import(params) => import::draw(frame, area, theme, params),
         Popup::CycleConfig | Popup::Quit => {

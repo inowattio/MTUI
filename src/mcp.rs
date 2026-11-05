@@ -557,8 +557,14 @@ mod tests {
                 .contains("read-only")
         );
 
-        let raw = call_tool(state.clone(), "raw_function", json!({ "code": 8 })).await;
+        let raw = call_tool(state.clone(), "raw_function", json!({ "code": 65 })).await;
         assert_eq!(raw["isError"], true);
+        assert!(
+            raw["content"][0]["text"]
+                .as_str()
+                .unwrap()
+                .contains("disabled")
+        );
 
         let unit = call_tool(
             state,

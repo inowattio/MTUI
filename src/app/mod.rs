@@ -8,7 +8,7 @@ use crate::custom::{ASCII_REGISTERS_MAX, CustomRule};
 use crate::interpretator::Interpretor;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::modbus::Interface;
-use crate::modbus::{DeviceConfig, DeviceIdAccess, ModbusDevice};
+use crate::modbus::{DeviceConfig, ModbusDevice};
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
 use crate::state::{ConnectionStatus, CustomParams, ScreenLayout, State, UnitParams};
 #[cfg(not(target_arch = "wasm32"))]
@@ -89,8 +89,8 @@ enum BackgroundTask {
     Write(TaskHandle<WriteOutcome>),
     Reconnect(TaskHandle<Result<ModbusDevice, String>>),
     Connect(TaskHandle<ConnectTaskResult>),
-    DeviceId(TaskHandle<DeviceIdTaskResult>),
     Raw(TaskHandle<RawTaskResult>),
+    Function(TaskHandle<FunctionTaskResult>),
     UnitScan(TaskHandle<UnitScanTaskResult>),
     LoadConfig(TaskHandle<LoadConfigTaskResult>),
 }
@@ -114,10 +114,12 @@ struct ConnectTaskResult {
     result: Result<ModbusDevice, String>,
 }
 
+type FunctionRows = Result<Vec<(String, String)>, String>;
+
 #[derive(Debug)]
-struct DeviceIdTaskResult {
-    access: DeviceIdAccess,
-    result: Result<Vec<(u8, String)>, String>,
+struct FunctionTaskResult {
+    request: crate::functions::FunctionRequest,
+    result: Result<(Duration, FunctionRows), String>,
 }
 
 #[derive(Debug)]
@@ -1004,12 +1006,12 @@ mod api;
 mod columns;
 mod config_io;
 mod custom;
-mod device_id;
 mod diff;
 mod discovery;
 #[cfg(not(target_arch = "wasm32"))]
 mod dropped;
 mod dump;
+mod functions;
 mod help;
 mod label;
 mod lifecycle;

@@ -57,10 +57,10 @@ pub fn min_width(min: u16, items: &[Hint]) -> u16 {
     min.max(width(items) as u16)
 }
 
-pub fn footer<const N: usize>(theme: &Theme, items: [Hint; N]) -> Line<'static> {
+pub fn footer(theme: &Theme, items: impl IntoIterator<Item = Hint>) -> Line<'static> {
     let key_style = Style::default().fg(theme.accent);
     let dim = theme.dim_style();
-    let mut spans: Vec<Span<'static>> = Vec::with_capacity(items.len() * 5 + 2);
+    let mut spans: Vec<Span<'static>> = Vec::new();
     spans.push(Span::styled(" ", dim));
     for (i, h) in items.into_iter().enumerate() {
         if i > 0 {
