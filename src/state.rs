@@ -1322,6 +1322,10 @@ impl ReadPanel {
             Self::Matrix => "Matrix",
         }
     }
+
+    pub const fn follows_position(self) -> bool {
+        matches!(self, Self::Main | Self::Matrix)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

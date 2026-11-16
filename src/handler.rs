@@ -86,8 +86,10 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) {
         }
         KeyCode::Left => app.scroll_columns(false),
         KeyCode::Right => app.scroll_columns(true),
-        KeyCode::Char(c) if c.is_ascii_digit() => type_address_digit(app, c),
-        KeyCode::Backspace => {
+        KeyCode::Char(c) if c.is_ascii_digit() && app.read().panel.follows_position() => {
+            type_address_digit(app, c);
+        }
+        KeyCode::Backspace if app.read().panel.follows_position() => {
             let mode = app.typing_mode();
             let p = app.read_mut();
             p.position = mode.pop_digit(p.position);
@@ -488,8 +490,10 @@ pub fn handle_paste(data: String, app: &mut App) {
     if app.popup_kind().is_none()
         && let Some(address) = app.interpreter.address_mode().parse(trimmed)
     {
-        app.read_mut().position = address;
-        app.scroll_to_cursor();
+        if app.read().panel.follows_position() {
+            app.read_mut().position = address;
+            app.scroll_to_cursor();
+        }
         return;
     }
 
@@ -517,7 +521,7 @@ fn paste_digits(digits: &str, app: &mut App) {
                 app.search_input(c);
             }
         }
-        None => {
+        None if app.read().panel.follows_position() => {
             let mode = app.interpreter.address_mode();
             app.read_mut().position = mode.parse_saturating(digits).unwrap_or(u16::MAX);
             app.scroll_to_cursor();
@@ -928,12 +932,31 @@ mod tests {
     use crate::register::RegisterType;
     use crate::scratch::ScratchDir;
     use crate::state::{
-        DiscoveryField, DiscoveryParams, InterfaceKind, MessageKind, Popup, PopupKind,
+        DiscoveryField, DiscoveryParams, InterfaceKind, MessageKind, Popup, PopupKind, ReadPanel,
         SettingsCategory, SettingsField, SettingsFocus, State, StatsTab, UnitField, UnitParams,
     };
 
     async fn app() -> App {
         App::boot(Config::default(), String::new()).await
+    }
+
+    #[tokio::test]
+    async fn address_typing_and_pasting_leave_the_position_alone_in_list_panels() {
+        let mut app = app().await;
+        app.read_mut().position = 5;
+
+        for panel in [ReadPanel::Pinned, ReadPanel::Labeled, ReadPanel::Custom] {
+            app.read_mut().panel = panel;
+            handle_key_events(KeyEvent::new(KeyCode::Char('3')), &mut app).await;
+            handle_key_events(KeyEvent::new(KeyCode::Backspace), &mut app).await;
+            super::handle_paste("42".to_string(), &mut app);
+            super::handle_paste("99999999".to_string(), &mut app);
+            assert_eq!(app.read().position, 5, "{panel:?}");
+        }
+
+        app.read_mut().panel = ReadPanel::Main;
+        handle_key_events(KeyEvent::new(KeyCode::Char('3')), &mut app).await;
+        assert_eq!(app.read().position, 53);
     }
 
     #[tokio::test]
@@ -1604,7 +1627,7 @@ mod tests {
         {
             let read = app.read_mut();
             read.position = 42;
-            read.panel = crate::state::ReadPanel::Pinned;
+            read.panel = ReadPanel::Pinned;
         }
 
         paste(&mut app, DUMP);
@@ -1623,7 +1646,7 @@ mod tests {
         handle_key_events(KeyEvent::new(KeyCode::Esc), &mut app).await;
         let read = app.read();
         assert_eq!(read.position, 42);
-        assert_eq!(read.panel, crate::state::ReadPanel::Pinned);
+        assert_eq!(read.panel, ReadPanel::Pinned);
         assert_eq!(read.popup, None);
         assert!(app.running, "escape closes the diff, not the app");
     }
