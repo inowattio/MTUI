@@ -402,6 +402,32 @@ mod tests {
 
     #[cfg(not(target_arch = "wasm32"))]
     #[tokio::test]
+    async fn a_cancelled_unit_override_does_not_leak_into_later_requests() {
+        let config = DeviceConfig {
+            request_gap_ms: 1000,
+            ..DeviceConfig::default()
+        };
+        let device = ModbusDevice::new(&config).await.unwrap();
+
+        let cancelled = tokio::time::timeout(
+            Duration::from_millis(50),
+            device.read_typed(Some(7), RegisterType::Holding, 11, 1),
+        )
+        .await;
+        assert!(
+            cancelled.is_err(),
+            "the override request is dropped mid-gap"
+        );
+
+        let unit = device
+            .read_typed(None, RegisterType::Holding, 11, 1)
+            .await
+            .unwrap();
+        assert_eq!(unit, vec![u16::from(config.unit_id)]);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
     async fn poisoned_context_reconnects_before_next_command() {
         // A mock device stands in for a real transport. Simulate a prior
         // command having timed out and desynchronized the context.
@@ -749,16 +775,13 @@ macro_rules! timed_as {
             let timeout_command = Duration::from_millis($this.config.request_timeout_ms);
             let time_between = Duration::from_millis($this.config.request_gap_ms);
             let override_unit = $unit;
-            if let Some(id) = override_unit {
-                hold.set_slave(Unit(id));
-            }
+            hold.set_slave(Unit(
+                override_unit.unwrap_or_else(|| $this.default_unit.load(Ordering::Relaxed)),
+            ));
             let began = compat::Instant::now();
             let outcome = compat::timeout(timeout_command, hold.$action($($arg),*)).await;
             let elapsed = began.elapsed();
             compat::sleep(time_between).await;
-            if override_unit.is_some() {
-                hold.set_slave(Unit($this.default_unit.load(Ordering::Relaxed)));
-            }
             let desc = match override_unit {
                 Some(id) => format!("{} (unit {id})", $desc),
                 None => $desc,
