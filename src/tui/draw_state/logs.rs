@@ -37,9 +37,9 @@ impl Row {
     }
 }
 
-fn event_rows(theme: &Theme) -> Vec<Row> {
-    logger::snapshot()
-        .into_iter()
+fn event_rows(entries: &[logger::LogEntry], theme: &Theme) -> Vec<Row> {
+    entries
+        .iter()
         .map(|entry| {
             let (tag, tag_style) = match entry.level {
                 LogLevel::Info => ("INFO", theme.ok_style()),
@@ -54,7 +54,7 @@ fn event_rows(theme: &Theme) -> Vec<Row> {
                     ),
                     Span::styled(format!("{tag} "), tag_style),
                 ],
-                text: entry.message,
+                text: entry.message.clone(),
             }
         })
         .collect()
@@ -248,12 +248,16 @@ pub fn draw(
     } else {
         Vec::new()
     };
-    let entries = match params.mode {
-        LogMode::Events => event_rows(theme),
-        LogMode::Frames => frame_rows(&snapshot, theme),
-        LogMode::Writes => write_rows(&params.writes, theme, address_mode),
+    let events = if params.mode == LogMode::Events {
+        logger::snapshot()
+    } else {
+        Vec::new()
     };
-    let len = entries.len();
+    let len = match params.mode {
+        LogMode::Events => events.len(),
+        LogMode::Frames => snapshot.len(),
+        LogMode::Writes => params.writes.len(),
+    };
     let selected = if shows_frames && len > 0 {
         Some(if params.follow {
             len - 1
@@ -317,6 +321,17 @@ pub fn draw(
         (params.top as usize).min(max_top)
     };
     let end = (top + visible).min(len);
+    let window = if params.wrap && params.follow {
+        len.saturating_sub(visible)..len
+    } else {
+        top..end
+    };
+    let first = window.start;
+    let entries = match params.mode {
+        LogMode::Events => event_rows(&events[window], theme),
+        LogMode::Frames => frame_rows(&snapshot[window], theme),
+        LogMode::Writes => write_rows(&params.writes[window], theme, address_mode),
+    };
 
     let prefix_w = entries.first().map_or(0, Row::head_width);
     let msg_width = (area.width as usize).saturating_sub(prefix_w).max(10);
@@ -330,8 +345,6 @@ pub fn draw(
     } else {
         entries
             .iter()
-            .skip(top)
-            .take(end - top)
             .map(|e| e.text.chars().count())
             .max()
             .unwrap_or(0)
@@ -356,7 +369,8 @@ pub fn draw(
             .enumerate()
             .rev()
             .flat_map(|(i, entry)| {
-                entry_rows(entry, theme, true, msg_width, 0, selected == Some(i))
+                let picked = selected == Some(first + i);
+                entry_rows(entry, theme, true, msg_width, 0, picked)
                     .into_iter()
                     .rev()
             })
@@ -369,7 +383,6 @@ pub fn draw(
             entries
                 .iter()
                 .enumerate()
-                .skip(top)
                 .flat_map(|(i, entry)| {
                     entry_rows(
                         entry,
@@ -377,7 +390,7 @@ pub fn draw(
                         params.wrap,
                         msg_width,
                         h_off,
-                        selected == Some(i),
+                        selected == Some(first + i),
                     )
                 })
                 .take(visible),
