@@ -65,7 +65,7 @@ pub fn draw_popup(
         Popup::Functions(params) => functions::draw(frame, area, theme, app, params, layout),
         Popup::Raw(params) => raw::draw(frame, area, theme, params),
         Popup::Import(params) => import::draw(frame, area, theme, params),
-        Popup::CycleConfig | Popup::Quit => {
+        Popup::LoadConfig(_) | Popup::Quit => {
             unsaved::draw(frame, area, theme, matches!(popup, Popup::Quit));
         }
     }

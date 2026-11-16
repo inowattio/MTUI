@@ -9,7 +9,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, quitting: bool)
     let (prompt, confirm, save) = if quitting {
         ("Quit anyway?", "Quit", "Save & quit")
     } else {
-        ("Load next configuration anyway?", "Load", "Save & load")
+        ("Load configuration anyway?", "Load", "Save & load")
     };
     let footer = [
         Hint::key(KeyCode::Enter, confirm),

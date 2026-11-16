@@ -13,6 +13,7 @@ use crate::register::{RegisterCell, RegisterType};
 use crate::snapshot::{Diff, Snapshot};
 use crate::writes_log::WriteEntry;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use std::time::Duration;
 
 macro_rules! field_enum {
@@ -1862,7 +1863,7 @@ popups! {
     Functions(FunctionsParams),
     Raw(RawParams),
     Import(ImportParams),
-    CycleConfig,
+    LoadConfig(PathBuf),
     Quit,
 }
 

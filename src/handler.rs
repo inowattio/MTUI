@@ -439,11 +439,11 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
             }
         }
 
-        PopupKind::Import | PopupKind::CycleConfig | PopupKind::Quit => {
+        PopupKind::Import | PopupKind::LoadConfig | PopupKind::Quit => {
             type Action = fn(&mut App);
             let (confirm, cancel): (Action, Action) = match kind {
                 PopupKind::Import => (App::apply_import, App::cancel_import),
-                PopupKind::CycleConfig => (App::confirm_cycle_config, App::close_popup),
+                PopupKind::LoadConfig => (App::confirm_load_config, App::close_popup),
                 _ => (App::quit, App::close_popup),
             };
             match key_event.code {
@@ -451,8 +451,8 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
                 KeyCode::Up if kind == PopupKind::Import => app.import_move(false),
                 KeyCode::Down if kind == PopupKind::Import => app.import_move(true),
                 KeyCode::Char('s') if kind == PopupKind::Quit => app.save_and_quit(),
-                KeyCode::Char('s') if kind == PopupKind::CycleConfig => {
-                    app.save_and_cycle_config();
+                KeyCode::Char('s') if kind == PopupKind::LoadConfig => {
+                    app.save_and_load_config();
                 }
                 c if c == KeyCode::Esc || c == KeyCode::Backspace => cancel(app),
                 _ => {}

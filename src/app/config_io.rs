@@ -191,8 +191,8 @@ impl App {
         self.save_then(Self::quit);
     }
 
-    pub fn save_and_cycle_config(&mut self) {
-        self.save_then(Self::confirm_cycle_config);
+    pub fn save_and_load_config(&mut self) {
+        self.save_then(Self::confirm_load_config);
     }
 
     pub fn config_changes(&self) -> Vec<super::ConfigChange> {
@@ -354,17 +354,24 @@ impl App {
             return;
         };
 
-        if self.dirty && !self.config.skip_unsaved_warning {
-            self.read_mut().popup = Some(Popup::CycleConfig);
-            return;
+        if let Some(target) = self.guard_unsaved_load(target) {
+            self.load_config_target(target);
         }
-
-        self.load_config_target(target);
     }
 
-    pub fn confirm_cycle_config(&mut self) {
+    pub(super) fn guard_unsaved_load(&mut self, target: PathBuf) -> Option<PathBuf> {
+        if !self.dirty || self.config.skip_unsaved_warning || target.as_os_str().is_empty() {
+            return Some(target);
+        }
+        self.close_settings();
+        self.read_mut().popup = Some(Popup::LoadConfig(target));
+        None
+    }
+
+    pub fn confirm_load_config(&mut self) {
+        let target = self.popup_as::<PathBuf>().cloned();
         self.close_popup();
-        if let Some(target) = self.cycle_target() {
+        if let Some(target) = target {
             self.load_config_target(target);
         }
     }
@@ -397,6 +404,48 @@ mod tests {
             .and_then(|s| s.status.as_ref())
             .map(|s| s.kind)
             .expect("a status is shown")
+    }
+
+    async fn dirty_app_loading_from_settings(skip_warning: bool) -> App {
+        let mut app = App::boot(Config::default(), String::new()).await;
+        app.config.skip_unsaved_warning = skip_warning;
+        app.config.name = "edited".to_string();
+        app.refresh_dirty();
+        app.open_settings();
+        if let Some(s) = app.settings_mut() {
+            s.load_path = "missing-config.json".to_string();
+        }
+        app.settings_load();
+        app
+    }
+
+    #[tokio::test]
+    async fn settings_load_with_unsaved_changes_asks_first() {
+        let app = dirty_app_loading_from_settings(false).await;
+
+        assert!(app.settings().is_none());
+        assert_eq!(
+            app.popup_as::<std::path::PathBuf>(),
+            Some(&std::path::PathBuf::from("missing-config.json"))
+        );
+    }
+
+    #[tokio::test]
+    async fn settings_load_with_an_empty_path_errors_without_asking() {
+        let mut app = App::boot(Config::default(), String::new()).await;
+        app.config.name = "edited".to_string();
+        app.refresh_dirty();
+        app.open_settings();
+        app.settings_load();
+
+        assert_eq!(settings_status(&app), MessageKind::Err);
+    }
+
+    #[tokio::test]
+    async fn settings_load_skips_the_prompt_when_the_warning_is_off() {
+        let app = dirty_app_loading_from_settings(true).await;
+
+        assert_eq!(settings_status(&app), MessageKind::Err);
     }
 
     #[tokio::test]
