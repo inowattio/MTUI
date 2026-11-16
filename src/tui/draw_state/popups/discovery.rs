@@ -36,7 +36,9 @@ pub fn draw(params: &DiscoveryParams, app: &App, frame: &mut Frame, area: Rect, 
     let action = match field {
         DiscoveryField::ScanNetwork if scanning => "Stop",
         DiscoveryField::ScanNetwork => "Scan",
-        DiscoveryField::ScanMethod | DiscoveryField::ScanRepr => "Toggle",
+        DiscoveryField::ScanMethod | DiscoveryField::ScanRepr | DiscoveryField::LocalEcho => {
+            "Toggle"
+        }
         DiscoveryField::Port(_) => "Use port",
         DiscoveryField::Found(_) => "Use address",
         _ => "Connect",
@@ -257,6 +259,11 @@ fn side_lines(
                     DiscoveryField::StopBits,
                     "Stop bits",
                     format!("{:?}", p.stop_bits),
+                ),
+                (
+                    DiscoveryField::LocalEcho,
+                    "Local echo",
+                    if p.local_echo { "on" } else { "off" }.to_string(),
                 ),
             ];
             for (field, label, value) in serial {
