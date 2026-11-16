@@ -1,7 +1,7 @@
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
-use ratatui::text::Span;
+use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Widget};
 
 pub struct TableRow {
@@ -29,6 +29,7 @@ pub struct RowsTable {
     header: String,
     header_style: Style,
     rows: Vec<TableRow>,
+    footer: Option<Line<'static>>,
     prefix: u16,
     h_off: u16,
 }
@@ -45,9 +46,15 @@ impl RowsTable {
             header,
             header_style,
             rows,
+            footer: None,
             prefix: 0,
             h_off: 0,
         }
+    }
+
+    pub fn footer(mut self, footer: Option<Line<'static>>) -> Self {
+        self.footer = footer;
+        self
     }
 
     pub const fn hscroll(mut self, prefix: u16, offset: u16) -> Self {
@@ -59,8 +66,23 @@ impl RowsTable {
 
 impl Widget for RowsTable {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let inner = self.block.inner(area);
-        self.block.render(area, buf);
+        let mut inner = self.block.inner(area);
+        let top = Rect {
+            height: inner.y - area.y,
+            ..area
+        };
+        self.block.render(top, buf);
+        if let Some(footer) = self.footer
+            && inner.height > 0
+        {
+            inner.height -= 1;
+            let row = Rect {
+                y: inner.bottom(),
+                height: 1,
+                ..inner
+            };
+            footer.render(row, buf);
+        }
         if inner.is_empty() {
             return;
         }
@@ -112,6 +134,7 @@ fn write_row(
         buf.set_style(Rect::new(inner.x, y, inner.width, 1), style);
     }
     let right = inner.right();
+    let row = buf.index_of(inner.x, y);
     let hidden = prefix as usize..(prefix as usize + h_off as usize);
     let mut x = inner.x;
     let mut index = 0usize;
@@ -131,8 +154,10 @@ fn write_row(
                 if x >= right {
                     break;
                 }
-                let cell = &mut buf[(x, y)];
-                cell.set_char(ch);
+                let cell = &mut buf.content[row + (x - inner.x) as usize];
+                if ch != ' ' || cell.symbol() != " " {
+                    cell.set_char(ch);
+                }
                 if restyle {
                     cell.set_style(cell_style);
                 }

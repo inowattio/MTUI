@@ -91,12 +91,9 @@ pub fn draw(
         NO_DIFFERENCES
     });
 
-    let mut block = theme
+    let block = theme
         .tabbed_panel(&TABS, usize::from(params.changed_only))
         .title_top(legend(theme));
-    if let Some(text) = footnote {
-        block = block.title_bottom(dim_line(theme, format!(" {text} ")));
-    }
 
     let visible = area
         .height
@@ -126,7 +123,8 @@ pub fn draw(
         .collect();
     frame.render_widget(
         RowsTable::new(block, header, theme.header_style(), table_rows)
-            .hscroll(prefix as u16, h_off),
+            .hscroll(prefix as u16, h_off)
+            .footer(footnote.map(|text| dim_line(theme, format!(" {text} ")))),
         area,
     );
 

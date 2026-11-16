@@ -273,8 +273,8 @@ impl App {
         self.read_log.get(&cell).map(|entry| entry.value)
     }
 
-    pub fn cell_changed(&self, cell: RegisterCell) -> Option<Changed> {
-        self.changed_since(cell, Utc::now())
+    pub fn cell_changed(&self, cell: RegisterCell, now: DateTime<Utc>) -> Option<Changed> {
+        self.changed_since(cell, now)
     }
 
     fn changed_since(&self, cell: RegisterCell, now: DateTime<Utc>) -> Option<Changed> {

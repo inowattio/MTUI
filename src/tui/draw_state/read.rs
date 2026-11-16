@@ -430,6 +430,7 @@ impl TableCtx<'_> {
         };
 
         let colored = app.config.display.changed_trend_color;
+        let now = Utc::now();
         let address_mode = app.interpreter.address_mode();
         let mut header = format!("{: >5}  ", "");
         for c in 0..cols {
@@ -454,7 +455,7 @@ impl TableCtx<'_> {
                     break;
                 };
                 let cell = (params.register_type, addr);
-                let changed = app.cell_changed(cell);
+                let changed = app.cell_changed(cell, now);
                 let heat = changed.map(|c| c.heat);
                 let (text, mut style) = match app.cell_value(cell) {
                     Some(value) => {
@@ -490,11 +491,8 @@ impl TableCtx<'_> {
             });
         }
 
-        let mut block = panel_block(theme, ReadPanel::Matrix, &app.config);
-        if let Some(context) = self.matrix_context_line() {
-            block = block.title_bottom(context.left_aligned());
-        }
-        rows_table(table_rows, header, theme, block)
+        let block = panel_block(theme, ReadPanel::Matrix, &app.config);
+        rows_table(table_rows, header, theme, block).footer(self.matrix_context_line())
     }
 
     fn matrix_context_line(&self) -> Option<Line<'static>> {

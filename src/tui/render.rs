@@ -7,7 +7,7 @@ use crate::tui::make_top_title::make_top_title;
 use crate::tui::theme::status_span;
 use chrono::Local;
 use ratatui::Frame;
-use ratatui::layout::Margin;
+use ratatui::layout::{Margin, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders};
@@ -67,17 +67,19 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         mode_spans.push(Span::styled(app.config.name.clone(), theme.accent_style()));
     }
 
-    let mut outer = Block::default()
+    let border_style = Style::default().fg(theme.border);
+    let mut top = Block::default()
         .title_top(Line::from(left_top))
         .title_top(Line::from(mode_spans).right_aligned())
+        .border_style(border_style)
+        .borders(Borders::TOP)
+        .border_type(BorderType::Rounded);
+    let bottom = Block::default()
         .title_bottom(clock_line)
         .title_bottom(key_hints.right_aligned())
-        .border_style(Style::default().fg(theme.border))
-        .borders(Borders::TOP | Borders::BOTTOM)
+        .border_style(border_style)
+        .borders(Borders::BOTTOM)
         .border_type(BorderType::Rounded);
-    if theme.background != Color::Reset {
-        outer = outer.style(Style::default().bg(theme.background));
-    }
 
     // The layout is published by the draw below, so this reads the previous
     // frame's value; it settles on the next redraw.
@@ -89,7 +91,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     if let Some(offset) = h_offset {
         let max = app.layout.h_max_offset;
         if let Some(hint) = hints::hscroll(&theme, offset.min(max), max) {
-            outer = outer.title_top(hint.centered());
+            top = top.title_top(hint.centered());
         }
     }
 
@@ -109,15 +111,27 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         .vertical
         .min(full.height.saturating_sub(PADDED_MIN_HEIGHT) / 2);
     let area = full.inner(Margin::new(pad_h, pad_v));
-    if area != full {
-        frame.render_widget(
-            Block::default().style(Style::default().bg(theme.background)),
-            full,
-        );
+    if theme.background != Color::Reset {
+        frame
+            .buffer_mut()
+            .set_style(full, Style::default().bg(theme.background));
     }
-    let inner = outer.inner(area);
+    let top_row = Rect {
+        height: area.height.min(1),
+        ..area
+    };
+    let bottom_row = Rect {
+        y: area.bottom().saturating_sub(1),
+        ..top_row
+    };
+    let inner = Block::default()
+        .borders(Borders::TOP | Borders::BOTTOM)
+        .inner(area);
     app.viewport_width = inner.width;
-    frame.render_widget(outer, area);
+    frame.render_widget(top, top_row);
+    if area.height > 1 {
+        frame.render_widget(bottom, bottom_row);
+    }
 
     let mut layout: ScreenLayout = app.layout;
     match &app.state {
