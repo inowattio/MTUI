@@ -7,7 +7,7 @@ mod native {
     use mtui::logger;
     use mtui::tui::Tui;
     use ratatui::Terminal;
-    use ratatui::backend::CrosstermBackend;
+    use ratatui_crossterm::CrosstermBackend;
     use std::io;
     use std::path::PathBuf;
 

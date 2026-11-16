@@ -1567,6 +1567,7 @@ dependencies = [
  "memory-stats",
  "num-traits",
  "ratatui",
+ "ratatui-crossterm",
  "ratzilla",
  "serde",
  "serde_json",
