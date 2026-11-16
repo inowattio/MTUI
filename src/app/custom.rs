@@ -325,25 +325,19 @@ impl App {
             .or_else(|| rule.raw(&words, order).map(|raw| raw as f64))
     }
 
-    pub(super) fn is_custom_part(&self, (kind, address): RegisterCell) -> bool {
-        self.custom_rules
-            .range((kind, 0)..=(kind, u16::MAX))
-            .any(|(_, rule)| rule.continuation(address).is_some())
+    pub(super) fn is_custom_part(&self, cell: RegisterCell) -> bool {
+        self.custom_rules.part_of(cell).is_some()
     }
 
-    pub(super) fn custom_part_of(&self, (kind, address): RegisterCell) -> Option<CustomCell> {
+    pub(super) fn custom_part_of(&self, cell: RegisterCell) -> Option<CustomCell> {
         if !self.config.display.rule_continuation {
             return None;
         }
-        self.custom_rules
-            .range((kind, 0)..=(kind, u16::MAX))
-            .find_map(|(&(_, owner), r)| {
-                let continuation = r.continuation(address)?;
-                Some(CustomCell::PartOf {
-                    owner,
-                    continuation,
-                })
-            })
+        let (owner, continuation) = self.custom_rules.part_of(cell)?;
+        Some(CustomCell::PartOf {
+            owner,
+            continuation,
+        })
     }
 
     pub(super) fn custom_marker(&self, cell: CustomCell) -> String {

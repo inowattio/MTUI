@@ -5,8 +5,8 @@ use super::{
     UnitScanTaskResult, WriteOutcome, default_config_path, load_config, reconnect_backoff,
 };
 use crate::compat::{self, Instant, TaskPoll};
-use crate::config::{AddressMode, BatchAnchor, Config, RegisterViews};
-use crate::custom::CustomRule;
+use crate::config::{AddressMode, BatchAnchor, Config};
+use crate::custom::{CustomRule, CustomRules};
 use crate::interpretator::Interpretor;
 use crate::modbus::{self, Interface, ModbusDevice};
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
@@ -21,6 +21,12 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU16, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+
+type AppViews = (
+    Vec<RegisterCell>,
+    BTreeMap<RegisterCell, String>,
+    CustomRules,
+);
 
 impl App {
     pub async fn new(
@@ -136,10 +142,11 @@ impl App {
         app
     }
 
-    fn derive_config_views(config: &Config) -> (Interpretor, RegisterViews) {
+    fn derive_config_views(config: &Config) -> (Interpretor, AppViews) {
+        let (pinned, labels, rules) = config.registers.clone().into_views();
         (
             Interpretor::new(config.columns.clone(), config.device.word_order),
-            config.registers.clone().into_views(),
+            (pinned, labels, rules.into()),
         )
     }
 
@@ -1094,7 +1101,8 @@ mod tests {
         app.config.batch.size = 1;
         app.config.batch.anchor = crate::config::BatchAnchor::Start;
         app.read_mut().register_type = H;
-        app.custom_rules = rules(&[(100, CustomRepr::F32, &[]), (520, CustomRepr::F64, &[524])]);
+        app.custom_rules =
+            rules(&[(100, CustomRepr::F32, &[]), (520, CustomRepr::F64, &[524])]).into();
 
         app.read_mut().position = 101;
         assert_eq!(app.read_window(), (101, 1), "off by default");

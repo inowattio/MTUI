@@ -4,7 +4,7 @@ use crate::config::{Config, Registers};
 use crate::constants::CONFIG_PATH;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::constants::SCAN_PREFIX_RANGE;
-use crate::custom::{ASCII_REGISTERS_MAX, CustomRule};
+use crate::custom::{ASCII_REGISTERS_MAX, CustomRule, CustomRules};
 use crate::interpretator::Interpretor;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::modbus::Interface;
@@ -549,7 +549,7 @@ pub struct App {
     read_log: BTreeMap<RegisterCell, ReadEntry>,
     value_history: BTreeMap<RegisterCell, VecDeque<(u16, DateTime<Utc>)>>,
     labels: BTreeMap<RegisterCell, String>,
-    custom_rules: BTreeMap<RegisterCell, CustomRule>,
+    custom_rules: CustomRules,
     pending_write: Option<PendingWrite>,
     queued_write: Option<QueuedWrite>,
     pending_import: Option<Vec<Registers>>,
