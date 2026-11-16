@@ -1502,6 +1502,7 @@ settings_fields! {
             NextConfig: Text => "Next configuration", "Configuration file loaded by the cycle config key",
         ],
     }
+    Changes {}
     Search {}
 }
 
@@ -1564,6 +1565,7 @@ field_enum! {
         Theme,
         Keybinds,
         Config,
+        Changes,
         Search,
     }
 }
@@ -1577,6 +1579,7 @@ impl SettingsCategory {
             Self::Theme => "Theme",
             Self::Keybinds => "Keybinds",
             Self::Config => "Config",
+            Self::Changes => "Changes",
             Self::Search => "Search",
         }
     }
@@ -1611,12 +1614,19 @@ impl SettingsCategory {
         matches!(self, Self::Keybinds)
     }
 
+    pub const fn is_changes(self) -> bool {
+        matches!(self, Self::Changes)
+    }
+
     pub const fn is_search(self) -> bool {
         matches!(self, Self::Search)
     }
 
     pub const fn is_searchable(self) -> bool {
-        !matches!(self, Self::Keybinds | Self::Theme | Self::Search)
+        !matches!(
+            self,
+            Self::Keybinds | Self::Theme | Self::Changes | Self::Search
+        )
     }
 }
 
@@ -1750,12 +1760,14 @@ impl SettingsParams {
     }
 
     pub fn enter_category(&mut self) {
-        if !self.current_category().is_keybinds() && self.current_fields().is_empty() {
+        let category = self.current_category();
+        let list = category.is_keybinds() || category.is_changes();
+        if !list && self.current_fields().is_empty() {
             return;
         }
         self.focus = SettingsFocus::Fields;
         self.field = 0;
-        if self.current_category().is_keybinds() {
+        if list {
             self.kb_selected = 0;
             self.kb_capturing = false;
         }

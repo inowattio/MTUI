@@ -195,8 +195,14 @@ impl App {
         self.save_then(Self::confirm_cycle_config);
     }
 
-    pub(super) fn refresh_dirty(&mut self) {
-        self.dirty = Self::serialize_config(&self.effective_config()) != self.saved_config;
+    pub fn config_changes(&self) -> Vec<super::ConfigChange> {
+        let saved = serde_json::from_str(&self.saved_config).unwrap_or_default();
+        let current = serde_json::to_value(self.effective_config()).unwrap_or_default();
+        super::changes::config_changes(&saved, &current)
+    }
+
+    pub fn refresh_dirty(&mut self) {
+        self.dirty = !self.config_changes().is_empty();
     }
 
     pub(super) fn persist_config(&mut self) -> Outcome {

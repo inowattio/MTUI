@@ -1003,6 +1003,7 @@ mod tests {
 }
 
 mod api;
+mod changes;
 mod columns;
 mod config_io;
 mod custom;
@@ -1027,4 +1028,5 @@ mod unit;
 mod unit_scan;
 mod write;
 
+pub use changes::ConfigChange;
 pub use stats::{CommStats, StatTarget};

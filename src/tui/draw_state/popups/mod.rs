@@ -160,7 +160,7 @@ pub(super) fn two_column(
         .collect()
 }
 
-pub(super) fn truncate(text: &str, width: usize) -> String {
+pub fn truncate(text: &str, width: usize) -> String {
     if text.chars().count() <= width {
         return text.to_string();
     }

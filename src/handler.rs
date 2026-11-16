@@ -697,8 +697,12 @@ fn dispatch_settings_key(key_event: KeyEvent, app: &mut App) {
     let kb = app.config.keybinds;
     let capturing = app.settings().is_some_and(|s| s.kb_capturing);
     if !capturing && key_event.code == kb.panel {
+        let no_changes = app.config_changes().is_empty();
         if let Some(s) = app.settings_mut() {
             s.cycle_category();
+            if no_changes && s.current_category().is_changes() {
+                s.focus = SettingsFocus::Categories;
+            }
         }
         return;
     }
@@ -713,6 +717,13 @@ fn dispatch_settings_key(key_event: KeyEvent, app: &mut App) {
                 .is_some_and(|s| s.current_category().is_keybinds()) =>
         {
             handle_keybinds_key(key_event, app);
+        }
+        SettingsFocus::Fields
+            if app
+                .settings()
+                .is_some_and(|s| s.current_category().is_changes()) =>
+        {
+            handle_changes_key(key_event, app);
         }
         SettingsFocus::Fields => handle_settings_field_key(key_event, app),
     }
@@ -740,15 +751,21 @@ fn handle_settings_category_key(key_event: KeyEvent, app: &mut App) {
         KeyCode::Up => {
             if let Some(s) = app.settings_mut() {
                 s.category = wrap_index(s.category, count, false);
+                s.kb_selected = 0;
             }
         }
         KeyCode::Down => {
             if let Some(s) = app.settings_mut() {
                 s.category = wrap_index(s.category, count, true);
+                s.kb_selected = 0;
             }
         }
         KeyCode::Enter | KeyCode::Right => {
-            if let Some(s) = app.settings_mut() {
+            let no_changes = app
+                .settings()
+                .is_some_and(|s| s.current_category().is_changes())
+                && app.config_changes().is_empty();
+            if !no_changes && let Some(s) = app.settings_mut() {
                 s.enter_category();
             }
         }
@@ -814,6 +831,26 @@ fn handle_settings_field_key(key_event: KeyEvent, app: &mut App) {
     }
 }
 
+fn handle_changes_key(key_event: KeyEvent, app: &mut App) {
+    let kb = app.config.keybinds;
+    if key_event.code == kb.settings {
+        app.close_settings();
+        return;
+    }
+    let count = u16::try_from(app.config_changes().len()).unwrap_or(u16::MAX);
+    let Some(s) = app.settings_mut() else {
+        return;
+    };
+    match key_event.code {
+        KeyCode::Esc => s.focus = SettingsFocus::Categories,
+        KeyCode::Up => s.kb_move(true, count),
+        KeyCode::Down => s.kb_move(false, count),
+        c if c == kb.page_up => s.kb_page(true, count),
+        c if c == kb.page_down => s.kb_page(false, count),
+        _ => {}
+    }
+}
+
 fn handle_keybinds_key(key_event: KeyEvent, app: &mut App) {
     let kb = app.config.keybinds;
     let count = KeybindAction::ALL.len() as u16;
@@ -835,7 +872,7 @@ fn handle_keybinds_key(key_event: KeyEvent, app: &mut App) {
         }
         if let Some(&action) = KeybindAction::ALL.get(selected) {
             app.config.keybinds.set(action, key_event.code);
-            app.dirty = true;
+            app.refresh_dirty();
         }
         return;
     }
@@ -875,7 +912,7 @@ fn handle_keybinds_key(key_event: KeyEvent, app: &mut App) {
             if let Some(&action) = KeybindAction::ALL.get(selected) {
                 let default = Keybinds::default().get(action);
                 app.config.keybinds.set(action, default);
-                app.dirty = true;
+                app.refresh_dirty();
             }
         }
         _ => {}

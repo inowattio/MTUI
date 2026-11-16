@@ -2,7 +2,8 @@ use crate::app::{ApiBindState, App};
 use crate::config::KeybindAction;
 use crate::input::KeyCode;
 use crate::state::{SettingsCategory, SettingsField, SettingsFocus, SettingsParams};
-use crate::tui::draw_state::{edit_value, field_row, marker};
+use crate::tui::draw_state::popups::truncate;
+use crate::tui::draw_state::{dim_line, edit_value, field_row, marker};
 use crate::tui::hints::{self, Hint};
 use crate::tui::theme::Theme;
 use ratatui::Frame;
@@ -50,6 +51,8 @@ pub fn draw(params: &SettingsParams, app: &App, frame: &mut Frame, area: Rect, t
     );
     if params.current_category().is_keybinds() {
         draw_keybinds(params, app, frame, right, theme);
+    } else if params.current_category().is_changes() {
+        draw_changes(params, app, frame, right, theme);
     } else {
         draw_fields(params, app, frame, right, theme);
     }
@@ -62,7 +65,7 @@ fn draw_categories(params: &SettingsParams, frame: &mut Frame, area: Rect, theme
     let mut lines: Vec<Line> = vec![Line::default()];
 
     for (i, &category) in SettingsCategory::ALL.iter().enumerate() {
-        if category.is_search() {
+        if category.is_changes() || category.is_search() {
             lines.push(Line::default());
         }
         let selected = i as u16 == params.category;
@@ -498,6 +501,83 @@ fn draw_keybinds(params: &SettingsParams, app: &App, frame: &mut Frame, area: Re
         frame.render_widget(Paragraph::new(more), row);
     }
     render_footer(frame, footer, vec![hint]);
+}
+
+fn draw_changes(params: &SettingsParams, app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
+    let changes = app.config_changes();
+    let mut lines: Vec<Line> = vec![Line::default()];
+    if changes.is_empty() {
+        lines.push(dim_line(theme, "  no unsaved changes"));
+        frame.render_widget(Paragraph::new(lines), area);
+        return;
+    }
+
+    let mode = app.interpreter.address_mode();
+    let targets: Vec<String> = changes
+        .iter()
+        .map(|c| match c.register {
+            Some((kind, address)) => {
+                format!("{} @{} {}", kind.name(), mode.display(address), c.path)
+            }
+            None => c.path.clone(),
+        })
+        .collect();
+    let room = (area.width as usize).saturating_sub(4);
+    let width = targets
+        .iter()
+        .map(|t| t.chars().count())
+        .max()
+        .unwrap_or(0)
+        .min(room / 2);
+    let old_width = room.saturating_sub(width) / 3;
+
+    let focused = params.focus == SettingsFocus::Fields;
+    let count = u16::try_from(changes.len()).unwrap_or(u16::MAX);
+    let current = if focused {
+        params.kb_selected.min(count.saturating_sub(1))
+    } else {
+        0
+    };
+    let (list, footer) = footer_split(area, 1);
+    let visible = list.height.saturating_sub(1).max(1);
+    let top = scroll_offset(current as usize, count as usize, visible as usize) as u16;
+    let end = (top + visible).min(count);
+    for idx in top..end {
+        let change = &changes[idx as usize];
+        let selected = focused && idx == current;
+        let target = truncate(&targets[idx as usize], width);
+        let old = truncate(change.old.as_deref().unwrap_or("(none)"), old_width);
+        let new = change.new.as_deref().unwrap_or("(none)").to_string();
+        lines.push(Line::from(vec![
+            Span::styled(
+                format!("{}{target:<width$} {old} -> ", marker(selected)),
+                theme.dim_style(),
+            ),
+            Span::styled(new, theme.line_style(selected)),
+        ]));
+    }
+
+    let kb = &app.config.keybinds;
+    let hint = hints::footer(
+        theme,
+        [
+            Hint::pair(KeyCode::Up, KeyCode::Down, "Move"),
+            Hint::pair(kb.page_up, kb.page_down, "Page"),
+        ],
+    );
+    frame.render_widget(Paragraph::new(lines), list);
+    if footer.is_some() && (top > 0 || end < count) {
+        let row = Rect {
+            y: list.y + list.height,
+            height: 1,
+            ..list
+        };
+        let more = hints::more(theme, top as usize, (count - end) as usize);
+        frame.render_widget(Paragraph::new(more), row);
+    }
+    if focused {
+        render_footer(frame, footer, vec![hint]);
+    }
 }
 
 fn api_host_view(params: &SettingsParams, app: &App) -> String {

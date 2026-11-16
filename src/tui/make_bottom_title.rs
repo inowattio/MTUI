@@ -51,17 +51,18 @@ pub fn make_bottom_title(theme: &Theme, app: &App) -> Line<'static> {
         }
         State::Settings(s) => {
             let primary = if s.focus == SettingsFocus::Categories {
-                Hint::key(KeyCode::Enter, "Open")
+                Some(Hint::key(KeyCode::Enter, "Open"))
+            } else if s.current_category().is_changes() {
+                None
             } else {
-                Hint::key(KeyCode::Enter, "Apply")
+                Some(Hint::key(KeyCode::Enter, "Apply"))
             };
             hints::footer(
                 theme,
-                [
-                    primary,
+                primary.into_iter().chain([
                     Hint::key(kb.panel, "Category"),
                     Hint::key(KeyCode::Esc, "Close"),
-                ],
+                ]),
             )
         }
         State::Logs(l) => hints::footer(
