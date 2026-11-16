@@ -42,7 +42,7 @@ pub(super) fn draw(
         theme,
         [
             Hint::key(KeyCode::Enter, "Confirm"),
-            Hint::pair(KeyCode::Backspace, KeyCode::Esc, "Cancel"),
+            Hint::key(KeyCode::Esc, "Cancel"),
         ],
     ));
 
