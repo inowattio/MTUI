@@ -1,7 +1,7 @@
 use super::popups::draw_popup;
 use crate::app::{App, Trend};
 use crate::config::{Column, Config};
-use crate::constants::{NO_VALUE, UNINTERPRETABLE};
+use crate::constants::UNINTERPRETABLE;
 use crate::input::KeyCode;
 use crate::interpretator::{RowSegment, fmt_num};
 use crate::register::{RegisterCell, RegisterType};
@@ -17,7 +17,10 @@ use ratatui::style::{Modifier, Style};
 use ratatui::symbols;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Axis, Block, Chart, Dataset, GraphType, LegendPosition, Paragraph};
+use std::borrow::Cow;
 use std::fmt::Write as _;
+
+const MATRIX_NO_VALUE: &str = "    -";
 
 fn panel_block(theme: &Theme, active: ReadPanel, config: &Config) -> Block<'static> {
     if !config.display.inactive_tabs {
@@ -446,10 +449,11 @@ impl TableCtx<'_> {
             let row_base = row_base as u16;
             let zebra = r % 2 == 1;
 
-            let mut spans = vec![Span::styled(
+            let mut spans = Vec::with_capacity(1 + 2 * cols as usize);
+            spans.push(Span::styled(
                 format!("{: >5}: ", address_mode.display(row_base)),
                 theme.dim_style(),
-            )];
+            ));
             for c in 0..cols {
                 let Some(addr) = row_base.checked_add(c) else {
                     break;
@@ -460,9 +464,9 @@ impl TableCtx<'_> {
                 let (text, mut style) = match app.cell_value(cell) {
                     Some(value) => {
                         let style = theme.row_style(zebra, heat);
-                        (format!("{value: >5}"), style)
+                        (Cow::from(format!("{value: >5}")), style)
                     }
-                    None => (format!("{NO_VALUE: >5}"), theme.placeholder_style(zebra)),
+                    None => (Cow::from(MATRIX_NO_VALUE), theme.placeholder_style(zebra)),
                 };
                 if addr == params.position {
                     style = theme.selected_style();
@@ -1216,13 +1220,21 @@ fn draw_graph(
 
 #[cfg(test)]
 mod tests {
-    use super::{bit_flipped_at, bit_shades, mark_trend, selection_shade, shaded_row};
+    use super::{
+        MATRIX_NO_VALUE, bit_flipped_at, bit_shades, mark_trend, selection_shade, shaded_row,
+    };
     use crate::app::Trend;
     use crate::config::{Column, InterpretorConfig};
+    use crate::constants::NO_VALUE;
     use crate::interpretator::Interpretor;
     use crate::modbus::WordOrder;
     use crate::tui::theme::Theme;
     use ratatui::style::{Color, Style};
+
+    #[test]
+    fn the_matrix_placeholder_is_the_padded_no_value() {
+        assert_eq!(MATRIX_NO_VALUE, format!("{NO_VALUE: >5}"));
+    }
 
     #[test]
     fn shades_split_the_row_in_order_whatever_order_they_come_in() {
