@@ -2,6 +2,7 @@ use crate::app::{App, AppResult};
 use crate::event::{Event, EventHandler};
 use crate::handler::{handle_key_events, handle_paste};
 use crate::tui::render;
+use crossterm::cursor::Show;
 use crossterm::event::{DisableBracketedPaste, EnableBracketedPaste};
 use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen, SetTitle};
 use ratatui::Terminal;
@@ -74,14 +75,18 @@ where
 
 impl<B: Backend> Drop for Tui<B> {
     fn drop(&mut self) {
-        let _ = self.terminal.show_cursor();
         let _ = restore_terminal();
     }
 }
 
 fn restore_terminal() -> io::Result<()> {
     terminal::disable_raw_mode()?;
-    crossterm::execute!(io::stderr(), LeaveAlternateScreen, DisableBracketedPaste)?;
+    crossterm::execute!(
+        io::stderr(),
+        Show,
+        LeaveAlternateScreen,
+        DisableBracketedPaste
+    )?;
     let _ = io::stderr().write_all(RESTORE_TITLE);
     Ok(())
 }
