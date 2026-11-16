@@ -312,13 +312,13 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
             KeyCode::Tab => app.write_toggle_raw(),
             KeyCode::Up => {
                 if let Some(w) = app.write_mut() {
-                    w.value = w.value.and_then(|v| v.checked_sub(1));
+                    w.value = w.value.and_then(|v| v.checked_add(1));
                 }
                 app.clamp_write_value();
             }
             KeyCode::Down => {
                 if let Some(w) = app.write_mut() {
-                    w.value = w.value.and_then(|v| v.checked_add(1));
+                    w.value = w.value.and_then(|v| v.checked_sub(1));
                 }
                 app.clamp_write_value();
             }
