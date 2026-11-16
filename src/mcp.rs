@@ -2,13 +2,19 @@ use crate::api::{
     ApiState, RawRequest, ReadRequest, WriteRequest, health_handler, raw_handler, read_handler,
     write_handler,
 };
-use crate::modbus::exception_message;
+use crate::app::RegisterMap;
+use crate::custom::CustomRule;
+use crate::modbus::{WordOrder, exception_message};
+use crate::register::{RegisterCell, RegisterType};
 use axum::Json;
 use axum::body::{self, Bytes};
 use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
-use serde_json::{Value, json};
+use serde::Deserialize;
+use serde_json::{Map, Value, json};
+use std::collections::BTreeSet;
+use std::sync::PoisonError;
 use std::sync::atomic::Ordering;
 use tokio_modbus::ExceptionCode;
 
@@ -22,7 +28,9 @@ const INVALID_PARAMS: i64 = -32602;
 const INSTRUCTIONS: &str = "Tools act on the Modbus device currently connected in mtui. \
 Addresses are 0-based Modbus protocol addresses. Call device_status first: it reports the \
 connection state, the default unit id and which optional abilities (writes, unit id override, \
-raw functions) the user has enabled in mtui's settings.";
+raw functions) the user has enabled in mtui's settings. Call list_registers to learn what the \
+addresses mean: it returns the names and decoding rules the user configured, and read_registers \
+with decode set applies those rules to the words it reads.";
 
 const UNIT_OVERRIDE_DISABLED: &str =
     "unit_id is not allowed: enable \"API unit id override\" in mtui's settings or omit it";
@@ -159,15 +167,29 @@ fn tools() -> Value {
             "annotations": { "readOnlyHint": true, "openWorldHint": false }
         },
         {
+            "name": "list_registers",
+            "title": "List registers",
+            "description": "List the registers the user described in mtui: each has its `type`, `address`, an optional `name` and an optional decoding `rule`. A rule reads the words at `words` (in that order) as `repr`, assembled with `word_order`, then applies `ops` in sequence, maps the result through `enum` or names its set `bits`, and shows it with `decimals` and `unit`. Does not touch the device.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "type": { "type": "string", "enum": ["holding", "input", "coil", "discrete"], "description": "Only list registers of this type." }
+                },
+                "additionalProperties": false
+            },
+            "annotations": { "readOnlyHint": true, "openWorldHint": false }
+        },
+        {
             "name": "read_registers",
             "title": "Read registers",
-            "description": "Read `count` consecutive items of `type` starting at `address`. holding and input return raw 16-bit values; coil and discrete return 0 or 1 per bit.",
+            "description": "Read `count` consecutive items of `type` starting at `address`. holding and input return raw 16-bit values; coil and discrete return 0 or 1 per bit. With `decode`, also returns `decoded`: one entry per configured rule whose words all fall inside the read range, with its `address`, `name`, `text` as mtui shows it and `value` when the result is a number.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "type": { "type": "string", "enum": ["holding", "input", "coil", "discrete"] },
                     "address": { "type": "integer", "minimum": 0, "maximum": 65535 },
                     "count": { "type": "integer", "minimum": 1, "maximum": 65535 },
+                    "decode": { "type": "boolean", "default": false, "description": "Apply the configured rules to the words read." },
                     "unit_id": unit_id
                 },
                 "required": ["type", "address", "count"],
@@ -229,6 +251,7 @@ async fn call(state: ApiState, params: &Value) -> Result<Value, RpcError> {
     log::info!("MCP tool call {name}");
     let outcome = match name {
         "device_status" => status(state).await,
+        "list_registers" => list(&state, arguments),
         "read_registers" => read(state, arguments).await,
         "write_registers" => write(state, arguments).await,
         "raw_function" => raw(state, arguments).await,
@@ -251,11 +274,107 @@ async fn status(state: ApiState) -> Result<Value, String> {
     json_body(health_handler(State(state)).await).await
 }
 
+#[derive(Deserialize)]
+struct ListArguments {
+    #[serde(rename = "type", default)]
+    register_type: Option<RegisterType>,
+}
+
+fn list(state: &ApiState, arguments: Value) -> Result<Value, String> {
+    let ListArguments { register_type } = arguments_as(arguments)?;
+    let map = state
+        .registers
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner);
+    Ok(json!({ "registers": register_list(&map, register_type) }))
+}
+
+fn register_list(map: &RegisterMap, only: Option<RegisterType>) -> Vec<Value> {
+    let cells: BTreeSet<RegisterCell> =
+        map.labels.keys().chain(map.rules.keys()).copied().collect();
+    cells
+        .into_iter()
+        .filter(|&(kind, _)| only.is_none_or(|only| only == kind))
+        .map(|cell| {
+            let mut entry = Map::new();
+            entry.insert("type".into(), json!(cell.0));
+            entry.insert("address".into(), json!(cell.1));
+            if let Some(name) = map.labels.get(&cell) {
+                entry.insert("name".into(), json!(name));
+            }
+            if let Some(rule) = map.rules.get(&cell) {
+                entry.insert("rule".into(), rule_description(rule, map.word_order));
+            }
+            Value::Object(entry)
+        })
+        .collect()
+}
+
+fn rule_description(rule: &CustomRule, order: WordOrder) -> Value {
+    let mut description = Map::new();
+    description.insert("repr".into(), json!(rule.repr.label()));
+    description.insert(
+        "words".into(),
+        json!(rule.word_addresses().collect::<Vec<_>>()),
+    );
+    description.insert("word_order".into(), json!(rule.word_order.unwrap_or(order)));
+    if !rule.ops.is_empty() {
+        let ops: Vec<String> = rule.ops.iter().map(|op| op.display()).collect();
+        description.insert("ops".into(), json!(ops));
+    }
+    if !rule.enum_map.is_empty() {
+        let entries: Map<String, Value> = rule
+            .enum_map
+            .iter()
+            .map(|e| (e.value.to_string(), json!(e.text)))
+            .collect();
+        description.insert("enum".into(), Value::Object(entries));
+    }
+    if !rule.bits.is_empty() {
+        let bits: Map<String, Value> = rule
+            .bits
+            .iter()
+            .map(|e| (e.bit.to_string(), json!(e.name)))
+            .collect();
+        description.insert("bits".into(), Value::Object(bits));
+    }
+    if let Some(decimals) = rule.decimals {
+        description.insert("decimals".into(), json!(decimals));
+    }
+    if !rule.prefix.trim().is_empty() {
+        description.insert("prefix".into(), json!(rule.prefix.trim()));
+    }
+    if !rule.suffix.trim().is_empty() {
+        description.insert("unit".into(), json!(rule.suffix.trim()));
+    }
+    Value::Object(description)
+}
+
+#[derive(Deserialize)]
+struct ReadArguments {
+    #[serde(flatten)]
+    request: ReadRequest,
+    #[serde(default)]
+    decode: bool,
+}
+
 async fn read(state: ApiState, arguments: Value) -> Result<Value, String> {
-    let request: ReadRequest = arguments_as(arguments)?;
+    let ReadArguments { request, decode } = arguments_as(arguments)?;
+    let (kind, start) = (request.register_type, request.address);
+    let registers = state.registers.clone();
     let response = read_handler(State(state), Json(request)).await;
     match response.status() {
-        StatusCode::OK => json_body(response).await,
+        StatusCode::OK => {
+            let mut body = json_body(response).await?;
+            if decode {
+                let values: Vec<u16> =
+                    serde_json::from_value(body["values"].take()).map_err(|e| e.to_string())?;
+                let map = registers.lock().unwrap_or_else(PoisonError::into_inner);
+                body["decoded"] = json!(decoded(&map, kind, start, &values));
+                body["values"] = json!(values);
+            }
+            Ok(body)
+        }
         StatusCode::FORBIDDEN => Err(UNIT_OVERRIDE_DISABLED.to_string()),
         _ => Err(device_failure(response).await),
     }
@@ -291,6 +410,31 @@ async fn raw(state: ApiState, arguments: Value) -> Result<Value, String> {
         StatusCode::UNPROCESSABLE_ENTITY => Err(UNIT_OVERRIDE_DISABLED.to_string()),
         _ => Err(device_failure(response).await),
     }
+}
+
+fn decoded(map: &RegisterMap, kind: RegisterType, start: u16, values: &[u16]) -> Vec<Value> {
+    map.rules
+        .range((kind, 0)..=(kind, u16::MAX))
+        .filter_map(|(&cell, rule)| {
+            let words: Vec<u16> = rule
+                .word_addresses()
+                .map(|address| {
+                    let offset = address.checked_sub(start)?;
+                    values.get(usize::from(offset)).copied()
+                })
+                .collect::<Option<_>>()?;
+            let mut entry = Map::new();
+            entry.insert("address".into(), json!(cell.1));
+            if let Some(name) = map.labels.get(&cell) {
+                entry.insert("name".into(), json!(name));
+            }
+            entry.insert("text".into(), json!(rule.evaluate(&words, map.word_order)));
+            if let Some(value) = rule.numeric(&words, map.word_order) {
+                entry.insert("value".into(), json!(value));
+            }
+            Some(Value::Object(entry))
+        })
+        .collect()
 }
 
 fn arguments_as<T: serde::de::DeserializeOwned>(arguments: Value) -> Result<T, String> {
@@ -330,9 +474,13 @@ async fn device_failure(response: Response) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{handler, origin_allowed};
+    use super::{decoded, handler, origin_allowed, register_list};
     use crate::api::ApiState;
     use crate::api::tests::mock_state;
+    use crate::app::RegisterMap;
+    use crate::custom::{BitEntry, CustomOp, CustomRepr, CustomRule, EnumEntry, OpKind};
+    use crate::modbus::WordOrder;
+    use crate::register::RegisterType;
     use axum::body::{self, Bytes};
     use axum::extract::State;
     use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
@@ -491,6 +639,7 @@ mod tests {
             names,
             [
                 "device_status",
+                "list_registers",
                 "read_registers",
                 "write_registers",
                 "raw_function"
@@ -591,6 +740,140 @@ mod tests {
         .await;
         assert_eq!(write["isError"], false);
         assert_eq!(write["structuredContent"]["written"], 1);
+    }
+
+    fn rule(address: u16, repr: CustomRepr) -> CustomRule {
+        CustomRule {
+            address,
+            repr,
+            ..Default::default()
+        }
+    }
+
+    fn sample_map() -> RegisterMap {
+        let mut power = rule(40, CustomRepr::U32);
+        power.ops = vec![CustomOp {
+            op: OpKind::Div,
+            v: 10.0,
+        }];
+        power.suffix = " W".to_string();
+        let mut mode = rule(50, CustomRepr::U16);
+        mode.enum_map = vec![EnumEntry {
+            value: 2,
+            text: "charging".to_string(),
+        }];
+        let mut alarms = rule(7, CustomRepr::U16);
+        alarms.bits = vec![BitEntry {
+            bit: 1,
+            name: "overheat".to_string(),
+        }];
+        let mut map = RegisterMap::default();
+        map.labels
+            .insert((RegisterType::Holding, 40), "Grid power".to_string());
+        map.labels
+            .insert((RegisterType::Coil, 3), "Relay".to_string());
+        map.rules.insert((RegisterType::Holding, 40), power);
+        map.rules.insert((RegisterType::Holding, 50), mode);
+        map.rules.insert((RegisterType::Input, 7), alarms);
+        map
+    }
+
+    #[test]
+    fn the_register_list_merges_labels_and_rules() {
+        let map = sample_map();
+        let all = register_list(&map, None);
+        let cells: Vec<_> = all
+            .iter()
+            .map(|e| (e["type"].as_str().unwrap(), e["address"].as_u64().unwrap()))
+            .collect();
+        assert_eq!(
+            cells,
+            [("holding", 40), ("holding", 50), ("input", 7), ("coil", 3)]
+        );
+
+        assert_eq!(
+            all[0],
+            json!({
+                "type": "holding",
+                "address": 40,
+                "name": "Grid power",
+                "rule": { "repr": "u32", "words": [40, 41], "word_order": "abcd", "ops": ["/10"], "unit": "W" }
+            })
+        );
+        assert_eq!(all[1]["rule"]["enum"], json!({ "2": "charging" }));
+        assert!(all[1].get("name").is_none());
+        assert_eq!(all[2]["rule"]["bits"], json!({ "1": "overheat" }));
+        assert_eq!(
+            all[3],
+            json!({ "type": "coil", "address": 3, "name": "Relay" })
+        );
+
+        let inputs = register_list(&map, Some(RegisterType::Input));
+        assert_eq!(inputs.len(), 1);
+        assert_eq!(inputs[0]["address"], 7);
+    }
+
+    #[test]
+    fn a_rule_word_order_overrides_the_device_order() {
+        let mut map = sample_map();
+        map.word_order = WordOrder::CDAB;
+        map.rules
+            .get_mut(&(RegisterType::Holding, 50))
+            .unwrap()
+            .word_order = Some(WordOrder::DCBA);
+        let all = register_list(&map, Some(RegisterType::Holding));
+        assert_eq!(all[0]["rule"]["word_order"], "cdab");
+        assert_eq!(all[1]["rule"]["word_order"], "dcba");
+    }
+
+    #[test]
+    fn only_rules_read_in_full_are_decoded() {
+        let map = sample_map();
+        let mut values = vec![0u16; 12];
+        values[0] = 0x0001;
+        values[1] = 0x0002;
+        values[10] = 2;
+        assert_eq!(
+            decoded(&map, RegisterType::Holding, 40, &values),
+            [
+                json!({ "address": 40, "name": "Grid power", "text": "6553.8 W", "value": 6553.8 }),
+                json!({ "address": 50, "text": "charging" })
+            ]
+        );
+
+        assert_eq!(decoded(&map, RegisterType::Holding, 41, &values).len(), 1);
+        assert!(decoded(&map, RegisterType::Holding, 40, &values[..1]).is_empty());
+        assert_eq!(
+            decoded(&map, RegisterType::Input, 7, &[0b10]),
+            [json!({ "address": 7, "text": "overheat" })]
+        );
+    }
+
+    #[tokio::test]
+    async fn reads_decode_only_when_asked() {
+        let state = mcp_state().await;
+        state
+            .registers
+            .lock()
+            .unwrap()
+            .rules
+            .insert((RegisterType::Holding, 0), rule(0, CustomRepr::U16));
+        let read =
+            |decode: bool| json!({ "type": "holding", "address": 0, "count": 1, "decode": decode });
+
+        let plain = call_tool(state.clone(), "read_registers", read(false)).await;
+        assert!(
+            plain["structuredContent"].get("decoded").is_none(),
+            "{plain}"
+        );
+
+        let decoded = call_tool(state, "read_registers", read(true)).await;
+        let content = &decoded["structuredContent"];
+        assert_eq!(content["decoded"][0]["address"], 0, "{decoded}");
+        assert_eq!(
+            content["decoded"][0]["value"].as_f64(),
+            content["values"][0].as_f64()
+        );
     }
 
     #[test]

@@ -106,6 +106,7 @@ impl App {
         self.custom_rules.extend(incoming_rules);
 
         self.sync_auto_widths();
+        self.sync_api_registers();
         self.refresh_dirty();
         self.close_popup();
         log::info!("Imported {pins} pin(s), {labels} label(s), {rules} rule(s) from clipboard");

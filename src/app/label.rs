@@ -43,6 +43,7 @@ impl App {
             self.labels.insert(key, text);
         }
         self.sync_auto_widths();
+        self.sync_api_registers();
         self.refresh_dirty();
         self.clamp_panel_cursor();
 
@@ -60,6 +61,7 @@ impl App {
         let n = self.labels.len();
         self.labels.clear();
         self.sync_auto_widths();
+        self.sync_api_registers();
         self.note_cleared(n, "label");
     }
 }

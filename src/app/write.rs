@@ -95,6 +95,7 @@ impl App {
         if let Some(device) = &mut self.device {
             device.set_word_order(next);
         }
+        self.sync_api_registers();
         self.refresh_dirty();
     }
 

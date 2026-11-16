@@ -1,6 +1,6 @@
 use crate::app::{
     AllowMcpFlag, AllowRawFlag, AllowUnitFlag, ApiBindState, ApiDevice, BindStateFlag, BoundPort,
-    CommStats, ReadOnlyFlag, SharedStats, StatTarget, StatusFlag,
+    CommStats, ReadOnlyFlag, SharedRegisterMap, SharedStats, StatTarget, StatusFlag,
 };
 use crate::compat::Elapsed;
 use crate::modbus::ModbusDevice;
@@ -31,6 +31,7 @@ pub struct ApiState {
     pub allow_unit_id: AllowUnitFlag,
     pub allow_raw: AllowRawFlag,
     pub allow_mcp: AllowMcpFlag,
+    pub registers: SharedRegisterMap,
     pub status: StatusFlag,
     pub bind: BindStateFlag,
     pub stats: SharedStats,
@@ -39,8 +40,8 @@ pub struct ApiState {
 #[derive(Deserialize)]
 pub(crate) struct ReadRequest {
     #[serde(rename = "type")]
-    register_type: RegisterType,
-    address: u16,
+    pub(crate) register_type: RegisterType,
+    pub(crate) address: u16,
     count: u16,
     #[serde(default)]
     unit_id: Option<u8>,
@@ -398,7 +399,7 @@ pub(crate) mod tests {
         ApiState, FailureResponse, RawRequest, RawResponse, ReadRequest, bind_requested,
         health_handler, raw_handler, read_handler,
     };
-    use crate::app::{CommStats, StatTarget};
+    use crate::app::{CommStats, RegisterMap, StatTarget};
     use crate::compat::Elapsed;
     use crate::modbus::{DeviceConfig, ModbusDevice, exception_error};
     use crate::register::RegisterType;
@@ -421,6 +422,7 @@ pub(crate) mod tests {
             allow_unit_id: Arc::new(AtomicBool::new(false)),
             allow_raw: Arc::new(AtomicBool::new(false)),
             allow_mcp: Arc::new(AtomicBool::new(false)),
+            registers: Arc::new(Mutex::new(RegisterMap::default())),
             status: Arc::new(AtomicU8::new(0)),
             bind: Arc::new(AtomicU8::new(0)),
             stats: Arc::new(Mutex::new(CommStats::default())),

@@ -201,6 +201,7 @@ impl App {
                 self.sync_api_device();
                 self.interpreter.set_word_order(config.word_order);
                 self.config.device = config;
+                self.sync_api_registers();
                 self.refresh_writes_log_state();
                 self.refresh_dirty();
                 self.clear_read_accumulation();

@@ -1,4 +1,4 @@
-use super::{ApiBindState, App};
+use super::{ApiBindState, App, RegisterMap};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::api::ApiState;
 use crate::modbus::ModbusDevice;
@@ -17,6 +17,7 @@ impl App {
             allow_unit_id: self.api_allow_unit_id.clone(),
             allow_raw: self.api_allow_raw.clone(),
             allow_mcp: self.api_allow_mcp.clone(),
+            registers: self.api_registers.clone(),
             status: self.api_status.clone(),
             bind: self.api_bind.clone(),
             stats: self.stats.clone(),
@@ -45,6 +46,16 @@ impl App {
     pub(super) fn sync_api_allow_mcp(&self) {
         self.api_allow_mcp
             .store(self.config.api.mcp, Ordering::Relaxed);
+    }
+
+    pub(super) fn sync_api_registers(&self) {
+        if let Ok(mut map) = self.api_registers.lock() {
+            *map = RegisterMap {
+                labels: self.labels.clone(),
+                rules: self.custom_rules.clone(),
+                word_order: self.config.device.word_order,
+            };
+        }
     }
 
     pub(super) fn sync_api_status(&self) {

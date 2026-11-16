@@ -328,10 +328,18 @@ paths:
 
         Supported methods are `initialize`, `ping`, `tools/list` and
         `tools/call`. The tools mirror the HTTP endpoints and obey the same
-        settings:
+        settings, plus `list_registers`, which describes the register map
+        configured in mtui:
 
         - `device_status`: the `/health` body
-        - `read_registers`: arguments as `ReadRequest`, result `{"values": [...]}`
+        - `list_registers`: optional `type` filter, result `{"registers": [...]}`
+          where each entry has `type`, `address`, an optional `name` (label)
+          and an optional `rule` (`repr`, `words`, `word_order`, `ops`,
+          `enum`, `bits`, `decimals`, `prefix`, `unit`)
+        - `read_registers`: arguments as `ReadRequest` plus an optional
+          `decode` flag, result `{"values": [...]}`; with `decode`, also
+          `decoded`: `{address, name, text, value}` for each rule whose words
+          were all read
         - `write_registers`: arguments as `WriteRequest`, result `{"written": n}`
         - `raw_function`: arguments as `RawRequest`, result `{"data": [...]}`
 

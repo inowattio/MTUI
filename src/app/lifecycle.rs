@@ -1,7 +1,7 @@
 use super::{
     App, BackgroundTask, Change, CommStats, ConfigError, ConnectTaskResult, FunctionTaskResult,
     LoadConfigTaskResult, PendingWrite, RawTaskResult, ReadEntry, ReadError, ReadFailure,
-    ReconnectState, RefreshTaskResult, RequestTrace, StatTarget, SweepState, Trend,
+    ReconnectState, RefreshTaskResult, RegisterMap, RequestTrace, StatTarget, SweepState, Trend,
     UnitScanTaskResult, WriteOutcome, default_config_path, load_config, reconnect_backoff,
 };
 use crate::compat::{self, Instant, TaskPoll};
@@ -87,6 +87,7 @@ impl App {
             api_allow_unit_id: Arc::new(AtomicBool::new(false)),
             api_allow_raw: Arc::new(AtomicBool::new(false)),
             api_allow_mcp: Arc::new(AtomicBool::new(false)),
+            api_registers: Arc::new(Mutex::new(RegisterMap::default())),
             api_status: Arc::new(AtomicU8::new(0)),
             api_bind: Arc::new(AtomicU8::new(0)),
             writes_log: Arc::new(Mutex::new(WritesLogState::default())),
@@ -104,6 +105,7 @@ impl App {
         app.sync_api_allow_unit_id();
         app.sync_api_allow_raw();
         app.sync_api_allow_mcp();
+        app.sync_api_registers();
         app.refresh_writes_log_state();
 
         app.sync_auto_widths();
@@ -160,6 +162,7 @@ impl App {
         self.sync_api_allow_unit_id();
         self.sync_api_allow_raw();
         self.sync_api_allow_mcp();
+        self.sync_api_registers();
         self.refresh_writes_log_state();
 
         self.clear_read_accumulation();

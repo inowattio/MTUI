@@ -8,7 +8,7 @@ use crate::custom::{ASCII_REGISTERS_MAX, CustomRule};
 use crate::interpretator::Interpretor;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::modbus::Interface;
-use crate::modbus::{DeviceConfig, ModbusDevice};
+use crate::modbus::{DeviceConfig, ModbusDevice, WordOrder};
 use crate::register::{RegisterCell, RegisterCellValue, RegisterType};
 use crate::state::{ConnectionStatus, CustomParams, ScreenLayout, State, UnitParams};
 #[cfg(not(target_arch = "wasm32"))]
@@ -37,6 +37,14 @@ pub type AllowMcpFlag = Arc<AtomicBool>;
 pub type StatusFlag = Arc<AtomicU8>;
 pub type BindStateFlag = Arc<AtomicU8>;
 pub type SharedStats = Arc<Mutex<CommStats>>;
+pub type SharedRegisterMap = Arc<Mutex<RegisterMap>>;
+
+#[derive(Clone, Debug, Default)]
+pub struct RegisterMap {
+    pub labels: BTreeMap<RegisterCell, String>,
+    pub rules: BTreeMap<RegisterCell, CustomRule>,
+    pub word_order: WordOrder,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ApiBindState {
@@ -552,6 +560,7 @@ pub struct App {
     api_allow_unit_id: AllowUnitFlag,
     api_allow_raw: AllowRawFlag,
     api_allow_mcp: AllowMcpFlag,
+    api_registers: SharedRegisterMap,
     api_status: StatusFlag,
     api_bind: BindStateFlag,
     writes_log: SharedWritesLog,

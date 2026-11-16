@@ -252,6 +252,7 @@ impl App {
             Ok((cell, rule)) => {
                 self.custom_rules.insert(cell, rule);
                 self.sync_auto_widths();
+                self.sync_api_registers();
                 self.refresh_dirty();
                 self.read_mut().popup = None;
                 log::info!("Custom rule set | {:?}@{}", cell.0, cell.1);
@@ -269,6 +270,7 @@ impl App {
         };
         if self.custom_rules.remove(&cell).is_some() {
             self.sync_auto_widths();
+            self.sync_api_registers();
             self.refresh_dirty();
             self.clamp_panel_cursor();
             log::info!("Custom rule removed | {:?}@{}", cell.0, cell.1);
@@ -421,6 +423,7 @@ impl App {
         let n = self.custom_rules.len();
         self.custom_rules.clear();
         self.sync_auto_widths();
+        self.sync_api_registers();
         self.note_cleared(n, "custom rule");
     }
 }
