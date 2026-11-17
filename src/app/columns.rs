@@ -110,7 +110,7 @@ impl App {
 
     pub fn toggle_graph(&mut self) {
         let p = self.read_mut();
-        p.graph = !p.graph;
+        p.graph.toggle();
     }
 
     pub fn graph_hold_series(&mut self) {

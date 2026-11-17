@@ -25,9 +25,9 @@ impl App {
     pub fn unit_toggle(&mut self, field: UnitField) {
         if let Some(p) = self.unit_mut() {
             match field {
-                UnitField::Mode => p.stop_at_first = !p.stop_at_first,
-                UnitField::Repr => p.ascii = !p.ascii,
-                UnitField::Exceptions => p.show_exceptions = !p.show_exceptions,
+                UnitField::Mode => p.stop_at_first.toggle(),
+                UnitField::Repr => p.ascii.toggle(),
+                UnitField::Exceptions => p.show_exceptions.toggle(),
                 _ => {}
             }
         }

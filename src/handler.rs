@@ -554,7 +554,7 @@ fn handle_discovery_key(key_event: KeyEvent, app: &mut App) {
             }
             DiscoveryField::ScanRepr => {
                 if let Some(d) = app.discovery_mut() {
-                    d.scan_ascii = !d.scan_ascii;
+                    d.scan_ascii.toggle();
                 }
             }
             DiscoveryField::Port(index) => app.choose_port(index),
@@ -646,7 +646,7 @@ fn cycle_field(
         DiscoveryField::Interface => d.set_interface(cycle(&kinds, d.interface, forward)),
         DiscoveryField::Baud => d.cycle_baud(forward),
         DiscoveryField::ScanMethod => d.cycle_scan_method(forward),
-        DiscoveryField::ScanRepr => d.scan_ascii = !d.scan_ascii,
+        DiscoveryField::ScanRepr => d.scan_ascii.toggle(),
         DiscoveryField::ScanPrefix => d.step_scan_prefix(forward),
         DiscoveryField::DataBits => d.data_bits = cycle(&DataBits::ALL, d.data_bits, forward),
         DiscoveryField::Parity => d.parity = cycle(&Parity::ALL, d.parity, forward),

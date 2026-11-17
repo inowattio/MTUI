@@ -102,7 +102,7 @@ impl App {
 
     pub const fn diff_toggle_changed(&mut self) {
         if let Some(d) = self.diff_view_mut() {
-            d.changed_only = !d.changed_only;
+            d.changed_only.toggle();
             d.top = 0;
         }
     }

@@ -109,7 +109,7 @@ impl App {
     pub fn write_toggle_raw(&mut self) {
         let applies = self.write().is_some_and(|w| self.write_has_rule_layout(w));
         if applies && let Some(w) = self.write_mut() {
-            w.raw = !w.raw;
+            w.raw.toggle();
             w.result = None;
         }
     }

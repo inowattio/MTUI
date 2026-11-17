@@ -395,7 +395,7 @@ impl App {
     }
 
     pub fn toggle_pause(&mut self) {
-        self.paused = !self.paused;
+        self.paused.toggle();
         if self.paused {
             log::info!("Auto-refresh paused");
         } else {

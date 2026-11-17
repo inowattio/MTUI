@@ -83,7 +83,7 @@ impl App {
 
     pub fn sweep_config_toggle(&mut self) {
         if let Some(p) = self.sweep_config_mut() {
-            p.continuous = !p.continuous;
+            p.continuous.toggle();
         }
     }
 

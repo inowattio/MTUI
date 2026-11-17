@@ -113,7 +113,7 @@ impl App {
 
     pub const fn log_view_toggle_wrap(&mut self) {
         if let Some(l) = self.log_view_mut() {
-            l.wrap = !l.wrap;
+            l.wrap.toggle();
             l.h_offset = 0;
         }
     }

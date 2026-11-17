@@ -576,10 +576,10 @@ impl CycleTypes {
 
     pub const fn toggle(&mut self, register_type: RegisterType) {
         match register_type {
-            RegisterType::Holding => self.holdings = !self.holdings,
-            RegisterType::Input => self.inputs = !self.inputs,
-            RegisterType::Coil => self.coils = !self.coils,
-            RegisterType::Discrete => self.discretes = !self.discretes,
+            RegisterType::Holding => self.holdings.toggle(),
+            RegisterType::Input => self.inputs.toggle(),
+            RegisterType::Coil => self.coils.toggle(),
+            RegisterType::Discrete => self.discretes.toggle(),
         }
     }
 
@@ -625,10 +625,10 @@ impl CyclePanels {
     pub const fn toggle(&mut self, panel: ReadPanel) {
         match panel {
             ReadPanel::Main => {}
-            ReadPanel::Pinned => self.pinned = !self.pinned,
-            ReadPanel::Labeled => self.labeled = !self.labeled,
-            ReadPanel::Custom => self.custom = !self.custom,
-            ReadPanel::Matrix => self.matrix = !self.matrix,
+            ReadPanel::Pinned => self.pinned.toggle(),
+            ReadPanel::Labeled => self.labeled.toggle(),
+            ReadPanel::Custom => self.custom.toggle(),
+            ReadPanel::Matrix => self.matrix.toggle(),
         }
     }
 }

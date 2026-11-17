@@ -245,7 +245,7 @@ impl App {
 
     pub fn toggle_hex_letters(&mut self) {
         let p = self.read_mut();
-        p.hex_letters = !p.hex_letters;
+        p.hex_letters.toggle();
     }
 
     pub fn typing_mode(&self) -> AddressMode {
@@ -573,7 +573,7 @@ fn sized_window(costs: &[usize], pos: usize, budget: usize, anchor: BatchAnchor)
                 BatchAnchor::Start => false,
                 BatchAnchor::End => true,
                 BatchAnchor::Middle => {
-                    prefer_before = !prefer_before;
+                    prefer_before.toggle();
                     !prefer_before
                 }
             },
