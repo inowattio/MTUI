@@ -31,6 +31,20 @@ Multiple options are available:
 * with cargo via `cargo install mtui`
 * clone the repository and then `cargo run`
 
+## Performance
+The project aims to run using as little resources as possible.  
+Using the default demo config on `1.9.1` with a screen size of 120x30:
+
+| CPU / Platform      | OS           | Render Time | Memory usage |
+|---------------------|--------------|-------------|--------------|
+| Intel i9 12900H     | Ubuntu 26.04 | 0.19 ms     | 7.6 MB       |
+| Raspberry Pi Zero 2 | Raspbian 13  | 2.70 ms     | 5.5 MB       |
+| Raspberry Pi 5      | Raspbian 12  | 0.41 ms     | 5.6 MB       |
+| Apple M1            | Tahoe 26.3.1 | 0.97 ms     | 10.1 MB      |
+
+These should give off an estimated performance outlook.   
+The count of data samples and the customs amount can vastly change these (amongst many other things).
+
 ## LLM usage disclosure
 LLM-based tools have been used to develop the project.  
 If LLM(s) are used upon creating PRs/issues, please keep in mind to always check the generated content to be as concise (and short) as possible.
