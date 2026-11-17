@@ -826,7 +826,7 @@ fn split_gaps(points: Vec<(f64, f64)>) -> Vec<Vec<(f64, f64)>> {
     if points.len() < 3 {
         return vec![points];
     }
-    let mut deltas: Vec<f64> = points.windows(2).map(|w| w[1].0 - w[0].0).collect();
+    let mut deltas: Vec<f64> = points.array_windows().map(|[a, b]| b.0 - a.0).collect();
     deltas.sort_by(f64::total_cmp);
     let gap = (deltas[deltas.len() / 2] * 2.5).max(1.0);
 
@@ -865,9 +865,7 @@ fn fmt_secs_ago(x: f64) -> String {
 
 fn step_points(points: Vec<(f64, f64)>) -> Vec<(f64, f64)> {
     let mut steps = Vec::with_capacity(points.len() * 2);
-    for pair in points.windows(2) {
-        let (x0, y0) = pair[0];
-        let (x1, _) = pair[1];
+    for &[(x0, y0), (x1, _)] in points.array_windows() {
         steps.push((x0, y0));
         steps.push((x1, y0));
     }
