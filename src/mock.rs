@@ -801,8 +801,7 @@ impl Client for MockContext {
             &frames::rtu(self.unit_id, &frames::request_pdu(&request)),
         );
         if !KNOWN_UNITS.contains(&self.unit_id) || stalls(&request) {
-            std::future::pending::<()>().await;
-            unreachable!();
+            std::future::pending::<!>().await;
         }
 
         self.simulate_latency().await;

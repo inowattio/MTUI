@@ -43,7 +43,7 @@ pub struct EventHandler {
     receiver: mpsc::UnboundedReceiver<Event>,
 }
 
-async fn event_processor(tx: mpsc::UnboundedSender<Event>) {
+async fn event_processor(tx: mpsc::UnboundedSender<Event>) -> ! {
     let mut reader = crossterm::event::EventStream::new();
     let mut tick = tokio::time::interval(EVENT_HANDLER_TICKRATE);
     loop {
