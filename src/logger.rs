@@ -87,8 +87,7 @@ pub fn count() -> usize {
 pub fn snapshot() -> Vec<LogEntry> {
     ENTRIES
         .lock()
-        .map(|e| e.iter().cloned().collect())
-        .unwrap_or_default()
+        .map_or_default(|e| e.iter().cloned().collect())
 }
 
 impl LogLevel {

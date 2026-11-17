@@ -190,7 +190,7 @@ impl Reading {
             registers: if ascii { self.count } else { None },
             ops: ops.into_iter().flatten().collect(),
             decimals: if ascii { None } else { self.precision },
-            suffix: unit.map(|unit| format!(" {unit}")).unwrap_or_default(),
+            suffix: unit.map_or_default(|unit| format!(" {unit}")),
             word_order: (ascii || repr.register_count() > 1)
                 .then(|| word_order(self.swap.as_deref())),
             ..Default::default()

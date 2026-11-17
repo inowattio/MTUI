@@ -131,7 +131,7 @@ fn record(
     previous: Option<u64>,
     function: u8,
 ) -> String {
-    let previous = previous.map(|v| v.to_string()).unwrap_or_default();
+    let previous = previous.map_or_default(|v| v.to_string());
     format!(
         "{timestamp},{unit},{address},{kind},{previous},{},0x{function:02X}",
         kind.csv_value()

@@ -816,8 +816,7 @@ type Series = Vec<(DateTime<Utc>, f64)>;
 fn series_history(app: &App, cell: RegisterCell, column: Option<Column>) -> Series {
     if cell.0.is_bit() {
         app.value_history(cell)
-            .map(|h| h.iter().map(|&(v, t)| (t, v as f64)).collect())
-            .unwrap_or_default()
+            .map_or_default(|h| h.iter().map(|&(v, t)| (t, v as f64)).collect())
     } else {
         column.map_or_else(Vec::new, |c| app.column_history(cell, c))
     }

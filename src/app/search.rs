@@ -218,8 +218,7 @@ mod app_tests {
             app.search_input(c);
         }
         app.popup_as::<SearchParams>()
-            .map(|s| s.matches.iter().map(|m| m.cell).collect())
-            .unwrap_or_default()
+            .map_or_default(|s| s.matches.iter().map(|m| m.cell).collect())
     }
 
     #[tokio::test]

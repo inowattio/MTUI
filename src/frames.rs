@@ -115,8 +115,7 @@ pub fn count() -> usize {
 pub fn snapshot() -> Vec<Frame> {
     FRAMES
         .lock()
-        .map(|f| f.iter().cloned().collect())
-        .unwrap_or_default()
+        .map_or_default(|f| f.iter().cloned().collect())
 }
 
 pub fn export(frames: &[Frame]) -> String {

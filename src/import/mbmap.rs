@@ -174,10 +174,7 @@ impl DeviceMap {
             registers,
             ops: ops.into_iter().flatten().collect(),
             enum_map: self.enum_map(register),
-            suffix: register
-                .unit()
-                .map(|unit| format!(" {unit}"))
-                .unwrap_or_default(),
+            suffix: register.unit().map_or_default(|unit| format!(" {unit}")),
             word_order: Some(word_order(byte_swap, word_swap)),
             ..Default::default()
         })

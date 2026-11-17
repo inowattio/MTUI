@@ -71,8 +71,7 @@ fn subnet_defaults(configured_ip: Option<&str>) -> (String, u8) {
 #[cfg(not(target_arch = "wasm32"))]
 fn available_ports() -> Vec<String> {
     tokio_serial::available_ports()
-        .map(|ports| ports.into_iter().map(|p| p.port_name).collect())
-        .unwrap_or_default()
+        .map_or_default(|ports| ports.into_iter().map(|p| p.port_name).collect())
 }
 
 impl App {

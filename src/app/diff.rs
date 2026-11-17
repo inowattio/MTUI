@@ -162,9 +162,7 @@ impl App {
             DiffMark::After => (current(), recorded()),
         };
         let text = text.unwrap_or_else(placeholder);
-        let emphasis = other
-            .map(|other| self.differing_segments(&text, &other))
-            .unwrap_or_default();
+        let emphasis = other.map_or_default(|other| self.differing_segments(&text, &other));
         DiffLine {
             mark,
             cell,

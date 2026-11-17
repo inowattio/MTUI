@@ -393,8 +393,7 @@ impl CustomRule {
         if self.repr == CustomRepr::Ascii {
             return self
                 .text(words, order)
-                .map(|text| format!("{}{text}{}", self.prefix, self.suffix))
-                .unwrap_or_default();
+                .map_or_default(|text| format!("{}{text}{}", self.prefix, self.suffix));
         }
         let Some(resolved) = self.resolve(words, order) else {
             return String::new();

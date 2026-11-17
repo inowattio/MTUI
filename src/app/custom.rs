@@ -27,7 +27,7 @@ impl App {
                 ops: rule.ops.clone(),
                 enum_map: rule.enum_map.clone(),
                 bits: rule.bits.clone(),
-                decimals: rule.decimals.map(|d| d.to_string()).unwrap_or_default(),
+                decimals: rule.decimals.map_or_default(|d| d.to_string()),
                 prefix: rule.prefix.clone(),
                 suffix: rule.suffix.clone(),
                 existed: true,
