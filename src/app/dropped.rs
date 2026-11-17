@@ -72,7 +72,7 @@ fn path_candidates(text: &str) -> Vec<PathBuf> {
 fn unquoted(text: &str) -> &str {
     ['"', '\'']
         .into_iter()
-        .find_map(|quote| text.strip_prefix(quote)?.strip_suffix(quote))
+        .find_map(|quote| text.strip_circumfix(quote, quote))
         .unwrap_or(text)
 }
 
