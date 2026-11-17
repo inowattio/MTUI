@@ -596,9 +596,7 @@ pub(super) fn file_name(parts: &[&str], extension: &str) -> String {
 
 fn ensure_parent_dir(path: &Path) -> Result<(), String> {
     match path.parent() {
-        Some(parent) if !parent.as_os_str().is_empty() => {
-            fs::create_dir_all(parent).map_err(|e| e.to_string())
-        }
+        Some(parent) if !parent.is_empty() => fs::create_dir_all(parent).map_err(|e| e.to_string()),
         _ => Ok(()),
     }
 }

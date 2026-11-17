@@ -260,7 +260,7 @@ impl App {
     }
 
     fn read_config_file(path: &Path) -> Result<Config, String> {
-        if path.as_os_str().is_empty() {
+        if path.is_empty() {
             return Err(message::LOAD_NEEDS_FILE_NAME.to_string());
         }
         let content = fs::read_to_string(path).map_err(|e| format!("Load failed: {e}"))?;
@@ -361,7 +361,7 @@ impl App {
     }
 
     pub(super) fn guard_unsaved_load(&mut self, target: PathBuf) -> Option<PathBuf> {
-        if !self.dirty || self.config.skip_unsaved_warning || target.as_os_str().is_empty() {
+        if !self.dirty || self.config.skip_unsaved_warning || target.is_empty() {
             return Some(target);
         }
         self.close_settings();
