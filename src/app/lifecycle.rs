@@ -1001,6 +1001,8 @@ mod tests {
     use crate::scratch::ScratchDir;
     #[cfg(not(target_arch = "wasm32"))]
     use crate::state::{ConnectionStatus, ReadPanel};
+    #[cfg(not(target_arch = "wasm32"))]
+    use std::assert_matches;
     use std::collections::BTreeMap;
     #[cfg(not(target_arch = "wasm32"))]
     use std::time::Duration;
@@ -1264,14 +1266,15 @@ mod tests {
         app.connection = ConnectionStatus::Error("Input/output error".to_string());
 
         app.tick();
-        assert!(
-            matches!(app.background_task, Some(BackgroundTask::Reconnect(_))),
+        assert_matches!(
+            app.background_task,
+            Some(BackgroundTask::Reconnect(_)),
             "a serial device must be reconnected like a network one"
         );
         assert_eq!(app.connection, ConnectionStatus::Reconnecting);
 
         settle(&mut app).await;
-        assert!(matches!(app.connection, ConnectionStatus::Error(_)));
+        assert_matches!(app.connection, ConnectionStatus::Error(_));
         assert!(app.reconnect.link_lost);
         assert_eq!(app.reconnect.attempts, 1);
         assert!(app.reconnect.next_at.is_some(), "retry is scheduled");
@@ -1288,8 +1291,9 @@ mod tests {
 
         app.reconnect.next_at = None;
         app.tick();
-        assert!(
-            matches!(app.background_task, Some(BackgroundTask::Reconnect(_))),
+        assert_matches!(
+            app.background_task,
+            Some(BackgroundTask::Reconnect(_)),
             "retry after backoff with no device present"
         );
         settle(&mut app).await;
@@ -1333,7 +1337,7 @@ mod tests {
         app.refresh();
         settle(&mut app).await;
 
-        assert!(matches!(app.connection, ConnectionStatus::Error(_)));
+        assert_matches!(app.connection, ConnectionStatus::Error(_));
         assert!(app.reconnect.link_lost);
     }
 
@@ -1345,7 +1349,7 @@ mod tests {
 
         app.refresh();
         settle(&mut app).await;
-        assert!(matches!(app.connection, ConnectionStatus::Error(_)));
+        assert_matches!(app.connection, ConnectionStatus::Error(_));
         assert!(!app.reconnect.link_lost);
 
         app.tick();
@@ -1382,7 +1386,7 @@ mod tests {
         app.refresh();
         settle(&mut app).await;
 
-        assert!(matches!(app.connection, ConnectionStatus::Error(_)));
+        assert_matches!(app.connection, ConnectionStatus::Error(_));
         assert!(app.reconnect.link_lost);
     }
 
@@ -1396,7 +1400,7 @@ mod tests {
 
         app.refresh();
         settle(&mut app).await;
-        assert!(matches!(app.connection, ConnectionStatus::Error(_)));
+        assert_matches!(app.connection, ConnectionStatus::Error(_));
         assert!(!app.reconnect.link_lost);
 
         app.tick();
@@ -1448,8 +1452,9 @@ mod tests {
             "the run after the failure is never sent"
         );
         let target = app.stats().reads.last_error().and_then(|e| e.target);
-        assert!(
-            matches!(target, Some(StatTarget::Read(RegisterType::Input, 64, _))),
+        assert_matches!(
+            target,
+            Some(StatTarget::Read(RegisterType::Input, 64, _)),
             "the error points at the failing request, got {target:?}"
         );
     }
@@ -1458,8 +1463,9 @@ mod tests {
     async fn app_with_refresh_in_flight() -> App {
         let mut app = App::boot(Config::default(), String::new()).await;
         app.refresh();
-        assert!(
-            matches!(app.background_task, Some(BackgroundTask::Refresh(_))),
+        assert_matches!(
+            app.background_task,
+            Some(BackgroundTask::Refresh(_)),
             "boot must land in a reading view so refresh() spawns a task"
         );
         app

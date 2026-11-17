@@ -795,6 +795,7 @@ pub(crate) async fn settle_until(app: &mut App, done: impl Fn(&App) -> bool, wha
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
     #[test]
     fn ascii_rules_drop_numeric_settings_and_need_a_register_count() {
         use crate::custom::{CustomOp, CustomRepr, OpKind};
@@ -906,7 +907,7 @@ mod tests {
         let path = scratch.path("config.json");
 
         let error = load_config(&path, false).expect_err("nothing to read");
-        assert!(matches!(error, ConfigError::Read { .. }));
+        assert_matches!(error, ConfigError::Read { .. });
         assert_eq!(error.exit_code(), 2);
         assert!(error.to_string().starts_with("Could not read config"));
         assert!(std::error::Error::source(&error).is_some());
@@ -939,7 +940,7 @@ mod tests {
         fs::write(&path, "{ not json").unwrap();
 
         let error = load_config(&path, true).expect_err("unparsable");
-        assert!(matches!(error, ConfigError::Parse { .. }));
+        assert_matches!(error, ConfigError::Parse { .. });
         assert_eq!(error.exit_code(), 3);
         assert!(error.to_string().starts_with("Could not parse config"));
         assert_eq!(
@@ -956,7 +957,7 @@ mod tests {
         fs::create_dir(&path).unwrap();
 
         let error = load_config(&path, true).expect_err("a directory cannot be read");
-        assert!(matches!(error, ConfigError::Read { .. }));
+        assert_matches!(error, ConfigError::Read { .. });
     }
 
     #[test]

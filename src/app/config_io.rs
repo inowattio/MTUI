@@ -388,14 +388,12 @@ mod tests {
     use super::{App, BackgroundTask};
     use crate::config::Config;
     use crate::state::{ImportSource, MessageKind};
+    use std::assert_matches;
 
     async fn app_with_refresh_in_flight() -> App {
         let mut app = App::boot(Config::default(), String::new()).await;
         app.refresh();
-        assert!(matches!(
-            app.background_task,
-            Some(BackgroundTask::Refresh(_))
-        ));
+        assert_matches!(app.background_task, Some(BackgroundTask::Refresh(_)));
         app.open_settings();
         app
     }
@@ -505,10 +503,7 @@ mod tests {
             assert_eq!(settings_status(&app), MessageKind::Err);
         }
 
-        assert!(matches!(
-            app.background_task,
-            Some(BackgroundTask::Refresh(_))
-        ));
+        assert_matches!(app.background_task, Some(BackgroundTask::Refresh(_)));
         assert!(!device.is_poisoned());
     }
 
@@ -524,10 +519,7 @@ mod tests {
         app.settings_load();
 
         assert_eq!(settings_status(&app), MessageKind::Info);
-        assert!(matches!(
-            app.background_task,
-            Some(BackgroundTask::LoadConfig(_))
-        ));
+        assert_matches!(app.background_task, Some(BackgroundTask::LoadConfig(_)));
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

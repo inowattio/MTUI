@@ -420,6 +420,7 @@ mod tests {
     use crate::modbus::WordOrder;
     use crate::register::RegisterType;
     use crate::state::{MessageKind, WriteParams};
+    use std::assert_matches;
 
     fn rule(repr: CustomRepr, address: u16) -> CustomRule {
         CustomRule {
@@ -523,10 +524,7 @@ mod tests {
             .and_then(|w| w.result.clone())
             .expect("a status is shown");
         assert_eq!(result.text, message::WRITING);
-        assert!(matches!(
-            app.background_task,
-            Some(BackgroundTask::Write(_))
-        ));
+        assert_matches!(app.background_task, Some(BackgroundTask::Write(_)));
     }
 
     #[tokio::test]
@@ -542,10 +540,7 @@ mod tests {
             .expect("a status is shown");
         assert_eq!(result.text, message::WRITE_QUEUED);
         assert!(app.queued_write.is_some());
-        assert!(matches!(
-            app.background_task,
-            Some(BackgroundTask::Refresh(_))
-        ));
+        assert_matches!(app.background_task, Some(BackgroundTask::Refresh(_)));
 
         for _ in 0..200 {
             app.complete_background_task();
@@ -554,8 +549,9 @@ mod tests {
             }
             tokio::time::sleep(std::time::Duration::from_millis(5)).await;
         }
-        assert!(
-            matches!(app.background_task, Some(BackgroundTask::Write(_))),
+        assert_matches!(
+            app.background_task,
+            Some(BackgroundTask::Write(_)),
             "the queued write must start once the read is done"
         );
         assert!(app.queued_write.is_none());
@@ -591,10 +587,7 @@ mod tests {
             .and_then(|w| w.result.clone())
             .expect("a status is shown");
         assert_eq!(result.text, message::DEVICE_READING);
-        assert!(matches!(
-            app.background_task,
-            Some(BackgroundTask::Refresh(_))
-        ));
+        assert_matches!(app.background_task, Some(BackgroundTask::Refresh(_)));
     }
 
     #[tokio::test]

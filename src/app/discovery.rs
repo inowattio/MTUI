@@ -366,6 +366,7 @@ mod tests {
     use crate::state::{
         DiscoveryColumn, DiscoveryField, DiscoveryParams, FoundHost, InterfaceKind,
     };
+    use std::assert_matches;
 
     fn wired_with_ports(ports: &[&str]) -> DiscoveryParams {
         let mut d = DiscoveryParams {
@@ -454,10 +455,10 @@ mod tests {
         d.custom_path = "  /dev/ttyAMA0 ".to_string();
         assert!(d.custom_path_active());
         assert_eq!(d.serial_path().as_deref(), Some("/dev/ttyAMA0"));
-        assert!(matches!(
+        assert_matches!(
             d.device_config().interface,
             Interface::Serial(ref w) if w.path == "/dev/ttyAMA0" && w.baud_rate == 9600
-        ));
+        );
 
         d.custom_path = "   ".to_string();
         assert!(!d.custom_path_active(), "whitespace is not a path");
@@ -540,10 +541,10 @@ mod tests {
                 DiscoveryField::ScanNetwork
             ]
         );
-        assert!(matches!(
+        assert_matches!(
             d.device_config().interface,
             Interface::RtuOverTcp(ref n) if n.ip == "10.0.0.9" && n.port == 8899
-        ));
+        );
 
         let mut config = Config::default();
         config.device.interface = Interface::RtuOverTcp(InterfaceTcpParams {

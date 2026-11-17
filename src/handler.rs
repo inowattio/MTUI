@@ -935,6 +935,7 @@ mod tests {
         DiscoveryField, DiscoveryParams, InterfaceKind, MessageKind, Popup, PopupKind, ReadPanel,
         SettingsCategory, SettingsField, SettingsFocus, State, StatsTab, UnitField, UnitParams,
     };
+    use std::assert_matches;
 
     async fn app() -> App {
         App::boot(Config::default(), String::new()).await
@@ -1514,7 +1515,7 @@ mod tests {
         app.dirty = true;
         handle_key_events(ctrl('c'), &mut app).await;
         assert!(app.running);
-        assert!(matches!(&app.state, State::Read(p) if p.popup == Some(Popup::Quit)));
+        assert_matches!(&app.state, State::Read(p) if p.popup == Some(Popup::Quit));
     }
 
     #[tokio::test]
@@ -1632,7 +1633,7 @@ mod tests {
 
         paste(&mut app, DUMP);
         assert_eq!(snapshot_len(&app), Some(2));
-        assert!(matches!(app.state, State::Diff(_)));
+        assert_matches!(app.state, State::Diff(_));
 
         let kb = app.config.keybinds;
         handle_key_events(KeyEvent::new(kb.panel), &mut app).await;
@@ -1827,7 +1828,7 @@ mod tests {
         app.dirty = true;
         handle_key_events(ctrl('c'), &mut app).await;
         assert!(app.running);
-        assert!(matches!(&app.state, State::Read(p) if p.popup == Some(Popup::Quit)));
+        assert_matches!(&app.state, State::Read(p) if p.popup == Some(Popup::Quit));
     }
 
     #[tokio::test]
