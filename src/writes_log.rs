@@ -151,7 +151,7 @@ fn parse_record(line: &str) -> Option<WriteEntry> {
     let value = fields.next()?;
     let function = fields
         .next()
-        .and_then(|f| u8::from_str_radix(f.trim_start_matches("0x"), 16).ok());
+        .and_then(|f| u8::from_str_radix(f.trim_prefix("0x"), 16).ok());
     Some(WriteEntry {
         timestamp: timestamp.to_string(),
         unit,

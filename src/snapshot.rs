@@ -63,7 +63,7 @@ impl CsvCursor<'_> {
 }
 
 fn read_csv(text: &str) -> Result<Vec<CsvRecord>, usize> {
-    let text = text.strip_prefix(BOM).unwrap_or(text).replace("\r\n", "\n");
+    let text = text.trim_prefix(BOM).replace("\r\n", "\n");
     let text = if text.contains('\n') {
         text
     } else {
@@ -141,7 +141,7 @@ impl fmt::Display for SnapshotError {
 }
 
 pub fn is_dump(text: &str) -> bool {
-    text.trim_start_matches(BOM)
+    text.trim_prefix(BOM)
         .trim_start()
         .split([',', '\n', '\r'])
         .next()
