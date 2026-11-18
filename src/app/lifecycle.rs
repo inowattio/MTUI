@@ -913,7 +913,7 @@ fn custom_words_outside(
     rules
         .range((kind, 0)..=(kind, u16::MAX))
         .filter(|(_, rule)| rule.word_addresses().any(|a| window.contains(&a)))
-        .flat_map(|(_, rule)| rule.word_addresses())
+        .flat_map(|(_, rule)| rule.source_addresses())
         .filter(|a| !window.contains(a))
         .map(|a| (kind, a))
         .collect()
@@ -1084,6 +1084,26 @@ mod tests {
             custom_words_outside(&rules, RegisterType::Input, 10..=20),
             Vec::new()
         );
+    }
+
+    #[test]
+    fn a_scale_register_is_read_with_its_rule_but_does_not_pull_it_in() {
+        use crate::custom::{CustomScale, ScaleMode, ScaleRepr};
+        let mut rules = rules(&[(17, CustomRepr::U32, &[])]);
+        rules.get_mut(&(H, 17)).unwrap().scale = Some(CustomScale {
+            register: 50,
+            mode: ScaleMode::Pow10,
+            repr: ScaleRepr::Sunspec,
+        });
+        assert_eq!(custom_words_outside(&rules, H, 10..=20), cells(&[50]));
+        assert_eq!(custom_words_outside(&rules, H, 15..=17), cells(&[18, 50]));
+        assert_eq!(custom_words_outside(&rules, H, 45..=55), Vec::new());
+        assert_eq!(custom_runs(&rules, H), vec![(17, 18)]);
+
+        let scale = rules.get_mut(&(H, 17)).unwrap().scale.as_mut().unwrap();
+        scale.mode = ScaleMode::Div;
+        scale.repr = ScaleRepr::Plain(CustomRepr::F32);
+        assert_eq!(custom_words_outside(&rules, H, 10..=20), cells(&[50, 51]));
     }
 
     #[test]

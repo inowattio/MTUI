@@ -318,6 +318,9 @@ fn rule_description(rule: &CustomRule, order: WordOrder) -> Value {
         json!(rule.word_addresses().collect::<Vec<_>>()),
     );
     description.insert("word_order".into(), json!(rule.word_order.unwrap_or(order)));
+    if let Some(scale) = rule.scale() {
+        description.insert("scale".into(), json!(scale));
+    }
     if !rule.ops.is_empty() {
         let ops: Vec<String> = rule.ops.iter().map(|op| op.display()).collect();
         description.insert("ops".into(), json!(ops));
@@ -417,7 +420,7 @@ fn decoded(map: &RegisterMap, kind: RegisterType, start: u16, values: &[u16]) ->
         .range((kind, 0)..=(kind, u16::MAX))
         .filter_map(|(&cell, rule)| {
             let words: Vec<u16> = rule
-                .word_addresses()
+                .source_addresses()
                 .map(|address| {
                     let offset = address.checked_sub(start)?;
                     values.get(usize::from(offset)).copied()

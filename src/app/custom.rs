@@ -1,7 +1,7 @@
 use super::{App, build_custom_rule};
 use crate::custom::{
-    ASCII_REGISTERS_DEFAULT, ASCII_REGISTERS_MAX, CustomCell, CustomRepr, parse_bit, parse_enum,
-    parse_op,
+    ASCII_REGISTERS_DEFAULT, ASCII_REGISTERS_MAX, CustomCell, CustomRepr, ScaleMode, ScaleRepr,
+    parse_bit, parse_enum, parse_op,
 };
 use crate::interpretator::fmt_num;
 use crate::modbus::WordOrder;
@@ -15,6 +15,7 @@ const PREVIEW_WORDS: usize = 8;
 impl App {
     pub fn open_custom(&mut self) {
         let (register_type, address) = self.cursor_cell();
+        let mode = self.interpreter.address_mode();
 
         let params = match self.custom_rules.get(&(register_type, address)) {
             Some(rule) => CustomParams {
@@ -24,6 +25,11 @@ impl App {
                 registers: rule.registers.unwrap_or_default(),
                 word_order: rule.word_order,
                 next: rule.next.clone(),
+                scale_mode: rule.scale.map(|scale| scale.mode),
+                scale_repr: rule.scale.map_or_default(|scale| scale.repr),
+                scale_register: rule
+                    .scale
+                    .map_or_default(|scale| mode.display(scale.register).to_string()),
                 ops: rule.ops.clone(),
                 enum_map: rule.enum_map.clone(),
                 bits: rule.bits.clone(),
@@ -81,6 +87,12 @@ impl App {
             Some(WordOrder::CDAB),
             Some(WordOrder::DCBA),
         ];
+        const SCALE_CHOICES: [Option<ScaleMode>; 4] = [
+            None,
+            Some(ScaleMode::Pow10),
+            Some(ScaleMode::Mul),
+            Some(ScaleMode::Div),
+        ];
         self.with_custom(|c| {
             c.error = None;
             match field {
@@ -100,6 +112,12 @@ impl App {
                 CustomField::WordOrder => {
                     c.word_order = cycle(&ORDER_CHOICES, c.word_order, forward);
                 }
+                CustomField::Scale => {
+                    c.scale_mode = cycle(&SCALE_CHOICES, c.scale_mode, forward);
+                }
+                CustomField::ScaleType => {
+                    c.scale_repr = cycle(&ScaleRepr::ALL, c.scale_repr, forward);
+                }
                 _ => {}
             }
             c.reselect(field);
@@ -118,6 +136,11 @@ impl App {
                 CustomField::Next => {
                     if mode.accepts(&c.next_buffer, ch) && c.next_buffer.len() < 6 {
                         c.next_buffer.push(ch);
+                    }
+                }
+                CustomField::ScaleRegister => {
+                    if mode.accepts(&c.scale_register, ch) && c.scale_register.len() < 6 {
+                        c.scale_register.push(ch);
                     }
                 }
                 CustomField::Decimals => {
@@ -163,6 +186,9 @@ impl App {
                     if c.next_buffer.pop().is_none() {
                         c.next.pop();
                     }
+                }
+                CustomField::ScaleRegister => {
+                    c.scale_register.pop();
                 }
                 CustomField::Decimals => {
                     c.decimals.pop();
@@ -245,7 +271,11 @@ impl App {
     }
 
     pub fn commit_custom(&mut self) {
-        let Some(built) = self.popup_as::<CustomParams>().map(build_custom_rule) else {
+        let mode = self.interpreter.address_mode();
+        let Some(built) = self
+            .popup_as::<CustomParams>()
+            .map(|c| build_custom_rule(c, mode))
+        else {
             return;
         };
         match built {
@@ -292,7 +322,7 @@ impl App {
             return self.custom_part_of(cell);
         };
         let mut words = vec![value];
-        for word_address in rule.word_addresses().skip(1) {
+        for word_address in rule.source_addresses().skip(1) {
             match at(word_address) {
                 Some(n) => words.push(n),
                 None => break,
@@ -309,7 +339,9 @@ impl App {
         let read: BTreeSet<RegisterCell> = values.iter().map(|&(cell, _)| cell).collect();
         self.custom_rules
             .iter()
-            .filter(|&(&(kind, _), rule)| rule.word_addresses().any(|a| read.contains(&(kind, a))))
+            .filter(|&(&(kind, _), rule)| {
+                rule.source_addresses().any(|a| read.contains(&(kind, a)))
+            })
             .map(|(&cell, _)| cell)
             .collect()
     }
@@ -317,7 +349,7 @@ impl App {
     pub(super) fn custom_level(&self, (kind, address): RegisterCell) -> Option<f64> {
         let rule = self.custom_rules.get(&(kind, address))?;
         let words: Vec<u16> = rule
-            .word_addresses()
+            .source_addresses()
             .map(|a| self.read_log.get(&(kind, a)).map(|entry| entry.value))
             .collect::<Option<_>>()?;
         let order = self.config.device.word_order;
@@ -360,10 +392,10 @@ impl App {
     }
 
     pub fn custom_preview(&self, c: &CustomParams) -> Result<CustomPreview, String> {
-        let (cell, rule) = build_custom_rule(c)?;
-        let mut words = Vec::with_capacity(rule.register_count());
-        let mut sources = Vec::with_capacity(rule.register_count());
-        for word_address in rule.word_addresses() {
+        let (cell, rule) = build_custom_rule(c, self.interpreter.address_mode())?;
+        let mut words = Vec::with_capacity(rule.register_count() + 1);
+        let mut sources = Vec::with_capacity(rule.register_count() + 1);
+        for word_address in rule.source_addresses() {
             let addr = self.interpreter.address_mode().display(word_address);
             match self.read_log.get(&(cell.0, word_address)) {
                 Some(entry) => {
@@ -382,13 +414,22 @@ impl App {
             return Err("no output".to_string());
         }
 
-        let transforms = !rule.ops.is_empty() || !rule.enum_map.is_empty() || !rule.bits.is_empty();
+        let transforms = !rule.ops.is_empty()
+            || !rule.enum_map.is_empty()
+            || !rule.bits.is_empty()
+            || rule.scale().is_some();
         let base = (rule.register_count() > 1 || transforms)
             .then(|| {
                 if rule.bits.is_empty() {
                     let b = rule.base(&words, order)?;
+                    let scale = rule
+                        .scale()
+                        .zip(rule.scale_factor(&words, order))
+                        .map_or_default(|(scale, factor)| {
+                            format!(" {}", scale.mode.describe(factor))
+                        });
                     Some(format!(
-                        "{} {}",
+                        "{} {}{scale}",
                         rule.repr.label(),
                         fmt_num(b, b.fract() != 0.0)
                     ))

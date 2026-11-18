@@ -2,7 +2,7 @@ use crate::app::WriteType;
 use crate::compat::Instant;
 use crate::config::Column;
 use crate::constants::{DEFAULT_SCAN_PREFIX, SCAN_PREFIX_RANGE};
-use crate::custom::{BitEntry, CustomOp, CustomRepr, EnumEntry};
+use crate::custom::{BitEntry, CustomOp, CustomRepr, EnumEntry, ScaleMode, ScaleRepr};
 use crate::functions::DiagnosticSub;
 use crate::modbus::{
     DataBits, DeviceConfig, DeviceIdAccess, Interface, InterfaceSerialParams, InterfaceTcpParams,
@@ -798,6 +798,9 @@ pub enum CustomField {
     Registers,
     WordOrder,
     Next,
+    Scale,
+    ScaleType,
+    ScaleRegister,
     Ops,
     Enum,
     Bits,
@@ -814,6 +817,9 @@ pub struct CustomParams {
     pub registers: u8,
     pub word_order: Option<WordOrder>,
     pub next: Vec<u16>,
+    pub scale_mode: Option<ScaleMode>,
+    pub scale_repr: ScaleRepr,
+    pub scale_register: String,
     pub ops: Vec<CustomOp>,
     pub enum_map: Vec<EnumEntry>,
     pub bits: Vec<BitEntry>,
@@ -853,7 +859,9 @@ impl CustomParams {
         if ascii {
             fields.push(Registers);
         }
-        if ascii || multi || self.word_order.is_some() {
+        let multi_scale =
+            !ascii && self.scale_mode.is_some() && self.scale_repr.register_count() > 1;
+        if ascii || multi || multi_scale || self.word_order.is_some() {
             fields.push(WordOrder);
         }
         if multi || !self.next.is_empty() {
@@ -863,6 +871,13 @@ impl CustomParams {
             fields.push(Prefix);
             fields.push(Suffix);
             return fields;
+        }
+        if !bits_active || self.scale_mode.is_some() {
+            fields.push(Scale);
+            if self.scale_mode.is_some() {
+                fields.push(ScaleType);
+                fields.push(ScaleRegister);
+            }
         }
         if !bits_active || !self.ops.is_empty() {
             fields.push(Ops);
@@ -938,7 +953,44 @@ impl CustomParams {
 #[cfg(test)]
 mod custom_params_tests {
     use super::{CustomField, CustomParams};
-    use crate::custom::{BitEntry, CustomRepr, EnumEntry};
+    use crate::custom::{BitEntry, CustomRepr, EnumEntry, ScaleMode, ScaleRepr};
+
+    #[test]
+    fn scale_type_and_register_show_only_once_a_scale_is_chosen() {
+        use CustomField::*;
+        let mut c = CustomParams::default();
+        assert!(c.fields().contains(&Scale));
+        assert!(!c.fields().contains(&ScaleType));
+        assert!(!c.fields().contains(&ScaleRegister));
+
+        for mode in ScaleMode::ALL {
+            c.scale_mode = Some(mode);
+            let fields = c.fields();
+            let at = |f| fields.iter().position(|&x| x == f).unwrap();
+            assert_eq!(at(ScaleType), at(Scale) + 1);
+            assert_eq!(at(ScaleRegister), at(ScaleType) + 1);
+            assert!(at(ScaleRegister) < at(Ops));
+        }
+
+        c.repr = CustomRepr::Ascii;
+        assert!(!c.fields().contains(&Scale));
+    }
+
+    #[test]
+    fn a_multi_register_scale_type_asks_for_a_word_order() {
+        use CustomField::*;
+        let mut c = CustomParams {
+            scale_mode: Some(ScaleMode::Pow10),
+            scale_repr: ScaleRepr::Plain(CustomRepr::F32),
+            ..CustomParams::default()
+        };
+        assert!(c.fields().contains(&WordOrder));
+        c.scale_repr = ScaleRepr::Sunspec;
+        assert!(!c.fields().contains(&WordOrder));
+        c.scale_repr = ScaleRepr::Plain(CustomRepr::U64);
+        c.scale_mode = None;
+        assert!(!c.fields().contains(&WordOrder));
+    }
 
     #[test]
     fn ascii_offers_only_decode_and_affixes() {

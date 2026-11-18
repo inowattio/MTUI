@@ -1,4 +1,7 @@
-use crate::custom::{BitEntry, CustomOp, CustomRepr, CustomRule, EnumEntry, OpKind};
+use crate::custom::{
+    BitEntry, CustomOp, CustomRepr, CustomRule, CustomScale, EnumEntry, OpKind, ScaleMode,
+    ScaleRepr,
+};
 use crate::input::KeyCode;
 use crate::modbus::{DeviceConfig, Interface};
 use crate::register::{RegisterCell, RegisterType};
@@ -668,6 +671,27 @@ fn plain(address: u16, repr: CustomRepr, decimals: Option<u8>, suffix: &str) -> 
     }
 }
 
+fn scaled_by(
+    address: u16,
+    repr: CustomRepr,
+    scale: CustomScale,
+    decimals: Option<u8>,
+    suffix: &str,
+) -> CustomRule {
+    CustomRule {
+        scale: Some(scale),
+        ..plain(address, repr, decimals, suffix)
+    }
+}
+
+const fn sunspec_sf(register: u16) -> CustomScale {
+    CustomScale {
+        register,
+        mode: ScaleMode::Pow10,
+        repr: ScaleRepr::Sunspec,
+    }
+}
+
 fn ascii(address: u16, registers: u8) -> CustomRule {
     CustomRule {
         address,
@@ -750,6 +774,12 @@ fn demo_labels() -> BTreeMap<RegisterCell, String> {
                 (14, "reactive (i32 var)"),
                 (16, "energy (m10k)"),
                 (20, "energy (f64 kWh)"),
+                (24, "power (sunspec)"),
+                (25, "voltage L1 (sunspec)"),
+                (26, "power sf"),
+                (27, "voltage sf"),
+                (28, "CT secondary mA"),
+                (29, "CT ratio"),
                 (30, "seconds"),
                 (31, "sawtooth"),
                 (32, "square"),
@@ -837,6 +867,25 @@ fn demo_rules() -> BTreeMap<RegisterCell, CustomRule> {
                 plain(10, CustomRepr::F32, Some(2), " pf"),
                 plain(12, CustomRepr::U32, None, " VA"),
                 plain(14, CustomRepr::I32, None, " var"),
+                scaled_by(24, CustomRepr::I16, sunspec_sf(26), None, " W"),
+                scaled_by(25, CustomRepr::U16, sunspec_sf(27), Some(1), " V"),
+                CustomRule {
+                    ops: vec![CustomOp {
+                        op: OpKind::Div,
+                        v: 1000.0,
+                    }],
+                    ..scaled_by(
+                        28,
+                        CustomRepr::U16,
+                        CustomScale {
+                            register: 29,
+                            mode: ScaleMode::Mul,
+                            ..Default::default()
+                        },
+                        Some(2),
+                        " A",
+                    )
+                },
                 switch(32, &[(0, "low"), (1, "high")]),
             ],
         ),

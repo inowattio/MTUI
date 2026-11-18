@@ -290,7 +290,7 @@ impl App {
                 regs.push((kind, address));
             } else if column == Some(Column::Custom) {
                 if let Some(rule) = self.custom_rule((kind, address)) {
-                    regs.extend(rule.word_addresses().map(|a| (kind, a)));
+                    regs.extend(rule.source_addresses().map(|a| (kind, a)));
                 }
             } else {
                 let width = column.and_then(Column::graph_width).unwrap_or(1) as u16;

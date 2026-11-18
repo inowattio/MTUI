@@ -45,8 +45,12 @@ use tokio_modbus::{ExceptionCode, Request, Response};
 ///   7          temperature x10, 8..=9 active power kW (f32),
 ///   10..=11    power factor (f32), 12..=13 apparent power VA (u32),
 ///   14..=15    reactive power var (i32, signed), 16..=17 energy (m10k),
-///   20..=23    total energy kWh (f64), 30 seconds, 31 sawtooth,
-///   32         square wave, 33 noise, 34 random walk,
+///   20..=23    total energy kWh (f64),
+///   24..=27    SunSpec-style block: 24 power W (i16), 25 voltage L1 (u16),
+///              26 power scale factor (auto-ranges 0/1 every 30s), 27 voltage
+///              scale factor (-1),
+///   28..=29    CT secondary current mA, CT ratio,
+///   30         seconds, 31 sawtooth, 32 square wave, 33 noise, 34 random walk,
 ///   35..=37    THD per phase x100, 40..=42 per-phase active power W,
 ///   43..=45    per-phase reactive power var (i16), 46..=48 per-phase VA,
 ///   50..=52    line-to-line voltages x10, 53 neutral current x100,
@@ -125,6 +129,7 @@ const FILE_RECORDS: u16 = 10_000;
 const MAX_PDU_DATA: usize = 0xF5;
 const VENDOR_NAME: &[u8; 32] = b"      POWER BUS SIMULATOR!      ";
 const THIRD_PHASE: f64 = 2.0944;
+const CT_RATIO: u16 = 40;
 
 const fn word(value: u32, index: u16) -> u16 {
     if index == 0 {
@@ -204,6 +209,10 @@ impl MockContext {
             self.noise(t, 8),
             0.8f64.mul_add((t / 7.0 + self.phase()).sin(), base),
         )
+    }
+
+    fn power_sf(&self, t: f64) -> i16 {
+        (((t + self.phase()) / 30.0) as u64 % 2) as i16
     }
 
     fn energy_wh(&self, t: f64) -> f64 {
@@ -331,6 +340,18 @@ impl MockContext {
             }
             16 | 17 => m10k(self.energy_wh(t) as u32, addr - 16),
             20..=23 => dword((self.energy_wh(t) / 1000.0).to_bits(), addr - 20),
+            24 => {
+                let watts = self.active_power_kw(t) * 1_000.0;
+                (watts / 10f64.powi(self.power_sf(t).into())).round() as i16 as u16
+            }
+            25 => self.input_value(0, t),
+            26 => self.power_sf(t) as u16,
+            27 => -1i16 as u16,
+            28 => {
+                let primary = f64::from(self.input_value(3, t)) / 100.0;
+                (primary * 1_000.0 / f64::from(CT_RATIO)).round() as u16
+            }
+            29 => CT_RATIO,
             30 => t as u16,
             31 => ((t * 100.0) as u16) % 1000,
             32 => ((t / 5.0) as u64 % 2) as u16,
@@ -835,6 +856,46 @@ mod tests {
 
     const RESERVED: ExceptionCode = ExceptionCode::IllegalDataAddress;
     const FAULTED: ExceptionCode = ExceptionCode::ServerDeviceFailure;
+
+    #[test]
+    fn demo_scale_rules_read_the_same_quantity_across_an_auto_range() {
+        use crate::compat::Instant;
+        use crate::config::Config;
+        use crate::modbus::WordOrder;
+        use crate::register::RegisterType;
+        use std::collections::HashMap;
+
+        let mock = MockContext {
+            started: Instant::now(),
+            written: HashMap::new(),
+            written_coils: HashMap::new(),
+            write_count: 0,
+            unit_id: 0,
+            served: 0,
+            exceptions: 0,
+            events: 0,
+        };
+        let (_, _, rules) = Config::demo().registers.into_views();
+        let read = |address: u16, t: f64| {
+            let rule = &rules[&(RegisterType::Input, address)];
+            let words: Vec<u16> = rule
+                .source_addresses()
+                .map(|a| mock.input_value(a, t))
+                .collect();
+            rule.numeric(&words, WordOrder::ABCD).unwrap()
+        };
+
+        for t in [5.0, 35.0] {
+            let watts = mock.active_power_kw(t) * 1_000.0;
+            assert!((read(24, t) - watts).abs() <= 5.0, "{t}: {}", read(24, t));
+            let volts = f64::from(mock.input_value(0, t)) / 10.0;
+            assert!((read(25, t) - volts).abs() < 1e-9);
+            let amps = f64::from(mock.input_value(3, t)) / 100.0;
+            assert!((read(28, t) - amps).abs() < 0.05);
+        }
+        assert_eq!(mock.input_value(26, 5.0), 0);
+        assert_eq!(mock.input_value(26, 35.0), 1);
+    }
 
     #[tokio::test]
     async fn faulty_addresses_answer_with_their_exception() {

@@ -1,10 +1,10 @@
 use crate::compat;
 use crate::compat::{Instant, TaskHandle};
-use crate::config::{Config, Registers};
+use crate::config::{AddressMode, Config, Registers};
 use crate::constants::CONFIG_PATH;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::constants::SCAN_PREFIX_RANGE;
-use crate::custom::{ASCII_REGISTERS_MAX, CustomRule, CustomRules};
+use crate::custom::{ASCII_REGISTERS_MAX, CustomRule, CustomRules, CustomScale};
 use crate::interpretator::Interpretor;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::modbus::Interface;
@@ -641,7 +641,10 @@ fn save_config(path: &Path, config: &Config) -> Result<(), String> {
     write_atomically(path, &content)
 }
 
-fn build_custom_rule(c: &CustomParams) -> Result<(RegisterCell, CustomRule), String> {
+fn build_custom_rule(
+    c: &CustomParams,
+    mode: AddressMode,
+) -> Result<(RegisterCell, CustomRule), String> {
     let decimals = match c.decimals.trim() {
         "" => None,
         s => Some(
@@ -674,10 +677,22 @@ fn build_custom_rule(c: &CustomParams) -> Result<(RegisterCell, CustomRule), Str
         return Err(format!("registers: 1 to {ASCII_REGISTERS_MAX}"));
     }
 
+    let scale = match c.scale_mode.filter(|_| !ascii) {
+        Some(scale_mode) => Some(CustomScale {
+            register: mode
+                .parse(&c.scale_register)
+                .ok_or_else(|| "scale: invalid register".to_string())?,
+            mode: scale_mode,
+            repr: c.scale_repr,
+        }),
+        None => None,
+    };
+
     let rule = CustomRule {
         address: c.address,
         repr: c.repr,
         registers: ascii.then_some(c.registers),
+        scale,
         ops: if ascii { Vec::new() } else { c.ops.clone() },
         enum_map: if ascii {
             Vec::new()
@@ -793,6 +808,7 @@ pub(crate) async fn settle_until(app: &mut App, done: impl Fn(&App) -> bool, wha
 
 #[cfg(test)]
 mod tests {
+    use crate::config::AddressMode;
     use std::assert_matches;
     #[test]
     fn ascii_rules_drop_numeric_settings_and_need_a_register_count() {
@@ -809,22 +825,59 @@ mod tests {
             }],
             decimals: "2".to_string(),
             suffix: " fw".to_string(),
+            scale_mode: Some(crate::custom::ScaleMode::Mul),
+            scale_register: "210".to_string(),
             ..Default::default()
         };
-        let (_, rule) = super::build_custom_rule(&c).unwrap();
+        let build = |c: &CustomParams| super::build_custom_rule(c, AddressMode::Dec);
+        let (_, rule) = build(&c).unwrap();
         assert_eq!(rule.registers, Some(16));
         assert_eq!(rule.register_count(), 16);
         assert!(rule.ops.is_empty());
         assert_eq!(rule.decimals, None);
+        assert_eq!(rule.scale, None);
         assert_eq!(rule.suffix, " fw");
 
         c.registers = 0;
-        assert!(super::build_custom_rule(&c).is_err());
+        assert!(build(&c).is_err());
 
         c.repr = CustomRepr::U16;
-        let (_, rule) = super::build_custom_rule(&c).unwrap();
+        let (_, rule) = build(&c).unwrap();
         assert_eq!(rule.registers, None);
         assert_eq!(rule.ops.len(), 1);
+        assert_eq!(rule.scale.map(|s| s.register), Some(210));
+    }
+
+    #[test]
+    fn scale_register_is_parsed_in_the_address_mode() {
+        use crate::custom::{CustomRepr, CustomScale, ScaleMode, ScaleRepr};
+        use crate::state::CustomParams;
+
+        let mut c = CustomParams {
+            repr: CustomRepr::I16,
+            scale_mode: Some(ScaleMode::Pow10),
+            scale_register: "9C4F".to_string(),
+            scale_repr: ScaleRepr::Sunspec,
+            ..Default::default()
+        };
+        let (_, rule) = super::build_custom_rule(&c, AddressMode::Hex).unwrap();
+        assert_eq!(
+            rule.scale,
+            Some(CustomScale {
+                register: 0x9C4F,
+                mode: ScaleMode::Pow10,
+                repr: ScaleRepr::Sunspec,
+            })
+        );
+        assert_eq!(
+            super::build_custom_rule(&c, AddressMode::Dec).unwrap_err(),
+            "scale: invalid register"
+        );
+        c.scale_register.clear();
+        assert!(super::build_custom_rule(&c, AddressMode::Hex).is_err());
+        c.scale_mode = None;
+        let (_, rule) = super::build_custom_rule(&c, AddressMode::Hex).unwrap();
+        assert_eq!(rule.scale, None);
     }
 
     #[test]

@@ -211,6 +211,146 @@ impl CustomOp {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ScaleMode {
+    #[default]
+    Pow10,
+    Mul,
+    Div,
+}
+
+impl ScaleMode {
+    pub const ALL: [Self; 3] = [Self::Pow10, Self::Mul, Self::Div];
+
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Pow10 => "* 10^reg",
+            Self::Mul => "* reg",
+            Self::Div => "/ reg",
+        }
+    }
+
+    fn apply(self, value: f64, factor: f64) -> f64 {
+        match self {
+            Self::Pow10 if !factor.is_finite() => f64::NAN,
+            Self::Pow10 if factor.fract() != 0.0 => value * 10f64.powf(factor),
+            Self::Pow10 => match factor as i32 {
+                exponent if exponent < 0 => value / 10f64.powi(-exponent),
+                exponent => value * 10f64.powi(exponent),
+            },
+            Self::Mul => value * factor,
+            Self::Div if factor == 0.0 => f64::NAN,
+            Self::Div => value / factor,
+        }
+    }
+
+    pub fn describe(self, factor: f64) -> String {
+        match self {
+            Self::Pow10 => format!("*10^{}", compact(factor)),
+            Self::Mul => format!("*{}", compact(factor)),
+            Self::Div => format!("/{}", compact(factor)),
+        }
+    }
+}
+
+const SUNSPEC_NOT_IMPLEMENTED: u16 = 0x8000;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ScaleRepr {
+    Plain(CustomRepr),
+    Sunspec,
+}
+
+impl Default for ScaleRepr {
+    fn default() -> Self {
+        Self::Plain(CustomRepr::U16)
+    }
+}
+
+impl ScaleRepr {
+    pub const ALL: [Self; 13] = [
+        Self::Plain(CustomRepr::U16),
+        Self::Plain(CustomRepr::I16),
+        Self::Sunspec,
+        Self::Plain(CustomRepr::F16),
+        Self::Plain(CustomRepr::U32),
+        Self::Plain(CustomRepr::I32),
+        Self::Plain(CustomRepr::F32),
+        Self::Plain(CustomRepr::U64),
+        Self::Plain(CustomRepr::I64),
+        Self::Plain(CustomRepr::F64),
+        Self::Plain(CustomRepr::U128),
+        Self::Plain(CustomRepr::I128),
+        Self::Plain(CustomRepr::F128),
+    ];
+
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Plain(repr) => repr.label(),
+            Self::Sunspec => "sunspec",
+        }
+    }
+
+    pub const fn register_count(self) -> usize {
+        match self {
+            Self::Plain(repr) => repr.register_count(),
+            Self::Sunspec => 1,
+        }
+    }
+
+    fn decode(self, words: &[u16], order: WordOrder) -> Option<f64> {
+        let words = words.get(..self.register_count())?;
+        Some(match self {
+            Self::Sunspec if words[0] == SUNSPEC_NOT_IMPLEMENTED => f64::NAN,
+            Self::Sunspec => f64::from(words[0] as i16),
+            Self::Plain(repr) => repr.decode(order.assemble(words)?),
+        })
+    }
+}
+
+impl TryFrom<String> for ScaleRepr {
+    type Error = String;
+
+    fn try_from(input: String) -> Result<Self, Self::Error> {
+        Self::ALL
+            .into_iter()
+            .find(|repr| repr.label() == input)
+            .ok_or_else(|| format!("unknown scale type {input:?}"))
+    }
+}
+
+impl Serialize for ScaleRepr {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.label())
+    }
+}
+
+impl<'de> Deserialize<'de> for ScaleRepr {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Self::try_from(String::deserialize(deserializer)?).map_err(serde::de::Error::custom)
+    }
+}
+
+fn is_default<T: Default + PartialEq>(value: &T) -> bool {
+    *value == T::default()
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct CustomScale {
+    pub register: u16,
+    #[serde(default)]
+    pub mode: ScaleMode,
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub repr: ScaleRepr,
+}
+
+impl CustomScale {
+    pub fn addresses(self) -> impl Iterator<Item = u16> {
+        (0..self.repr.register_count() as u16).map(move |i| self.register.wrapping_add(i))
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EnumEntry {
     pub value: i64,
@@ -256,6 +396,8 @@ pub struct CustomRule {
     pub repr: CustomRepr,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub registers: Option<u8>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scale: Option<CustomScale>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ops: Vec<CustomOp>,
     #[serde(
@@ -306,6 +448,22 @@ impl CustomRule {
             *previous = address;
             Some(address)
         })
+    }
+
+    pub fn scale(&self) -> Option<CustomScale> {
+        self.scale.filter(|_| self.repr != CustomRepr::Ascii)
+    }
+
+    pub fn source_addresses(&self) -> impl Iterator<Item = u16> + '_ {
+        self.word_addresses()
+            .chain(self.scale().into_iter().flat_map(CustomScale::addresses))
+    }
+
+    pub fn scale_factor(&self, words: &[u16], order: WordOrder) -> Option<f64> {
+        self.scale()?.repr.decode(
+            words.get(self.register_count()..)?,
+            self.word_order.unwrap_or(order),
+        )
     }
 
     pub fn continuation(&self, address: u16) -> Option<Continuation> {
@@ -377,8 +535,12 @@ impl CustomRule {
         if !self.bits.is_empty() {
             return Some(Resolved::Bits(raw));
         }
+        let scaled = match self.scale() {
+            Some(scale) => scale.mode.apply(base, self.scale_factor(words, order)?),
+            None => base,
+        };
         Some(Resolved::Number(
-            self.ops.iter().fold(base, |v, op| op.apply(v)),
+            self.ops.iter().fold(scaled, |v, op| op.apply(v)),
         ))
     }
 
@@ -896,6 +1058,164 @@ mod tests {
             v: 0.0,
         }];
         assert_eq!(r.evaluate(&[10], WordOrder::ABCD), UNINTERPRETABLE);
+    }
+
+    fn scaled_by(repr: CustomRepr, mode: ScaleMode, scale: ScaleRepr, register: u16) -> CustomRule {
+        let mut r = rule(repr);
+        r.address = 100;
+        r.scale = Some(CustomScale {
+            register,
+            mode,
+            repr: scale,
+        });
+        r
+    }
+
+    const U16: ScaleRepr = ScaleRepr::Plain(CustomRepr::U16);
+    const I16: ScaleRepr = ScaleRepr::Plain(CustomRepr::I16);
+    const F32: ScaleRepr = ScaleRepr::Plain(CustomRepr::F32);
+
+    #[test]
+    fn pow10_applies_a_power_of_ten_from_any_scale_type() {
+        let r = scaled_by(CustomRepr::U16, ScaleMode::Pow10, I16, 110);
+        assert_eq!(
+            r.evaluate(&[2304, (-1i16) as u16], WordOrder::ABCD),
+            "230.4"
+        );
+        assert_eq!(r.evaluate(&[23, 2], WordOrder::ABCD), "2300");
+        assert_eq!(r.evaluate(&[23, 0], WordOrder::ABCD), "23");
+        assert_eq!(
+            r.numeric(&[12345, (-3i16) as u16], WordOrder::ABCD),
+            Some(12.345)
+        );
+        assert_eq!(
+            r.numeric(&[2304, (-1i16) as u16], WordOrder::ABCD),
+            Some(230.4)
+        );
+
+        let r = scaled_by(CustomRepr::U16, ScaleMode::Pow10, F32, 110);
+        assert_eq!(r.evaluate(&[3, 0x4000, 0], WordOrder::ABCD), "300");
+        assert_eq!(r.evaluate(&[1, 0x3F00, 0], WordOrder::ABCD), "3.162");
+    }
+
+    #[test]
+    fn the_sunspec_type_is_an_i16_with_a_not_implemented_marker() {
+        let sunspec = scaled_by(CustomRepr::I16, ScaleMode::Pow10, ScaleRepr::Sunspec, 110);
+        assert_eq!(
+            sunspec.evaluate(&[2304, (-1i16) as u16], WordOrder::ABCD),
+            "230.4"
+        );
+        assert_eq!(
+            sunspec.evaluate(&[5, 0x8000], WordOrder::ABCD),
+            UNINTERPRETABLE
+        );
+        assert_eq!(sunspec.numeric(&[5, 0x8000], WordOrder::ABCD), None);
+
+        let plain = scaled_by(CustomRepr::I16, ScaleMode::Pow10, I16, 110);
+        assert_eq!(plain.numeric(&[5, 0x8000], WordOrder::ABCD), Some(0.0));
+
+        let mul = scaled_by(CustomRepr::U16, ScaleMode::Mul, ScaleRepr::Sunspec, 110);
+        assert_eq!(mul.evaluate(&[5, (-2i16) as u16], WordOrder::ABCD), "-10");
+        assert_eq!(mul.evaluate(&[5, 0x8000], WordOrder::ABCD), UNINTERPRETABLE);
+    }
+
+    #[test]
+    fn register_scale_multiplies_or_divides_before_ops_and_after_the_words() {
+        let mut r = scaled_by(CustomRepr::U32, ScaleMode::Mul, U16, 7);
+        r.ops = vec![parse_op("+1").unwrap()];
+        assert_eq!(r.evaluate(&[0, 50, 3], WordOrder::ABCD), "151");
+
+        let r = scaled_by(CustomRepr::U16, ScaleMode::Div, U16, 7);
+        assert_eq!(r.evaluate(&[1000, 8], WordOrder::ABCD), "125");
+        assert_eq!(r.evaluate(&[1000, 0], WordOrder::ABCD), UNINTERPRETABLE);
+
+        let r = scaled_by(CustomRepr::U16, ScaleMode::Div, I16, 7);
+        assert_eq!(r.evaluate(&[100, (-4i16) as u16], WordOrder::ABCD), "-25");
+    }
+
+    #[test]
+    fn a_missing_scale_word_yields_nothing_but_enums_still_match() {
+        let mut r = scaled_by(CustomRepr::U16, ScaleMode::Pow10, ScaleRepr::Sunspec, 110);
+        assert_eq!(r.evaluate(&[5], WordOrder::ABCD), "");
+        r.enum_map = vec![parse_enum("5=five").unwrap()];
+        assert_eq!(r.evaluate(&[5], WordOrder::ABCD), "five");
+    }
+
+    #[test]
+    fn the_scale_register_is_a_source_but_not_a_word_of_the_rule() {
+        let r = scaled_by(CustomRepr::U32, ScaleMode::Pow10, ScaleRepr::Sunspec, 110);
+        assert_eq!(r.word_addresses().collect::<Vec<_>>(), vec![100, 101]);
+        assert_eq!(
+            r.source_addresses().collect::<Vec<_>>(),
+            vec![100, 101, 110]
+        );
+        assert_eq!(r.continuation(110), None);
+
+        let rules = CustomRules::from(BTreeMap::from([((RegisterType::Holding, 100), r)]));
+        assert_eq!(rules.part_of((RegisterType::Holding, 110)), None);
+    }
+
+    #[test]
+    fn ascii_ignores_a_scale() {
+        let mut r = ascii_rule(2);
+        r.address = 100;
+        r.scale = Some(CustomScale {
+            register: 110,
+            mode: ScaleMode::Mul,
+            ..Default::default()
+        });
+        assert_eq!(r.source_addresses().collect::<Vec<_>>(), vec![100, 101]);
+        assert_eq!(r.evaluate(&words(b"ABCD"), WordOrder::ABCD), "ABCD");
+    }
+
+    #[test]
+    fn a_multi_register_scale_decodes_its_own_words_with_the_rule_word_order() {
+        let r = scaled_by(CustomRepr::U16, ScaleMode::Mul, F32, 110);
+        assert_eq!(
+            r.source_addresses().collect::<Vec<_>>(),
+            vec![100, 110, 111]
+        );
+        assert_eq!(r.evaluate(&[100, 0x3FC0, 0], WordOrder::ABCD), "150");
+        assert_eq!(r.evaluate(&[100, 0, 0x3FC0], WordOrder::CDAB), "150");
+        assert_eq!(r.evaluate(&[100, 0x3FC0], WordOrder::ABCD), "");
+
+        let mut own = r;
+        own.word_order = Some(WordOrder::CDAB);
+        assert_eq!(own.evaluate(&[100, 0, 0x3FC0], WordOrder::ABCD), "150");
+    }
+
+    #[test]
+    fn scale_serializes_with_its_type_only_when_not_u16() {
+        let r = scaled_by(CustomRepr::I16, ScaleMode::Pow10, ScaleRepr::Sunspec, 40100);
+        assert_eq!(
+            serde_json::to_string(&r).unwrap(),
+            r#"{"repr":"i16","scale":{"register":40100,"mode":"pow10","repr":"sunspec"}}"#
+        );
+        let r = scaled_by(CustomRepr::U16, ScaleMode::Div, F32, 3);
+        let json = serde_json::to_string(&r).unwrap();
+        assert_eq!(
+            json,
+            r#"{"repr":"u16","scale":{"register":3,"mode":"div","repr":"f32"}}"#
+        );
+        let back: CustomRule = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.scale, r.scale);
+
+        let terse: CustomRule =
+            serde_json::from_str(r#"{"repr":"i16","scale":{"register":40100}}"#).unwrap();
+        assert_eq!(
+            terse.scale,
+            Some(CustomScale {
+                register: 40100,
+                mode: ScaleMode::Pow10,
+                repr: U16,
+            })
+        );
+        assert!(
+            serde_json::from_str::<CustomRule>(
+                r#"{"repr":"u16","scale":{"register":3,"repr":"ascii"}}"#
+            )
+            .is_err()
+        );
     }
 
     #[test]

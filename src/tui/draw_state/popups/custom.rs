@@ -1,4 +1,5 @@
 use crate::app::App;
+use crate::custom::ScaleMode;
 use crate::input::KeyCode;
 use crate::state::{CustomField, CustomParams};
 use crate::tui::draw_state::{edit_value, field_row, marker};
@@ -38,7 +39,12 @@ const fn section(field: CustomField) -> &'static str {
         CustomField::Repr | CustomField::Registers | CustomField::WordOrder | CustomField::Next => {
             "DECODE"
         }
-        CustomField::Ops | CustomField::Enum | CustomField::Bits => "MAP",
+        CustomField::Scale
+        | CustomField::ScaleType
+        | CustomField::ScaleRegister
+        | CustomField::Ops
+        | CustomField::Enum
+        | CustomField::Bits => "MAP",
         CustomField::Decimals | CustomField::Prefix | CustomField::Suffix => "FORMAT",
     }
 }
@@ -239,7 +245,44 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &
                     entry_hints(&mut lines, &c.next_buffer, "address of word 2 (then 3, 4)");
                 }
             }
+            CustomField::Scale => {
+                let value = c.scale_mode.map_or("(none)", ScaleMode::label).to_string();
+                lines.push(field_row(
+                    theme,
+                    "Scale",
+                    12,
+                    edit_value(value, selected, true),
+                    selected,
+                ));
+            }
+            CustomField::ScaleType => {
+                let value = format!(
+                    "{}  ({} reg)",
+                    c.scale_repr.label(),
+                    c.scale_repr.register_count()
+                );
+                lines.push(field_row(
+                    theme,
+                    "Scale type",
+                    12,
+                    edit_value(value, selected, true),
+                    selected,
+                ));
+            }
+            CustomField::ScaleRegister => {
+                let value = edit_value(c.scale_register.clone(), selected, false);
+                lines.push(field_row(theme, "Scale by", 12, value, selected));
+                if selected {
+                    lines.push(Line::from(Span::styled(
+                        "    address of the scale register",
+                        theme.dim_style(),
+                    )));
+                }
+            }
             CustomField::Ops => {
+                if c.scale_mode.is_some() {
+                    lines.push(Line::default());
+                }
                 let items = c.ops.iter().map(|o| o.display()).collect();
                 list_rows(&mut lines, "Operations", items, "(none)", selected);
                 if selected {

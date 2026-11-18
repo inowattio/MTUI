@@ -200,7 +200,7 @@ impl App {
         for &(kind, addr) in window {
             cells.insert((kind, addr));
             if let Some(rule) = self.custom_rules.get(&(kind, addr)) {
-                for word_address in rule.word_addresses().skip(1) {
+                for word_address in rule.source_addresses().skip(1) {
                     cells.insert((kind, word_address));
                 }
             }
@@ -390,7 +390,7 @@ impl App {
             let Some(rule) = self.custom_rule(cell) else {
                 return Vec::new();
             };
-            return self.combined_history(cell.0, rule.word_addresses(), |regs| {
+            return self.combined_history(cell.0, rule.source_addresses(), |regs| {
                 rule.numeric(regs, order)
             });
         }
