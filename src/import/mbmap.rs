@@ -1,6 +1,7 @@
 use crate::config::Registers;
 use crate::custom::{
-    ASCII_REGISTERS_MAX, BitEntry, CustomOp, CustomRepr, CustomRule, EnumEntry, OpKind,
+    ASCII_REGISTERS_MAX, BitEntry, CustomOp, CustomRepr, CustomRule, CustomScale, EnumEntry,
+    OpKind, ScaleMode, ScaleRepr,
 };
 use crate::modbus::WordOrder;
 use crate::register::{RegisterCell, RegisterType};
@@ -49,7 +50,7 @@ fn parse_integer(text: &str) -> Option<i64> {
     }
 }
 
-#[derive(Clone, Copy, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
 enum Area {
     Holding,
@@ -81,6 +82,7 @@ struct Register {
     bit: Option<Integer>,
     bits: Option<Integer>,
     scale: Option<f64>,
+    scale_factor: Option<String>,
     offset: Option<f64>,
     #[serde(rename = "enum")]
     labels: Option<Value>,
@@ -116,7 +118,34 @@ const fn word_order(byte_swap: bool, word_swap: bool) -> WordOrder {
     }
 }
 
+type Names<'a> = BTreeMap<&'a str, &'a Register>;
+
 impl Register {
+    fn address(&self, base: i64) -> Option<u16> {
+        let address = self.address.value()?.checked_sub(base)?;
+        u16::try_from(address).ok()
+    }
+
+    fn exponent(&self, area: Area, base: i64) -> Option<CustomScale> {
+        if self.area != area || self.bits.is_some() || self.scale_factor.is_some() {
+            return None;
+        }
+        let repr = match self.data_type.as_deref()? {
+            "int16" => ScaleRepr::Sunspec,
+            "uint16" => ScaleRepr::Plain(CustomRepr::U16),
+            "int32" => ScaleRepr::Plain(CustomRepr::I32),
+            "uint32" => ScaleRepr::Plain(CustomRepr::U32),
+            "int64" => ScaleRepr::Plain(CustomRepr::I64),
+            "uint64" => ScaleRepr::Plain(CustomRepr::U64),
+            _ => return None,
+        };
+        Some(CustomScale {
+            register: self.address(base)?,
+            mode: ScaleMode::Pow10,
+            repr,
+        })
+    }
+
     fn unit(&self) -> Option<&str> {
         self.unit.as_deref().filter(|unit| !unit.is_empty())
     }
@@ -159,10 +188,20 @@ impl DeviceMap {
             .collect()
     }
 
-    fn rule(&self, register: &Register, address: u16) -> Option<CustomRule> {
+    fn rule(
+        &self,
+        register: &Register,
+        address: u16,
+        base: i64,
+        names: &Names<'_>,
+    ) -> Option<CustomRule> {
         let repr = repr(register.data_type.as_deref())?;
         let text = repr == CustomRepr::Ascii;
         let registers = if text { Some(register.length()?) } else { None };
+        let scale = match register.scale_factor.as_deref().filter(|_| !text) {
+            Some(name) => Some(names.get(name)?.exponent(register.area, base)?),
+            None => None,
+        };
         let ops = [
             register
                 .scale
@@ -179,6 +218,7 @@ impl DeviceMap {
             address,
             repr,
             registers,
+            scale,
             ops: ops.into_iter().flatten().collect(),
             enum_map: self.enum_map(register),
             suffix: register.unit().map_or_default(|unit| format!(" {unit}")),
@@ -203,13 +243,8 @@ impl Import {
         self.labels.insert(cell, label);
     }
 
-    fn register(&mut self, map: &DeviceMap, base: i64, register: &Register) {
-        let Some(address) = register
-            .address
-            .value()
-            .and_then(|address| address.checked_sub(base))
-            .and_then(|address| u16::try_from(address).ok())
-        else {
+    fn register(&mut self, map: &DeviceMap, base: i64, names: &Names<'_>, register: &Register) {
+        let Some(address) = register.address(base) else {
             return;
         };
         let cell = (register.area.into(), address);
@@ -224,7 +259,7 @@ impl Import {
                     name: register.name.clone(),
                 });
             }
-        } else if let Some(rule) = map.rule(register, address) {
+        } else if let Some(rule) = map.rule(register, address, base, names) {
             self.rules.insert(cell, rule);
         }
     }
@@ -250,13 +285,18 @@ pub fn parse(text: &str) -> Option<Registers> {
         .as_ref()
         .and_then(Integer::value)
         .unwrap_or(0);
-    let mut import = Import::default();
-    for register in map
+    let registers: Vec<Register> = map
         .registers
         .iter()
         .filter_map(|value| Register::deserialize(value).ok())
-    {
-        import.register(&map, base, &register);
+        .collect();
+    let mut names = Names::new();
+    for register in &registers {
+        names.entry(register.name.as_str()).or_insert(register);
+    }
+    let mut import = Import::default();
+    for register in &registers {
+        import.register(&map, base, &names, register);
     }
     let registers = import.into_registers();
     (registers.total() > 0).then_some(registers)
@@ -265,7 +305,8 @@ pub fn parse(text: &str) -> Option<Registers> {
 #[cfg(test)]
 mod tests {
     use super::{parse, unsupported_version};
-    use crate::custom::CustomRepr;
+    use crate::constants::UNINTERPRETABLE;
+    use crate::custom::{CustomRepr, CustomScale, ScaleMode, ScaleRepr};
     use crate::modbus::WordOrder;
     use serde_json::{Value, json};
 
@@ -384,5 +425,74 @@ mod tests {
         assert_eq!(unsupported_version(r#"{"holdings": []}"#), None);
         assert_eq!(unsupported_version(r#"{"mbmap": "next"}"#), None);
         assert_eq!(unsupported_version("mbmap: 3"), None);
+    }
+
+    #[test]
+    fn scale_factors_point_at_the_first_register_with_that_name() {
+        let mut value = map(json!([
+            {"name": "AC power", "area": "holding", "address": 11, "type": "int16", "unit": "W", "scale_factor": "W_SF"},
+            {"name": "W_SF", "area": "holding", "address": 12, "type": "int16"},
+            {"name": "W_SF", "area": "holding", "address": 13, "type": "uint16"},
+            {"name": "Energy", "area": "holding", "address": 21, "type": "uint32", "scale_factor": "E_SF", "scale": 2, "offset": 1},
+            {"name": "E_SF", "area": "holding", "address": 23, "type": "uint32"},
+        ]));
+        value["address_base"] = json!(1);
+        let r = parse(&value.to_string()).unwrap();
+
+        let power = r.holdings[0].custom.as_ref().unwrap();
+        assert_eq!(
+            power.scale,
+            Some(CustomScale {
+                register: 11,
+                mode: ScaleMode::Pow10,
+                repr: ScaleRepr::Sunspec,
+            })
+        );
+        assert_eq!(
+            power.evaluate(&[2345, (-1i16) as u16], WordOrder::ABCD),
+            "234.5 W"
+        );
+        assert_eq!(
+            power.evaluate(&[2345, 0x8000], WordOrder::ABCD),
+            format!("{UNINTERPRETABLE} W")
+        );
+
+        let energy = r.holdings[3].custom.as_ref().unwrap();
+        assert_eq!(
+            energy.scale.map(|scale| (scale.register, scale.repr)),
+            Some((22, ScaleRepr::Plain(CustomRepr::U32)))
+        );
+        assert_eq!(energy.evaluate(&[5, 0, 2, 0], WordOrder::ABCD), "1001");
+    }
+
+    #[test]
+    fn unusable_scale_factors_leave_the_register_label_only() {
+        let r = parse(
+            &map(json!([
+                {"name": "Missing", "area": "holding", "address": 0, "type": "int16", "unit": "W", "scale_factor": "nope"},
+                {"name": "Float", "area": "holding", "address": 1, "type": "int16", "scale_factor": "F_SF"},
+                {"name": "F_SF", "area": "holding", "address": 2, "type": "float32"},
+                {"name": "Field", "area": "holding", "address": 4, "type": "int16", "scale_factor": "B_SF"},
+                {"name": "B_SF", "area": "holding", "address": 5, "type": "uint16", "bit": 0, "bits": 4},
+                {"name": "Chained", "area": "holding", "address": 6, "type": "int16", "scale_factor": "Field"},
+                {"name": "Elsewhere", "area": "holding", "address": 7, "type": "int16", "scale_factor": "I_SF"},
+                {"name": "I_SF", "area": "input", "address": 8, "type": "int16"},
+                {"name": "Text", "area": "holding", "address": 9, "type": "string", "length": 1, "scale_factor": "I_SF"},
+            ]))
+            .to_string(),
+        )
+        .unwrap();
+        let ruled = |address: u16| {
+            r.holdings
+                .iter()
+                .find(|e| e.address == address)
+                .and_then(|e| e.custom.as_ref())
+        };
+        assert_eq!(r.holdings[0].label.as_deref(), Some("Missing [W]"));
+        for address in [0, 1, 4, 6, 7] {
+            assert!(ruled(address).is_none(), "{address}");
+        }
+        let text = ruled(9).unwrap();
+        assert_eq!((text.repr, text.scale), (CustomRepr::Ascii, None));
     }
 }
