@@ -49,7 +49,15 @@ impl App {
 
     pub fn paste_import(&mut self, data: &str) -> bool {
         let Some(ParsedImport { devices, source }) = Self::parse_import(data) else {
-            return false;
+            let Some(version) = mbmap::unsupported_version(data) else {
+                return false;
+            };
+            log::warn!("Paste ignored | .mbmap version {version} is not supported");
+            self.set_read_status(StatusMessage::warn(format!(
+                "Unsupported .mbmap version {version} - only version {} can be imported",
+                mbmap::VERSION
+            )));
+            return true;
         };
         let params = ImportParams {
             source,

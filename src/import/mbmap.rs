@@ -8,6 +8,13 @@ use serde::Deserialize;
 use serde_json::{Map, Value};
 use std::collections::BTreeMap;
 
+pub const VERSION: i64 = 2;
+
+#[derive(Deserialize)]
+struct Header {
+    mbmap: Integer,
+}
+
 #[derive(Deserialize)]
 struct DeviceMap {
     mbmap: Integer,
@@ -228,9 +235,14 @@ impl Import {
     }
 }
 
+pub fn unsupported_version(text: &str) -> Option<i64> {
+    let header: Header = serde_json::from_str(text.trim()).ok()?;
+    header.mbmap.value().filter(|&version| version != VERSION)
+}
+
 pub fn parse(text: &str) -> Option<Registers> {
     let map: DeviceMap = serde_json::from_str(text.trim()).ok()?;
-    if map.mbmap.value()? != 2 {
+    if map.mbmap.value()? != VERSION {
         return None;
     }
     let base = map
@@ -252,7 +264,7 @@ pub fn parse(text: &str) -> Option<Registers> {
 
 #[cfg(test)]
 mod tests {
-    use super::parse;
+    use super::{parse, unsupported_version};
     use crate::custom::CustomRepr;
     use crate::modbus::WordOrder;
     use serde_json::{Value, json};
@@ -359,5 +371,18 @@ mod tests {
         assert!(parse(r#"{"mbmap": 3, "registers": []}"#).is_none());
         assert!(parse(r#"{"holdings": []}"#).is_none());
         assert!(parse(r#"{"mbmap": 2, "registers": []}"#).is_none());
+    }
+
+    #[test]
+    fn reports_only_versions_it_cannot_read() {
+        assert_eq!(
+            unsupported_version(r#"{"mbmap": 3, "registers": []}"#),
+            Some(3)
+        );
+        assert_eq!(unsupported_version(r#"{"mbmap": "0x1"}"#), Some(1));
+        assert_eq!(unsupported_version(&map(json!([])).to_string()), None);
+        assert_eq!(unsupported_version(r#"{"holdings": []}"#), None);
+        assert_eq!(unsupported_version(r#"{"mbmap": "next"}"#), None);
+        assert_eq!(unsupported_version("mbmap: 3"), None);
     }
 }
