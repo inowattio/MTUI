@@ -565,14 +565,8 @@ mod tests {
 
     #[test]
     fn source_rows_fill_the_width_and_right_align_the_count() {
-        let row = source_cells(
-            "SunSpec",
-            "github.com/sunspec/models",
-            "Cached",
-            "114",
-            100,
-        )
-        .concat();
+        let row =
+            source_cells("SunSpec", "github.com/sunspec/models", "Cached", "114", 100).concat();
         assert_eq!(row.chars().count(), 100);
         assert!(row.ends_with(" 114"));
         let narrow = source_cells("x", "y", "Failed to download", "9999999", 20).concat();
