@@ -7,6 +7,7 @@ license = "GPL-2.0-only"
 description = "An extensive Modbus client for your terminal."
 repository = "https://github.com/inowattio/mtui"
 homepage = "https://inowattio.github.io/MTUI/"
+readme = "README.md"
 keywords = ["modbus", "tui", "rtu", "terminal", "client"]
 categories = ["command-line-utilities", "network-programming"]
 default-run = "mtui"
@@ -47,7 +48,6 @@ unused_dependencies = "deny"
 unknown_lints = "deny"
 non_kebab_case_bins = "deny"
 non_kebab_case_features = "deny"
-manual_readme = "deny"
 
 [lints.rust]
 unsafe_code = "forbid"
