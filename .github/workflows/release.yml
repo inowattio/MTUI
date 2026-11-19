@@ -233,9 +233,17 @@ jobs:
         with:
           ref: ${{ env.RELEASE_TAG || github.ref }}
 
+      - name: Set up LXD
+        uses: canonical/setup-lxd@v1
+
+      - name: Install Snapcraft
+        run: sudo snap install snapcraft --classic
+
       - name: Build snap
         id: build
-        uses: snapcore/action-build@v1
+        run: |
+          snapcraft pack
+          echo "snap=$(ls *.snap)" >> "$GITHUB_OUTPUT"
 
       - name: Upload build artifact
         if: env.RELEASE_TAG == ''
@@ -246,12 +254,10 @@ jobs:
 
       - name: Publish to the Snap Store
         if: env.RELEASE_TAG != ''
-        uses: snapcore/action-publish@v1
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
-        with:
-          snap: ${{ steps.build.outputs.snap }}
-          release: stable
+          SNAP_FILE: ${{ steps.build.outputs.snap }}
+        run: snapcraft upload --release=stable "$SNAP_FILE"
 
   crates:
     name: Publish to crates.io
