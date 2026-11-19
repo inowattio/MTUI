@@ -583,7 +583,7 @@ impl LibrarySource {
     pub const fn name(self) -> &'static str {
         match self {
             Self::Mbmap => "mbmap",
-            Self::SunSpec => "SunSpec models",
+            Self::SunSpec => "SunSpec",
             Self::Solarman => "Solarman",
         }
     }
@@ -602,7 +602,7 @@ impl LibrarySource {
                 "Community device register maps, each checked against the size and hash in the library's index."
             }
             Self::SunSpec => {
-                "SunSpec information models. Pick the start address of the model, prefilled from a scan of the connected device."
+                "Information models, pick the start address of the model, prefilled from a scan of the connected device."
             }
             Self::Solarman => "Inverter definitions of the Home Assistant Solarman integration.",
         }
@@ -1684,7 +1684,7 @@ settings_fields! {
     Libraries {
         [
             LibraryMbmap: Toggle => "mbmap", "List the community device maps of github.com/nobrega8/mbmap-library in the Library",
-            LibrarySunSpec: Toggle => "SunSpec models", "List the SunSpec information models of github.com/sunspec/models in the Library",
+            LibrarySunSpec: Toggle => "SunSpec", "List the SunSpec information models of github.com/sunspec/models in the Library",
             LibrarySolarman: Toggle => "Solarman", "List the Solarman inverter definitions of github.com/davidrapan/ha-solarman in the Library",
         ],
         [

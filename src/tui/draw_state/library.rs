@@ -566,7 +566,7 @@ mod tests {
     #[test]
     fn source_rows_fill_the_width_and_right_align_the_count() {
         let row = source_cells(
-            "SunSpec models",
+            "SunSpec",
             "github.com/sunspec/models",
             "Cached",
             "114",
