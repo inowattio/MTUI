@@ -92,5 +92,29 @@ pub fn make_bottom_title(theme: &Theme, app: &App) -> Line<'static> {
                 Hint::key(KeyCode::Esc, "Close"),
             ],
         ),
+        State::Library(l) if l.prompt.is_some() => hints::footer(
+            theme,
+            [
+                Hint::key(KeyCode::Enter, "Import"),
+                Hint::key(KeyCode::Esc, "Cancel"),
+            ],
+        ),
+        State::Library(l) if l.source.is_none() => hints::footer(
+            theme,
+            [
+                Hint::pair(KeyCode::Up, KeyCode::Down, "Select"),
+                Hint::key(KeyCode::Enter, "Open"),
+                Hint::key(KeyCode::Esc, "Close"),
+            ],
+        ),
+        State::Library(_) => hints::footer(
+            theme,
+            [
+                Hint::pair(KeyCode::Up, KeyCode::Down, "Select"),
+                Hint::pair(KeyCode::PageUp, KeyCode::PageDown, "Page"),
+                Hint::key(KeyCode::Enter, "Import"),
+                Hint::key(KeyCode::Esc, "Sources"),
+            ],
+        ),
     }
 }

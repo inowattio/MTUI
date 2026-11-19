@@ -2,7 +2,7 @@ use super::{App, BackgroundTask, LoadConfigTaskResult, save_config};
 use crate::compat;
 use crate::config::{Config, Registers, Startup};
 use crate::constants::message;
-use crate::import::{Device, home_assistant, mbmap};
+use crate::import::{Device, home_assistant, mbmap, solarman};
 use crate::modbus::ModbusDevice;
 use crate::num_ops::wrap_index;
 use crate::state::{
@@ -21,7 +21,7 @@ struct ParsedImport {
 
 impl App {
     fn parse_import(data: &str) -> Option<ParsedImport> {
-        let parsers: [(ImportParser, ImportSource); 3] = [
+        let parsers: [(ImportParser, ImportSource); 4] = [
             (
                 |data| Some(vec![Self::parse_json_import(data)?.into()]),
                 ImportSource::Mtui,
@@ -31,6 +31,7 @@ impl App {
                 ImportSource::Mbmap,
             ),
             (home_assistant::parse, ImportSource::HomeAssistant),
+            (solarman::parse, ImportSource::Solarman),
         ];
         parsers.into_iter().find_map(|(parse, source)| {
             Some(ParsedImport {
@@ -47,18 +48,23 @@ impl App {
         (registers.total() > 0).then_some(registers)
     }
 
-    pub fn paste_import(&mut self, data: &str) -> bool {
+    pub fn import_text(&mut self, data: &str) -> bool {
         let Some(ParsedImport { devices, source }) = Self::parse_import(data) else {
             let Some(version) = mbmap::unsupported_version(data) else {
                 return false;
             };
-            log::warn!("Paste ignored | .mbmap version {version} is not supported");
+            log::warn!("Import ignored | .mbmap version {version} is not supported");
             self.set_read_status(StatusMessage::warn(format!(
                 "Unsupported .mbmap version {version} - only version {} can be imported",
                 mbmap::VERSION
             )));
             return true;
         };
+        self.open_import(devices, source);
+        true
+    }
+
+    pub(super) fn open_import(&mut self, devices: Vec<Device>, source: ImportSource) {
         let params = ImportParams {
             source,
             devices: devices
@@ -75,7 +81,6 @@ impl App {
         };
         self.pending_import = Some(devices.into_iter().map(|device| device.registers).collect());
         self.read_mut().popup = Some(Popup::Import(params));
-        true
     }
 
     pub fn import_move(&mut self, down: bool) {
@@ -117,7 +122,7 @@ impl App {
         self.sync_api_registers();
         self.refresh_dirty();
         self.close_popup();
-        log::info!("Imported {pins} pin(s), {labels} label(s), {rules} rule(s) from clipboard");
+        log::info!("Imported {pins} pin(s), {labels} label(s), {rules} rule(s)");
         self.set_read_status(StatusMessage::ok(format!(
             "Imported {pins} pin(s), {labels} label(s), {rules} rule(s)"
         )));
@@ -231,6 +236,7 @@ impl App {
             State::Read(p) => p,
             State::Settings(s) => &s.previous,
             State::Diff(d) => &d.previous,
+            State::Library(l) => &l.previous,
             State::Logs(_) => return None,
         };
         Some(Startup {
@@ -343,6 +349,7 @@ impl App {
             State::Settings(_) => self.set_settings_status(outcome.into()),
             State::Logs(l) => l.previous.set_status(outcome.into()),
             State::Diff(d) => d.previous.set_status(outcome.into()),
+            State::Library(l) => l.previous.set_status(outcome.into()),
         }
     }
 
@@ -493,7 +500,7 @@ mod tests {
         assert_eq!(payload.rules(), app.custom_rules.len());
 
         let mut other = App::boot(Config::default(), String::new()).await;
-        assert!(other.paste_import(&json));
+        assert!(other.import_text(&json));
         other.apply_import();
         assert_eq!(other.pinned_registers, app.pinned_registers);
         assert_eq!(other.labels, app.labels);

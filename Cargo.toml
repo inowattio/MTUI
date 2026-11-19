@@ -98,6 +98,7 @@ serde_json = "1.0.154"
 chrono = "0.4"
 log = "0.4"
 serde_norway = "0.9.42"
+sha2 = "0.11.1"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 ratatui = { version = "0.30.2", default-features = false, features = ["std"] }
@@ -114,6 +115,7 @@ directories = "6"
 memory-stats = "1"
 surge-ping = "0.9.1"
 if-addrs = "0.15.0"
+reqwest = { version = "0.13.5", default-features = false, features = ["rustls"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 ratzilla = "0.3.1"
@@ -122,6 +124,7 @@ critical-section = { version = "1", features = ["std"] }
 wasm-bindgen-futures = "0.4"
 chrono = { version = "0.4", features = ["wasmbind"] }
 console_error_panic_hook = "0.1"
+reqwest = { version = "0.13.5", default-features = false }
 
 [profile.release]
 lto = "fat"

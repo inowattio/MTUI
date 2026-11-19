@@ -14,6 +14,8 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, params: &Import
         ImportSource::Mtui => " Found importable data:",
         ImportSource::Mbmap => " Found an .mbmap device map:",
         ImportSource::HomeAssistant => " Found a Home Assistant config:",
+        ImportSource::SunSpec => " Found a SunSpec model:",
+        ImportSource::Solarman => " Found a Solarman inverter definition:",
     };
     let mut lines = vec![
         Line::default(),
@@ -86,5 +88,5 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, params: &Import
 
     let content_w = lines.iter().map(Line::width).max().unwrap_or(0) as u16;
     let width = content_w.saturating_add(3).min(area.width);
-    super::render(frame, area, theme, "Paste import", width, lines);
+    super::render(frame, area, theme, "Import", width, lines);
 }
