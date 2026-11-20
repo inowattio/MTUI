@@ -6,5 +6,6 @@ pub const fn make_top_title(state: &State) -> &str {
         State::Settings(_) => "Settings",
         State::Logs(l) => l.mode.title(),
         State::Diff(_) => "Diff",
+        State::Library(_) => "Library",
     }
 }

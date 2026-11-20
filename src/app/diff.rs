@@ -35,7 +35,7 @@ impl App {
     }
 
     pub fn paste_text(&mut self, text: &str) {
-        if self.paste_import(text) {
+        if self.import_text(text) {
             return;
         }
         match self.pasted_dump(text) {

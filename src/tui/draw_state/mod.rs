@@ -1,4 +1,5 @@
 pub mod diff;
+pub mod library;
 pub mod logs;
 pub mod popups;
 pub mod read;

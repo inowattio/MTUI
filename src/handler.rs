@@ -36,6 +36,11 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) {
         return;
     }
 
+    if app.library_view().is_some() {
+        handle_library_view_key(key_event, app);
+        return;
+    }
+
     if let Some(kind) = app.popup_kind() {
         handle_popup_key(kind, key_event, app).await;
         return;
@@ -167,6 +172,7 @@ fn run_action(app: &mut App, action: KeybindAction) {
         Inspect => app.open_inspect(),
         OtherFunctions => app.open_functions(),
         DeviceId => app.open_device_id(),
+        Library => app.open_library(),
         RawRequest => app.open_raw(),
         Graph => app.toggle_graph(),
         Device => app.open_discovery(),
@@ -441,6 +447,12 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
             }
         }
 
+        PopupKind::NoLibraries => match key_event.code {
+            KeyCode::Enter | KeyCode::Esc => app.close_popup(),
+            c if c == kb.settings => app.open_library_settings(),
+            _ => {}
+        },
+
         PopupKind::Import | PopupKind::LoadConfig | PopupKind::Quit => {
             type Action = fn(&mut App);
             let (confirm, cancel): (Action, Action) = match kind {
@@ -475,6 +487,11 @@ pub fn handle_paste(data: String, app: &mut App) {
 
     if app.diff_view().is_some() {
         app.paste_into_diff_view(trimmed);
+        return;
+    }
+
+    if app.library_view().is_some() {
+        app.library_paste(trimmed);
         return;
     }
 
@@ -690,6 +707,22 @@ fn handle_diff_view_key(key_event: KeyEvent, app: &mut App) {
     }
 }
 
+fn handle_library_view_key(key_event: KeyEvent, app: &mut App) {
+    match key_event.code {
+        KeyCode::Esc => app.library_back(),
+        KeyCode::Enter => app.library_commit(),
+        KeyCode::Up => app.library_move(-1),
+        KeyCode::Down => app.library_move(1),
+        KeyCode::PageUp => app.library_page(false),
+        KeyCode::PageDown => app.library_page(true),
+        KeyCode::Home => app.library_move(i32::MIN),
+        KeyCode::End => app.library_move(i32::MAX),
+        KeyCode::Backspace => app.library_backspace(),
+        KeyCode::Char(c) => app.library_input(c),
+        _ => {}
+    }
+}
+
 fn handle_settings_key(key_event: KeyEvent, app: &mut App) {
     dispatch_settings_key(key_event, app);
     if let Some(s) = app.settings_mut() {
@@ -820,6 +853,7 @@ fn handle_settings_field_key(key_event: KeyEvent, app: &mut App) {
             SettingsField::ClearCustom => app.clear_custom(),
             SettingsField::CopyData => app.copy_data_to_clipboard(),
             SettingsField::CopyConfig => app.copy_config_to_clipboard(),
+            SettingsField::ClearLibraryCache => app.clear_library_cache(),
             f if f.is_toggle() || f.is_theme_color() => app.settings_adjust(f, 1),
             SettingsField::Save => app.settings_save(),
             SettingsField::LoadConfig => app.settings_load(),

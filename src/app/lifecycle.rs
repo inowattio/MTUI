@@ -86,6 +86,7 @@ impl App {
             pending_write: None,
             queued_write: None,
             pending_import: None,
+            library: super::library::LibraryState::default(),
             logged_connection: ConnectionStatus::Unknown,
             api_device: Arc::new(Mutex::new(None)),
             api_bound_port: Arc::new(AtomicU16::new(0)),
@@ -271,6 +272,7 @@ impl App {
         self.close_settings();
         self.close_log_view();
         self.close_diff_view();
+        self.close_library_view();
         self.read_mut().popup = Some(Popup::Quit);
     }
 
@@ -721,6 +723,7 @@ impl App {
             State::Settings(s) => &mut s.previous,
             State::Logs(l) => &mut l.previous,
             State::Diff(d) => &mut d.previous,
+            State::Library(l) => &mut l.previous,
         }
     }
 
@@ -774,6 +777,7 @@ impl App {
     }
 
     pub fn complete_background_task(&mut self) {
+        self.poll_library_task();
         #[cfg(not(target_arch = "wasm32"))]
         self.poll_network_scan();
         #[cfg(not(target_arch = "wasm32"))]
@@ -788,6 +792,7 @@ impl App {
             Function(Option<FunctionTaskResult>),
             UnitScan(Option<UnitScanTaskResult>),
             LoadConfig(Option<LoadConfigTaskResult>),
+            SunSpecScan(Option<super::library::SunSpecScan>),
         }
 
         macro_rules! poll_task {
@@ -810,6 +815,7 @@ impl App {
             Some(BackgroundTask::Function(handle)) => poll_task!(handle, Done::Function),
             Some(BackgroundTask::UnitScan(handle)) => poll_task!(handle, Done::UnitScan),
             Some(BackgroundTask::LoadConfig(handle)) => poll_task!(handle, Done::LoadConfig),
+            Some(BackgroundTask::SunSpecScan(handle)) => poll_task!(handle, Done::SunSpecScan),
         };
         self.background_task = None;
 
@@ -820,6 +826,7 @@ impl App {
             Done::Function(result) => self.apply_function_result(result),
             Done::UnitScan(result) => self.apply_unit_scan_result(result),
             Done::LoadConfig(result) => self.apply_load_config_result(result),
+            Done::SunSpecScan(result) => self.apply_sunspec_scan(result),
             Done::Refresh(Some(result)) => self.apply_refresh_result(result),
             Done::Refresh(None) => {
                 let message = "read task stopped unexpectedly".to_string();

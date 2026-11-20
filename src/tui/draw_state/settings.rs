@@ -375,6 +375,17 @@ fn field_value(
         SettingsField::ClearLabels => (format!("{} labels", app.label_count()), None),
         SettingsField::ClearCustom => (format!("{} rules", app.custom_count()), None),
         SettingsField::CopyData => (String::new(), None),
+        SettingsField::LibraryMbmap
+        | SettingsField::LibrarySunSpec
+        | SettingsField::LibrarySolarman => (
+            on_off(
+                field
+                    .library_source()
+                    .is_some_and(|source| device.libraries.enabled(source)),
+            ),
+            None,
+        ),
+        SettingsField::ClearLibraryCache => (String::new(), None),
         SettingsField::CopyConfig => (String::new(), None),
         SettingsField::ShowRuleContinuation => (on_off(device.display.rule_continuation), None),
         SettingsField::ChangedFade => (on_off(device.display.changed_fade), None),

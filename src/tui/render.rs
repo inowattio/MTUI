@@ -56,6 +56,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     let counter = match &app.state {
         State::Logs(l) => Some(draw_state::logs::counter(l, app)),
         State::Diff(d) => Some(draw_state::diff::summary(d)),
+        State::Library(l) => Some(draw_state::library::counter(l, app)),
         _ => None,
     };
     if let Some(counter) = counter {
@@ -141,6 +142,9 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         State::Settings(s) => draw_state::settings::draw(s, app, frame, inner, &theme),
         State::Logs(l) => draw_state::logs::draw(l, app, frame, inner, &theme, &mut layout),
         State::Diff(d) => draw_state::diff::draw(d, app, frame, inner, &theme, &mut layout),
+        State::Library(l) => {
+            draw_state::library::draw(l, app, frame, inner, &theme, &mut layout);
+        }
     }
     app.layout = layout;
 }

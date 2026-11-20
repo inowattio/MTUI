@@ -56,6 +56,10 @@ pub mod message {
     pub const SESSION_CLEARED: &str = "Cleared session read data";
     pub const LOAD_NEEDS_FILE_NAME: &str = "Load failed: enter a file name";
     pub const LOAD_TASK_STOPPED: &str = "Load failed: task stopped unexpectedly";
+    pub const LIBRARY_BAD_START: &str = "Enter a valid start address";
+    pub const LIBRARY_CACHE_CLEARED: &str = "Cleared the library cache";
+    pub const LIBRARY_TASK_STOPPED: &str = "Library request stopped unexpectedly";
+    pub const LIBRARY_MAP_UNREADABLE: &str = "The downloaded map could not be imported";
 }
 
 pub mod keybind {
@@ -78,6 +82,7 @@ pub mod keybind {
     pub const INSPECT: KeyCode = KeyCode::Char('v');
     pub const OTHER_FUNCTIONS: KeyCode = KeyCode::Char('b');
     pub const DEVICE_ID: KeyCode = KeyCode::Char('D');
+    pub const LIBRARY: KeyCode = KeyCode::Char('L');
     pub const RAW_REQUEST: KeyCode = KeyCode::Char('f');
     pub const GRAPH: KeyCode = KeyCode::Char('g');
     pub const DEVICE: KeyCode = KeyCode::Char('n');

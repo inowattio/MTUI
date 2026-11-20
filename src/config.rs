@@ -5,7 +5,7 @@ use crate::custom::{
 use crate::input::KeyCode;
 use crate::modbus::{DeviceConfig, Interface};
 use crate::register::{RegisterCell, RegisterType};
-use crate::state::ReadPanel;
+use crate::state::{LibrarySource, ReadPanel};
 use crate::tui::theme::Theme;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -42,6 +42,7 @@ pub struct Config {
     pub display: DisplayConfig,
     pub cycle_register_types: CycleTypes,
     pub cycle_panels: CyclePanels,
+    pub libraries: LibrariesConfig,
     pub api: ApiConfig,
     pub registers: Registers,
     pub keybinds: Keybinds,
@@ -388,6 +389,7 @@ keybinds! {
     Inspect => inspect : "Inspect register" = INSPECT,
     OtherFunctions => other_functions : "Other functions" = OTHER_FUNCTIONS,
     DeviceId => device_id : "Device identification" = DEVICE_ID,
+    Library => library : "Library" = LIBRARY,
     RawRequest => raw_request : "Raw request" = RAW_REQUEST,
     Graph => graph : "Value graph" = GRAPH,
     Device => device : "Switch device" = DEVICE,
@@ -544,6 +546,49 @@ impl Registers {
             registers.section_mut(kind).push(entry);
         }
         registers
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(default)]
+pub struct LibrariesConfig {
+    pub mbmap: bool,
+    pub sunspec: bool,
+    pub solarman: bool,
+}
+
+impl Default for LibrariesConfig {
+    fn default() -> Self {
+        Self {
+            mbmap: true,
+            sunspec: true,
+            solarman: true,
+        }
+    }
+}
+
+impl LibrariesConfig {
+    pub const fn enabled(&self, source: LibrarySource) -> bool {
+        match source {
+            LibrarySource::Mbmap => self.mbmap,
+            LibrarySource::SunSpec => self.sunspec,
+            LibrarySource::Solarman => self.solarman,
+        }
+    }
+
+    pub const fn toggle(&mut self, source: LibrarySource) {
+        match source {
+            LibrarySource::Mbmap => self.mbmap = !self.mbmap,
+            LibrarySource::SunSpec => self.sunspec = !self.sunspec,
+            LibrarySource::Solarman => self.solarman = !self.solarman,
+        }
+    }
+
+    pub fn sources(&self) -> Vec<LibrarySource> {
+        LibrarySource::ALL
+            .into_iter()
+            .filter(|&source| self.enabled(source))
+            .collect()
     }
 }
 
@@ -944,6 +989,7 @@ impl Default for Config {
             display: DisplayConfig::default(),
             cycle_register_types: CycleTypes::default(),
             cycle_panels: CyclePanels::default(),
+            libraries: LibrariesConfig::default(),
             api: ApiConfig::default(),
             registers: Registers::default(),
             keybinds: Keybinds::default(),
@@ -1095,8 +1141,32 @@ interpretation_columns! {
 
 #[cfg(test)]
 mod tests {
-    use super::{AddressMode, ApiConfig, CONFIG_VERSION, Config};
+    use super::{AddressMode, ApiConfig, CONFIG_VERSION, Config, LibrariesConfig};
+    use crate::state::LibrarySource;
     use std::net::{IpAddr, Ipv4Addr};
+
+    #[test]
+    fn every_library_source_is_on_by_default_and_in_older_configs() {
+        assert_eq!(LibrariesConfig::default().sources(), LibrarySource::ALL);
+        let config: Config = serde_json::from_str(r#"{"name": "old"}"#).expect("config");
+        assert_eq!(config.libraries, LibrariesConfig::default());
+        let partial: Config =
+            serde_json::from_str(r#"{"libraries": {"sunspec": false}}"#).expect("config");
+        assert_eq!(
+            partial.libraries.sources(),
+            [LibrarySource::Mbmap, LibrarySource::Solarman]
+        );
+    }
+
+    #[test]
+    fn library_sources_toggle_one_at_a_time() {
+        let mut libraries = LibrariesConfig::default();
+        libraries.toggle(LibrarySource::Mbmap);
+        assert!(!libraries.enabled(LibrarySource::Mbmap));
+        assert!(libraries.enabled(LibrarySource::SunSpec));
+        libraries.toggle(LibrarySource::Mbmap);
+        assert_eq!(libraries, LibrariesConfig::default());
+    }
 
     #[test]
     fn address_mode_displays_decimal_or_uppercase_hex() {

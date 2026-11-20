@@ -8,6 +8,7 @@ mod help;
 mod import;
 mod inspect;
 mod label;
+mod no_libraries;
 mod raw;
 mod search;
 mod stats;
@@ -65,6 +66,7 @@ pub fn draw_popup(
         Popup::Functions(params) => functions::draw(frame, area, theme, app, params, layout),
         Popup::Raw(params) => raw::draw(frame, area, theme, params),
         Popup::Import(params) => import::draw(frame, area, theme, params),
+        Popup::NoLibraries => no_libraries::draw(frame, area, theme, kb.settings),
         Popup::LoadConfig(_) | Popup::Quit => {
             unsaved::draw(frame, area, theme, matches!(popup, Popup::Quit));
         }

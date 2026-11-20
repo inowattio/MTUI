@@ -18,6 +18,7 @@ Play the GIF to see a quick tour, or better yet, try it in your browser (mock de
 - HTTP API (`POST /read`, `POST /write`, `POST /raw`, `GET /health`, see [openapi.yaml](./openapi.yaml), can run standalone with `--headless`)
 - MCP server on the same port at `/mcp` (Streamable HTTP, enable it under Settings / API), exposing `device_status`, `list_registers` (labels and custom rules), `read_registers` (optionally decoding custom rules), `write_registers` and `raw_function` tools under the same API settings, e.g. `claude mcp add --transport http mtui http://localhost:26127/mcp`
 - Dump read data to a file, copy addresses to the clipboard, paste pins/labels/custom rules to import them ([Home Assistant Modbus](https://www.home-assistant.io/integrations/modbus/) YAML config or [`.mbmap.json`](https://github.com/nobrega8/mbmap-library) are accepted too)
+- Browse device register libraries and import from them straight from the app: the [mbmap-library](https://github.com/nobrega8/mbmap-library), [SunSpec models](https://github.com/sunspec/models) and the [Solarman inverter definitions](https://github.com/davidrapan/ha-solarman).
 - Snapshot diffing: paste a dump to compare it with the current reads
 - Configurable via files, a user-located `config.json` file will be created on the first startup (`~/.config/mtui/` on Linux, `%APPDATA%\inowattio\mtui\config\` on Windows, `~/Library/Application Support/io.inowattio.mtui/` on macOS), overridable with `--config <path>` and can also be modified in-app, the config can also be switched on the fly.
 

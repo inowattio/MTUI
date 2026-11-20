@@ -101,6 +101,7 @@ enum BackgroundTask {
     Function(TaskHandle<FunctionTaskResult>),
     UnitScan(TaskHandle<UnitScanTaskResult>),
     LoadConfig(TaskHandle<LoadConfigTaskResult>),
+    SunSpecScan(TaskHandle<library::SunSpecScan>),
 }
 
 #[derive(Debug)]
@@ -553,6 +554,7 @@ pub struct App {
     pending_write: Option<PendingWrite>,
     queued_write: Option<QueuedWrite>,
     pending_import: Option<Vec<Registers>>,
+    library: library::LibraryState,
     logged_connection: ConnectionStatus,
     api_device: ApiDevice,
     api_bound_port: BoundPort,
@@ -1076,6 +1078,7 @@ mod dump;
 mod functions;
 mod help;
 mod label;
+mod library;
 mod lifecycle;
 mod logs;
 mod panel;

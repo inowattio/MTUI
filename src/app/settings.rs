@@ -229,6 +229,13 @@ impl App {
                     self.config.cycle_register_types.toggle(rt);
                 }
             }
+            SettingsField::LibraryMbmap
+            | SettingsField::LibrarySunSpec
+            | SettingsField::LibrarySolarman => {
+                if let Some(source) = field.library_source() {
+                    self.config.libraries.toggle(source);
+                }
+            }
             SettingsField::CyclePinned
             | SettingsField::CycleLabeled
             | SettingsField::CycleCustom
