@@ -2,7 +2,7 @@ use super::{App, BackgroundTask, LoadConfigTaskResult, save_config};
 use crate::compat;
 use crate::config::{Config, Registers, Startup};
 use crate::constants::message;
-use crate::import::mbmap::{self, Firmware};
+use crate::import::mbmap;
 use crate::import::{Device, home_assistant, solarman};
 use crate::modbus::ModbusDevice;
 use crate::num_ops::wrap_index;
@@ -77,11 +77,8 @@ impl App {
             )));
             return true;
         };
-        let firmware = (source == ImportSource::Mbmap)
-            .then(|| mbmap::firmware(data))
-            .flatten()
-            .map(|known| (data.to_string(), known));
-        self.open_import(devices, source, firmware);
+        let map = (source == ImportSource::Mbmap).then_some(data);
+        self.open_import(devices, source, map);
         true
     }
 
@@ -89,9 +86,9 @@ impl App {
         &mut self,
         devices: Vec<Device>,
         source: ImportSource,
-        firmware: Option<(String, Firmware)>,
+        map: Option<&str>,
     ) {
-        let (map, firmware) = firmware.unzip();
+        let firmware = map.and_then(mbmap::firmware);
         let params = ImportParams {
             source,
             devices: devices.iter().map(summary).collect(),
@@ -100,10 +97,13 @@ impl App {
                 text: String::new(),
                 known,
             }),
+            revision: map.and_then(mbmap::revision),
         };
         self.pending_import = Some(PendingImport {
             devices: devices.into_iter().map(|device| device.registers).collect(),
-            map,
+            map: map
+                .filter(|_| params.firmware.is_some())
+                .map(str::to_string),
         });
         self.read_mut().popup = Some(Popup::Import(params));
     }

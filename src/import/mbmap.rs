@@ -19,6 +19,37 @@ struct Header {
 }
 
 #[derive(Deserialize)]
+struct Edition {
+    revision: Option<Integer>,
+    revised: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Revision {
+    number: Option<i64>,
+    date: Option<String>,
+}
+
+fn is_date(text: &str) -> bool {
+    text.len() == 10
+        && text.bytes().enumerate().all(|(i, b)| match i {
+            4 | 7 => b == b'-',
+            _ => b.is_ascii_digit(),
+        })
+}
+
+impl fmt::Display for Revision {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match (self.number, &self.date) {
+            (Some(number), Some(date)) => write!(f, "revision {number}, revised {date}"),
+            (Some(number), None) => write!(f, "revision {number}"),
+            (None, Some(date)) => write!(f, "revised {date}"),
+            (None, None) => Ok(()),
+        }
+    }
+}
+
+#[derive(Deserialize)]
 struct DeviceMap {
     mbmap: Integer,
     address_base: Option<Integer>,
@@ -372,6 +403,19 @@ pub fn unsupported_version(text: &str) -> Option<i64> {
     header.mbmap.value().filter(|&version| version != VERSION)
 }
 
+pub fn revision(text: &str) -> Option<Revision> {
+    let edition: Edition = serde_json::from_str(text.trim()).ok()?;
+    let revision = Revision {
+        number: edition
+            .revision
+            .as_ref()
+            .and_then(Integer::value)
+            .filter(|&number| number >= 1),
+        date: edition.revised.filter(|date| is_date(date)),
+    };
+    (revision.number.is_some() || revision.date.is_some()).then_some(revision)
+}
+
 pub fn firmware(text: &str) -> Option<Firmware> {
     let map: DeviceMap = serde_json::from_str(text.trim()).ok()?;
     let mut ranges: Vec<(FirmwareRange, usize)> = Vec::new();
@@ -432,7 +476,8 @@ pub fn parse_for_firmware(text: &str, firmware: &str) -> Option<Registers> {
 #[cfg(test)]
 mod tests {
     use super::{
-        FirmwareRange, firmware, parse, parse_for_firmware, unsupported_version, version, within,
+        FirmwareRange, firmware, parse, parse_for_firmware, revision, unsupported_version, version,
+        within,
     };
     use crate::constants::UNINTERPRETABLE;
     use crate::custom::{CustomRepr, CustomScale, ScaleMode, ScaleRepr};
@@ -745,5 +790,30 @@ mod tests {
         assert!(range.applies("1.5") && range.applies("2") && !range.applies("1.4.9"));
         assert!(FirmwareRange::new(Some("x"), Some("")).is_none());
         assert!(FirmwareRange::new(None, None).is_none());
+    }
+
+    #[test]
+    fn revision_shows_the_number_and_date_that_are_well_formed() {
+        let shown = |extra: Value| {
+            let mut value = map(json!([]));
+            for (key, item) in extra.as_object().unwrap() {
+                value[key] = item.clone();
+            }
+            revision(&value.to_string()).map(|r| r.to_string())
+        };
+        assert_eq!(
+            shown(json!({"revision": 3, "revised": "2026-11-14"})).as_deref(),
+            Some("revision 3, revised 2026-11-14")
+        );
+        assert_eq!(
+            shown(json!({"revision": "0x2"})).as_deref(),
+            Some("revision 2")
+        );
+        assert_eq!(
+            shown(json!({"revision": 0, "revised": "2026-02-01"})).as_deref(),
+            Some("revised 2026-02-01")
+        );
+        assert_eq!(shown(json!({"revised": "14/11/2026"})), None);
+        assert_eq!(shown(json!({})), None);
     }
 }

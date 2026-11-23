@@ -20,8 +20,14 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, params: &Import
     let mut lines = vec![
         Line::default(),
         Line::from(Span::styled(found, theme.base())),
-        Line::default(),
     ];
+    if let Some(revision) = &params.revision {
+        lines.push(Line::from(Span::styled(
+            format!("   Map {revision}"),
+            theme.dim_style(),
+        )));
+    }
+    lines.push(Line::default());
 
     if let Some(firmware) = &params.firmware {
         push_firmware(&mut lines, theme, firmware);
