@@ -4,6 +4,7 @@ use crate::config::Column;
 use crate::constants::{DEFAULT_SCAN_PREFIX, SCAN_PREFIX_RANGE};
 use crate::custom::{BitEntry, CustomOp, CustomRepr, EnumEntry, ScaleMode, ScaleRepr};
 use crate::functions::DiagnosticSub;
+use crate::import::mbmap::Firmware;
 use crate::modbus::{
     DataBits, DeviceConfig, DeviceIdAccess, Interface, InterfaceSerialParams, InterfaceTcpParams,
     Parity, StopBits, WordOrder,
@@ -558,10 +559,17 @@ pub struct ImportDevice {
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
+pub struct FirmwareInput {
+    pub text: String,
+    pub known: Firmware,
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct ImportParams {
     pub source: ImportSource,
     pub devices: Vec<ImportDevice>,
     pub selected: u16,
+    pub firmware: Option<FirmwareInput>,
 }
 
 impl ImportParams {

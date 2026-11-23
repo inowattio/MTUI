@@ -2,12 +2,13 @@ use super::{App, BackgroundTask, LoadConfigTaskResult, save_config};
 use crate::compat;
 use crate::config::{Config, Registers, Startup};
 use crate::constants::message;
-use crate::import::{Device, home_assistant, mbmap, solarman};
+use crate::import::mbmap::{self, Firmware};
+use crate::import::{Device, home_assistant, solarman};
 use crate::modbus::ModbusDevice;
 use crate::num_ops::wrap_index;
 use crate::state::{
-    ConnectionStatus, ImportDevice, ImportParams, ImportSource, Outcome, Popup, State,
-    StatusMessage,
+    ConnectionStatus, FirmwareInput, ImportDevice, ImportParams, ImportSource, Outcome, Popup,
+    State, StatusMessage,
 };
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -17,6 +18,22 @@ type ImportParser = fn(&str) -> Option<Vec<Device>>;
 struct ParsedImport {
     devices: Vec<Device>,
     source: ImportSource,
+}
+
+#[derive(Debug)]
+pub(super) struct PendingImport {
+    devices: Vec<Registers>,
+    map: Option<String>,
+}
+
+fn summary(device: &Device) -> ImportDevice {
+    ImportDevice {
+        name: device.name.clone(),
+        pins: device.registers.pins(),
+        labels: device.registers.labels(),
+        rules: device.registers.rules(),
+        replaced: device.replaced,
+    }
 }
 
 impl App {
@@ -60,27 +77,81 @@ impl App {
             )));
             return true;
         };
-        self.open_import(devices, source);
+        let firmware = (source == ImportSource::Mbmap)
+            .then(|| mbmap::firmware(data))
+            .flatten()
+            .map(|known| (data.to_string(), known));
+        self.open_import(devices, source, firmware);
         true
     }
 
-    pub(super) fn open_import(&mut self, devices: Vec<Device>, source: ImportSource) {
+    pub(super) fn open_import(
+        &mut self,
+        devices: Vec<Device>,
+        source: ImportSource,
+        firmware: Option<(String, Firmware)>,
+    ) {
+        let (map, firmware) = firmware.unzip();
         let params = ImportParams {
             source,
-            devices: devices
-                .iter()
-                .map(|device| ImportDevice {
-                    name: device.name.clone(),
-                    pins: device.registers.pins(),
-                    labels: device.registers.labels(),
-                    rules: device.registers.rules(),
-                    replaced: device.replaced,
-                })
-                .collect(),
+            devices: devices.iter().map(summary).collect(),
             selected: 0,
+            firmware: firmware.map(|known| FirmwareInput {
+                text: String::new(),
+                known,
+            }),
         };
-        self.pending_import = Some(devices.into_iter().map(|device| device.registers).collect());
+        self.pending_import = Some(PendingImport {
+            devices: devices.into_iter().map(|device| device.registers).collect(),
+            map,
+        });
         self.read_mut().popup = Some(Popup::Import(params));
+    }
+
+    pub fn editing_import_firmware(&self) -> bool {
+        self.popup_as::<ImportParams>()
+            .is_some_and(|p| p.firmware.is_some())
+    }
+
+    pub fn import_firmware_input(&mut self, c: char) {
+        if let Some(firmware) = self
+            .popup_as_mut::<ImportParams>()
+            .and_then(|p| p.firmware.as_mut())
+        {
+            firmware.text.push(c);
+            self.refilter_import();
+        }
+    }
+
+    pub fn import_firmware_backspace(&mut self) {
+        if let Some(firmware) = self
+            .popup_as_mut::<ImportParams>()
+            .and_then(|p| p.firmware.as_mut())
+        {
+            firmware.text.pop();
+            self.refilter_import();
+        }
+    }
+
+    fn refilter_import(&mut self) {
+        let Some(firmware) = self
+            .popup_as::<ImportParams>()
+            .and_then(|p| p.firmware.as_ref())
+            .map(|firmware| firmware.text.clone())
+        else {
+            return;
+        };
+        let Some(map) = self.pending_import.as_ref().and_then(|p| p.map.as_deref()) else {
+            return;
+        };
+        let device = Device::from(mbmap::parse_for_firmware(map, &firmware).unwrap_or_default());
+        if let Some(p) = self.popup_as_mut::<ImportParams>() {
+            p.devices = vec![summary(&device)];
+            p.selected = 0;
+        }
+        if let Some(pending) = &mut self.pending_import {
+            pending.devices = vec![device.registers];
+        }
     }
 
     pub fn import_move(&mut self, down: bool) {
@@ -101,7 +172,7 @@ impl App {
         let Some(payload) = self
             .pending_import
             .take()
-            .and_then(|devices| devices.into_iter().nth(selected))
+            .and_then(|pending| pending.devices.into_iter().nth(selected))
         else {
             self.close_popup();
             return;

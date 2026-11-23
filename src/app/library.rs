@@ -774,7 +774,7 @@ impl App {
         match devices {
             Some((devices, import_source)) => {
                 self.close_library_view();
-                self.open_import(devices, import_source);
+                self.open_import(devices, import_source, None);
             }
             None => {
                 log::error!("Downloaded {} file could not be imported", source.name());

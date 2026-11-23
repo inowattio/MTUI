@@ -7,7 +7,9 @@ use crate::modbus::WordOrder;
 use crate::register::{RegisterCell, RegisterType};
 use serde::Deserialize;
 use serde_json::{Map, Value};
+use std::cmp::Ordering;
 use std::collections::BTreeMap;
+use std::fmt;
 
 pub const VERSION: i64 = 2;
 
@@ -25,6 +27,8 @@ struct DeviceMap {
     #[serde(default)]
     enums: Map<String, Value>,
     registers: Vec<Value>,
+    firmware_min: Option<String>,
+    firmware_max: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -88,6 +92,91 @@ struct Register {
     labels: Option<Value>,
     byte_order: Option<String>,
     word_order: Option<String>,
+    firmware_min: Option<String>,
+    firmware_max: Option<String>,
+}
+
+fn version(text: &str) -> Option<Vec<u64>> {
+    text.split('.')
+        .map(|part| {
+            if part.is_empty() || !part.bytes().all(|b| b.is_ascii_digit()) {
+                return None;
+            }
+            part.parse().ok()
+        })
+        .collect()
+}
+
+fn against(firmware: &[u64], bound: &[u64]) -> Ordering {
+    bound
+        .iter()
+        .enumerate()
+        .map(|(i, bound)| firmware.get(i).unwrap_or(&0).cmp(bound))
+        .find(|order| order.is_ne())
+        .unwrap_or(Ordering::Equal)
+}
+
+fn within(firmware: &[u64], bound: Option<&str>, keep: fn(Ordering) -> bool) -> bool {
+    bound
+        .and_then(version)
+        .is_none_or(|bound| keep(against(firmware, &bound)))
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FirmwareRange {
+    min: Option<String>,
+    max: Option<String>,
+}
+
+impl FirmwareRange {
+    fn new(min: Option<&str>, max: Option<&str>) -> Option<Self> {
+        let valid = |bound: Option<&str>| {
+            bound
+                .filter(|bound| version(bound).is_some())
+                .map(str::to_string)
+        };
+        let range = Self {
+            min: valid(min),
+            max: valid(max),
+        };
+        (range.min.is_some() || range.max.is_some()).then_some(range)
+    }
+
+    fn contains(&self, firmware: &[u64]) -> bool {
+        within(firmware, self.min.as_deref(), Ordering::is_ge)
+            && within(firmware, self.max.as_deref(), Ordering::is_le)
+    }
+
+    pub fn applies(&self, firmware: &str) -> bool {
+        version(firmware).is_none_or(|firmware| self.contains(&firmware))
+    }
+
+    fn key(&self) -> (Vec<u64>, Vec<u64>) {
+        let bound =
+            |bound: Option<&str>, open: u64| bound.and_then(version).unwrap_or_else(|| vec![open]);
+        (
+            bound(self.min.as_deref(), 0),
+            bound(self.max.as_deref(), u64::MAX),
+        )
+    }
+}
+
+impl fmt::Display for FirmwareRange {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match (&self.min, &self.max) {
+            (Some(min), Some(max)) if min == max => write!(f, "{min} only"),
+            (Some(min), Some(max)) => write!(f, "{min} to {max}"),
+            (Some(min), None) => write!(f, "{min} and later"),
+            (None, Some(max)) => write!(f, "up to {max}"),
+            (None, None) => write!(f, "any"),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Firmware {
+    pub map: Option<FirmwareRange>,
+    pub ranges: Vec<(FirmwareRange, usize)>,
 }
 
 fn repr(data_type: Option<&str>) -> Option<CustomRepr> {
@@ -121,6 +210,14 @@ const fn word_order(byte_swap: bool, word_swap: bool) -> WordOrder {
 type Names<'a> = BTreeMap<&'a str, &'a Register>;
 
 impl Register {
+    fn firmware(&self) -> Option<FirmwareRange> {
+        FirmwareRange::new(self.firmware_min.as_deref(), self.firmware_max.as_deref())
+    }
+
+    fn applies_to(&self, firmware: Option<&[u64]>) -> bool {
+        firmware.is_none_or(|firmware| self.firmware().is_none_or(|range| range.contains(firmware)))
+    }
+
     fn address(&self, base: i64) -> Option<u16> {
         let address = self.address.value()?.checked_sub(base)?;
         u16::try_from(address).ok()
@@ -275,7 +372,36 @@ pub fn unsupported_version(text: &str) -> Option<i64> {
     header.mbmap.value().filter(|&version| version != VERSION)
 }
 
+pub fn firmware(text: &str) -> Option<Firmware> {
+    let map: DeviceMap = serde_json::from_str(text.trim()).ok()?;
+    let mut ranges: Vec<(FirmwareRange, usize)> = Vec::new();
+    for range in map
+        .registers
+        .iter()
+        .filter_map(|value| Register::deserialize(value).ok())
+        .filter_map(|register| register.firmware())
+    {
+        match ranges.iter_mut().find(|(known, _)| *known == range) {
+            Some((_, count)) => *count += 1,
+            None => ranges.push((range, 1)),
+        }
+    }
+    if ranges.is_empty() {
+        return None;
+    }
+    ranges.sort_by_key(|(range, _)| range.key());
+    Some(Firmware {
+        map: FirmwareRange::new(map.firmware_min.as_deref(), map.firmware_max.as_deref()),
+        ranges,
+    })
+}
+
 pub fn parse(text: &str) -> Option<Registers> {
+    parse_for_firmware(text, "")
+}
+
+pub fn parse_for_firmware(text: &str, firmware: &str) -> Option<Registers> {
+    let firmware = version(firmware);
     let map: DeviceMap = serde_json::from_str(text.trim()).ok()?;
     if map.mbmap.value()? != VERSION {
         return None;
@@ -289,6 +415,7 @@ pub fn parse(text: &str) -> Option<Registers> {
         .registers
         .iter()
         .filter_map(|value| Register::deserialize(value).ok())
+        .filter(|register| register.applies_to(firmware.as_deref()))
         .collect();
     let mut names = Names::new();
     for register in &registers {
@@ -304,11 +431,14 @@ pub fn parse(text: &str) -> Option<Registers> {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse, unsupported_version};
+    use super::{
+        FirmwareRange, firmware, parse, parse_for_firmware, unsupported_version, version, within,
+    };
     use crate::constants::UNINTERPRETABLE;
     use crate::custom::{CustomRepr, CustomScale, ScaleMode, ScaleRepr};
     use crate::modbus::WordOrder;
     use serde_json::{Value, json};
+    use std::cmp::Ordering;
 
     fn map(registers: Value) -> Value {
         json!({"mbmap": 2, "vendor": "V", "model": "M", "word_order": "little", "registers": registers})
@@ -494,5 +624,126 @@ mod tests {
         }
         let text = ruled(9).unwrap();
         assert_eq!((text.repr, text.scale), (CustomRepr::Ascii, None));
+    }
+
+    #[test]
+    fn versions_are_dotted_whole_numbers() {
+        assert_eq!(version("1.02.7"), Some(vec![1, 2, 7]));
+        assert_eq!(version("2"), Some(vec![2]));
+        for text in ["", "2.", ".1", "1..2", "v2", "2.1b", "-1", " 2"] {
+            assert_eq!(version(text), None, "{text:?}");
+        }
+    }
+
+    #[test]
+    fn bounds_cover_every_version_that_starts_with_them() {
+        let min = |firmware: &str, bound: &str| {
+            within(&version(firmware).unwrap(), Some(bound), Ordering::is_ge)
+        };
+        let max = |firmware: &str, bound: &str| {
+            within(&version(firmware).unwrap(), Some(bound), Ordering::is_le)
+        };
+        assert!(min("2.1", "2.1") && min("2.1.4", "2.1") && min("3.0", "2.1"));
+        assert!(!min("2.0.9", "2.1") && !min("2", "2.1"));
+        assert!(min("1.10", "1.9") && min("1.2", "1.02"));
+        assert!(max("2.9.9", "2") && max("2.3.7", "2.3") && max("2", "2.3"));
+        assert!(!max("3.0", "2") && !max("2.4", "2.3"));
+        assert!(within(&[1], Some("not a version"), Ordering::is_ge));
+        assert!(within(&[1], None, Ordering::is_le));
+    }
+
+    #[test]
+    fn a_firmware_version_skips_the_registers_of_other_firmware() {
+        let text = map(json!([
+            {"name": "Voltage", "area": "input", "address": 10, "type": "uint16"},
+            {"name": "Energy", "area": "input", "address": 20, "type": "uint32", "firmware_max": "2.0"},
+            {"name": "Energy", "area": "input", "address": 40, "type": "uint64", "firmware_min": "2.1"},
+            {"name": "Power factor", "area": "input", "address": 30, "type": "int16", "firmware_min": "2.1"},
+        ]))
+        .to_string();
+        let addresses = |firmware: &str| {
+            parse_for_firmware(&text, firmware)
+                .unwrap()
+                .inputs
+                .iter()
+                .map(|e| e.address)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(addresses("1.9"), [10, 20]);
+        assert_eq!(addresses("2.0.5"), [10, 20]);
+        assert_eq!(addresses("2.1"), [10, 30, 40]);
+        assert_eq!(addresses(""), [10, 20, 30, 40]);
+        assert_eq!(addresses("2."), [10, 20, 30, 40]);
+        assert!(firmware(&text).is_some());
+        assert!(
+            firmware(
+                &map(json!([{"name": "A", "area": "input", "address": 0, "type": "uint16"}]))
+                    .to_string()
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn scale_factor_names_resolve_among_the_registers_of_the_firmware() {
+        let text = map(json!([
+            {"name": "Power", "area": "holding", "address": 0, "type": "int16", "scale_factor": "SF"},
+            {"name": "SF", "area": "holding", "address": 1, "type": "int16", "firmware_max": "1"},
+            {"name": "SF", "area": "holding", "address": 2, "type": "int16", "firmware_min": "2"},
+        ]))
+        .to_string();
+        let scale_register = |firmware: &str| {
+            parse_for_firmware(&text, firmware).unwrap().holdings[0]
+                .custom
+                .as_ref()
+                .and_then(|rule| rule.scale)
+                .map(|scale| scale.register)
+        };
+        assert_eq!(scale_register("1.4"), Some(1));
+        assert_eq!(scale_register("2.0"), Some(2));
+        assert_eq!(scale_register(""), Some(1));
+    }
+
+    #[test]
+    fn firmware_lists_each_range_once_in_version_order_with_its_register_count() {
+        let mut value = map(json!([
+            {"name": "A", "area": "input", "address": 0, "type": "uint16", "firmware_min": "1.10"},
+            {"name": "B", "area": "input", "address": 1, "type": "uint16", "firmware_min": "1.9"},
+            {"name": "C", "area": "input", "address": 2, "type": "uint16", "firmware_min": "1.10"},
+            {"name": "D", "area": "input", "address": 3, "type": "uint16", "firmware_max": "1"},
+            {"name": "E", "area": "input", "address": 4, "type": "uint16", "firmware_min": "2", "firmware_max": "2"},
+            {"name": "F", "area": "input", "address": 5, "type": "uint16", "firmware_min": "v3"},
+            {"name": "G", "area": "input", "address": 6, "type": "uint16"},
+        ]));
+        value["firmware_min"] = json!("1");
+        value["firmware_max"] = json!("2");
+        let found = firmware(&value.to_string()).unwrap();
+
+        let listed: Vec<(String, usize)> = found
+            .ranges
+            .iter()
+            .map(|(range, count)| (range.to_string(), *count))
+            .collect();
+        assert_eq!(
+            listed,
+            [
+                ("up to 1".to_string(), 1),
+                ("1.9 and later".to_string(), 1),
+                ("1.10 and later".to_string(), 2),
+                ("2 only".to_string(), 1),
+            ]
+        );
+        let map_range = found.map.unwrap();
+        assert_eq!(map_range.to_string(), "1 to 2");
+        assert!(map_range.applies("2.7") && map_range.applies("") && map_range.applies("2."));
+        assert!(!map_range.applies("3.0") && !map_range.applies("0.9"));
+    }
+
+    #[test]
+    fn a_range_applies_to_the_versions_it_covers() {
+        let range = FirmwareRange::new(Some("1.5"), None).unwrap();
+        assert!(range.applies("1.5") && range.applies("2") && !range.applies("1.4.9"));
+        assert!(FirmwareRange::new(Some("x"), Some("")).is_none());
+        assert!(FirmwareRange::new(None, None).is_none());
     }
 }

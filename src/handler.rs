@@ -464,6 +464,16 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
                 KeyCode::Enter => confirm(app),
                 KeyCode::Up if kind == PopupKind::Import => app.import_move(false),
                 KeyCode::Down if kind == PopupKind::Import => app.import_move(true),
+                KeyCode::Char(c)
+                    if kind == PopupKind::Import && (c.is_ascii_digit() || c == '.') =>
+                {
+                    app.import_firmware_input(c);
+                }
+                KeyCode::Backspace
+                    if kind == PopupKind::Import && app.editing_import_firmware() =>
+                {
+                    app.import_firmware_backspace();
+                }
                 KeyCode::Char('s') if kind == PopupKind::Quit => app.save_and_quit(),
                 KeyCode::Char('s') if kind == PopupKind::LoadConfig => {
                     app.save_and_load_config();

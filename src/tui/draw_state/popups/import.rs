@@ -1,5 +1,5 @@
 use crate::input::KeyCode;
-use crate::state::{ImportParams, ImportSource};
+use crate::state::{FirmwareInput, ImportParams, ImportSource};
 use crate::tui::hints::Hint;
 use crate::tui::theme::Theme;
 use ratatui::Frame;
@@ -22,6 +22,10 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, params: &Import
         Line::from(Span::styled(found, theme.base())),
         Line::default(),
     ];
+
+    if let Some(firmware) = &params.firmware {
+        push_firmware(&mut lines, theme, firmware);
+    }
 
     let picking = params.devices.len() > 1;
     if picking {
@@ -78,7 +82,11 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, params: &Import
         theme.dim_style(),
     )));
     let import = Hint::key(KeyCode::Enter, "Import");
-    let cancel = Hint::pair(KeyCode::Backspace, KeyCode::Esc, "Cancel");
+    let cancel = if params.firmware.is_some() {
+        Hint::key(KeyCode::Esc, "Cancel")
+    } else {
+        Hint::pair(KeyCode::Backspace, KeyCode::Esc, "Cancel")
+    };
     if picking {
         let device = Hint::pair(KeyCode::Up, KeyCode::Down, "Device");
         super::push_footer(&mut lines, theme, [device, import, cancel]);
@@ -89,4 +97,69 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, params: &Import
     let content_w = lines.iter().map(Line::width).max().unwrap_or(0) as u16;
     let width = content_w.saturating_add(3).min(area.width);
     super::render(frame, area, theme, "Import", width, lines);
+}
+
+const RANGES_SHOWN: usize = 8;
+
+fn push_firmware(lines: &mut Vec<Line<'static>>, theme: &Theme, firmware: &FirmwareInput) {
+    let FirmwareInput { text, known } = firmware;
+    let (shown, style) = if text.is_empty() {
+        ("any".to_string(), theme.dim_style())
+    } else {
+        (text.clone(), theme.base())
+    };
+    lines.push(Line::from(vec![
+        Span::styled("   Firmware: ", theme.dim_style()),
+        Span::styled(shown, style),
+        super::cursor_span(theme),
+    ]));
+    if let Some(map) = &known.map {
+        let (note, style) = if map.applies(text) {
+            (
+                format!("   This map is for firmware {map}"),
+                theme.dim_style(),
+            )
+        } else {
+            (
+                format!("   {text} is outside this map's firmware ({map})"),
+                theme.warn_style(),
+            )
+        };
+        lines.push(Line::from(Span::styled(note, style)));
+    }
+    lines.push(Line::default());
+    lines.push(Line::from(Span::styled(
+        "   Registers by firmware (dimmed are skipped):",
+        theme.dim_style(),
+    )));
+    let width = known
+        .ranges
+        .iter()
+        .take(RANGES_SHOWN)
+        .map(|(range, _)| range.to_string().chars().count())
+        .max()
+        .unwrap_or(0);
+    for (range, count) in known.ranges.iter().take(RANGES_SHOWN) {
+        let plural = if *count == 1 { "" } else { "s" };
+        let style = if range.applies(text) {
+            theme.base()
+        } else {
+            theme.dim_style()
+        };
+        lines.push(Line::from(Span::styled(
+            format!(
+                "     {:<width$}   {count} register{plural}",
+                range.to_string()
+            ),
+            style,
+        )));
+    }
+    let hidden = known.ranges.len().saturating_sub(RANGES_SHOWN);
+    if hidden > 0 {
+        lines.push(Line::from(Span::styled(
+            format!("     and {hidden} more"),
+            theme.dim_style(),
+        )));
+    }
+    lines.push(Line::default());
 }

@@ -1,6 +1,6 @@
 use crate::compat;
 use crate::compat::{Instant, TaskHandle};
-use crate::config::{AddressMode, Config, Registers};
+use crate::config::{AddressMode, Config};
 use crate::constants::CONFIG_PATH;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::constants::SCAN_PREFIX_RANGE;
@@ -553,7 +553,7 @@ pub struct App {
     custom_rules: CustomRules,
     pending_write: Option<PendingWrite>,
     queued_write: Option<QueuedWrite>,
-    pending_import: Option<Vec<Registers>>,
+    pending_import: Option<config_io::PendingImport>,
     library: library::LibraryState,
     logged_connection: ConnectionStatus,
     api_device: ApiDevice,
