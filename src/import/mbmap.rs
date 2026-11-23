@@ -416,20 +416,24 @@ impl Import {
     }
 }
 
+fn json(text: &str) -> &str {
+    text.trim_start_matches('\u{feff}').trim()
+}
+
 pub fn unsupported_version(text: &str) -> Option<i64> {
-    let header: Header = serde_json::from_str(text.trim()).ok()?;
+    let header: Header = serde_json::from_str(json(text)).ok()?;
     header.mbmap.value().filter(|&version| version != VERSION)
 }
 
 pub fn status(text: &str) -> Option<Status> {
-    let edition: Edition = serde_json::from_str(text.trim()).ok()?;
+    let edition: Edition = serde_json::from_str(json(text)).ok()?;
     [Status::Verified, Status::Official, Status::Unofficial]
         .into_iter()
         .find(|status| edition.x_status.as_deref() == Some(status.label()))
 }
 
 pub fn revision(text: &str) -> Option<Revision> {
-    let edition: Edition = serde_json::from_str(text.trim()).ok()?;
+    let edition: Edition = serde_json::from_str(json(text)).ok()?;
     let revision = Revision {
         number: edition
             .revision
@@ -442,7 +446,7 @@ pub fn revision(text: &str) -> Option<Revision> {
 }
 
 pub fn firmware(text: &str) -> Option<Firmware> {
-    let map: DeviceMap = serde_json::from_str(text.trim()).ok()?;
+    let map: DeviceMap = serde_json::from_str(json(text)).ok()?;
     let mut ranges: Vec<(FirmwareRange, usize)> = Vec::new();
     for range in map
         .registers
@@ -471,7 +475,7 @@ pub fn parse(text: &str) -> Option<Registers> {
 
 pub fn parse_for_firmware(text: &str, firmware: &str) -> Option<Registers> {
     let firmware = version(firmware);
-    let map: DeviceMap = serde_json::from_str(text.trim()).ok()?;
+    let map: DeviceMap = serde_json::from_str(json(text)).ok()?;
     if map.mbmap.value()? != VERSION {
         return None;
     }
@@ -501,7 +505,7 @@ pub fn parse_for_firmware(text: &str, firmware: &str) -> Option<Registers> {
 #[cfg(test)]
 mod tests {
     use super::{
-        FirmwareRange, Status, firmware, parse, parse_for_firmware, revision, status,
+        FirmwareRange, Status, firmware, json, parse, parse_for_firmware, revision, status,
         unsupported_version, version, within,
     };
     use crate::constants::UNINTERPRETABLE;
@@ -856,5 +860,24 @@ mod tests {
         assert_eq!(read(json!("draft")), None);
         assert_eq!(read(json!(1)), None);
         assert_eq!(status(&map(json!([])).to_string()), None);
+    }
+
+    #[test]
+    fn a_leading_byte_order_mark_is_ignored() {
+        let mut value = map(json!([
+            {"name": "A", "area": "input", "address": 0, "type": "uint16", "firmware_min": "2"},
+        ]));
+        value["revision"] = json!(4);
+        value["x_status"] = json!("verified");
+        let text = format!("\u{feff}{value}\n");
+        assert_eq!(json(&text), value.to_string());
+        assert_eq!(parse(&text).unwrap().labels(), 1);
+        assert!(firmware(&text).is_some());
+        assert_eq!(revision(&text).unwrap().to_string(), "revision 4");
+        assert_eq!(status(&text), Some(Status::Verified));
+        assert_eq!(
+            unsupported_version("\u{feff}{\"mbmap\": 3, \"registers\": []}"),
+            Some(3)
+        );
     }
 }
