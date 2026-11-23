@@ -75,6 +75,8 @@ struct DeviceMap {
     word_order: Option<String>,
     #[serde(default)]
     enums: Map<String, Value>,
+    #[serde(default)]
+    sentinels: Map<String, Value>,
     registers: Vec<Value>,
     firmware_min: Option<String>,
     firmware_max: Option<String>,
@@ -228,6 +230,44 @@ pub struct Firmware {
     pub ranges: Vec<(FirmwareRange, usize)>,
 }
 
+fn table_entries(table: Option<&Value>) -> Vec<EnumEntry> {
+    let Some(Value::Object(table)) = table else {
+        return Vec::new();
+    };
+    table
+        .iter()
+        .filter_map(|(key, text)| {
+            Some(EnumEntry {
+                value: parse_integer(key)?,
+                text: text.as_str()?.to_string(),
+            })
+        })
+        .collect()
+}
+
+fn sentinel(value: i64, data_type: &str) -> Option<i64> {
+    let (bits, signed) = match data_type {
+        "int16" => (16, true),
+        "uint16" => (16, false),
+        "int32" => (32, true),
+        "uint32" => (32, false),
+        "int64" => return Some(value),
+        "uint64" => return (value >= 0).then_some(value),
+        _ => return None,
+    };
+    let span = 1i64 << bits;
+    let (min, max) = if signed {
+        (-span / 2, span / 2 - 1)
+    } else {
+        (0, span - 1)
+    };
+    match value {
+        value if (min..=max).contains(&value) => Some(value),
+        value if signed && (0..span).contains(&value) => Some(value - span),
+        _ => None,
+    }
+}
+
 fn repr(data_type: Option<&str>) -> Option<CustomRepr> {
     Some(match data_type? {
         "uint16" => CustomRepr::U16,
@@ -320,18 +360,18 @@ impl DeviceMap {
             Some(Value::String(name)) => self.enums.get(name),
             other => other.as_ref(),
         };
-        let Some(Value::Object(table)) = table else {
-            return Vec::new();
-        };
-        table
-            .iter()
-            .filter_map(|(key, text)| {
-                Some(EnumEntry {
-                    value: parse_integer(key)?,
-                    text: text.as_str()?.to_string(),
-                })
-            })
-            .collect()
+        let mut entries = table_entries(table);
+        if let Some(data_type) = register.data_type.as_deref() {
+            for entry in table_entries(self.sentinels.get(data_type)) {
+                let Some(value) = sentinel(entry.value, data_type) else {
+                    continue;
+                };
+                if !entries.iter().any(|known| known.value == value) {
+                    entries.push(EnumEntry { value, ..entry });
+                }
+            }
+        }
+        entries
     }
 
     fn rule(
@@ -505,8 +545,8 @@ pub fn parse_for_firmware(text: &str, firmware: &str) -> Option<Registers> {
 #[cfg(test)]
 mod tests {
     use super::{
-        FirmwareRange, Status, firmware, json, parse, parse_for_firmware, revision, status,
-        unsupported_version, version, within,
+        FirmwareRange, Status, firmware, json, parse, parse_for_firmware, revision, sentinel,
+        status, unsupported_version, version, within,
     };
     use crate::constants::UNINTERPRETABLE;
     use crate::custom::{CustomRepr, CustomScale, ScaleMode, ScaleRepr};
@@ -879,5 +919,54 @@ mod tests {
             unsupported_version("\u{feff}{\"mbmap\": 3, \"registers\": []}"),
             Some(3)
         );
+    }
+
+    #[test]
+    fn sentinels_fit_their_type() {
+        assert_eq!(sentinel(0xFFFF, "uint16"), Some(0xFFFF));
+        assert_eq!(sentinel(0x7FFF, "int16"), Some(0x7FFF));
+        assert_eq!(sentinel(0x8000, "int16"), Some(-32768));
+        assert_eq!(sentinel(-32768, "int16"), Some(-32768));
+        assert_eq!(sentinel(0xFFFF_FFFF, "int32"), Some(-1));
+        assert_eq!(sentinel(0x1_0000, "uint16"), None);
+        assert_eq!(sentinel(-1, "uint32"), None);
+        assert_eq!(sentinel(-1, "uint64"), None);
+        assert_eq!(sentinel(i64::MAX, "int64"), Some(i64::MAX));
+        assert_eq!(sentinel(1, "float32"), None);
+    }
+
+    #[test]
+    fn sentinels_label_reserved_raw_values_unless_the_register_enum_has_them() {
+        let mut value = map(json!([
+            {"name": "Power", "area": "holding", "address": 0, "type": "uint16", "scale": 0.1, "unit": "W"},
+            {"name": "Temp", "area": "holding", "address": 1, "type": "int16"},
+            {"name": "State", "area": "holding", "address": 2, "type": "uint16", "enum": {"0xFFFF": "Idle"}},
+            {"name": "Energy", "area": "holding", "address": 3, "type": "uint32"},
+            {"name": "Ratio", "area": "holding", "address": 5, "type": "float32"},
+        ]));
+        value["sentinels"] = json!({
+            "uint16": {"0xFFFF": "Not available", "0xFFFE": "Over range"},
+            "int16": {"0x8000": "Not implemented"},
+            "uint32": {"0xFFFFFFFF": "Not available"},
+            "float32": {"0": "Ignored"},
+        });
+        let r = parse(&value.to_string()).unwrap();
+        let rule = |i: usize| r.holdings[i].custom.as_ref().unwrap();
+
+        assert_eq!(rule(0).evaluate(&[0xFFFE], WordOrder::ABCD), "Over range W");
+        assert_eq!(rule(0).evaluate(&[1234], WordOrder::ABCD), "123.4 W");
+        assert_eq!(rule(0).numeric(&[0xFFFF], WordOrder::ABCD), None);
+        assert_eq!(
+            rule(1).evaluate(&[0x8000], WordOrder::ABCD),
+            "Not implemented"
+        );
+        assert_eq!(rule(1).evaluate(&[0x7FFF], WordOrder::ABCD), "32767");
+        assert_eq!(rule(2).evaluate(&[0xFFFF], WordOrder::ABCD), "Idle");
+        assert_eq!(rule(2).evaluate(&[0xFFFE], WordOrder::ABCD), "Over range");
+        assert_eq!(
+            rule(3).evaluate(&[0xFFFF, 0xFFFF], WordOrder::ABCD),
+            "Not available"
+        );
+        assert!(rule(4).enum_map.is_empty());
     }
 }
