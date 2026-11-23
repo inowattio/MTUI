@@ -1,3 +1,4 @@
+use crate::import::mbmap::{Revision, Status};
 use crate::input::KeyCode;
 use crate::state::{FirmwareInput, ImportParams, ImportSource};
 use crate::tui::hints::Hint;
@@ -21,11 +22,8 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, params: &Import
         Line::default(),
         Line::from(Span::styled(found, theme.base())),
     ];
-    if let Some(revision) = &params.revision {
-        lines.push(Line::from(Span::styled(
-            format!("   Map {revision}"),
-            theme.dim_style(),
-        )));
+    if params.revision.is_some() || params.status.is_some() {
+        lines.push(map_line(theme, params.revision.as_ref(), params.status));
     }
     lines.push(Line::default());
 
@@ -168,4 +166,23 @@ fn push_firmware(lines: &mut Vec<Line<'static>>, theme: &Theme, firmware: &Firmw
         )));
     }
     lines.push(Line::default());
+}
+
+fn map_line(theme: &Theme, revision: Option<&Revision>, status: Option<Status>) -> Line<'static> {
+    let mut spans = vec![Span::styled("   Map ", theme.dim_style())];
+    if let Some(revision) = revision {
+        spans.push(Span::styled(revision.to_string(), theme.dim_style()));
+    }
+    if let Some(status) = status {
+        if revision.is_some() {
+            spans.push(Span::styled(" · ", theme.dim_style()));
+        }
+        let style = match status {
+            Status::Verified => theme.ok_style(),
+            Status::Official => theme.dim_style(),
+            Status::Unofficial => theme.warn_style(),
+        };
+        spans.push(Span::styled(status.label(), style));
+    }
+    Line::from(spans)
 }

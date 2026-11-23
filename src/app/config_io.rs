@@ -98,6 +98,7 @@ impl App {
                 known,
             }),
             revision: map.and_then(mbmap::revision),
+            status: map.and_then(mbmap::status),
         };
         self.pending_import = Some(PendingImport {
             devices: devices.into_iter().map(|device| device.registers).collect(),

@@ -22,6 +22,24 @@ struct Header {
 struct Edition {
     revision: Option<Integer>,
     revised: Option<String>,
+    x_status: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Status {
+    Verified,
+    Official,
+    Unofficial,
+}
+
+impl Status {
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Verified => "verified",
+            Self::Official => "official",
+            Self::Unofficial => "unofficial",
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -403,6 +421,13 @@ pub fn unsupported_version(text: &str) -> Option<i64> {
     header.mbmap.value().filter(|&version| version != VERSION)
 }
 
+pub fn status(text: &str) -> Option<Status> {
+    let edition: Edition = serde_json::from_str(text.trim()).ok()?;
+    [Status::Verified, Status::Official, Status::Unofficial]
+        .into_iter()
+        .find(|status| edition.x_status.as_deref() == Some(status.label()))
+}
+
 pub fn revision(text: &str) -> Option<Revision> {
     let edition: Edition = serde_json::from_str(text.trim()).ok()?;
     let revision = Revision {
@@ -476,8 +501,8 @@ pub fn parse_for_firmware(text: &str, firmware: &str) -> Option<Registers> {
 #[cfg(test)]
 mod tests {
     use super::{
-        FirmwareRange, firmware, parse, parse_for_firmware, revision, unsupported_version, version,
-        within,
+        FirmwareRange, Status, firmware, parse, parse_for_firmware, revision, status,
+        unsupported_version, version, within,
     };
     use crate::constants::UNINTERPRETABLE;
     use crate::custom::{CustomRepr, CustomScale, ScaleMode, ScaleRepr};
@@ -815,5 +840,21 @@ mod tests {
         );
         assert_eq!(shown(json!({"revised": "14/11/2026"})), None);
         assert_eq!(shown(json!({})), None);
+    }
+
+    #[test]
+    fn status_is_one_of_the_library_values() {
+        let read = |value: Value| {
+            let mut map = map(json!([]));
+            map["x_status"] = value;
+            status(&map.to_string())
+        };
+        assert_eq!(read(json!("verified")), Some(Status::Verified));
+        assert_eq!(read(json!("official")), Some(Status::Official));
+        assert_eq!(read(json!("unofficial")), Some(Status::Unofficial));
+        assert_eq!(read(json!("Unofficial")), None);
+        assert_eq!(read(json!("draft")), None);
+        assert_eq!(read(json!(1)), None);
+        assert_eq!(status(&map(json!([])).to_string()), None);
     }
 }
