@@ -17,7 +17,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, settings: KeyCo
             theme.base(),
         )),
         Line::from(Span::styled(
-            " Turn them on in Settings / Libraries.",
+            " Turn them on in Settings / Library.",
             theme.dim_style(),
         )),
         Line::default(),

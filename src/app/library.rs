@@ -312,7 +312,7 @@ impl App {
         self.open_settings();
         let category = SettingsCategory::ALL
             .iter()
-            .position(|&category| category == SettingsCategory::Libraries)
+            .position(|&category| category == SettingsCategory::Library)
             .unwrap_or_default();
         if let Some(s) = self.settings_mut() {
             s.category = category as u16;

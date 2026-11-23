@@ -1681,7 +1681,7 @@ settings_fields! {
         ],
     }
     Keybinds {}
-    Libraries {
+    Library {
         [
             LibraryMbmap: Toggle => "mbmap", "List the community device maps of github.com/nobrega8/mbmap-library in the Library",
             LibrarySunSpec: Toggle => "SunSpec", "List the SunSpec information models of github.com/sunspec/models in the Library",
@@ -1780,7 +1780,7 @@ field_enum! {
         Display,
         Theme,
         Keybinds,
-        Libraries,
+        Library,
         Config,
         Changes,
         Search,
@@ -1795,7 +1795,7 @@ impl SettingsCategory {
             Self::Display => "Display",
             Self::Theme => "Theme",
             Self::Keybinds => "Keybinds",
-            Self::Libraries => "Libraries",
+            Self::Library => "Library",
             Self::Config => "Config",
             Self::Changes => "Changes",
             Self::Search => "Search",
@@ -2311,22 +2311,22 @@ mod tests {
         let categories = SettingsCategory::ALL;
         let position = |c| categories.iter().position(|&x| x == c).unwrap();
         assert_eq!(
-            position(SettingsCategory::Libraries) + 1,
+            position(SettingsCategory::Library) + 1,
             position(SettingsCategory::Config)
         );
-        let sources: Vec<_> = SettingsCategory::Libraries
+        let sources: Vec<_> = SettingsCategory::Library
             .fields()
             .into_iter()
             .filter_map(SettingsField::library_source)
             .collect();
         assert_eq!(sources, LibrarySource::ALL);
         assert!(
-            SettingsCategory::Libraries
+            SettingsCategory::Library
                 .fields()
                 .contains(&SettingsField::ClearLibraryCache)
         );
         let found = SettingsCategory::search("sunspec");
-        assert_eq!(found[0].0, Some(SettingsCategory::Libraries));
+        assert_eq!(found[0].0, Some(SettingsCategory::Library));
     }
 
     #[test]
