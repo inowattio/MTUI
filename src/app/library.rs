@@ -292,6 +292,10 @@ impl App {
             self.read_mut().popup = Some(Popup::NoLibraries);
             return;
         }
+        if !self.config.libraries.disclaimer_accepted {
+            self.read_mut().popup = Some(Popup::LibraryDisclaimer);
+            return;
+        }
         self.library.download = None;
         let previous = std::mem::take(self.read_mut());
         self.state = State::Library(LibraryViewParams::new(previous));
@@ -305,6 +309,13 @@ impl App {
         if sources.len() == 1 {
             self.choose_library_source();
         }
+    }
+
+    pub fn accept_library_disclaimer(&mut self) {
+        self.config.libraries.disclaimer_accepted = true;
+        self.persist_library_disclaimer();
+        self.close_popup();
+        self.open_library();
     }
 
     pub fn open_library_settings(&mut self) {

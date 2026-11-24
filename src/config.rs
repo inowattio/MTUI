@@ -555,6 +555,7 @@ pub struct LibrariesConfig {
     pub mbmap: bool,
     pub sunspec: bool,
     pub solarman: bool,
+    pub disclaimer_accepted: bool,
 }
 
 impl Default for LibrariesConfig {
@@ -563,6 +564,7 @@ impl Default for LibrariesConfig {
             mbmap: true,
             sunspec: true,
             solarman: true,
+            disclaimer_accepted: false,
         }
     }
 }

@@ -236,6 +236,7 @@ impl App {
                     self.config.libraries.toggle(source);
                 }
             }
+            SettingsField::LibraryDisclaimer => self.config.libraries.disclaimer_accepted.toggle(),
             SettingsField::CyclePinned
             | SettingsField::CycleLabeled
             | SettingsField::CycleCustom

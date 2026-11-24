@@ -447,6 +447,12 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
             }
         }
 
+        PopupKind::LibraryDisclaimer => match key_event.code {
+            KeyCode::Enter => app.accept_library_disclaimer(),
+            KeyCode::Esc | KeyCode::Backspace => app.close_popup(),
+            _ => {}
+        },
+
         PopupKind::NoLibraries => match key_event.code {
             KeyCode::Enter | KeyCode::Esc => app.close_popup(),
             c if c == kb.settings => app.open_library_settings(),

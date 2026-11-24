@@ -1743,6 +1743,9 @@ settings_fields! {
             LibrarySolarman: Toggle => "Solarman", "List the Solarman inverter definitions of github.com/davidrapan/ha-solarman in the Library",
         ],
         [
+            LibraryDisclaimer: Toggle => "Disclaimer", "Whether the notice that library maps come from external, unverified sources was accepted, turn off to show it again",
+        ],
+        [
             ClearLibraryCache: Action => "Clear cache", "Delete the saved library listings and map files and forget the SunSpec device scan, all downloaded again when needed",
         ],
     }
@@ -2136,6 +2139,7 @@ popups! {
     Raw(RawParams),
     Import(ImportParams),
     NoLibraries,
+    LibraryDisclaimer,
     LoadConfig(PathBuf),
     Quit,
 }

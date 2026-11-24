@@ -8,6 +8,7 @@ mod help;
 mod import;
 mod inspect;
 mod label;
+mod library_disclaimer;
 mod no_libraries;
 mod raw;
 mod search;
@@ -67,6 +68,7 @@ pub fn draw_popup(
         Popup::Raw(params) => raw::draw(frame, area, theme, params),
         Popup::Import(params) => import::draw(frame, area, theme, params),
         Popup::NoLibraries => no_libraries::draw(frame, area, theme, kb.settings),
+        Popup::LibraryDisclaimer => library_disclaimer::draw(frame, area, theme),
         Popup::LoadConfig(_) | Popup::Quit => {
             unsaved::draw(frame, area, theme, matches!(popup, Popup::Quit));
         }

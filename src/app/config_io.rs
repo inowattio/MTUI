@@ -517,6 +517,25 @@ impl App {
         }
     }
 
+    pub(super) fn persist_library_disclaimer(&mut self) {
+        let mut config: Config = match serde_json::from_str(&self.saved_config) {
+            Ok(config) => config,
+            Err(error) => {
+                log::error!("Library disclaimer acceptance not saved | {error}");
+                return;
+            }
+        };
+        config.libraries.disclaimer_accepted = true;
+        match save_config(&self.config_path, &config) {
+            Ok(()) => {
+                self.saved_config = Self::serialize_config(&config);
+                log::info!("Library disclaimer accepted");
+            }
+            Err(error) => log::error!("Library disclaimer acceptance not saved | {error}"),
+        }
+        self.refresh_dirty();
+    }
+
     pub fn config_path(&self) -> &Path {
         &self.config_path
     }

@@ -385,6 +385,14 @@ fn field_value(
             ),
             None,
         ),
+        SettingsField::LibraryDisclaimer => {
+            let accepted = if device.libraries.disclaimer_accepted {
+                "accepted"
+            } else {
+                "not accepted"
+            };
+            (accepted.to_string(), None)
+        }
         SettingsField::ClearLibraryCache => (String::new(), None),
         SettingsField::CopyConfig => (String::new(), None),
         SettingsField::ShowRuleContinuation => (on_off(device.display.rule_continuation), None),
