@@ -384,44 +384,52 @@ impl App {
     }
 
     pub(super) fn apply_load_config_result(&mut self, result: Option<LoadConfigTaskResult>) {
-        let outcome: Outcome = match result {
+        let status = match result {
             Some(LoadConfigTaskResult {
                 path,
                 config,
                 result,
-            }) => match result {
-                Ok(device) => {
-                    self.apply_config(*config, Some(device));
+            }) => {
+                let (device, error) = match result {
+                    Ok(device) => (Some(device), None),
+                    Err(e) => (None, Some(e)),
+                };
+                self.apply_config(*config, device);
 
-                    self.config_path = path.clone();
-                    self.mark_config_saved();
+                self.config_path = path.clone();
+                self.mark_config_saved();
 
-                    *self.read_or_previous_mut() = self.startup_read_params();
-                    self.rediff();
+                *self.read_or_previous_mut() = self.startup_read_params();
+                self.rediff();
 
-                    Ok(format!("Loaded {}", path.display()))
-                }
-                Err(e) => {
-                    if self.device.is_none() {
+                match error {
+                    None => {
+                        let message = format!("Loaded {}", path.display());
+                        log::info!("{message}");
+                        StatusMessage::ok(message)
+                    }
+                    Some(e) => {
                         self.connection = ConnectionStatus::Error(e.clone());
                         self.logged_connection = self.connection.clone();
+                        self.reconnect.link_lost = true;
+                        let message = format!("Loaded {}, device: {e}", path.display());
+                        log::warn!("{message}");
+                        StatusMessage::warn(message)
                     }
-                    Err(format!("Load failed: device: {e}"))
                 }
-            },
-            None => Err(message::LOAD_TASK_STOPPED.to_string()),
+            }
+            None => {
+                log::error!("{}", message::LOAD_TASK_STOPPED);
+                StatusMessage::err(message::LOAD_TASK_STOPPED)
+            }
         };
 
-        match &outcome {
-            Ok(message) => log::info!("{message}"),
-            Err(error) => log::error!("{error}"),
-        }
         match &mut self.state {
-            State::Read(p) => p.set_status(outcome.into()),
-            State::Settings(_) => self.set_settings_status(outcome.into()),
-            State::Logs(l) => l.previous.set_status(outcome.into()),
-            State::Diff(d) => d.previous.set_status(outcome.into()),
-            State::Library(l) => l.previous.set_status(outcome.into()),
+            State::Read(p) => p.set_status(status),
+            State::Settings(_) => self.set_settings_status(status),
+            State::Logs(l) => l.previous.set_status(status),
+            State::Diff(d) => d.previous.set_status(status),
+            State::Library(l) => l.previous.set_status(status),
         }
     }
 
@@ -472,9 +480,9 @@ impl App {
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
-    use super::{App, BackgroundTask};
+    use super::{App, BackgroundTask, LoadConfigTaskResult};
     use crate::config::Config;
-    use crate::state::{ImportSource, MessageKind};
+    use crate::state::{ConnectionStatus, ImportSource, MessageKind};
     use std::assert_matches;
 
     async fn app_with_refresh_in_flight() -> App {
@@ -608,5 +616,28 @@ mod tests {
         assert_eq!(settings_status(&app), MessageKind::Info);
         assert_matches!(app.background_task, Some(BackgroundTask::LoadConfig(_)));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn a_failed_connect_still_switches_the_config() {
+        let mut app = App::boot(Config::default(), String::new()).await;
+        let next = Config {
+            name: "next".to_string(),
+            ..Config::default()
+        };
+        let path = std::path::PathBuf::from("next.json");
+
+        app.apply_load_config_result(Some(LoadConfigTaskResult {
+            path: path.clone(),
+            config: Box::new(next),
+            result: Err("Connection refused".to_string()),
+        }));
+
+        assert_eq!(app.config.name, "next");
+        assert_eq!(app.config_path(), path.as_path());
+        assert!(app.device.is_none());
+        assert!(app.reconnect.link_lost);
+        assert_matches!(app.connection, ConnectionStatus::Error(_));
+        assert!(!app.dirty);
     }
 }
