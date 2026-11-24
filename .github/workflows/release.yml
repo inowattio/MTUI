@@ -131,8 +131,10 @@ jobs:
             deb: true
           - target: x86_64-unknown-linux-musl
             os: ubuntu-latest
+            musl: true
           - target: aarch64-unknown-linux-musl
             os: ubuntu-24.04-arm
+            musl: true
           - target: aarch64-apple-darwin
             os: macos-latest
     steps:
@@ -151,6 +153,13 @@ jobs:
           sudo apt-get install -y gcc-${{ matrix.cross }}
           VAR=$(echo "${{ matrix.target }}" | tr 'a-z-' 'A-Z_')
           echo "CARGO_TARGET_${VAR}_LINKER=${{ matrix.cross }}-gcc" >> "$GITHUB_ENV"
+
+      - name: Install musl C compiler
+        if: matrix.musl
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+          echo "CC_$(echo "${{ matrix.target }}" | tr '-' '_')=musl-gcc" >> "$GITHUB_ENV"
 
       - uses: Swatinem/rust-cache@v2
         with:
