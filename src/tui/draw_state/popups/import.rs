@@ -1,6 +1,8 @@
 use crate::import::mbmap::{Revision, Status};
 use crate::input::KeyCode;
-use crate::state::{FirmwareInput, ImportParams, ImportSource};
+use crate::state::{
+    ConfigImport, ConfigImportAction, FirmwareInput, ImportDevice, ImportParams, ImportSource,
+};
 use crate::tui::hints::Hint;
 use crate::tui::theme::Theme;
 use ratatui::Frame;
@@ -11,6 +13,10 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, params: &Import
     let Some(device) = params.device() else {
         return;
     };
+    if let Some(config) = &params.config {
+        draw_config(frame, area, theme, device, config);
+        return;
+    }
     let found = match params.source {
         ImportSource::Mtui => " Found importable data:",
         ImportSource::Mbmap => " Found an .mbmap device map:",
@@ -101,6 +107,96 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, params: &Import
     let content_w = lines.iter().map(Line::width).max().unwrap_or(0) as u16;
     let width = content_w.saturating_add(3).min(area.width);
     super::render(frame, area, theme, "Import", width, lines);
+}
+
+fn draw_config(
+    frame: &mut Frame,
+    area: Rect,
+    theme: &Theme,
+    device: &ImportDevice,
+    config: &ConfigImport,
+) {
+    let mut lines = vec![
+        Line::default(),
+        Line::from(vec![
+            Span::styled(" Found a full config ", theme.base()),
+            Span::styled(format!("\"{}\"", config.name), theme.accent_style()),
+            Span::styled(":", theme.base()),
+        ]),
+        Line::default(),
+    ];
+
+    for action in ConfigImportAction::ALL {
+        let selected = action == config.action;
+        let marker = if selected { '>' } else { ' ' };
+        let mut title = vec![Span::styled(
+            format!("   {marker} {}", action.label()),
+            theme.line_style(selected),
+        )];
+        if action == ConfigImportAction::Save {
+            title.push(Span::styled(" ", theme.base()));
+            title.push(Span::styled(config.file_name.clone(), theme.base()));
+            if selected {
+                title.push(super::cursor_span(theme));
+            }
+            title.push(Span::styled(".json", theme.dim_style()));
+        }
+        lines.push(Line::from(title));
+        let (detail, style) = match action {
+            ConfigImportAction::Registers => (registers_detail(device), theme.dim_style()),
+            ConfigImportAction::Load if config.unsaved => (
+                "Replaces the current config, discarding unsaved changes".to_string(),
+                theme.warn_style(),
+            ),
+            ConfigImportAction::Load => (
+                "Replaces the current config until you save".to_string(),
+                theme.dim_style(),
+            ),
+            ConfigImportAction::Save => (format!("in {}", config.folder), theme.dim_style()),
+        };
+        lines.push(Line::from(Span::styled(format!("       {detail}"), style)));
+    }
+
+    if let Some(error) = &config.error {
+        lines.push(Line::default());
+        lines.push(Line::from(Span::styled(
+            format!(" {error}"),
+            theme.err_style(),
+        )));
+    }
+
+    let action = Hint::pair(KeyCode::Up, KeyCode::Down, "Action");
+    let confirm = Hint::key(KeyCode::Enter, config.action.confirm());
+    let cancel = if config.action == ConfigImportAction::Save {
+        Hint::key(KeyCode::Esc, "Cancel")
+    } else {
+        Hint::pair(KeyCode::Backspace, KeyCode::Esc, "Cancel")
+    };
+    super::push_footer(&mut lines, theme, [action, confirm, cancel]);
+
+    let content_w = lines.iter().map(Line::width).max().unwrap_or(0) as u16;
+    let width = content_w.saturating_add(3).min(area.width);
+    super::render(frame, area, theme, "Import", width, lines);
+}
+
+fn registers_detail(device: &ImportDevice) -> String {
+    let counts: Vec<String> = [
+        (device.pins, "pin"),
+        (device.labels, "label"),
+        (device.rules, "custom rule"),
+    ]
+    .into_iter()
+    .filter(|&(count, _)| count > 0)
+    .map(|(count, noun)| {
+        let plural = if count == 1 { "" } else { "s" };
+        format!("{count} {noun}{plural}")
+    })
+    .collect();
+    if counts.is_empty() {
+        "No pins, labels or custom rules".to_string()
+    } else {
+        counts.join(", ")
+    }
 }
 
 const RANGES_SHOWN: usize = 8;

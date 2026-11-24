@@ -1,4 +1,4 @@
-use super::{App, BackgroundTask, LoadConfigTaskResult, save_config};
+use super::{App, BackgroundTask, LoadConfigTaskResult, file_name, save_config};
 use crate::compat;
 use crate::config::{Config, Registers, Startup};
 use crate::constants::message;
@@ -7,8 +7,8 @@ use crate::import::{Device, home_assistant, solarman};
 use crate::modbus::ModbusDevice;
 use crate::num_ops::wrap_index;
 use crate::state::{
-    ConnectionStatus, FirmwareInput, ImportDevice, ImportParams, ImportSource, Outcome, Popup,
-    State, StatusMessage,
+    ConfigImport, ConfigImportAction, ConnectionStatus, FirmwareInput, ImportDevice, ImportParams,
+    ImportSource, Outcome, Popup, State, StatusMessage,
 };
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -24,6 +24,27 @@ struct ParsedImport {
 pub(super) struct PendingImport {
     devices: Vec<Registers>,
     map: Option<String>,
+    config: Option<Box<Config>>,
+}
+
+fn parse_whole_config(data: &str) -> Option<Config> {
+    let value: serde_json::Value = serde_json::from_str(data.trim()).ok()?;
+    let fields = value.as_object()?;
+    if !fields.contains_key("registers") || fields.len() < 2 {
+        return None;
+    }
+    serde_json::from_value(value).ok()
+}
+
+fn config_file_name(input: &str) -> Option<String> {
+    let input = input.trim();
+    let stem = input
+        .len()
+        .checked_sub(".json".len())
+        .filter(|&end| input.is_char_boundary(end) && input[end..].eq_ignore_ascii_case(".json"))
+        .map_or(input, |end| &input[..end]);
+    let name = file_name(&[stem], "json");
+    (name != ".json").then_some(name)
 }
 
 fn summary(device: &Device) -> ImportDevice {
@@ -66,6 +87,10 @@ impl App {
     }
 
     pub fn import_text(&mut self, data: &str) -> bool {
+        if let Some(config) = parse_whole_config(data) {
+            self.open_config_import(config);
+            return true;
+        }
         let Some(ParsedImport { devices, source }) = Self::parse_import(data) else {
             let Some(version) = mbmap::unsupported_version(data) else {
                 return false;
@@ -99,22 +124,89 @@ impl App {
             }),
             revision: map.and_then(mbmap::revision),
             status: map.and_then(mbmap::status),
+            config: None,
         };
         self.pending_import = Some(PendingImport {
             devices: devices.into_iter().map(|device| device.registers).collect(),
             map: map
                 .filter(|_| params.firmware.is_some())
                 .map(str::to_string),
+            config: None,
         });
         self.read_mut().popup = Some(Popup::Import(params));
     }
 
-    pub fn editing_import_firmware(&self) -> bool {
-        self.popup_as::<ImportParams>()
-            .is_some_and(|p| p.firmware.is_some())
+    fn open_config_import(&mut self, config: Config) {
+        let device = Device::from(config.registers.clone());
+        self.open_import(vec![device], ImportSource::Mtui, None);
+        let folder = self.config_folder();
+        let folder = std::path::absolute(folder)
+            .unwrap_or_else(|_| folder.to_path_buf())
+            .display()
+            .to_string();
+        let import = ConfigImport {
+            name: config.name.clone(),
+            action: ConfigImportAction::Registers,
+            file_name: file_name(&[&config.name], "json")
+                .trim_end_matches(".json")
+                .to_string(),
+            folder,
+            unsaved: self.dirty,
+            error: None,
+        };
+        if let Some(p) = self.popup_as_mut::<ImportParams>() {
+            p.config = Some(import);
+        }
+        if let Some(pending) = &mut self.pending_import {
+            pending.config = Some(Box::new(config));
+        }
     }
 
-    pub fn import_firmware_input(&mut self, c: char) {
+    fn config_folder(&self) -> &Path {
+        self.config_path
+            .parent()
+            .filter(|parent| !parent.is_empty())
+            .unwrap_or_else(|| Path::new("."))
+    }
+
+    pub fn editing_import_text(&self) -> bool {
+        self.popup_as::<ImportParams>()
+            .is_some_and(|p| p.firmware.is_some() || p.action() == ConfigImportAction::Save)
+    }
+
+    pub fn import_input(&mut self, c: char) {
+        let Some(p) = self.popup_as_mut::<ImportParams>() else {
+            return;
+        };
+        if let Some(config) = p
+            .config
+            .as_mut()
+            .filter(|c| c.action == ConfigImportAction::Save)
+        {
+            config.file_name.push(c);
+            config.error = None;
+        } else if c.is_ascii_digit() || c == '.' {
+            self.import_firmware_input(c);
+        }
+    }
+
+    pub fn import_backspace(&mut self) {
+        let Some(p) = self.popup_as_mut::<ImportParams>() else {
+            return;
+        };
+        if let Some(config) = p
+            .config
+            .as_mut()
+            .filter(|c| c.action == ConfigImportAction::Save)
+        {
+            config.file_name.pop();
+            config.error = None;
+        } else {
+            self.import_firmware_backspace();
+        }
+    }
+
+    fn import_firmware_input(&mut self, c: char) {
         if let Some(firmware) = self
             .popup_as_mut::<ImportParams>()
             .and_then(|p| p.firmware.as_mut())
@@ -124,7 +216,7 @@ impl App {
         }
     }
 
-    pub fn import_firmware_backspace(&mut self) {
+    fn import_firmware_backspace(&mut self) {
         if let Some(firmware) = self
             .popup_as_mut::<ImportParams>()
             .and_then(|p| p.firmware.as_mut())
@@ -156,7 +248,19 @@ impl App {
     }
 
     pub fn import_move(&mut self, down: bool) {
-        if let Some(p) = self.popup_as_mut::<ImportParams>() {
+        let Some(p) = self.popup_as_mut::<ImportParams>() else {
+            return;
+        };
+        if let Some(config) = p.config.as_mut() {
+            let actions = &ConfigImportAction::ALL;
+            let current = actions
+                .iter()
+                .position(|&a| a == config.action)
+                .unwrap_or(0);
+            let next = wrap_index(current as u16, actions.len() as u16, down);
+            config.action = actions[usize::from(next)];
+            config.error = None;
+        } else {
             p.selected = wrap_index(p.selected, p.devices.len() as u16, down);
         }
     }
@@ -167,6 +271,14 @@ impl App {
     }
 
     pub fn apply_import(&mut self) {
+        match self.popup_as::<ImportParams>().map(ImportParams::action) {
+            Some(ConfigImportAction::Load) => self.load_pasted_config(),
+            Some(ConfigImportAction::Save) => self.save_pasted_config(),
+            _ => self.import_registers(),
+        }
+    }
+
+    fn import_registers(&mut self) {
         let selected = self
             .popup_as::<ImportParams>()
             .map_or(0, |p| usize::from(p.selected));
@@ -198,6 +310,70 @@ impl App {
         self.set_read_status(StatusMessage::ok(format!(
             "Imported {pins} pin(s), {labels} label(s), {rules} rule(s)"
         )));
+    }
+
+    fn take_pasted_config(&mut self) -> Option<Config> {
+        let config = self.pending_import.take()?.config?;
+        Some(*config)
+    }
+
+    fn load_pasted_config(&mut self) {
+        let config = self.take_pasted_config();
+        self.close_popup();
+        let Some(config) = config else {
+            return;
+        };
+        if !self.free_background_slot() {
+            self.set_read_status(StatusMessage::info(message::DEVICE_BUSY));
+            return;
+        }
+        self.spawn_config_load(None, config);
+        self.set_read_status(StatusMessage::info(message::LOADING));
+    }
+
+    fn save_pasted_config(&mut self) {
+        let Some(input) = self
+            .popup_as::<ImportParams>()
+            .and_then(|p| p.config.as_ref())
+            .map(|c| c.file_name.clone())
+        else {
+            return;
+        };
+        let result = match config_file_name(&input) {
+            None => Err(message::SAVE_NEEDS_FILE_NAME.to_string()),
+            Some(name) => self.write_pasted_config(&self.config_folder().join(name)),
+        };
+        match result {
+            Ok(path) => {
+                self.pending_import = None;
+                self.close_popup();
+                let message = format!("Saved pasted config to {}", path.display());
+                log::info!("{message}");
+                self.set_read_status(StatusMessage::ok(message));
+            }
+            Err(error) => {
+                log::warn!("{error}");
+                if let Some(config) = self
+                    .popup_as_mut::<ImportParams>()
+                    .and_then(|p| p.config.as_mut())
+                {
+                    config.error = Some(error);
+                }
+            }
+        }
+    }
+
+    fn write_pasted_config(&self, path: &Path) -> Result<PathBuf, String> {
+        if path.exists() {
+            return Err(format!("Save failed: {} already exists", path.display()));
+        }
+        let config = self
+            .pending_import
+            .as_ref()
+            .and_then(|pending| pending.config.as_deref())
+            .ok_or_else(|| "Save failed: nothing to save".to_string())?;
+        save_config(path, config).map_err(|e| format!("Save failed: {e}"))?;
+        Ok(path.to_path_buf())
     }
 
     fn export_payload_json(&self) -> String {
@@ -364,11 +540,11 @@ impl App {
         if !self.free_background_slot() {
             return StatusMessage::info(message::DEVICE_BUSY);
         }
-        self.spawn_config_load(path, config);
+        self.spawn_config_load(Some(path), config);
         StatusMessage::info(message::LOADING)
     }
 
-    fn spawn_config_load(&mut self, path: PathBuf, config: Config) {
+    fn spawn_config_load(&mut self, path: Option<PathBuf>, config: Config) {
         let previous = self.take_device();
         let device_config = config.device.clone();
         self.background_task = Some(BackgroundTask::LoadConfig(compat::spawn(async move {
@@ -396,15 +572,24 @@ impl App {
                 };
                 self.apply_config(*config, device);
 
-                self.config_path = path.clone();
-                self.mark_config_saved();
+                let source = match path {
+                    Some(path) => {
+                        self.config_path = path;
+                        self.mark_config_saved();
+                        self.config_path.display().to_string()
+                    }
+                    None => {
+                        self.refresh_dirty();
+                        "pasted config".to_string()
+                    }
+                };
 
                 *self.read_or_previous_mut() = self.startup_read_params();
                 self.rediff();
 
                 match error {
                     None => {
-                        let message = format!("Loaded {}", path.display());
+                        let message = format!("Loaded {source}");
                         log::info!("{message}");
                         StatusMessage::ok(message)
                     }
@@ -412,7 +597,7 @@ impl App {
                         self.connection = ConnectionStatus::Error(e.clone());
                         self.logged_connection = self.connection.clone();
                         self.reconnect.link_lost = true;
-                        let message = format!("Loaded {}, device: {e}", path.display());
+                        let message = format!("Loaded {source}, device: {e}");
                         log::warn!("{message}");
                         StatusMessage::warn(message)
                     }
@@ -475,6 +660,41 @@ impl App {
     fn load_config_target(&mut self, target: PathBuf) {
         let status = self.load_config_from(target);
         self.set_read_status(status);
+    }
+}
+
+#[cfg(test)]
+mod pasted_config_tests {
+    use super::{config_file_name, parse_whole_config};
+
+    #[test]
+    fn only_a_config_with_more_than_registers_is_whole() {
+        let registers = r#"{"registers":{"holdings":[{"address":1,"pinned":true}]}}"#;
+        assert!(parse_whole_config(registers).is_none());
+        assert!(parse_whole_config(r#"{"holdings":[{"address":1,"label":"a"}]}"#).is_none());
+        assert!(parse_whole_config("[]").is_none());
+
+        let whole = r#"{"version":1,"name":"site","registers":{}}"#;
+        assert_eq!(
+            parse_whole_config(whole).map(|c| c.name),
+            Some("site".to_string())
+        );
+    }
+
+    #[test]
+    fn config_file_names_are_sanitized_with_one_json_extension() {
+        assert_eq!(config_file_name("site"), Some("site.json".to_string()));
+        assert_eq!(
+            config_file_name(" site.JSON "),
+            Some("site.json".to_string())
+        );
+        assert_eq!(
+            config_file_name("my site/2"),
+            Some("my_site_2.json".to_string())
+        );
+        assert_eq!(config_file_name(""), None);
+        assert_eq!(config_file_name(".json"), None);
+        assert_eq!(config_file_name("//"), None);
     }
 }
 
@@ -628,7 +848,7 @@ mod tests {
         let path = std::path::PathBuf::from("next.json");
 
         app.apply_load_config_result(Some(LoadConfigTaskResult {
-            path: path.clone(),
+            path: Some(path.clone()),
             config: Box::new(next),
             result: Err("Connection refused".to_string()),
         }));

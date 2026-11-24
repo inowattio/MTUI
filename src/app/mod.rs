@@ -140,7 +140,7 @@ struct RawTaskResult {
 
 #[derive(Debug)]
 struct LoadConfigTaskResult {
-    path: PathBuf,
+    path: Option<PathBuf>,
     config: Box<Config>,
     result: Result<ModbusDevice, String>,
 }

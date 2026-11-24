@@ -55,6 +55,7 @@ pub mod message {
     pub const NOTHING_TO_DUMP: &str = "Nothing read yet to dump.";
     pub const SESSION_CLEARED: &str = "Cleared session read data";
     pub const LOAD_NEEDS_FILE_NAME: &str = "Load failed: enter a file name";
+    pub const SAVE_NEEDS_FILE_NAME: &str = "Save failed: enter a file name";
     pub const LOAD_TASK_STOPPED: &str = "Load failed: task stopped unexpectedly";
     pub const LIBRARY_BAD_START: &str = "Enter a valid start address";
     pub const LIBRARY_CACHE_CLEARED: &str = "Cleared the library cache";
