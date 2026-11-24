@@ -36,8 +36,7 @@ pub(super) fn draw(
     let primary = match sel {
         UnitField::Id => "Set",
         UnitField::Hit(_) => "Use id",
-        UnitField::Repr if params.ascii => "Values",
-        UnitField::Repr => "ASCII",
+        UnitField::Repr => super::show_as(!params.ascii),
         UnitField::Exceptions if params.show_exceptions => "Hide",
         UnitField::Exceptions => "Include",
         _ if params.active() => "Stop scan",
@@ -135,7 +134,7 @@ fn form_lines(
         "full range"
     };
     let mode_val = edit_value(mode.to_string(), sel == UnitField::Mode, true);
-    let repr = if params.ascii { "ASCII" } else { "values" };
+    let repr = super::show_as(params.ascii);
     let repr_val = edit_value(repr.to_string(), sel == UnitField::Repr, true);
     let exceptions = if params.show_exceptions {
         "included"
@@ -410,7 +409,7 @@ mod tests {
         let rows = render(&params);
         locate(&rows, "  3  19796 21833");
         let (_, y) = locate(&rows, "Show as");
-        assert!(rows[y].contains("values"));
+        assert!(rows[y].contains("Decimal"));
 
         params.ascii = true;
         let rows = render(&params);

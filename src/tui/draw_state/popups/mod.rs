@@ -112,6 +112,10 @@ pub(super) fn query_line(theme: &Theme, query: &str, count: usize) -> Line<'stat
     ])
 }
 
+pub(super) const fn show_as(ascii: bool) -> &'static str {
+    if ascii { "ASCII" } else { "Decimal" }
+}
+
 pub(super) fn cursor_span(theme: &Theme) -> Span<'static> {
     Span::styled("_", theme.accent_style())
 }

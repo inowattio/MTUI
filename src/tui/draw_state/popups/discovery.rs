@@ -309,7 +309,7 @@ fn side_lines(
             ));
             if p.reads_on_scan() {
                 let on = selected(DiscoveryField::ScanRepr);
-                let repr = if p.scan_ascii { "ASCII" } else { "decimal" };
+                let repr = super::show_as(p.scan_ascii);
                 lines.push(row(
                     theme,
                     "Show as",
