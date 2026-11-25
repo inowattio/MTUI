@@ -271,7 +271,7 @@ mod tests {
             UnitField::Hit(1)
         );
 
-        app.commit_unit_hit(1).await;
+        app.commit_unit_hit(1);
         assert_eq!(app.config.device.unit_id, 5);
         let p = app.popup_as::<UnitParams>().expect("the popup stays open");
         assert_eq!(p.id, 5, "the Unit id field follows the pick");
@@ -301,7 +301,7 @@ mod tests {
         assert_eq!(ids, vec![2, 3, 4]);
         assert_eq!(p.id, 3, "the id field follows the config");
 
-        app.commit_unit().await;
+        app.commit_unit();
         assert!(app.popup_as::<UnitParams>().is_none());
         app.open_unit();
         assert_eq!(
@@ -340,7 +340,7 @@ mod tests {
         assert_eq!(p.hits.len(), 1);
         assert!(p.hits[0].result.is_err());
 
-        app.commit_unit_hit(0).await;
+        app.commit_unit_hit(0);
         assert_eq!(app.config.device.unit_id, 7);
         assert_eq!(app.popup_as::<UnitParams>().unwrap().id, 7);
     }

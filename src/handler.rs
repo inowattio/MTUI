@@ -9,7 +9,7 @@ use crate::state::{
     SweepField, UnitField, UnitParams,
 };
 
-pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) {
+pub fn handle_key_events(key_event: KeyEvent, app: &mut App) {
     if key_event.is_ctrl_c() {
         app.interrupt();
         return;
@@ -42,7 +42,7 @@ pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) {
     }
 
     if let Some(kind) = app.popup_kind() {
-        handle_popup_key(kind, key_event, app).await;
+        handle_popup_key(kind, key_event, app);
         return;
     }
 
@@ -204,7 +204,7 @@ fn run_action(app: &mut App, action: KeybindAction) {
     }
 }
 
-async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
+fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
     let kb = app.config.keybinds;
     match kind {
         PopupKind::Discovery => handle_discovery_key(key_event, app),
@@ -407,8 +407,8 @@ async fn handle_popup_key(kind: PopupKind, key_event: KeyEvent, app: &mut App) {
             match key_event.code {
                 c if c == KeyCode::Esc || c == kb.unit_id => app.close_popup(),
                 KeyCode::Enter => match field {
-                    UnitField::Id => app.commit_unit().await,
-                    UnitField::Hit(index) => app.commit_unit_hit(index).await,
+                    UnitField::Id => app.commit_unit(),
+                    UnitField::Hit(index) => app.commit_unit_hit(index),
                     UnitField::Repr | UnitField::Exceptions => app.unit_toggle(field),
                     UnitField::From | UnitField::To | UnitField::Mode | UnitField::Scan => {
                         app.unit_scan_action();
@@ -992,15 +992,15 @@ mod tests {
 
         for panel in [ReadPanel::Pinned, ReadPanel::Labeled, ReadPanel::Custom] {
             app.read_mut().panel = panel;
-            handle_key_events(KeyEvent::new(KeyCode::Char('3')), &mut app).await;
-            handle_key_events(KeyEvent::new(KeyCode::Backspace), &mut app).await;
+            handle_key_events(KeyEvent::new(KeyCode::Char('3')), &mut app);
+            handle_key_events(KeyEvent::new(KeyCode::Backspace), &mut app);
             super::handle_paste("42".to_string(), &mut app);
             super::handle_paste("99999999".to_string(), &mut app);
             assert_eq!(app.read().position, 5, "{panel:?}");
         }
 
         app.read_mut().panel = ReadPanel::Main;
-        handle_key_events(KeyEvent::new(KeyCode::Char('3')), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Char('3')), &mut app);
         assert_eq!(app.read().position, 53);
     }
 
@@ -1024,9 +1024,9 @@ mod tests {
         );
 
         for c in "/dev/ttyAMA0".chars() {
-            handle_key_events(KeyEvent::new(KeyCode::Char(c)), &mut app).await;
+            handle_key_events(KeyEvent::new(KeyCode::Char(c)), &mut app);
         }
-        handle_key_events(KeyEvent::new(KeyCode::Backspace), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Backspace), &mut app);
         super::handle_paste("1\n".to_string(), &mut app);
 
         let d = app.discovery().unwrap();
@@ -1053,22 +1053,22 @@ mod tests {
         );
 
         for _ in 0..4 {
-            handle_key_events(KeyEvent::new(KeyCode::Backspace), &mut app).await;
+            handle_key_events(KeyEvent::new(KeyCode::Backspace), &mut app);
         }
         assert_eq!(app.discovery().unwrap().baud_rate, 0, "9600 erased");
         for c in "250000".chars() {
-            handle_key_events(KeyEvent::new(KeyCode::Char(c)), &mut app).await;
+            handle_key_events(KeyEvent::new(KeyCode::Char(c)), &mut app);
         }
         assert_eq!(app.discovery().unwrap().baud_rate, 250_000);
 
-        handle_key_events(KeyEvent::new(KeyCode::Right), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Right), &mut app);
         assert_eq!(
             app.discovery().unwrap().baud_rate,
             460_800,
             "next preset above"
         );
-        handle_key_events(KeyEvent::new(KeyCode::Left), &mut app).await;
-        handle_key_events(KeyEvent::new(KeyCode::Left), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Left), &mut app);
+        handle_key_events(KeyEvent::new(KeyCode::Left), &mut app);
         assert_eq!(app.discovery().unwrap().baud_rate, 115_200);
     }
 
@@ -1084,7 +1084,7 @@ mod tests {
             InterfaceKind::RtuOverTcp,
             InterfaceKind::Mock,
         ] {
-            handle_key_events(KeyEvent::new(KeyCode::Right), &mut app).await;
+            handle_key_events(KeyEvent::new(KeyCode::Right), &mut app);
             assert_eq!(kind(&app), expected);
         }
 
@@ -1097,7 +1097,7 @@ mod tests {
             InterfaceKind::RtuOverTcp,
             InterfaceKind::Serial,
         ] {
-            handle_key_events(KeyEvent::new(KeyCode::Right), &mut app).await;
+            handle_key_events(KeyEvent::new(KeyCode::Right), &mut app);
             assert_eq!(kind(&app), expected);
         }
     }
@@ -1108,16 +1108,16 @@ mod tests {
         app.open_settings();
         app.settings_mut().unwrap().category = SettingsCategory::ALL.len() as u16 - 1;
 
-        handle_key_events(KeyEvent::new(KeyCode::Right), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Right), &mut app);
         assert_eq!(app.settings().unwrap().focus, SettingsFocus::Categories);
-        handle_key_events(KeyEvent::new(KeyCode::Enter), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Enter), &mut app);
         assert_eq!(app.settings().unwrap().focus, SettingsFocus::Categories);
 
         {
             let s = app.settings_mut().unwrap();
             s.focus = SettingsFocus::Fields;
         }
-        handle_key_events(KeyEvent::new(KeyCode::Esc), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Esc), &mut app);
         assert_eq!(app.settings().unwrap().focus, SettingsFocus::Categories);
     }
 
@@ -1127,7 +1127,7 @@ mod tests {
         app.open_columns();
         let first = app.interpreter.ordered_columns()[0];
 
-        handle_key_events(KeyEvent::new(KeyCode::Char('.')), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Char('.')), &mut app);
 
         assert_eq!(app.interpreter.ordered_columns()[1], first, "moved right");
         assert!(app.dirty, "the order is part of the config");
@@ -1138,7 +1138,7 @@ mod tests {
             "the order key is not typed into the search"
         );
 
-        handle_key_events(KeyEvent::new(KeyCode::Char(',')), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Char(',')), &mut app);
         assert_eq!(app.interpreter.ordered_columns()[0], first, "and back");
     }
 
@@ -1147,27 +1147,27 @@ mod tests {
         let mut app = app().await;
         let kb = app.config.keybinds;
 
-        handle_key_events(KeyEvent::new(kb.copy_column), &mut app).await;
+        handle_key_events(KeyEvent::new(kb.copy_column), &mut app);
         assert_eq!(
             app.copy_column_name(),
             Some("address"),
             "arms on the address"
         );
 
-        handle_key_events(KeyEvent::new(KeyCode::Left), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Left), &mut app);
         assert_eq!(
             app.copy_column_name(),
             Some("address"),
             "the anchor is the left edge"
         );
 
-        handle_key_events(KeyEvent::new(KeyCode::Right), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Right), &mut app);
         assert_eq!(app.copy_column_name(), Some("time"));
 
-        handle_key_events(KeyEvent::new(KeyCode::Left), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Left), &mut app);
         assert_eq!(app.copy_column_name(), Some("address"));
 
-        handle_key_events(KeyEvent::new(KeyCode::Esc), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Esc), &mut app);
         assert_eq!(app.copy_column_name(), None);
         assert!(app.running, "escape leaves the mode without quitting");
     }
@@ -1177,8 +1177,8 @@ mod tests {
         let mut app = app().await;
         let kb = app.config.keybinds;
 
-        handle_key_events(KeyEvent::new(kb.copy_column), &mut app).await;
-        handle_key_events(KeyEvent::new(KeyCode::Enter), &mut app).await;
+        handle_key_events(KeyEvent::new(kb.copy_column), &mut app);
+        handle_key_events(KeyEvent::new(KeyCode::Enter), &mut app);
 
         assert_eq!(app.copy_column_name(), None, "committing disarms");
         assert!(app.read().status.is_some(), "the copy reports an outcome");
@@ -1202,7 +1202,7 @@ mod tests {
             s.kb_capturing = true;
         }
 
-        handle_key_events(KeyEvent::new(KeyCode::Up), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Up), &mut app);
         let s = app.settings().unwrap();
         assert!(!s.kb_capturing, "capture ends on a reserved key");
         assert_eq!(
@@ -1217,7 +1217,7 @@ mod tests {
         );
 
         app.settings_mut().unwrap().kb_capturing = true;
-        handle_key_events(KeyEvent::new(KeyCode::Char('z')), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Char('z')), &mut app);
         assert_eq!(app.config.keybinds.get(action), KeyCode::Char('z'));
         assert!(app.dirty);
     }
@@ -1229,7 +1229,7 @@ mod tests {
         app.settings_mut().unwrap().category = SettingsCategory::ALL.len() as u16 - 1;
 
         for c in "clock".chars() {
-            handle_key_events(KeyEvent::new(KeyCode::Char(c)), &mut app).await;
+            handle_key_events(KeyEvent::new(KeyCode::Char(c)), &mut app);
         }
         let s = app.settings().unwrap();
         assert_eq!(s.query, "clock");
@@ -1240,13 +1240,13 @@ mod tests {
         assert_eq!(s.focus, SettingsFocus::Categories);
 
         let before = app.config.display.clock;
-        handle_key_events(KeyEvent::new(KeyCode::Enter), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Enter), &mut app);
         assert_eq!(app.settings().unwrap().focus, SettingsFocus::Fields);
-        handle_key_events(KeyEvent::new(KeyCode::Enter), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Enter), &mut app);
         assert_ne!(app.config.display.clock, before);
 
-        handle_key_events(KeyEvent::new(KeyCode::Esc), &mut app).await;
-        handle_key_events(KeyEvent::new(KeyCode::Backspace), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Esc), &mut app);
+        handle_key_events(KeyEvent::new(KeyCode::Backspace), &mut app);
         assert_eq!(app.settings().unwrap().query, "cloc");
     }
 
@@ -1272,16 +1272,16 @@ mod tests {
         let address = app.config.startup.address;
 
         app.config.save_position_on_exit = true;
-        handle_key_events(KeyEvent::new(KeyCode::Right), &mut app).await;
-        handle_key_events(KeyEvent::new(KeyCode::Char('7')), &mut app).await;
-        handle_key_events(KeyEvent::new(KeyCode::Backspace), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Right), &mut app);
+        handle_key_events(KeyEvent::new(KeyCode::Char('7')), &mut app);
+        handle_key_events(KeyEvent::new(KeyCode::Backspace), &mut app);
         assert_eq!(
             app.config.startup.address, address,
             "locked fields ignore edits"
         );
 
         app.config.save_position_on_exit = false;
-        handle_key_events(KeyEvent::new(KeyCode::Right), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Right), &mut app);
         assert_eq!(app.config.startup.address, address + 1);
     }
 
@@ -1307,14 +1307,14 @@ mod tests {
         let millis = app.config.display.clock_millis;
 
         app.config.display.clock = false;
-        handle_key_events(KeyEvent::new(KeyCode::Right), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Right), &mut app);
         assert_eq!(
             app.config.display.clock_millis, millis,
             "locked fields ignore edits"
         );
 
         app.config.display.clock = true;
-        handle_key_events(KeyEvent::new(KeyCode::Right), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Right), &mut app);
         assert_ne!(app.config.display.clock_millis, millis);
     }
 
@@ -1341,11 +1341,11 @@ mod tests {
 
         app.config.startup.address = 0;
         for c in "200".chars() {
-            handle_key_events(KeyEvent::new(KeyCode::Char(c)), &mut app).await;
+            handle_key_events(KeyEvent::new(KeyCode::Char(c)), &mut app);
         }
         assert_eq!(app.config.startup.address, 200);
         for c in "f".chars() {
-            handle_key_events(KeyEvent::new(KeyCode::Char(c)), &mut app).await;
+            handle_key_events(KeyEvent::new(KeyCode::Char(c)), &mut app);
         }
         assert_eq!(
             app.config.startup.address, 200,
@@ -1355,10 +1355,10 @@ mod tests {
         app.interpreter.set_address_mode(AddressMode::Hex);
         app.config.startup.address = 0;
         for c in "C8".chars() {
-            handle_key_events(KeyEvent::new(KeyCode::Char(c)), &mut app).await;
+            handle_key_events(KeyEvent::new(KeyCode::Char(c)), &mut app);
         }
         assert_eq!(app.config.startup.address, 0xC8);
-        handle_key_events(KeyEvent::new(KeyCode::Backspace), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Backspace), &mut app);
         assert_eq!(app.config.startup.address, 0xC);
     }
 
@@ -1371,7 +1371,7 @@ mod tests {
         app.open_stats();
         assert_eq!(app.popup_kind(), Some(PopupKind::Stats));
 
-        handle_key_events(KeyEvent::new(app.config.keybinds.clear_session), &mut app).await;
+        handle_key_events(KeyEvent::new(app.config.keybinds.clear_session), &mut app);
         assert_eq!(app.stats().reads.ok, 0);
         assert_eq!(app.stats().reads.latency(), None);
         assert_eq!(
@@ -1388,21 +1388,21 @@ mod tests {
         app.open_stats();
         assert_eq!(app.popup_as::<StatsTab>(), Some(&StatsTab::All));
 
-        handle_key_events(KeyEvent::new(panel), &mut app).await;
+        handle_key_events(KeyEvent::new(panel), &mut app);
         assert_eq!(app.popup_as::<StatsTab>(), Some(&StatsTab::Reads));
 
-        handle_key_events(KeyEvent::new(panel), &mut app).await;
-        handle_key_events(KeyEvent::new(panel), &mut app).await;
+        handle_key_events(KeyEvent::new(panel), &mut app);
+        handle_key_events(KeyEvent::new(panel), &mut app);
         assert_eq!(app.popup_as::<StatsTab>(), Some(&StatsTab::Others));
 
-        handle_key_events(KeyEvent::new(panel), &mut app).await;
+        handle_key_events(KeyEvent::new(panel), &mut app);
         assert_eq!(
             app.popup_as::<StatsTab>(),
             Some(&StatsTab::All),
             "wraps around"
         );
 
-        handle_key_events(KeyEvent::new(KeyCode::Right), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Right), &mut app);
         assert_eq!(
             app.popup_as::<StatsTab>(),
             Some(&StatsTab::All),
@@ -1434,7 +1434,7 @@ mod tests {
 
         let panel = app.config.keybinds.panel;
         for _ in 0..3 {
-            handle_key_events(KeyEvent::new(panel), &mut app).await;
+            handle_key_events(KeyEvent::new(panel), &mut app);
         }
         let others = screen(&mut app);
         assert!(!others.contains("Illegal data address"), "{others}");
@@ -1451,28 +1451,28 @@ mod tests {
             .position(|&f| f == UnitField::Repr)
             .unwrap();
         for _ in 0..index {
-            handle_key_events(KeyEvent::new(KeyCode::Down), &mut app).await;
+            handle_key_events(KeyEvent::new(KeyCode::Down), &mut app);
         }
         fn unit(app: &App) -> &UnitParams {
             app.popup_as().unwrap()
         }
         assert_eq!(unit(&app).current_field(), UnitField::Repr);
 
-        handle_key_events(KeyEvent::new(KeyCode::Right), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Right), &mut app);
         assert!(unit(&app).ascii, "arrows switch to ASCII");
-        handle_key_events(KeyEvent::new(KeyCode::Enter), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Enter), &mut app);
         assert!(!unit(&app).ascii, "enter switches back");
         assert!(
             !unit(&app).active(),
             "enter on this field never starts a scan"
         );
 
-        handle_key_events(KeyEvent::new(KeyCode::Down), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Down), &mut app);
         assert_eq!(unit(&app).current_field(), UnitField::Exceptions);
         assert!(unit(&app).show_exceptions, "listed by default");
-        handle_key_events(KeyEvent::new(kb.pause), &mut app).await;
+        handle_key_events(KeyEvent::new(kb.pause), &mut app);
         assert!(!unit(&app).show_exceptions, "space hides them");
-        handle_key_events(KeyEvent::new(KeyCode::Left), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Left), &mut app);
         assert!(unit(&app).show_exceptions);
         assert!(!unit(&app).active());
     }
@@ -1515,15 +1515,15 @@ mod tests {
             .position(|&f| f == UnitField::Exceptions)
             .unwrap();
         for _ in 0..index {
-            handle_key_events(KeyEvent::new(KeyCode::Down), &mut app).await;
+            handle_key_events(KeyEvent::new(KeyCode::Down), &mut app);
         }
-        handle_key_events(KeyEvent::new(KeyCode::Right), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Right), &mut app);
         let hidden = screen(&mut app);
         assert!(hidden.contains("Found 0"), "{hidden}");
         assert!(!hidden.contains("Illegal"), "exceptions vanish at once");
         assert!(hidden.contains("(no hits)"));
 
-        handle_key_events(KeyEvent::new(KeyCode::Left), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Left), &mut app);
         let shown = screen(&mut app);
         assert!(shown.contains("Found 3"), "{shown}");
         assert_eq!(shown.matches("Illegal").count(), 3);
@@ -1536,7 +1536,7 @@ mod tests {
     #[tokio::test]
     async fn ctrl_c_quits_a_clean_session_at_once() {
         let mut app = app().await;
-        handle_key_events(ctrl('c'), &mut app).await;
+        handle_key_events(ctrl('c'), &mut app);
         assert!(!app.running);
     }
 
@@ -1544,11 +1544,11 @@ mod tests {
     async fn ctrl_c_asks_before_discarding_unsaved_changes() {
         let mut app = app().await;
         app.dirty = true;
-        handle_key_events(ctrl('c'), &mut app).await;
+        handle_key_events(ctrl('c'), &mut app);
         assert!(app.running, "unsaved changes must be confirmed first");
         assert_eq!(app.popup_kind(), Some(PopupKind::Quit));
 
-        handle_key_events(ctrl('c'), &mut app).await;
+        handle_key_events(ctrl('c'), &mut app);
         assert!(!app.running, "a second Ctrl+C confirms");
     }
 
@@ -1557,7 +1557,7 @@ mod tests {
         let mut app = app().await;
         app.open_settings();
         app.dirty = true;
-        handle_key_events(ctrl('c'), &mut app).await;
+        handle_key_events(ctrl('c'), &mut app);
         assert!(app.running);
         assert_matches!(&app.state, State::Read(p) if p.popup == Some(Popup::Quit));
     }
@@ -1570,13 +1570,13 @@ mod tests {
         app.pin();
         assert!(app.dirty);
         let startup = app.config.startup;
-        handle_key_events(KeyEvent::new(KeyCode::Down), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Down), &mut app);
         assert_ne!(app.read().position, startup.address);
 
-        handle_key_events(KeyEvent::new(KeyCode::Esc), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Esc), &mut app);
         assert_eq!(app.popup_kind(), Some(PopupKind::Quit));
 
-        handle_key_events(KeyEvent::new(KeyCode::Char('s')), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Char('s')), &mut app);
         assert!(!app.running);
         assert!(!app.dirty);
         let saved: Config = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
@@ -1603,8 +1603,8 @@ mod tests {
         let path = blocker.join("config.json");
         let mut app = App::boot(Config::default(), path).await;
         app.pin();
-        handle_key_events(KeyEvent::new(KeyCode::Esc), &mut app).await;
-        handle_key_events(KeyEvent::new(KeyCode::Char('s')), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Esc), &mut app);
+        handle_key_events(KeyEvent::new(KeyCode::Char('s')), &mut app);
         assert!(app.running);
         assert!(app.dirty);
         assert_eq!(app.popup_kind(), None);
@@ -1620,21 +1620,21 @@ mod tests {
         let mut app = app().await;
         app.dirty = true;
         app.config.skip_unsaved_warning = true;
-        handle_key_events(ctrl('c'), &mut app).await;
+        handle_key_events(ctrl('c'), &mut app);
         assert!(!app.running);
     }
 
     #[tokio::test]
     async fn ctrl_letters_do_not_fire_the_bare_letter_binding() {
         let mut app = app().await;
-        handle_key_events(ctrl('w'), &mut app).await;
+        handle_key_events(ctrl('w'), &mut app);
         assert_eq!(
             app.popup_kind(),
             None,
             "Ctrl+W must not open the write popup"
         );
 
-        handle_key_events(KeyEvent::new(KeyCode::Char('c')), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Char('c')), &mut app);
         assert_eq!(
             app.popup_kind(),
             Some(PopupKind::Columns),
@@ -1680,15 +1680,15 @@ mod tests {
         assert_matches!(app.state, State::Diff(_));
 
         let kb = app.config.keybinds;
-        handle_key_events(KeyEvent::new(kb.panel), &mut app).await;
+        handle_key_events(KeyEvent::new(kb.panel), &mut app);
         assert!(
             app.diff_view().unwrap().changed_only,
             "the panel key switches tabs"
         );
-        handle_key_events(KeyEvent::new(KeyCode::Char('w')), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Char('w')), &mut app);
         assert!(app.diff_view().is_some(), "read keys do nothing here");
 
-        handle_key_events(KeyEvent::new(KeyCode::Esc), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Esc), &mut app);
         let read = app.read();
         assert_eq!(read.position, 42);
         assert_eq!(read.panel, ReadPanel::Pinned);
@@ -1772,7 +1772,7 @@ mod tests {
         app.open_dump();
         paste(&mut app, DUMP);
         assert_eq!(snapshot_len(&app), Some(2));
-        handle_key_events(KeyEvent::new(KeyCode::Esc), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Esc), &mut app);
         assert_eq!(app.popup_kind(), None, "the dump popup is gone");
 
         app.open_dump();
@@ -1870,7 +1870,7 @@ mod tests {
         let mut app = app().await;
         paste(&mut app, DUMP);
         app.dirty = true;
-        handle_key_events(ctrl('c'), &mut app).await;
+        handle_key_events(ctrl('c'), &mut app);
         assert!(app.running);
         assert_matches!(&app.state, State::Read(p) if p.popup == Some(Popup::Quit));
     }
@@ -1890,13 +1890,13 @@ mod tests {
     async fn a_typed_digit_past_the_last_address_warns_and_keeps_the_position() {
         let mut app = app().await;
         app.read_mut().position = 9999;
-        handle_key_events(KeyEvent::new(KeyCode::Char('9')), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Char('9')), &mut app);
         assert_eq!(app.read().position, 9999);
         assert!(warning(&app).contains("Can't append 9"));
 
         app.read_mut().status = None;
         app.read_mut().position = 6553;
-        handle_key_events(KeyEvent::new(KeyCode::Char('5')), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Char('5')), &mut app);
         assert_eq!(app.read().position, 65535);
         assert!(app.read().status.is_none());
     }
@@ -1907,15 +1907,15 @@ mod tests {
         app.interpreter.set_address_mode(AddressMode::Hex);
         app.read_mut().position = 0;
         for c in ['1', '0'] {
-            handle_key_events(KeyEvent::new(KeyCode::Char(c)), &mut app).await;
+            handle_key_events(KeyEvent::new(KeyCode::Char(c)), &mut app);
         }
         assert_eq!(app.read().position, 0x10);
 
-        handle_key_events(KeyEvent::new(KeyCode::Backspace), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Backspace), &mut app);
         assert_eq!(app.read().position, 0x1);
 
         app.read_mut().position = 0x1000;
-        handle_key_events(KeyEvent::new(KeyCode::Char('0')), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Char('0')), &mut app);
         assert_eq!(app.read().position, 0x1000);
         assert!(warning(&app).contains("past FFFF"));
     }
@@ -1927,21 +1927,21 @@ mod tests {
         app.read_mut().position = 0;
         let kb = app.config.keybinds;
 
-        handle_key_events(KeyEvent::new(kb.hex_letters), &mut app).await;
+        handle_key_events(KeyEvent::new(kb.hex_letters), &mut app);
         assert!(app.hex_letters());
         let screen = screen(&mut app);
         let bottom = screen.lines().last().unwrap();
         assert!(bottom.contains("HEX "), "{bottom}");
         assert!(bottom.find("HEX") < bottom.find("Help"), "{bottom}");
         for c in ['1', 'a', 'B'] {
-            handle_key_events(KeyEvent::new(KeyCode::Char(c)), &mut app).await;
+            handle_key_events(KeyEvent::new(KeyCode::Char(c)), &mut app);
         }
         assert_eq!(app.read().position, 0x1AB);
         assert_eq!(app.popup_kind(), None, "a no longer opens About");
 
-        handle_key_events(KeyEvent::new(kb.hex_letters), &mut app).await;
+        handle_key_events(KeyEvent::new(kb.hex_letters), &mut app);
         assert!(!app.hex_letters());
-        handle_key_events(KeyEvent::new(KeyCode::Char('a')), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Char('a')), &mut app);
         assert_eq!(app.popup_kind(), Some(PopupKind::About));
     }
 
@@ -1950,7 +1950,7 @@ mod tests {
         let mut app = app().await;
         app.interpreter.set_address_mode(AddressMode::Hex);
         app.toggle_hex_letters();
-        handle_key_events(KeyEvent::new(KeyCode::Esc), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Esc), &mut app);
         assert!(!app.hex_letters());
         assert!(app.running);
         assert_eq!(app.popup_kind(), None);
@@ -1962,15 +1962,15 @@ mod tests {
         app.read_mut().position = 0;
         app.toggle_hex_letters();
         for c in ['1', '0', 'f'] {
-            handle_key_events(KeyEvent::new(KeyCode::Char(c)), &mut app).await;
+            handle_key_events(KeyEvent::new(KeyCode::Char(c)), &mut app);
         }
         assert_eq!(app.read().position, 0x10F);
 
-        handle_key_events(KeyEvent::new(KeyCode::Backspace), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Backspace), &mut app);
         assert_eq!(app.read().position, 0x10);
 
         app.read_mut().position = 0x1000;
-        handle_key_events(KeyEvent::new(KeyCode::Char('a')), &mut app).await;
+        handle_key_events(KeyEvent::new(KeyCode::Char('a')), &mut app);
         assert_eq!(app.read().position, 0x1000);
         assert!(warning(&app).contains("past 65535"));
     }

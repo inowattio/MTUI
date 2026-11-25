@@ -361,6 +361,7 @@ impl App {
     fn apply_reconnect_result(&mut self, result: Option<Result<ModbusDevice, String>>) {
         match result {
             Some(Ok(device)) => {
+                device.set_unit(self.config.device.unit_id);
                 self.device = Some(device);
                 self.sync_api_device();
                 self.reconnect = ReconnectState::default();
@@ -1338,6 +1339,28 @@ mod tests {
 
         app.tick();
         assert!(app.background_task.is_none());
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn a_unit_id_set_during_a_reconnect_reaches_the_new_device() {
+        use crate::modbus::ModbusDevice;
+        use crate::state::UnitParams;
+
+        let mut app = App::boot(Config::default(), String::new()).await;
+        let stale = app.config.device.clone();
+        let previous = app.take_device();
+        let target = stale.unit_id.wrapping_add(4);
+
+        app.open_unit();
+        app.popup_as_mut::<UnitParams>().unwrap().id = target;
+        app.commit_unit();
+        assert_eq!(app.config.device.unit_id, target);
+
+        let device = ModbusDevice::replace(previous, &stale).await.unwrap();
+        assert_eq!(device.unit(), stale.unit_id);
+        app.apply_reconnect_result(Some(Ok(device)));
+        assert_eq!(app.device.as_ref().map(ModbusDevice::unit), Some(target));
     }
 
     #[cfg(not(target_arch = "wasm32"))]

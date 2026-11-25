@@ -63,7 +63,7 @@ where
         for event in self.events.nexts().await? {
             match event {
                 Event::Tick => app.tick(),
-                Event::Key(key_event) => handle_key_events(key_event, app).await,
+                Event::Key(key_event) => handle_key_events(key_event, app),
                 Event::Resize(_, _) => {}
                 Event::Paste(data) => handle_paste(data, app),
             }

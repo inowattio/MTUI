@@ -17,14 +17,14 @@ impl App {
         self.read_mut().popup = Some(Popup::Unit(params));
     }
 
-    pub async fn commit_unit(&mut self) {
+    pub fn commit_unit(&mut self) {
         let id = self.popup_as::<UnitParams>().map(|p| p.id);
         if let Some(id) = id {
-            self.apply_unit(id).await;
+            self.apply_unit(id);
         }
     }
 
-    pub async fn commit_unit_hit(&mut self, index: usize) {
+    pub fn commit_unit_hit(&mut self, index: usize) {
         let id = self
             .popup_as::<UnitParams>()
             .and_then(|p| p.hits.get(index))
@@ -32,21 +32,21 @@ impl App {
         let Some(id) = id else {
             return;
         };
-        self.set_unit(id).await;
+        self.set_unit(id);
         if let Some(p) = self.popup_as_mut::<UnitParams>() {
             p.id = id;
         }
     }
 
-    async fn apply_unit(&mut self, id: u8) {
-        self.set_unit(id).await;
+    fn apply_unit(&mut self, id: u8) {
+        self.set_unit(id);
         self.close_popup();
         self.refresh();
     }
 
-    async fn set_unit(&mut self, id: u8) {
+    fn set_unit(&mut self, id: u8) {
         if let Some(device) = &self.device {
-            device.set_unit(id).await;
+            device.set_unit(id);
         }
         self.config.device.unit_id = id;
         self.refresh_writes_log_state();
@@ -69,13 +69,13 @@ mod tests {
 
         app.open_unit();
         app.popup_as_mut::<UnitParams>().unwrap().id = original.wrapping_add(1);
-        app.commit_unit().await;
+        app.commit_unit();
         assert_eq!(app.config.device.unit_id, original.wrapping_add(1));
         assert!(app.dirty, "a new unit id is an unsaved change");
 
         app.open_unit();
         app.popup_as_mut::<UnitParams>().unwrap().id = original;
-        app.commit_unit().await;
+        app.commit_unit();
         assert!(!app.dirty, "restoring the saved id is clean again");
     }
 }

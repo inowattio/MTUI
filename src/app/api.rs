@@ -182,8 +182,8 @@ mod tests {
         app
     }
 
-    async fn press(app: &mut App, code: KeyCode) {
-        handle_key_events(KeyEvent::new(code), app).await;
+    fn press(app: &mut App, code: KeyCode) {
+        handle_key_events(KeyEvent::new(code), app);
         app.reconcile_api_server();
     }
 
@@ -212,12 +212,12 @@ mod tests {
     async fn stepping_the_port_edits_the_draft_too() {
         let mut app = app_on_the_api_port_field(49000).await;
 
-        press(&mut app, KeyCode::Right).await;
-        press(&mut app, KeyCode::Right).await;
+        press(&mut app, KeyCode::Right);
+        press(&mut app, KeyCode::Right);
         assert_eq!(draft(&app), Some(49002));
         assert_eq!(app.api_server_addr.map(|addr| addr.port()), Some(49000));
 
-        press(&mut app, KeyCode::Enter).await;
+        press(&mut app, KeyCode::Enter);
         assert_eq!(app.api_server_addr.map(|addr| addr.port()), Some(49002));
     }
 
@@ -227,25 +227,25 @@ mod tests {
         focus_field(&mut app, SettingsField::ApiHost);
 
         for _ in 0.."0.0.0.0".len() {
-            press(&mut app, KeyCode::Backspace).await;
+            press(&mut app, KeyCode::Backspace);
         }
         for c in "127.0.0.1 x".chars() {
-            press(&mut app, KeyCode::Char(c)).await;
+            press(&mut app, KeyCode::Char(c));
         }
         assert_eq!(host_draft(&app).as_deref(), Some("127.0.0.1"));
         assert_eq!(app.api_server_addr, Some(addr([0, 0, 0, 0], 49000)));
 
-        press(&mut app, KeyCode::Enter).await;
+        press(&mut app, KeyCode::Enter);
         assert_eq!(host_draft(&app), None);
         assert_eq!(app.api_server_addr, Some(addr([127, 0, 0, 1], 49000)));
 
-        press(&mut app, KeyCode::Char('.')).await;
-        press(&mut app, KeyCode::Enter).await;
+        press(&mut app, KeyCode::Char('.'));
+        press(&mut app, KeyCode::Enter);
         assert_eq!(host_draft(&app).as_deref(), Some("127.0.0.1."));
         assert_eq!(app.config.api.host, IpAddr::from([127, 0, 0, 1]));
         assert_eq!(app.api_server_addr, Some(addr([127, 0, 0, 1], 49000)));
 
-        press(&mut app, KeyCode::Esc).await;
+        press(&mut app, KeyCode::Esc);
         assert_eq!(host_draft(&app), None);
     }
 
@@ -253,9 +253,9 @@ mod tests {
     async fn leaving_the_field_without_enter_discards_the_draft() {
         for leave in [KeyCode::Down, KeyCode::Esc] {
             let mut app = app_on_the_api_port_field(49000).await;
-            press(&mut app, KeyCode::Right).await;
+            press(&mut app, KeyCode::Right);
 
-            press(&mut app, leave).await;
+            press(&mut app, leave);
             assert_eq!(draft(&app), None, "{leave:?} drops the draft");
             assert_eq!(app.config.api.port, 49000);
             assert_eq!(app.api_server_addr.map(|addr| addr.port()), Some(49000));
@@ -265,10 +265,10 @@ mod tests {
     #[tokio::test]
     async fn closing_settings_without_enter_keeps_the_applied_port() {
         let mut app = app_on_the_api_port_field(49000).await;
-        press(&mut app, KeyCode::Right).await;
+        press(&mut app, KeyCode::Right);
 
         let close = app.config.keybinds.settings;
-        press(&mut app, close).await;
+        press(&mut app, close);
         assert!(app.settings().is_none(), "settings closed");
         assert_eq!(app.config.api.port, 49000);
         assert_eq!(app.api_server_addr.map(|addr| addr.port()), Some(49000));
@@ -283,7 +283,7 @@ mod tests {
         assert_eq!(bind_outcome(&mut app).await, ApiBindState::Failed);
         assert!(screen(&mut app).contains("bind failed"));
 
-        press(&mut app, KeyCode::Backspace).await;
+        press(&mut app, KeyCode::Backspace);
         let edited = screen(&mut app);
         assert!(edited.contains("bind failed"), "{edited}");
         assert!(edited.contains(&(port / 10).to_string()));
@@ -299,13 +299,13 @@ mod tests {
         app.open_settings();
         focus_field(&mut app, SettingsField::ApiEnabled);
 
-        press(&mut app, KeyCode::Enter).await;
+        press(&mut app, KeyCode::Enter);
         assert_eq!(bind_outcome(&mut app).await, ApiBindState::Bound);
         assert!(screen(&mut app).contains("listening on 0.0.0.0:"));
 
         focus_field(&mut app, SettingsField::ApiPort);
         for c in port.to_string().chars() {
-            press(&mut app, KeyCode::Char(c)).await;
+            press(&mut app, KeyCode::Char(c));
         }
         let listening = format!("listening on 0.0.0.0:{port}");
         assert!(
@@ -313,7 +313,7 @@ mod tests {
             "a draft is not applied"
         );
 
-        press(&mut app, KeyCode::Enter).await;
+        press(&mut app, KeyCode::Enter);
         assert_eq!(bind_outcome(&mut app).await, ApiBindState::Bound);
         let applied = screen(&mut app);
         assert!(applied.contains(&listening), "{applied}");

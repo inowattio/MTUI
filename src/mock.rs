@@ -4,12 +4,12 @@ use async_trait::async_trait;
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
 use std::time::Duration;
+use tokio_modbus::bytes::Bytes;
 use tokio_modbus::client::{Client, Context};
 use tokio_modbus::prelude::{
     ConformityLevel, DeviceIdObject, ReadCode, ReadDeviceIdentificationResponse,
 };
 use tokio_modbus::slave::{Slave as Unit, SlaveContext, SlaveId as UnitId};
-use tokio_modbus::bytes::Bytes;
 use tokio_modbus::{ExceptionCode, Request, Response};
 
 /// A simulated RS-485 bus of power meters.
@@ -1351,7 +1351,11 @@ mod tests {
             Ok(Request::ReadInputRegisters(4, 1))
         );
 
-        for unchanged in [custom(0x08, &[0, 0, 1, 2]), custom(0x41, &[1]), custom(0x90, &[])] {
+        for unchanged in [
+            custom(0x08, &[0, 0, 1, 2]),
+            custom(0x41, &[1]),
+            custom(0x90, &[]),
+        ] {
             assert_eq!(standard_request(unchanged.clone()), Ok(unchanged));
         }
 

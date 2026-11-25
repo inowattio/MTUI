@@ -948,7 +948,9 @@ trait RawCall {
 
 impl RawCall for Context {
     async fn raw_call(&mut self, request: Request<'_>) -> tokio_modbus::Result<Response> {
-        self.call(request).await.or_else(recover_mismatched_response)
+        self.call(request)
+            .await
+            .or_else(recover_mismatched_response)
     }
 }
 
@@ -1082,9 +1084,8 @@ impl ModbusDevice {
         self.default_unit.load(Ordering::Relaxed)
     }
 
-    pub async fn set_unit(&self, unit_id: UnitId) {
+    pub fn set_unit(&self, unit_id: UnitId) {
         self.default_unit.store(unit_id, Ordering::Relaxed);
-        self.context.lock().await.set_slave(Unit(unit_id));
     }
 
     pub fn poison(&self) {
