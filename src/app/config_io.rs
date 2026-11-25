@@ -2,13 +2,14 @@ use super::{App, BackgroundTask, LoadConfigTaskResult, file_name, save_config};
 use crate::compat;
 use crate::config::{Config, Registers, Startup};
 use crate::constants::message;
+use crate::export;
 use crate::import::mbmap;
 use crate::import::{Device, home_assistant, solarman};
 use crate::modbus::ModbusDevice;
 use crate::num_ops::wrap_index;
 use crate::state::{
-    ConfigImport, ConfigImportAction, ConnectionStatus, FirmwareInput, ImportDevice, ImportParams,
-    ImportSource, Outcome, Popup, State, StatusMessage,
+    ConfigImport, ConfigImportAction, ConnectionStatus, ExportFormat, ExportTarget, FirmwareInput,
+    ImportDevice, ImportParams, ImportSource, Outcome, Popup, State, StatusMessage,
 };
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -380,22 +381,6 @@ impl App {
         serde_json::to_string_pretty(&self.registers()).unwrap_or_default()
     }
 
-    pub fn copy_data_to_clipboard(&mut self) {
-        let pins = self.pinned_registers.len();
-        let labels = self.labels.len();
-        let rules = self.custom_rules.len();
-        let json = self.export_payload_json();
-        let message = if self.set_clipboard(json) {
-            log::info!("Copied {pins} pin(s), {labels} label(s), {rules} rule(s) to clipboard");
-            StatusMessage::ok(format!(
-                "Copied {pins} pin(s), {labels} label(s), {rules} rule(s) to clipboard"
-            ))
-        } else {
-            StatusMessage::err(message::CLIPBOARD_UNAVAILABLE)
-        };
-        self.set_settings_status(message);
-    }
-
     fn config_json(&self) -> String {
         let mut config = self.effective_config();
         if let Some(startup) = self.current_position() {
@@ -404,14 +389,58 @@ impl App {
         serde_json::to_string_pretty(&config).unwrap_or_default()
     }
 
-    pub fn copy_config_to_clipboard(&mut self) {
-        let json = self.config_json();
-        let message = if self.set_clipboard(json) {
-            log::info!("Copied the configuration to clipboard");
-            StatusMessage::ok(message::CONFIG_COPIED)
-        } else {
-            StatusMessage::err(message::CLIPBOARD_UNAVAILABLE)
+    fn export_text(&self, format: ExportFormat) -> String {
+        match format {
+            ExportFormat::Registers => self.export_payload_json(),
+            ExportFormat::Config => self.config_json(),
+            ExportFormat::HomeAssistant => export::home_assistant::export(&self.effective_config()),
+            ExportFormat::Mbmap => export::mbmap::export(&self.effective_config()),
+        }
+    }
+
+    fn export_subject(&self, format: ExportFormat) -> String {
+        match format {
+            ExportFormat::Registers => format!(
+                "{} pin(s), {} label(s), {} rule(s)",
+                self.pinned_registers.len(),
+                self.labels.len(),
+                self.custom_rules.len()
+            ),
+            ExportFormat::Config => "the configuration".to_string(),
+            ExportFormat::HomeAssistant | ExportFormat::Mbmap => {
+                format!("the {} map", format.label())
+            }
+        }
+    }
+
+    pub fn export(&mut self) {
+        let Some((format, target)) = self.settings().map(|s| (s.export_format, s.export_target))
+        else {
+            return;
         };
+        let text = self.export_text(format);
+        let subject = self.export_subject(format);
+        let message = match target {
+            ExportTarget::Clipboard => {
+                if self.set_clipboard(text) {
+                    StatusMessage::ok(format!("Exported {subject} to clipboard"))
+                } else {
+                    StatusMessage::err(message::CLIPBOARD_UNAVAILABLE)
+                }
+            }
+            ExportTarget::File => {
+                let date = chrono::Local::now().format("%Y%m%d_%H%M%S").to_string();
+                let path = file_name(
+                    &["export", &self.config.name, format.file_tag(), &date],
+                    format.extension(),
+                );
+                match fs::write(&path, text) {
+                    Ok(()) => StatusMessage::ok(format!("Exported {subject} to {path}")),
+                    Err(e) => StatusMessage::err(format!("Export failed: {e}")),
+                }
+            }
+        };
+        log::info!("{}", message.text);
         self.set_settings_status(message);
     }
 

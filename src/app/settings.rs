@@ -4,7 +4,9 @@ use crate::config::{AddressMode, BatchAnchor, TimeMode};
 use crate::interpretator::WIDTH_MAX;
 use crate::num_ops::cycle;
 use crate::register::RegisterType;
-use crate::state::{ReadPanel, SettingsField, SettingsParams, State, StatusMessage};
+use crate::state::{
+    ExportFormat, ExportTarget, ReadPanel, SettingsField, SettingsParams, State, StatusMessage,
+};
 use crate::tui::theme::{self, Theme};
 use ratatui::style::Color;
 
@@ -237,6 +239,16 @@ impl App {
                 }
             }
             SettingsField::LibraryDisclaimer => self.config.libraries.disclaimer_accepted.toggle(),
+            SettingsField::ExportFormat => {
+                if let Some(s) = self.settings_mut() {
+                    s.export_format = cycle(&ExportFormat::ALL, s.export_format, delta > 0);
+                }
+            }
+            SettingsField::ExportTarget => {
+                if let Some(s) = self.settings_mut() {
+                    s.export_target = cycle(&ExportTarget::ALL, s.export_target, delta > 0);
+                }
+            }
             SettingsField::CyclePinned
             | SettingsField::CycleLabeled
             | SettingsField::CycleCustom

@@ -7,6 +7,7 @@ pub mod constants;
 pub mod custom;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod event;
+pub mod export;
 pub mod frames;
 pub mod functions;
 pub mod handler;

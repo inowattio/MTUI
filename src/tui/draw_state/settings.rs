@@ -374,7 +374,9 @@ fn field_value(
         SettingsField::ClearPins => (format!("{} pinned", app.pinned_registers.len()), None),
         SettingsField::ClearLabels => (format!("{} labels", app.label_count()), None),
         SettingsField::ClearCustom => (format!("{} rules", app.custom_count()), None),
-        SettingsField::CopyData => (String::new(), None),
+        SettingsField::ExportFormat => (params.export_format.label().to_string(), None),
+        SettingsField::ExportTarget => (params.export_target.label().to_string(), None),
+        SettingsField::Export => (String::new(), None),
         SettingsField::LibraryMbmap
         | SettingsField::LibrarySunSpec
         | SettingsField::LibrarySolarman => (
@@ -394,7 +396,6 @@ fn field_value(
             (accepted.to_string(), None)
         }
         SettingsField::ClearLibraryCache => (String::new(), None),
-        SettingsField::CopyConfig => (String::new(), None),
         SettingsField::ShowRuleContinuation => (on_off(device.display.rule_continuation), None),
         SettingsField::ChangedFade => (on_off(device.display.changed_fade), None),
         SettingsField::ChangedBits => (on_off(device.display.changed_bits), None),

@@ -39,7 +39,6 @@ pub mod message {
     pub const DUMP_NO_ADDRESS: &str = "Dump has no address column";
     pub const DUMP_NO_RAW_COLUMN: &str = "Dump has no u16, hex, i16 or bits column";
     pub const DUMP_NO_ROWS: &str = "Dump has no register rows";
-    pub const CONFIG_COPIED: &str = "Copied the configuration to clipboard";
     pub const LOADING: &str = "Loading...";
     pub const NO_NEXT_CONFIG: &str = "No next configuration set";
     pub const READ_ONLY_ON: &str = "Read-only mode is on (toggle in settings)";

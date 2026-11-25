@@ -1776,13 +1776,16 @@ settings_fields! {
             ClearPins: Action => "Clear pinned registers", "Remove every pinned register",
             ClearLabels: Action => "Clear labels", "Remove every label",
             ClearCustom: Action => "Clear custom rules", "Remove every custom rule",
-            CopyData: Action => "Copy registers", "Copy pins, labels and custom rules as JSON, paste into another MTUI to import",
         ],
         [
-            CopyConfig: Action => "Copy configuration", "Copy the whole configuration as JSON, as Save would write it",
             Save: Action => "Save configuration", "Write the current settings to the configuration file",
             LoadConfig: Text => "Load configuration", "Path of a configuration file to load now",
             NextConfig: Text => "Next configuration", "Configuration file loaded by the cycle config key",
+        ],
+        [
+            ExportFormat: Toggle => "Export format", "Registers: pins, labels and custom rules as MTUI JSON, Whole config: as Save would write it, Home Assistant: modbus YAML, mbmap: .mbmap.json device map",
+            ExportTarget: Toggle => "Export to", "Copy to the clipboard or write a file in the directory MTUI was started from",
+            Export: Action => "Export", "Export the chosen format to the chosen destination",
         ],
     }
     Changes {}
@@ -1986,6 +1989,68 @@ impl From<Outcome> for StatusMessage {
     }
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ExportFormat {
+    #[default]
+    Registers,
+    Config,
+    HomeAssistant,
+    Mbmap,
+}
+
+impl ExportFormat {
+    pub const ALL: [Self; 4] = [
+        Self::Registers,
+        Self::Config,
+        Self::HomeAssistant,
+        Self::Mbmap,
+    ];
+
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Registers => "Registers",
+            Self::Config => "Whole config",
+            Self::HomeAssistant => "Home Assistant YAML",
+            Self::Mbmap => "mbmap",
+        }
+    }
+
+    pub const fn extension(self) -> &'static str {
+        match self {
+            Self::Registers | Self::Config => "json",
+            Self::HomeAssistant => "yaml",
+            Self::Mbmap => "mbmap.json",
+        }
+    }
+
+    pub const fn file_tag(self) -> &'static str {
+        match self {
+            Self::Registers => "registers",
+            Self::Config => "config",
+            Self::HomeAssistant => "home_assistant",
+            Self::Mbmap => "",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ExportTarget {
+    #[default]
+    Clipboard,
+    File,
+}
+
+impl ExportTarget {
+    pub const ALL: [Self; 2] = [Self::Clipboard, Self::File];
+
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Clipboard => "Clipboard",
+            Self::File => "File",
+        }
+    }
+}
+
 #[derive(Debug, Default, PartialEq)]
 pub struct SettingsParams {
     pub category: u16,
@@ -1999,6 +2064,8 @@ pub struct SettingsParams {
     pub query: String,
     pub api_port_draft: Option<u16>,
     pub api_host_draft: Option<String>,
+    pub export_format: ExportFormat,
+    pub export_target: ExportTarget,
 }
 
 impl SettingsParams {
