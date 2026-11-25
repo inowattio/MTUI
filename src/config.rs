@@ -79,7 +79,7 @@ pub struct GraphConfig {
 impl Default for GraphConfig {
     fn default() -> Self {
         Self {
-            history: 180,
+            history: 127,
             time_axis: true,
         }
     }
