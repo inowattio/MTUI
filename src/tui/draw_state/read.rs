@@ -461,7 +461,7 @@ impl TableCtx<'_> {
                 let cell = (params.register_type, addr);
                 let changed = app.cell_changed(cell, now);
                 let heat = changed.map(|c| c.heat);
-                let (text, mut style) = match app.cell_value(cell) {
+                let (text, mut style) = match app.word_value(cell) {
                     Some(value) => {
                         let style = theme.row_style(zebra, heat);
                         (Cow::from(format!("{value: >5}")), style)

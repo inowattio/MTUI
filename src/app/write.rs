@@ -2,7 +2,7 @@ use super::{App, BackgroundTask, PendingWrite, QueuedWrite, WriteOutcome, WriteT
 use crate::compat;
 use crate::constants::UNINTERPRETABLE;
 use crate::constants::message;
-use crate::custom::{CustomCell, CustomRule};
+use crate::custom::{CustomCell, CustomRepr, CustomRule};
 use crate::modbus::WordOrder;
 use crate::num_ops::cycle;
 use crate::register::{RegisterCell, RegisterType};
@@ -43,7 +43,8 @@ impl App {
 
         let value = match write_type {
             WriteType::DWord => self.dword_value((kind, write_pos), false).map(i64::from),
-            _ => self.cell_value((kind, write_pos)).map(i64::from),
+            WriteType::Word => self.single_value((kind, write_pos)).map(i64::from),
+            WriteType::Coil => self.cell_value((kind, write_pos)).map(i64::from),
         };
 
         let bit_cursor = write_type.bits() - 1;
@@ -78,6 +79,15 @@ impl App {
             cell.1,
             self.config.device.word_order,
         )
+    }
+
+    fn single_order(&self, cell: RegisterCell) -> WordOrder {
+        single_order(self.custom_rule(cell), self.config.device.word_order)
+    }
+
+    fn single_value(&self, cell: RegisterCell) -> Option<u16> {
+        let order = self.single_order(cell);
+        self.cell_value(cell).map(|value| order.single(value))
     }
 
     fn dword_value(&self, cell: RegisterCell, raw: bool) -> Option<u32> {
@@ -151,7 +161,7 @@ impl App {
         let ([_, second_address], order) = self.dword_layout(cell, w.raw);
         let (value, second) = match w.write_type {
             WriteType::Coil => ((number != 0) as u16, None),
-            WriteType::Word => (number as u16, None),
+            WriteType::Word => (self.single_order(cell).single(number as u16), None),
             WriteType::DWord => {
                 let [first, second] = order.split_word(number as u32);
                 (first, Some(second))
@@ -247,7 +257,10 @@ impl App {
         };
         let cell = (kind, position);
         let (previous, new_value) = match write_type {
-            WriteType::Word => (self.cell_value(cell).map(u64::from), (number as u16) as u64),
+            WriteType::Word => (
+                self.single_value(cell).map(u64::from),
+                (number as u16) as u64,
+            ),
             WriteType::Coil => (self.cell_value(cell).map(u64::from), (number != 0) as u64),
             WriteType::DWord => (
                 self.dword_value(cell, raw).map(u64::from),
@@ -263,10 +276,13 @@ impl App {
             new_value,
         });
 
-        let (_, word_order) = self.dword_layout(cell, raw);
+        let word_order = match write_type {
+            WriteType::Word => self.single_order(cell),
+            _ => self.dword_layout(cell, raw).1,
+        };
         self.background_task = Some(BackgroundTask::Write(compat::spawn(async move {
             let words = match write_type {
-                WriteType::Word => vec![number as u16],
+                WriteType::Word => vec![word_order.single(number as u16)],
                 WriteType::DWord => word_order.split_word(number as u32).to_vec(),
                 WriteType::Coil => vec![],
             };
@@ -276,7 +292,7 @@ impl App {
                     .await
                     .map(|((), latency)| (Vec::new(), latency)),
                 (WriteType::Word, WriteFunc::Single) => device
-                    .write_register(position, number as u16)
+                    .write_register(position, word_order.single(number as u16))
                     .await
                     .map(|((), latency)| (Vec::new(), latency)),
                 (_, WriteFunc::ReadWrite) => device.read_write_registers(position, &words).await,
@@ -402,6 +418,11 @@ fn dword_layout(
     }
 }
 
+fn single_order(rule: Option<&CustomRule>, device_order: WordOrder) -> WordOrder {
+    rule.filter(|rule| rule.repr.register_count() == 1 && rule.repr != CustomRepr::Ascii)
+        .map_or(device_order, |rule| rule.order(device_order))
+}
+
 fn read_back_message(read_back: Option<u128>, written: u64) -> String {
     match read_back {
         None => "Write OK".to_string(),
@@ -412,7 +433,7 @@ fn read_back_message(read_back: Option<u128>, written: u64) -> String {
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
-    use super::{dword_layout, read_back_message};
+    use super::{dword_layout, read_back_message, single_order};
     use crate::app::{App, BackgroundTask};
     use crate::config::Config;
     use crate::constants::message;
@@ -427,6 +448,22 @@ mod tests {
             repr,
             address,
             ..Default::default()
+        }
+    }
+
+    #[test]
+    fn single_writes_follow_a_one_register_rule_else_the_device() {
+        assert_eq!(single_order(None, WordOrder::BADC), WordOrder::BADC);
+
+        let mut r = rule(CustomRepr::I16, 10);
+        assert_eq!(single_order(Some(&r), WordOrder::DCBA), WordOrder::DCBA);
+        r.word_order = Some(WordOrder::BADC);
+        assert_eq!(single_order(Some(&r), WordOrder::ABCD), WordOrder::BADC);
+
+        for repr in [CustomRepr::Ascii, CustomRepr::U32] {
+            let mut r = rule(repr, 10);
+            r.word_order = Some(WordOrder::BADC);
+            assert_eq!(single_order(Some(&r), WordOrder::CDAB), WordOrder::CDAB);
         }
     }
 

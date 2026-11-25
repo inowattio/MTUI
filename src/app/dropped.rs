@@ -1,5 +1,6 @@
 use super::diff::PastedDump;
 use crate::config::AddressMode;
+use crate::modbus::WordOrder;
 use crate::snapshot::{self, SnapshotError};
 use std::io::{self, Read as _};
 use std::path::{Path, PathBuf};
@@ -7,7 +8,7 @@ use std::path::{Path, PathBuf};
 const DUMP_HEAD_BYTES: u64 = 4096;
 const DUMP_FILE_LIMIT: u64 = 256 * 1024 * 1024;
 
-pub(super) fn dropped_dump(text: &str, mode: AddressMode) -> PastedDump {
+pub(super) fn dropped_dump(text: &str, mode: AddressMode, order: WordOrder) -> PastedDump {
     let Some(path) = dropped_path(text) else {
         return PastedDump::Other;
     };
@@ -18,7 +19,7 @@ pub(super) fn dropped_dump(text: &str, mode: AddressMode) -> PastedDump {
     let parsed = match dump_file_text(&path) {
         Err(error) => return PastedDump::Invalid(format!("Couldn't read {name}: {error}")),
         Ok(None) => Err(SnapshotError::NotADump),
-        Ok(Some(content)) => snapshot::parse_dump(&content, mode),
+        Ok(Some(content)) => snapshot::parse_dump(&content, mode, order),
     };
     match parsed {
         Ok(snapshot) => PastedDump::Snapshot(snapshot),

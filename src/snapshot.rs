@@ -1,6 +1,7 @@
 use crate::config::{AddressMode, Column};
 use crate::constants::message;
 use crate::interpretator::{RowSegment, is_age};
+use crate::modbus::WordOrder;
 use crate::register::{RegisterCell, RegisterType};
 use std::collections::BTreeMap;
 use std::fmt;
@@ -11,7 +12,7 @@ pub const TYPE_COLUMN: &str = "type";
 
 const BOM: char = '\u{feff}';
 
-const RAW_COLUMNS: [Column; 4] = [Column::U16, Column::Hex, Column::I16, Column::Bits];
+const RAW_COLUMNS: [Column; 4] = [Column::Hex, Column::Bits, Column::U16, Column::I16];
 
 pub fn csv_line<'a>(fields: impl Iterator<Item = &'a str>) -> String {
     let mut line = fields.map(csv_field).collect::<Vec<_>>().join(",");
@@ -171,14 +172,19 @@ impl DumpHeader {
         })
     }
 
-    fn row(&self, fields: &[String], mode: AddressMode) -> Option<(RegisterCell, SnapshotEntry)> {
+    fn row(
+        &self,
+        fields: &[String],
+        mode: AddressMode,
+        order: WordOrder,
+    ) -> Option<(RegisterCell, SnapshotEntry)> {
         if fields.len() != self.width {
             return None;
         }
         let kind = register_type(&fields[0])?;
         let address = mode.parse(&fields[self.address])?;
         let (column, index) = self.raw;
-        let value = raw_value(column, &fields[index])?;
+        let value = raw_value(column, &fields[index], order.for_kind(kind))?;
         let time = self
             .time
             .map(|index| fields[index].trim())
@@ -195,14 +201,17 @@ fn register_type(text: &str) -> Option<RegisterType> {
         .find(|kind| kind.name().eq_ignore_ascii_case(text))
 }
 
-fn raw_value(column: Column, text: &str) -> Option<u16> {
+fn raw_value(column: Column, text: &str, order: WordOrder) -> Option<u16> {
     let text = text.trim();
     match column {
-        Column::U16 => text.parse().ok(),
+        Column::U16 => text.parse().ok().map(|value| order.single(value)),
         Column::Hex if text.len() == 4 && text.bytes().all(|b| b.is_ascii_hexdigit()) => {
             u16::from_str_radix(text, 16).ok()
         }
-        Column::I16 => text.parse::<i16>().ok().map(i16::cast_unsigned),
+        Column::I16 => text
+            .parse::<i16>()
+            .ok()
+            .map(|value| order.single(value.cast_unsigned())),
         Column::Bits => bits_value(text),
         _ => None,
     }
@@ -220,7 +229,11 @@ fn bits_value(text: &str) -> Option<u16> {
     u16::from_str_radix(&groups.concat(), 2).ok()
 }
 
-pub fn parse_dump(text: &str, address_mode: AddressMode) -> Result<Snapshot, SnapshotError> {
+pub fn parse_dump(
+    text: &str,
+    address_mode: AddressMode,
+    order: WordOrder,
+) -> Result<Snapshot, SnapshotError> {
     if !is_dump(text) {
         return Err(SnapshotError::NotADump);
     }
@@ -234,7 +247,7 @@ pub fn parse_dump(text: &str, address_mode: AddressMode) -> Result<Snapshot, Sna
     let mut snapshot = Snapshot::new();
     for record in records {
         let (cell, entry) = header
-            .row(&record.fields, address_mode)
+            .row(&record.fields, address_mode, order)
             .ok_or(SnapshotError::MalformedRow(record.line))?;
         snapshot.insert(cell, entry);
     }
@@ -350,7 +363,7 @@ mod tests {
     }
 
     fn dec(text: &str) -> Result<Snapshot, SnapshotError> {
-        parse_dump(text, AddressMode::Dec)
+        parse_dump(text, AddressMode::Dec, WordOrder::ABCD)
     }
 
     fn value(snapshot: &Snapshot, cell: RegisterCell) -> u16 {
@@ -499,12 +512,14 @@ mod tests {
     }
 
     #[test]
-    fn u16_wins_over_the_other_raw_columns() {
+    fn hex_then_bits_then_u16_then_i16_win() {
         let snapshot = dec("type,address,bits,i16,hex,u16\ninput,1,0000 0000 0000 0001,2,0003,4\n");
-        assert_eq!(value(&snapshot.unwrap(), (INPUT, 1)), 4);
-        let snapshot = dec("type,address,bits,i16,hex\ninput,1,0000 0000 0000 0001,2,0003\n");
         assert_eq!(value(&snapshot.unwrap(), (INPUT, 1)), 3);
-        let snapshot = dec("type,address,bits,i16\ninput,1,0000 0000 0000 0001,2\n");
+        let snapshot = dec("type,address,bits,i16,u16\ninput,1,0000 0000 0000 0001,2,4\n");
+        assert_eq!(value(&snapshot.unwrap(), (INPUT, 1)), 1);
+        let snapshot = dec("type,address,i16,u16\ninput,1,2,4\n");
+        assert_eq!(value(&snapshot.unwrap(), (INPUT, 1)), 4);
+        let snapshot = dec("type,address,i16\ninput,1,2\n");
         assert_eq!(value(&snapshot.unwrap(), (INPUT, 1)), 2);
     }
 
@@ -559,12 +574,43 @@ mod tests {
     fn addresses_follow_the_address_mode_and_accept_a_hex_prefix() {
         let text = "type,address,u16\ninput,1F,5\n";
         assert_eq!(dec(text), Err(SnapshotError::MalformedRow(2)));
-        let snapshot = parse_dump(text, AddressMode::Hex).unwrap();
+        let snapshot = parse_dump(text, AddressMode::Hex, WordOrder::ABCD).unwrap();
         assert_eq!(value(&snapshot, (INPUT, 31)), 5);
 
         for mode in AddressMode::ALL {
-            let snapshot = parse_dump("type,address,u16\nINPUT,0x1f,6\n", mode).unwrap();
+            let snapshot =
+                parse_dump("type,address,u16\nINPUT,0x1f,6\n", mode, WordOrder::ABCD).unwrap();
             assert_eq!(value(&snapshot, (INPUT, 31)), 6, "{mode:?}");
+        }
+    }
+
+    #[test]
+    fn decoded_columns_are_swapped_back_and_raw_columns_win() {
+        let parse = |text: &str, order| {
+            value(
+                &parse_dump(text, AddressMode::Dec, order).unwrap(),
+                (INPUT, 0),
+            )
+        };
+        for order in [WordOrder::ABCD, WordOrder::CDAB] {
+            assert_eq!(parse("type,address,u16\ninput,0,4660\n", order), 0x1234);
+        }
+        for order in [WordOrder::BADC, WordOrder::DCBA] {
+            assert_eq!(parse("type,address,u16\ninput,0,4660\n", order), 0x3412);
+            assert_eq!(parse("type,address,i16\ninput,0,-2\n", order), 0xFEFF);
+        }
+        for order in WordOrder::ALL {
+            assert_eq!(
+                parse("type,address,u16,hex\ninput,0,4660,3412\n", order),
+                0x3412
+            );
+            assert_eq!(
+                parse(
+                    "type,address,i16,bits\ninput,0,4660,0011 0100 0001 0010\n",
+                    order
+                ),
+                0x3412
+            );
         }
     }
 

@@ -303,7 +303,8 @@ fn register_list(map: &RegisterMap, only: Option<RegisterType>) -> Vec<Value> {
                 entry.insert("name".into(), json!(name));
             }
             if let Some(rule) = map.rules.get(&cell) {
-                entry.insert("rule".into(), rule_description(rule, map.word_order));
+                let order = map.word_order.for_kind(cell.0);
+                entry.insert("rule".into(), rule_description(rule, order));
             }
             Value::Object(entry)
         })
@@ -317,7 +318,7 @@ fn rule_description(rule: &CustomRule, order: WordOrder) -> Value {
         "words".into(),
         json!(rule.word_addresses().collect::<Vec<_>>()),
     );
-    description.insert("word_order".into(), json!(rule.word_order.unwrap_or(order)));
+    description.insert("word_order".into(), json!(rule.order(order)));
     if let Some(scale) = rule.scale() {
         description.insert("scale".into(), json!(scale));
     }
@@ -431,8 +432,9 @@ fn decoded(map: &RegisterMap, kind: RegisterType, start: u16, values: &[u16]) ->
             if let Some(name) = map.labels.get(&cell) {
                 entry.insert("name".into(), json!(name));
             }
-            entry.insert("text".into(), json!(rule.evaluate(&words, map.word_order)));
-            if let Some(value) = rule.numeric(&words, map.word_order) {
+            let order = map.word_order.for_kind(kind);
+            entry.insert("text".into(), json!(rule.evaluate(&words, order)));
+            if let Some(value) = rule.numeric(&words, order) {
                 entry.insert("value".into(), json!(value));
             }
             Some(Value::Object(entry))

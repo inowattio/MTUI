@@ -68,9 +68,10 @@ impl App {
 
     fn pasted_dump(&self, text: &str) -> PastedDump {
         let mode = self.interpreter.address_mode();
-        match snapshot::parse_dump(text, mode) {
+        let order = self.config.device.word_order;
+        match snapshot::parse_dump(text, mode, order) {
             Ok(snapshot) => PastedDump::Snapshot(snapshot),
-            Err(SnapshotError::NotADump) => dropped_dump(text, mode),
+            Err(SnapshotError::NotADump) => dropped_dump(text, mode, order),
             Err(error) => PastedDump::Invalid(error.to_string()),
         }
     }
@@ -183,7 +184,7 @@ impl App {
             .custom_value(cell, entry.value, &at)
             .and_then(CustomCell::value);
         self.interpreter.format_row(
-            addr,
+            cell,
             entry.value,
             following(addr, self.interpreter.lookahead(), at),
             entry.time.as_deref().unwrap_or(NO_VALUE),
@@ -205,7 +206,11 @@ impl App {
 }
 
 #[cfg(target_arch = "wasm32")]
-const fn dropped_dump(_: &str, _: crate::config::AddressMode) -> PastedDump {
+const fn dropped_dump(
+    _: &str,
+    _: crate::config::AddressMode,
+    _: crate::modbus::WordOrder,
+) -> PastedDump {
     PastedDump::Other
 }
 
@@ -239,7 +244,12 @@ mod tests {
     }
 
     fn dumped(app: &App) -> Snapshot {
-        parse_dump(&app.dump_csv(Utc::now()), app.interpreter.address_mode()).unwrap()
+        parse_dump(
+            &app.dump_csv(Utc::now()),
+            app.interpreter.address_mode(),
+            app.config.device.word_order,
+        )
+        .unwrap()
     }
 
     fn snapshot_with_changes(app: &App) -> Snapshot {

@@ -687,8 +687,9 @@ impl App {
                 time_text: Arc::clone(&time_text),
             };
             let previous = self.read_log.insert(cell, entry);
+            let order = self.config.device.word_order.for_kind(cell.0);
             if let Some(prev) = previous
-                && let Some(trend) = Trend::between(prev.value, value)
+                && let Some(trend) = Trend::between(order.single(prev.value), order.single(value))
             {
                 let flipped = prev.value ^ value;
                 let change = Change {
@@ -1339,6 +1340,22 @@ mod tests {
 
         app.tick();
         assert!(app.background_task.is_none());
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn trends_compare_the_byte_ordered_value() {
+        use crate::app::Trend;
+        use crate::modbus::WordOrder;
+
+        let mut app = App::boot(Config::default(), String::new()).await;
+        app.config.device.word_order = WordOrder::BADC;
+        let holding = (RegisterType::Holding, 900);
+        let coil = (RegisterType::Coil, 900);
+        app.store_values(&[(holding, 0xFF00), (coil, 0)]);
+        app.store_values(&[(holding, 0x0001), (coil, 1)]);
+        assert_eq!(app.changed[&holding].trend, Trend::Up);
+        assert_eq!(app.changed[&coil].trend, Trend::Up);
     }
 
     #[cfg(not(target_arch = "wasm32"))]

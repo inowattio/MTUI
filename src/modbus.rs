@@ -151,6 +151,18 @@ impl WordOrder {
         self.swaps().0
     }
 
+    pub const fn for_kind(self, kind: RegisterType) -> Self {
+        if kind.is_bit() { Self::ABCD } else { self }
+    }
+
+    pub const fn single(self, word: u16) -> u16 {
+        if self.swaps_bytes() {
+            word.swap_bytes()
+        } else {
+            word
+        }
+    }
+
     const fn ordered(self, a: u16, b: u16) -> (u16, u16) {
         let (byte_swap, word_swap) = self.swaps();
         let (mut high, mut low) = if word_swap { (b, a) } else { (a, b) };
@@ -191,7 +203,7 @@ impl WordOrder {
 
     pub fn assemble(self, words: &[u16]) -> Option<u128> {
         Some(match words.len() {
-            1 => u128::from(*words.first()?),
+            1 => u128::from(self.single(*words.first()?)),
             2 => u128::from(self.make_word(*words.first()?, *words.get(1)?)),
             4 => u128::from(self.make_dword(words.try_into().ok()?)),
             8 => self.make_qword(words.try_into().ok()?),
@@ -258,7 +270,10 @@ mod tests {
             0x0102, 0x0304, 0x0506, 0x0708, 0x090A, 0x0B0C, 0x0D0E, 0x0F10,
         ];
         for order in WordOrder::ALL {
-            assert_eq!(order.assemble(&regs[..1]), Some(0x0102));
+            assert_eq!(
+                order.assemble(&regs[..1]),
+                Some(u128::from(order.single(0x0102)))
+            );
             assert_eq!(
                 order.assemble(&regs[..2]),
                 Some(u128::from(order.make_word(0x0102, 0x0304)))
@@ -273,6 +288,17 @@ mod tests {
                 assert_eq!(order.assemble(&regs[..n]), None);
             }
             assert_eq!(order.assemble(&regs), Some(order.make_qword(regs)));
+        }
+    }
+
+    #[test]
+    fn a_single_word_swaps_only_its_bytes() {
+        assert_eq!(WordOrder::ABCD.single(0x1234), 0x1234);
+        assert_eq!(WordOrder::CDAB.single(0x1234), 0x1234);
+        assert_eq!(WordOrder::BADC.single(0x3412), 0x1234);
+        assert_eq!(WordOrder::DCBA.single(0x3412), 0x1234);
+        for order in WordOrder::ALL {
+            assert_eq!(order.single(order.single(0xA1B2)), 0xA1B2);
         }
     }
 

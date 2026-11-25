@@ -62,6 +62,7 @@ impl App {
 mod tests {
     use crate::app::{App, settle_until};
     use crate::config::{AddressMode, Column, Config};
+    use crate::modbus::WordOrder;
     use crate::register::RegisterType;
     use crate::snapshot::{Snapshot, parse_dump};
     use chrono::Utc;
@@ -96,23 +97,32 @@ mod tests {
         let dump = app.dump_csv(Utc::now());
         assert!(dump.starts_with("type,address,time,u16,"), "{dump}");
 
-        let snapshot = parse_dump(&dump, app.interpreter.address_mode()).expect("a valid dump");
+        let snapshot = parse_dump(
+            &dump,
+            app.interpreter.address_mode(),
+            app.config.device.word_order,
+        )
+        .expect("a valid dump");
         assert_matches_the_read_log(&app, &snapshot);
     }
 
     #[tokio::test]
     async fn each_raw_column_alone_is_enough_to_recover_the_values() {
         let mut app = read_app().await;
-        for kept in RAW {
-            for column in RAW {
-                if app.interpreter.is_enabled(column) != (column == kept) {
-                    app.interpreter.toggle(column);
+        for order in WordOrder::ALL {
+            app.config.device.word_order = order;
+            app.interpreter.set_word_order(order);
+            for kept in RAW {
+                for column in RAW {
+                    if app.interpreter.is_enabled(column) != (column == kept) {
+                        app.interpreter.toggle(column);
+                    }
                 }
+                let dump = app.dump_csv(Utc::now());
+                let snapshot = parse_dump(&dump, app.interpreter.address_mode(), order)
+                    .unwrap_or_else(|e| panic!("{order:?} {}: {e}", kept.name()));
+                assert_matches_the_read_log(&app, &snapshot);
             }
-            let dump = app.dump_csv(Utc::now());
-            let snapshot = parse_dump(&dump, app.interpreter.address_mode())
-                .unwrap_or_else(|e| panic!("{}: {e}", kept.name()));
-            assert_matches_the_read_log(&app, &snapshot);
         }
     }
 
@@ -126,7 +136,7 @@ mod tests {
 
         let dump = app.dump_csv(Utc::now());
         assert!(dump.contains("\ninput,C8,"), "{dump}");
-        let snapshot = parse_dump(&dump, AddressMode::Hex).expect("a valid dump");
+        let snapshot = parse_dump(&dump, AddressMode::Hex, WordOrder::ABCD).expect("a valid dump");
         assert_matches_the_read_log(&app, &snapshot);
     }
 }

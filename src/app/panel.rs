@@ -273,6 +273,11 @@ impl App {
         self.read_log.get(&cell).map(|entry| entry.value)
     }
 
+    pub fn word_value(&self, cell: RegisterCell) -> Option<u16> {
+        let order = self.config.device.word_order.for_kind(cell.0);
+        self.cell_value(cell).map(|value| order.single(value))
+    }
+
     pub fn cell_changed(&self, cell: RegisterCell, now: DateTime<Utc>) -> Option<Changed> {
         self.changed_since(cell, now)
     }
@@ -326,7 +331,7 @@ impl App {
             .map(|custom| self.custom_description(custom));
         let label = self.labels.get(&cell).map(String::as_str);
         self.interpreter.interpret_all(
-            addr,
+            cell,
             value,
             following(addr, LOOKAHEAD, at),
             &entry.time_text,
@@ -385,7 +390,7 @@ impl App {
     }
 
     pub fn column_history(&self, cell: RegisterCell, column: Column) -> Vec<(DateTime<Utc>, f64)> {
-        let order = self.config.device.word_order;
+        let order = self.config.device.word_order.for_kind(cell.0);
         if column == Column::Custom {
             let Some(rule) = self.custom_rule(cell) else {
                 return Vec::new();
@@ -507,7 +512,7 @@ impl App {
         };
         self.interpreter.format_row_into(
             row,
-            addr,
+            cell,
             value,
             following(addr, self.interpreter.lookahead(), at),
             &entry.time_text,

@@ -328,7 +328,7 @@ impl App {
                 None => break,
             }
         }
-        let formatted = rule.evaluate(&words, self.config.device.word_order);
+        let formatted = rule.evaluate(&words, self.config.device.word_order.for_kind(cell.0));
         (!formatted.is_empty()).then_some(CustomCell::Value(formatted))
     }
 
@@ -352,7 +352,7 @@ impl App {
             .source_addresses()
             .map(|a| self.read_log.get(&(kind, a)).map(|entry| entry.value))
             .collect::<Option<_>>()?;
-        let order = self.config.device.word_order;
+        let order = self.config.device.word_order.for_kind(kind);
         rule.numeric(&words, order)
             .or_else(|| rule.raw(&words, order).map(|raw| raw as f64))
     }
@@ -408,7 +408,7 @@ impl App {
             }
         }
 
-        let order = self.config.device.word_order;
+        let order = self.config.device.word_order.for_kind(cell.0);
         let output = rule.evaluate(&words, order);
         if output.is_empty() {
             return Err("no output".to_string());

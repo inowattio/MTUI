@@ -224,6 +224,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &
             CustomField::WordOrder => {
                 let value = match c.word_order {
                     Some(order) => format!("{order:?}"),
+                    None if c.is_ascii() => "default (ABCD)".to_string(),
                     None => format!("device ({:?})", app.config.device.word_order),
                 };
                 lines.push(field_row(

@@ -208,7 +208,7 @@ impl App {
 
     fn copy_matrix_cell(&mut self) {
         let cell = self.cursor_cell();
-        let message = match self.cell_value(cell) {
+        let message = match self.word_value(cell) {
             None => StatusMessage::warn(message::NOTHING_READ_HERE),
             Some(value) if self.set_clipboard(value.to_string()) => {
                 StatusMessage::ok(format!("Copied {value} to clipboard"))

@@ -2,6 +2,7 @@ use crate::config::{AddressMode, Column, InterpretorConfig, TimeMode};
 use crate::constants::{ELLIPSIS, NO_VALUE, UNINTERPRETABLE};
 use crate::custom::CustomRepr;
 use crate::modbus::WordOrder;
+use crate::register::RegisterCell;
 use std::fmt::Write as _;
 
 #[derive(Debug, Clone)]
@@ -65,6 +66,7 @@ struct ColumnSpec {
 
 struct RowCtx<'a> {
     value: u16,
+    single: u16,
     next: Lookahead,
     word: u32,
     dword: u64,
@@ -93,6 +95,7 @@ impl<'a> RowCtx<'a> {
         let [b, c, d, e, f, g, h] = data.next.map(Option::unwrap_or_default);
         Self {
             value: data.value,
+            single: order.single(data.value),
             next: data.next,
             word: order.make_word(data.value, b),
             dword: order.make_dword([data.value, b, c, d]),
@@ -116,14 +119,14 @@ impl<'a> RowCtx<'a> {
 const COLUMNS: &[ColumnSpec] = &[
     ColumnSpec { column: Column::Address, width: ADDRESS_W, render: |c, w, o| address_cell(c.address, c.address_mode, w, o) },
     ColumnSpec { column: Column::Time,    width: TIME_W, render: |c, w, o| time_cell(c, w, o) },
-    ColumnSpec { column: Column::U16,     width: 5,  render: |c, _, o| { let _ = write!(o, "{}", c.value); } },
-    ColumnSpec { column: Column::I16,     width: 6,  render: |c, _, o| { let _ = write!(o, "{}", c.value as i16); } },
+    ColumnSpec { column: Column::U16,     width: 5,  render: |c, _, o| { let _ = write!(o, "{}", c.single); } },
+    ColumnSpec { column: Column::I16,     width: 6,  render: |c, _, o| { let _ = write!(o, "{}", c.single as i16); } },
     ColumnSpec { column: Column::U8,     width: 8,  render: |c, _, o| { let _ = write!(o, "{}/{}", (c.value >> 8) as u8, (c.value & 0xFF) as u8); } },
     ColumnSpec { column: Column::I8,     width: 9,  render: |c, _, o| { let _ = write!(o, "{}/{}", (c.value >> 8) as u8 as i8, (c.value & 0xFF) as u8 as i8); } },
     ColumnSpec { column: Column::Hex,     width: 4,  render: |c, _, o| { let _ = write!(o, "{:04X}", c.value); } },
     ColumnSpec { column: Column::Hex32,   width: 9,  render: |c, _, o| if c.has_next(1) { let _ = write!(o, "{:08X}", c.word); } else { o.push_str(UNINTERPRETABLE); } },
-    ColumnSpec { column: Column::F16,     width: 10, render: |c, w, o| float_cell(f16_to_f32(c.value), w, o) },
-    ColumnSpec { column: Column::Bcd,     width: 6,  render: |c, _, o| match bcd_to_decimal(c.value) { Some(n) => { let _ = write!(o, "{n}"); } None => o.push_str(UNINTERPRETABLE) } },
+    ColumnSpec { column: Column::F16,     width: 10, render: |c, w, o| float_cell(f16_to_f32(c.single), w, o) },
+    ColumnSpec { column: Column::Bcd,     width: 6,  render: |c, _, o| match bcd_to_decimal(c.single) { Some(n) => { let _ = write!(o, "{n}"); } None => o.push_str(UNINTERPRETABLE) } },
     ColumnSpec { column: Column::Bcd32,   width: 10, render: |c, _, o| if c.has_next(1) { match bcd_to_decimal(c.word) { Some(n) => { let _ = write!(o, "{n}"); } None => o.push_str(UNINTERPRETABLE) } } else { o.push_str(UNINTERPRETABLE); } },
     ColumnSpec { column: Column::U32,     width: 10, render: |c, _, o| if c.has_next(1) { let _ = write!(o, "{}", c.word); } else { o.push_str(UNINTERPRETABLE); } },
     ColumnSpec { column: Column::I32,     width: 11, render: |c, _, o| if c.has_next(1) { let _ = write!(o, "{}", c.word as i32); } else { o.push_str(UNINTERPRETABLE); } },
@@ -203,7 +206,7 @@ pub fn graph_value(column: Column, order: WordOrder, regs: &[u16]) -> Option<f64
         return Some(repr.decode(raw));
     }
     Some(match column {
-        Column::Bcd => bcd_to_decimal(regs[0])? as f64,
+        Column::Bcd => bcd_to_decimal(order.single(regs[0]))? as f64,
         Column::Bcd32 => bcd_to_decimal(order.make_word(regs[0], regs[1]))? as f64,
         _ => return None,
     })
@@ -444,7 +447,7 @@ impl Interpretor {
     #[allow(clippy::too_many_arguments)]
     pub fn format_row(
         &self,
-        address: u16,
+        cell: RegisterCell,
         value: u16,
         next: Lookahead,
         time_text: &str,
@@ -454,7 +457,7 @@ impl Interpretor {
     ) -> String {
         let mut row = self.row_buffer();
         self.format_row_into(
-            &mut row, address, value, next, time_text, elapsed, custom, label,
+            &mut row, cell, value, next, time_text, elapsed, custom, label,
         );
         row
     }
@@ -463,7 +466,7 @@ impl Interpretor {
     pub fn format_row_into(
         &self,
         row: &mut String,
-        address: u16,
+        (kind, address): RegisterCell,
         value: u16,
         next: Lookahead,
         time_text: &str,
@@ -473,7 +476,7 @@ impl Interpretor {
     ) {
         let ctx = RowCtx::new(
             &self.config,
-            self.word_order,
+            self.word_order.for_kind(kind),
             RowData {
                 address,
                 value,
@@ -494,7 +497,7 @@ impl Interpretor {
     #[allow(clippy::too_many_arguments)]
     pub fn interpret_all(
         &self,
-        address: u16,
+        (kind, address): RegisterCell,
         value: u16,
         next: Lookahead,
         time: &str,
@@ -504,7 +507,7 @@ impl Interpretor {
     ) -> Vec<(&'static str, String)> {
         let ctx = RowCtx::new(
             &self.config,
-            self.word_order,
+            self.word_order.for_kind(kind),
             RowData {
                 address,
                 value,
@@ -737,6 +740,7 @@ pub(crate) fn f16_to_f32(bits: u16) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::register::RegisterType;
 
     #[test]
     fn bits_cell_groups_nibbles_from_the_high_end() {
@@ -885,7 +889,7 @@ mod tests {
     fn row_segments_line_up_with_a_rendered_row() {
         let interpretor = interpretor();
         let row = interpretor.format_row(
-            42,
+            (RegisterType::Holding, 42),
             0x1234,
             [Some(0); LOOKAHEAD],
             "12:00:00.000",
@@ -913,7 +917,7 @@ mod tests {
 
     fn row_of(interpretor: &Interpretor) -> String {
         interpretor.format_row(
-            5,
+            (RegisterType::Holding, 5),
             1,
             [None; LOOKAHEAD],
             "12:34:56.789",
@@ -941,7 +945,15 @@ mod tests {
     fn a_row_without_an_age_shows_its_time_text_clipped_in_every_mode() {
         let mut interpretor = interpretor();
         let untimed = |i: &Interpretor, time: &str| {
-            i.format_row(5, 1, [None; LOOKAHEAD], time, None, None, None)
+            i.format_row(
+                (RegisterType::Holding, 5),
+                1,
+                [None; LOOKAHEAD],
+                time,
+                None,
+                None,
+                None,
+            )
         };
         for mode in TimeMode::ALL {
             interpretor.set_time_mode(mode);
@@ -973,7 +985,7 @@ mod tests {
         let mut interpretor = interpretor();
         let entry = |i: &Interpretor, name: &str| {
             i.interpret_all(
-                4660,
+                (RegisterType::Holding, 4660),
                 1,
                 [None; LOOKAHEAD],
                 "12:34:56.789",
@@ -1040,7 +1052,7 @@ mod tests {
         interpretor.set_label_width(8);
 
         let row = interpretor.format_row(
-            5,
+            (RegisterType::Holding, 5),
             1,
             [None; LOOKAHEAD],
             "12:34:56.789",
@@ -1059,11 +1071,41 @@ mod tests {
     }
 
     #[test]
+    fn single_word_columns_follow_the_byte_swap_except_raw_ones_and_bits() {
+        let config = InterpretorConfig {
+            visible: vec![
+                Column::Address,
+                Column::U16,
+                Column::I16,
+                Column::Hex,
+                Column::Bits,
+            ],
+            ..InterpretorConfig::default()
+        };
+        let row = |order, cell, value| {
+            let i = Interpretor::new(config.clone(), order);
+            let row = i.format_row(cell, value, [None; LOOKAHEAD], "", None, None, None);
+            [Column::U16, Column::I16, Column::Hex]
+                .map(|column| i.segment(column).unwrap().text(&row).trim().to_string())
+        };
+        let holding = (RegisterType::Holding, 5);
+        for order in [WordOrder::ABCD, WordOrder::CDAB] {
+            assert_eq!(row(order, holding, 0xFEFF), ["65279", "-257", "FEFF"]);
+        }
+        for order in [WordOrder::BADC, WordOrder::DCBA] {
+            assert_eq!(row(order, holding, 0xFEFF), ["65534", "-2", "FEFF"]);
+            for kind in [RegisterType::Coil, RegisterType::Discrete] {
+                assert_eq!(row(order, (kind, 5), 1), ["1", "1", "0001"]);
+            }
+        }
+    }
+
+    #[test]
     fn the_address_mode_switches_the_column_to_hex() {
         let mut interpretor = interpretor();
         interpretor.set_address_mode(AddressMode::Hex);
         let row = interpretor.format_row(
-            255,
+            (RegisterType::Holding, 255),
             1,
             [None; LOOKAHEAD],
             "12:34:56.789",

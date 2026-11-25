@@ -302,8 +302,10 @@ impl ScaleRepr {
     fn decode(self, words: &[u16], order: WordOrder) -> Option<f64> {
         let words = words.get(..self.register_count())?;
         Some(match self {
-            Self::Sunspec if words[0] == SUNSPEC_NOT_IMPLEMENTED => f64::NAN,
-            Self::Sunspec => f64::from(words[0] as i16),
+            Self::Sunspec => match order.single(words[0]) {
+                SUNSPEC_NOT_IMPLEMENTED => f64::NAN,
+                word => f64::from(word as i16),
+            },
             Self::Plain(repr) => repr.decode(order.assemble(words)?),
         })
     }
@@ -459,6 +461,14 @@ impl CustomRule {
             .chain(self.scale().into_iter().flat_map(CustomScale::addresses))
     }
 
+    pub fn order(&self, device: WordOrder) -> WordOrder {
+        match self.word_order {
+            Some(order) => order,
+            None if self.repr == CustomRepr::Ascii => WordOrder::ABCD,
+            None => device,
+        }
+    }
+
     pub fn scale_factor(&self, words: &[u16], order: WordOrder) -> Option<f64> {
         self.scale()?.repr.decode(
             words.get(self.register_count()..)?,
@@ -483,12 +493,12 @@ impl CustomRule {
         if self.repr == CustomRepr::Ascii {
             return None;
         }
-        let order = self.word_order.unwrap_or(order);
-        order.assemble(words.get(..self.register_count())?)
+        self.order(order)
+            .assemble(words.get(..self.register_count())?)
     }
 
     fn text(&self, words: &[u16], order: WordOrder) -> Option<String> {
-        let swap = self.word_order.unwrap_or(order).swaps_bytes();
+        let swap = self.order(order).swaps_bytes();
         let text: String = words
             .get(..self.register_count())?
             .iter()
@@ -840,6 +850,20 @@ mod tests {
     }
 
     #[test]
+    fn a_single_register_follows_the_byte_swap_of_the_word_order() {
+        let r = rule(CustomRepr::U16);
+        assert_eq!(r.evaluate(&[0x3412], WordOrder::ABCD), "13330");
+        assert_eq!(r.evaluate(&[0x3412], WordOrder::CDAB), "13330");
+        assert_eq!(r.evaluate(&[0x3412], WordOrder::BADC), "4660");
+        assert_eq!(r.evaluate(&[0x3412], WordOrder::DCBA), "4660");
+
+        let mut own = rule(CustomRepr::I16);
+        own.word_order = Some(WordOrder::BADC);
+        assert_eq!(own.evaluate(&[0xFFFE], WordOrder::ABCD), "-257");
+        assert_eq!(own.evaluate(&[0xFEFF], WordOrder::ABCD), "-2");
+    }
+
+    #[test]
     fn no_override_follows_device_order() {
         let r = rule(CustomRepr::F32);
         assert_eq!(r.evaluate(&[0x0000, 0x3F80], WordOrder::CDAB), "1");
@@ -1117,6 +1141,17 @@ mod tests {
         let mul = scaled_by(CustomRepr::U16, ScaleMode::Mul, ScaleRepr::Sunspec, 110);
         assert_eq!(mul.evaluate(&[5, (-2i16) as u16], WordOrder::ABCD), "-10");
         assert_eq!(mul.evaluate(&[5, 0x8000], WordOrder::ABCD), UNINTERPRETABLE);
+    }
+
+    #[test]
+    fn a_sunspec_scale_follows_the_byte_swap_of_its_value() {
+        let sunspec = scaled_by(CustomRepr::I16, ScaleMode::Pow10, ScaleRepr::Sunspec, 110);
+        let plain = scaled_by(CustomRepr::I16, ScaleMode::Pow10, I16, 110);
+        for order in [WordOrder::BADC, WordOrder::DCBA] {
+            assert_eq!(sunspec.evaluate(&[0x0009, 0xFEFF], order), "23.04");
+            assert_eq!(plain.evaluate(&[0x0009, 0xFEFF], order), "23.04");
+            assert_eq!(sunspec.numeric(&[0x0009, 0x0080], order), None);
+        }
     }
 
     #[test]
@@ -1402,12 +1437,20 @@ mod tests {
     fn ascii_honors_only_the_byte_swap_of_the_word_order() {
         let r = ascii_rule(2);
         let swapped = words(b"TMIU");
-        assert_eq!(r.evaluate(&swapped, WordOrder::BADC), "MTUI");
-        assert_eq!(r.evaluate(&swapped, WordOrder::DCBA), "MTUI");
-        assert_eq!(r.evaluate(&swapped, WordOrder::CDAB), "TMIU");
-        let mut own = ascii_rule(2);
-        own.word_order = Some(WordOrder::BADC);
-        assert_eq!(own.evaluate(&swapped, WordOrder::ABCD), "MTUI");
+        for device in WordOrder::ALL {
+            assert_eq!(r.evaluate(&swapped, device), "TMIU", "{device:?}");
+        }
+        for (own, text) in [
+            (WordOrder::ABCD, "TMIU"),
+            (WordOrder::BADC, "MTUI"),
+            (WordOrder::CDAB, "TMIU"),
+            (WordOrder::DCBA, "MTUI"),
+        ] {
+            let mut r = ascii_rule(2);
+            r.word_order = Some(own);
+            assert_eq!(r.evaluate(&swapped, WordOrder::ABCD), text, "{own:?}");
+            assert_eq!(r.evaluate(&swapped, WordOrder::BADC), text, "{own:?}");
+        }
     }
 
     #[test]

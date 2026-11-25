@@ -191,8 +191,7 @@ impl Reading {
             ops: ops.into_iter().flatten().collect(),
             decimals: if ascii { None } else { self.precision },
             suffix: unit.map_or_default(|unit| format!(" {unit}")),
-            word_order: (ascii || repr.register_count() > 1)
-                .then(|| word_order(self.swap.as_deref())),
+            word_order: Some(word_order(self.swap.as_deref())),
             ..Default::default()
         })
     }
@@ -417,6 +416,11 @@ modbus:
         offset: -5
         precision: 1
         unit_of_measurement: V
+      - name: Swapped
+        address: 0x11
+        input_type: input
+        data_type: int16
+        swap: byte
       - name: Power
         address: 20
         data_type: float32
@@ -453,7 +457,10 @@ modbus:
         );
         assert_eq!(rule.decimals, Some(1));
         assert_eq!(rule.suffix, " V");
-        assert_eq!(rule.word_order, None);
+        assert_eq!(rule.word_order, Some(WordOrder::ABCD));
+        let swapped = registers.inputs[1].custom.as_ref().expect("rule");
+        assert_eq!(swapped.word_order, Some(WordOrder::BADC));
+        assert_eq!(swapped.evaluate(&[0xFEFF], WordOrder::ABCD), "-2");
 
         let [power, model, blob] = &registers.holdings[..] else {
             panic!("three holdings: {:?}", registers.holdings);

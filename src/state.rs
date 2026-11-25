@@ -1054,11 +1054,7 @@ impl CustomParams {
         if ascii {
             fields.push(Registers);
         }
-        let multi_scale =
-            !ascii && self.scale_mode.is_some() && self.scale_repr.register_count() > 1;
-        if ascii || multi || multi_scale || self.word_order.is_some() {
-            fields.push(WordOrder);
-        }
+        fields.push(WordOrder);
         if multi || !self.next.is_empty() {
             fields.push(Next);
         }
@@ -1172,7 +1168,7 @@ mod custom_params_tests {
     }
 
     #[test]
-    fn a_multi_register_scale_type_asks_for_a_word_order() {
+    fn every_rule_offers_a_word_order() {
         use CustomField::*;
         let mut c = CustomParams {
             scale_mode: Some(ScaleMode::Pow10),
@@ -1181,10 +1177,17 @@ mod custom_params_tests {
         };
         assert!(c.fields().contains(&WordOrder));
         c.scale_repr = ScaleRepr::Sunspec;
-        assert!(!c.fields().contains(&WordOrder));
-        c.scale_repr = ScaleRepr::Plain(CustomRepr::U64);
+        assert!(c.fields().contains(&WordOrder));
         c.scale_mode = None;
-        assert!(!c.fields().contains(&WordOrder));
+        for repr in [
+            CustomRepr::U16,
+            CustomRepr::I16,
+            CustomRepr::F16,
+            CustomRepr::U64,
+        ] {
+            c.repr = repr;
+            assert!(c.fields().contains(&WordOrder), "{repr:?}");
+        }
     }
 
     #[test]
