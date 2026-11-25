@@ -9,6 +9,7 @@ use tokio_modbus::prelude::{
     ConformityLevel, DeviceIdObject, ReadCode, ReadDeviceIdentificationResponse,
 };
 use tokio_modbus::slave::{Slave as Unit, SlaveContext, SlaveId as UnitId};
+use tokio_modbus::bytes::Bytes;
 use tokio_modbus::{ExceptionCode, Request, Response};
 
 /// A simulated RS-485 bus of power meters.
@@ -609,12 +610,6 @@ impl MockContext {
             0x08 => self.diagnostics(data, t),
             0x0B => Ok(self.comm_event_counter()),
             0x0C => Ok(self.comm_event_log()),
-            0x11 => {
-                let (id, extra) = self.server_id();
-                let mut out = vec![(2 + extra.len()) as u8, id, 0xFF];
-                out.extend(extra);
-                Ok(out)
-            }
             0x14 => read_file_record(data),
             0x18 => self.read_fifo(data, t),
             _ => Ok(data.to_vec()),
@@ -677,6 +672,20 @@ fn read_file_record(data: &[u8]) -> Result<Vec<u8>, ExceptionCode> {
     let mut out = vec![body.len() as u8];
     out.extend(body);
     Ok(out)
+}
+
+fn standard_request(request: Request<'_>) -> Result<Request<'_>, ExceptionCode> {
+    let Request::Custom(code, data) = &request else {
+        return Ok(request);
+    };
+    let mut pdu = vec![*code];
+    pdu.extend_from_slice(data);
+    match Request::try_from(Bytes::from(pdu)) {
+        Ok(Request::Custom(..)) => Ok(request),
+        Ok(standard) => Ok(standard),
+        Err(_) if *code < 0x80 => Err(ExceptionCode::IllegalDataValue),
+        Err(_) => Ok(request),
+    }
 }
 
 fn stalls(request: &Request<'_>) -> bool {
@@ -821,14 +830,15 @@ impl Client for MockContext {
             Framing::Rtu,
             &frames::rtu(self.unit_id, &frames::request_pdu(&request)),
         );
-        if !KNOWN_UNITS.contains(&self.unit_id) || stalls(&request) {
+        let request = standard_request(request);
+        if !KNOWN_UNITS.contains(&self.unit_id) || request.as_ref().is_ok_and(stalls) {
             std::future::pending::<!>().await;
         }
 
         self.simulate_latency().await;
         let t = self.time();
         self.served = self.served.wrapping_add(1);
-        let response = self.respond(request, t);
+        let response = request.and_then(|request| self.respond(request, t));
         match response {
             Err(_) => self.exceptions = self.exceptions.wrapping_add(1),
             Ok(_) if !matches!(function, 0x0B | 0x0C) => self.events = self.events.wrapping_add(1),
@@ -1137,10 +1147,16 @@ mod tests {
         assert!(extra.starts_with(b"MTUI-SIM"));
         assert!(extra.is_ascii());
 
-        let raw = custom(&mut mock, 0x11, &[]).await.unwrap();
-        assert_eq!(usize::from(raw[0]), raw.len() - 1);
-        assert_eq!(raw[1..3], [super::SERVER_ID, 0xFF]);
-        assert_eq!(raw[3..], extra[..]);
+        assert_eq!(
+            mock.call(Request::Custom(0x11, Vec::new().into()))
+                .await
+                .unwrap(),
+            Ok(Response::ReportServerId(id, running, extra))
+        );
+        assert_eq!(
+            custom(&mut mock, 0x11, &[1]).await,
+            Err(ExceptionCode::IllegalDataValue)
+        );
     }
 
     #[tokio::test]
@@ -1305,5 +1321,85 @@ mod tests {
         let mut mock = MockContext::make();
         assert_eq!(custom(&mut mock, 0x41, &[1, 2, 3]).await, Ok(vec![1, 2, 3]));
         assert_eq!(custom(&mut mock, 0x65, &[]).await, Ok(vec![]));
+    }
+
+    #[test]
+    fn standard_codes_sent_as_custom_become_standard_requests() {
+        use super::standard_request;
+        use tokio_modbus::Request;
+
+        let custom = |code, data: &[u8]| Request::Custom(code, data.to_vec().into());
+
+        assert_eq!(
+            standard_request(custom(0x03, &[0, 10, 0, 2])),
+            Ok(Request::ReadHoldingRegisters(10, 2))
+        );
+        assert_eq!(
+            standard_request(custom(0x05, &[0, 3, 0xFF, 0])),
+            Ok(Request::WriteSingleCoil(3, true))
+        );
+        assert_eq!(
+            standard_request(custom(0x10, &[0, 50, 0, 1, 2, 0x12, 0x34])),
+            Ok(Request::WriteMultipleRegisters(50, vec![0x1234].into()))
+        );
+        assert_eq!(
+            standard_request(custom(0x11, &[])),
+            Ok(Request::ReportServerId)
+        );
+        assert_eq!(
+            standard_request(Request::ReadInputRegisters(4, 1)),
+            Ok(Request::ReadInputRegisters(4, 1))
+        );
+
+        for unchanged in [custom(0x08, &[0, 0, 1, 2]), custom(0x41, &[1]), custom(0x90, &[])] {
+            assert_eq!(standard_request(unchanged.clone()), Ok(unchanged));
+        }
+
+        for malformed in [
+            custom(0x03, &[0, 10]),
+            custom(0x03, &[0, 10, 0, 2, 0]),
+            custom(0x05, &[0, 3, 0x12, 0x34]),
+            custom(0x10, &[0, 50, 0, 2, 2, 0, 1]),
+            custom(0x11, &[1]),
+        ] {
+            assert_eq!(
+                standard_request(malformed),
+                Err(ExceptionCode::IllegalDataValue)
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn standard_codes_sent_as_custom_are_served_like_typed_requests() {
+        use tokio_modbus::client::Client;
+        use tokio_modbus::{Request, Response};
+
+        let mut mock = MockContext::make();
+        let mut call = async |code, data: &[u8]| {
+            mock.call(Request::Custom(code, data.to_vec().into()))
+                .await
+                .unwrap()
+        };
+
+        assert_eq!(
+            call(0x06, &[0, 60, 0x12, 0x34]).await,
+            Ok(Response::WriteSingleRegister(60, 0x1234))
+        );
+        assert_eq!(
+            call(0x03, &[0, 60, 0, 1]).await,
+            Ok(Response::ReadHoldingRegisters(vec![0x1234]))
+        );
+        assert_eq!(call(0x03, &[0x01, 0xF4, 0, 1]).await, Err(RESERVED));
+        assert_eq!(
+            call(0x03, &[0, 60]).await,
+            Err(ExceptionCode::IllegalDataValue)
+        );
+
+        let typed = mock.read_holding_registers(0, 8).await.unwrap();
+        let raw = mock
+            .call(Request::Custom(0x03, vec![0, 0, 0, 8].into()))
+            .await
+            .unwrap();
+        assert_eq!(raw, typed.map(Response::ReadHoldingRegisters));
     }
 }
