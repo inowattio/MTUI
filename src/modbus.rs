@@ -364,6 +364,71 @@ mod tests {
     }
 
     #[test]
+    fn replies_to_standard_codes_sent_as_custom_are_recovered() {
+        use super::recover_mismatched_response;
+        use crate::frames::response_pdu;
+        use tokio_modbus::{
+            Error, ExceptionCode, ExceptionResponse, FunctionCode, ProtocolError, Response,
+        };
+
+        let mismatch = |request, result| {
+            Error::Protocol(ProtocolError::FunctionCodeMismatch { request, result })
+        };
+        let payload = |result: tokio_modbus::Result<Response>| {
+            let response = result.unwrap().unwrap();
+            response_pdu(response.function_code().value(), &Ok(response))[1..].to_vec()
+        };
+
+        let holding = mismatch(
+            FunctionCode::Custom(0x03),
+            Ok(Response::ReadHoldingRegisters(vec![10, 0x0B0C])),
+        );
+        assert_eq!(
+            payload(recover_mismatched_response(holding)),
+            [4, 0, 10, 0x0B, 0x0C]
+        );
+
+        let coils = mismatch(
+            FunctionCode::Custom(0x01),
+            Ok(Response::ReadCoils(vec![
+                true, false, true, false, false, false, false, false, true, false, false, false,
+                false, false, false, false,
+            ])),
+        );
+        assert_eq!(payload(recover_mismatched_response(coils)), [2, 0b101, 1]);
+
+        let single = mismatch(
+            FunctionCode::Custom(0x06),
+            Ok(Response::WriteSingleRegister(7, 0x1234)),
+        );
+        assert_eq!(
+            payload(recover_mismatched_response(single)),
+            [0, 7, 0x12, 0x34]
+        );
+
+        let other_function = mismatch(
+            FunctionCode::Custom(0x04),
+            Ok(Response::ReadHoldingRegisters(vec![1])),
+        );
+        assert!(recover_mismatched_response(other_function).is_err());
+
+        let exception = mismatch(
+            FunctionCode::Custom(0x03),
+            Err(ExceptionResponse {
+                function: FunctionCode::ReadHoldingRegisters,
+                exception: ExceptionCode::IllegalDataAddress,
+            }),
+        );
+        assert!(recover_mismatched_response(exception).is_err());
+
+        let header = Error::Protocol(ProtocolError::HeaderMismatch {
+            message: String::new(),
+            result: Ok(Response::ReadHoldingRegisters(vec![1])),
+        });
+        assert!(recover_mismatched_response(header).is_err());
+    }
+
+    #[test]
     fn raw_exception_messages_only_carry_the_code() {
         use super::exception_message;
         use tokio_modbus::ExceptionCode;
@@ -867,6 +932,26 @@ const fn mismatched_exception(error: &tokio_modbus::Error) -> Option<ExceptionCo
     }
 }
 
+fn recover_mismatched_response(error: tokio_modbus::Error) -> tokio_modbus::Result<Response> {
+    match error {
+        tokio_modbus::Error::Protocol(ProtocolError::FunctionCodeMismatch {
+            request,
+            result: Ok(response),
+        }) if response.function_code().value() == request.value() => Ok(Ok(response)),
+        error => Err(error),
+    }
+}
+
+trait RawCall {
+    async fn raw_call(&mut self, request: Request<'_>) -> tokio_modbus::Result<Response>;
+}
+
+impl RawCall for Context {
+    async fn raw_call(&mut self, request: Request<'_>) -> tokio_modbus::Result<Response> {
+        self.call(request).await.or_else(recover_mismatched_response)
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum DeviceIdAccess {
     #[default]
@@ -1200,18 +1285,12 @@ impl ModbusDevice {
         let (response, elapsed) = timed_as!(
             self,
             unit,
-            call,
+            raw_call,
             (request),
             format!("Raw function 0x{code:02X} with data {data:?}")
         )?;
-        match response {
-            Response::Custom(_, bytes) => Ok((bytes.to_vec(), elapsed)),
-            response @ Response::ReportServerId(..) => {
-                let mut bytes = response_pdu(code, &Ok(response));
-                bytes.remove(0);
-                Ok((bytes, elapsed))
-            }
-            _ => anyhow::bail!("Unexpected response type."),
-        }
+        let mut bytes = response_pdu(code, &Ok(response));
+        bytes.remove(0);
+        Ok((bytes, elapsed))
     }
 }
