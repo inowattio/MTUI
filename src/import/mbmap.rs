@@ -312,7 +312,7 @@ impl Register {
         u16::try_from(address).ok()
     }
 
-    fn exponent(&self, area: Area, base: i64) -> Option<CustomScale> {
+    fn exponent(&self, area: Area, base: i64, map: &DeviceMap) -> Option<CustomScale> {
         if self.area != area || self.bits.is_some() || self.scale_factor.is_some() {
             return None;
         }
@@ -329,6 +329,7 @@ impl Register {
             register: self.address(base)?,
             mode: ScaleMode::Pow10,
             repr,
+            word_order: Some(map.order(self, false)),
         })
     }
 
@@ -355,6 +356,12 @@ impl Register {
 }
 
 impl DeviceMap {
+    fn order(&self, register: &Register, text: bool) -> WordOrder {
+        let byte_swap = little(register.byte_order.as_deref(), self.byte_order.as_deref());
+        let word_swap = !text && little(register.word_order.as_deref(), self.word_order.as_deref());
+        word_order(byte_swap, word_swap)
+    }
+
     fn enum_map(&self, register: &Register) -> Vec<EnumEntry> {
         let table = match &register.labels {
             Some(Value::String(name)) => self.enums.get(name),
@@ -385,7 +392,7 @@ impl DeviceMap {
         let text = repr == CustomRepr::Ascii;
         let registers = if text { Some(register.length()?) } else { None };
         let scale = match register.scale_factor.as_deref().filter(|_| !text) {
-            Some(name) => Some(names.get(name)?.exponent(register.area, base)?),
+            Some(name) => Some(names.get(name)?.exponent(register.area, base, self)?),
             None => None,
         };
         let ops = [
@@ -398,8 +405,6 @@ impl DeviceMap {
                 .filter(|&v| v != 0.0)
                 .map(|v| CustomOp { op: OpKind::Add, v }),
         ];
-        let byte_swap = little(register.byte_order.as_deref(), self.byte_order.as_deref());
-        let word_swap = !text && little(register.word_order.as_deref(), self.word_order.as_deref());
         Some(CustomRule {
             address,
             repr,
@@ -408,7 +413,7 @@ impl DeviceMap {
             ops: ops.into_iter().flatten().collect(),
             enum_map: self.enum_map(register),
             suffix: register.unit().map_or_default(|unit| format!(" {unit}")),
-            word_order: Some(word_order(byte_swap, word_swap)),
+            word_order: Some(self.order(register, text)),
             ..Default::default()
         })
     }
@@ -690,6 +695,7 @@ mod tests {
                 register: 11,
                 mode: ScaleMode::Pow10,
                 repr: ScaleRepr::Sunspec,
+                word_order: Some(WordOrder::CDAB),
             })
         );
         assert_eq!(
@@ -707,6 +713,52 @@ mod tests {
             Some((22, ScaleRepr::Plain(CustomRepr::U32)))
         );
         assert_eq!(energy.evaluate(&[5, 0, 2, 0], WordOrder::ABCD), "1001");
+    }
+
+    #[test]
+    fn a_scale_factor_is_decoded_in_its_own_register_order() {
+        let r = parse(
+            &json!({"mbmap": 2, "registers": [
+                {"name": "Energy", "area": "holding", "address": 0, "type": "uint32", "byte_order": "little", "scale_factor": "E_SF"},
+                {"name": "E_SF", "area": "holding", "address": 2, "type": "uint32", "byte_order": "big"},
+            ]})
+            .to_string(),
+        )
+        .unwrap();
+        let energy = r.holdings[0].custom.as_ref().unwrap();
+        assert_eq!(energy.word_order, Some(WordOrder::BADC));
+        assert_eq!(
+            energy.scale.and_then(|scale| scale.word_order),
+            Some(WordOrder::ABCD)
+        );
+        assert_eq!(energy.evaluate(&[0, 0x0500, 0, 2], WordOrder::DCBA), "500");
+
+        let r = parse(
+            &json!({"mbmap": 2, "byte_order": "little", "word_order": "little", "registers": [
+                {"name": "Energy", "area": "holding", "address": 0, "type": "uint32", "scale_factor": "E_SF"},
+                {"name": "E_SF", "area": "holding", "address": 2, "type": "uint32", "byte_order": "big"},
+                {"name": "Power", "area": "holding", "address": 4, "type": "uint32", "scale_factor": "P_SF"},
+                {"name": "P_SF", "area": "holding", "address": 6, "type": "uint32", "word_order": "big"},
+                {"name": "Current", "area": "holding", "address": 8, "type": "uint32", "scale_factor": "C_SF"},
+                {"name": "C_SF", "area": "holding", "address": 10, "type": "uint32"},
+            ]})
+            .to_string(),
+        )
+        .unwrap();
+        let rule = |i: usize| r.holdings[i].custom.as_ref().unwrap();
+        let orders = |i: usize| (rule(i).word_order, rule(i).scale.unwrap().word_order);
+        assert_eq!(orders(0), (Some(WordOrder::DCBA), Some(WordOrder::CDAB)));
+        assert_eq!(rule(0).evaluate(&[0x0500, 0, 2, 0], WordOrder::ABCD), "500");
+        assert_eq!(orders(2), (Some(WordOrder::DCBA), Some(WordOrder::BADC)));
+        assert_eq!(
+            rule(2).evaluate(&[0x0500, 0, 0, 0x0200], WordOrder::ABCD),
+            "500"
+        );
+        assert_eq!(orders(4), (Some(WordOrder::DCBA), Some(WordOrder::DCBA)));
+        assert_eq!(
+            rule(4).evaluate(&[0x0500, 0, 0x0200, 0], WordOrder::ABCD),
+            "500"
+        );
     }
 
     #[test]

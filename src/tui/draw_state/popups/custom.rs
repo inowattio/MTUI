@@ -42,6 +42,7 @@ const fn section(field: CustomField) -> &'static str {
         CustomField::Scale
         | CustomField::ScaleType
         | CustomField::ScaleRegister
+        | CustomField::ScaleWordOrder
         | CustomField::Ops
         | CustomField::Enum
         | CustomField::Bits => "MAP",
@@ -279,6 +280,20 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, theme: &Theme, app: &App, c: &
                         theme.dim_style(),
                     )));
                 }
+            }
+            CustomField::ScaleWordOrder => {
+                let value = match (c.scale_word_order, c.word_order) {
+                    (Some(order), _) => format!("{order:?}"),
+                    (None, Some(rule)) => format!("rule ({rule:?})"),
+                    (None, None) => format!("rule (device {:?})", app.config.device.word_order),
+                };
+                lines.push(field_row(
+                    theme,
+                    "Scale order",
+                    12,
+                    edit_value(value, selected, true),
+                    selected,
+                ));
             }
             CustomField::Ops => {
                 if c.scale_mode.is_some() {

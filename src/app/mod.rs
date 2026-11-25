@@ -686,6 +686,7 @@ fn build_custom_rule(
                 .ok_or_else(|| "scale: invalid register".to_string())?,
             mode: scale_mode,
             repr: c.scale_repr,
+            word_order: c.scale_word_order,
         }),
         None => None,
     };
@@ -869,6 +870,7 @@ mod tests {
                 register: 0x9C4F,
                 mode: ScaleMode::Pow10,
                 repr: ScaleRepr::Sunspec,
+                ..Default::default()
             })
         );
         assert_eq!(
@@ -880,6 +882,30 @@ mod tests {
         c.scale_mode = None;
         let (_, rule) = super::build_custom_rule(&c, AddressMode::Hex).unwrap();
         assert_eq!(rule.scale, None);
+    }
+
+    #[test]
+    fn the_scale_word_order_is_kept_apart_from_the_rule_order() {
+        use crate::custom::{CustomRepr, ScaleMode, ScaleRepr};
+        use crate::modbus::WordOrder;
+        use crate::state::CustomParams;
+
+        let mut c = CustomParams {
+            repr: CustomRepr::U32,
+            word_order: Some(WordOrder::DCBA),
+            scale_mode: Some(ScaleMode::Pow10),
+            scale_register: "20".to_string(),
+            scale_repr: ScaleRepr::Plain(CustomRepr::U32),
+            scale_word_order: Some(WordOrder::BADC),
+            ..Default::default()
+        };
+        let (_, rule) = super::build_custom_rule(&c, AddressMode::Dec).unwrap();
+        assert_eq!(rule.word_order, Some(WordOrder::DCBA));
+        assert_eq!(rule.scale.unwrap().word_order, Some(WordOrder::BADC));
+
+        c.scale_word_order = None;
+        let (_, rule) = super::build_custom_rule(&c, AddressMode::Dec).unwrap();
+        assert_eq!(rule.scale.unwrap().word_order, None);
     }
 
     #[test]

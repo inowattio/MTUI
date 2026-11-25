@@ -158,6 +158,7 @@ fn exponent(scopes: &[Scope<'_>], name: &str) -> Option<CustomScale> {
         register: *register,
         mode: ScaleMode::Pow10,
         repr,
+        word_order: None,
     })
 }
 
@@ -595,6 +596,7 @@ mod tests {
                 register: start + 6,
                 mode: ScaleMode::Pow10,
                 repr: ScaleRepr::Sunspec,
+                ..Default::default()
             })
         );
         assert_eq!(

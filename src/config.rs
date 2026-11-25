@@ -736,6 +736,7 @@ const fn sunspec_sf(register: u16) -> CustomScale {
         register,
         mode: ScaleMode::Pow10,
         repr: ScaleRepr::Sunspec,
+        word_order: None,
     }
 }
 

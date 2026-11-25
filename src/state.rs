@@ -996,6 +996,7 @@ pub enum CustomField {
     Scale,
     ScaleType,
     ScaleRegister,
+    ScaleWordOrder,
     Ops,
     Enum,
     Bits,
@@ -1015,6 +1016,7 @@ pub struct CustomParams {
     pub scale_mode: Option<ScaleMode>,
     pub scale_repr: ScaleRepr,
     pub scale_register: String,
+    pub scale_word_order: Option<WordOrder>,
     pub ops: Vec<CustomOp>,
     pub enum_map: Vec<EnumEntry>,
     pub bits: Vec<BitEntry>,
@@ -1068,6 +1070,7 @@ impl CustomParams {
             if self.scale_mode.is_some() {
                 fields.push(ScaleType);
                 fields.push(ScaleRegister);
+                fields.push(ScaleWordOrder);
             }
         }
         if !bits_active || !self.ops.is_empty() {
@@ -1153,6 +1156,7 @@ mod custom_params_tests {
         assert!(c.fields().contains(&Scale));
         assert!(!c.fields().contains(&ScaleType));
         assert!(!c.fields().contains(&ScaleRegister));
+        assert!(!c.fields().contains(&ScaleWordOrder));
 
         for mode in ScaleMode::ALL {
             c.scale_mode = Some(mode);
@@ -1160,8 +1164,19 @@ mod custom_params_tests {
             let at = |f| fields.iter().position(|&x| x == f).unwrap();
             assert_eq!(at(ScaleType), at(Scale) + 1);
             assert_eq!(at(ScaleRegister), at(ScaleType) + 1);
-            assert!(at(ScaleRegister) < at(Ops));
+            assert_eq!(at(ScaleWordOrder), at(ScaleRegister) + 1);
+            assert!(at(ScaleWordOrder) < at(Ops));
         }
+
+        c.bits = vec![BitEntry {
+            bit: 0,
+            name: "b".into(),
+        }];
+        assert!(c.fields().contains(&ScaleWordOrder));
+        c.scale_mode = None;
+        assert!(!c.fields().contains(&ScaleWordOrder));
+        c.bits.clear();
+        c.scale_mode = Some(ScaleMode::Pow10);
 
         c.repr = CustomRepr::Ascii;
         assert!(!c.fields().contains(&Scale));

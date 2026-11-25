@@ -30,6 +30,7 @@ impl App {
                 scale_register: rule
                     .scale
                     .map_or_default(|scale| mode.display(scale.register).to_string()),
+                scale_word_order: rule.scale.and_then(|scale| scale.word_order),
                 ops: rule.ops.clone(),
                 enum_map: rule.enum_map.clone(),
                 bits: rule.bits.clone(),
@@ -111,6 +112,9 @@ impl App {
                 }
                 CustomField::WordOrder => {
                     c.word_order = cycle(&ORDER_CHOICES, c.word_order, forward);
+                }
+                CustomField::ScaleWordOrder => {
+                    c.scale_word_order = cycle(&ORDER_CHOICES, c.scale_word_order, forward);
                 }
                 CustomField::Scale => {
                     c.scale_mode = cycle(&SCALE_CHOICES, c.scale_mode, forward);

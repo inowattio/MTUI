@@ -345,6 +345,8 @@ pub struct CustomScale {
     pub mode: ScaleMode,
     #[serde(default, skip_serializing_if = "is_default")]
     pub repr: ScaleRepr,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub word_order: Option<WordOrder>,
 }
 
 impl CustomScale {
@@ -470,9 +472,10 @@ impl CustomRule {
     }
 
     pub fn scale_factor(&self, words: &[u16], order: WordOrder) -> Option<f64> {
-        self.scale()?.repr.decode(
+        let scale = self.scale()?;
+        scale.repr.decode(
             words.get(self.register_count()..)?,
-            self.word_order.unwrap_or(order),
+            scale.word_order.or(self.word_order).unwrap_or(order),
         )
     }
 
@@ -1091,11 +1094,13 @@ mod tests {
             register,
             mode,
             repr: scale,
+            ..Default::default()
         });
         r
     }
 
     const U16: ScaleRepr = ScaleRepr::Plain(CustomRepr::U16);
+    const U32: ScaleRepr = ScaleRepr::Plain(CustomRepr::U32);
     const I16: ScaleRepr = ScaleRepr::Plain(CustomRepr::I16);
     const F32: ScaleRepr = ScaleRepr::Plain(CustomRepr::F32);
 
@@ -1219,6 +1224,71 @@ mod tests {
         assert_eq!(own.evaluate(&[100, 0, 0x3FC0], WordOrder::ABCD), "150");
     }
 
+    fn scale_ordered(rule: Option<WordOrder>, scale: Option<WordOrder>) -> CustomRule {
+        let mut r = scaled_by(CustomRepr::U16, ScaleMode::Mul, U32, 110);
+        r.word_order = rule;
+        r.scale.as_mut().unwrap().word_order = scale;
+        r
+    }
+
+    #[test]
+    fn a_scale_word_order_overrides_the_rule_and_the_device_order() {
+        let r = scale_ordered(Some(WordOrder::BADC), Some(WordOrder::ABCD));
+        assert_eq!(r.scale_factor(&[100, 0, 3], WordOrder::DCBA), Some(3.0));
+        assert_eq!(r.evaluate(&[0x6400, 0, 3], WordOrder::DCBA), "300");
+
+        let r = scale_ordered(Some(WordOrder::ABCD), Some(WordOrder::BADC));
+        assert_eq!(
+            r.scale_factor(&[100, 0, 0x0300], WordOrder::ABCD),
+            Some(3.0)
+        );
+        assert_eq!(r.scale_factor(&[100, 0, 3], WordOrder::ABCD), Some(768.0));
+
+        let r = scale_ordered(None, Some(WordOrder::CDAB));
+        assert_eq!(r.scale_factor(&[100, 3, 0], WordOrder::DCBA), Some(3.0));
+
+        let r = scale_ordered(Some(WordOrder::CDAB), None);
+        assert_eq!(r.scale_factor(&[100, 3, 0], WordOrder::ABCD), Some(3.0));
+        let r = scale_ordered(None, None);
+        assert_eq!(
+            r.scale_factor(&[100, 0x0300, 0], WordOrder::DCBA),
+            Some(3.0)
+        );
+
+        let mut single = scaled_by(CustomRepr::U16, ScaleMode::Mul, U16, 110);
+        single.word_order = Some(WordOrder::BADC);
+        assert_eq!(single.evaluate(&[0x6400, 3], WordOrder::ABCD), "76800");
+        single.scale.as_mut().unwrap().word_order = Some(WordOrder::ABCD);
+        assert_eq!(single.evaluate(&[0x6400, 3], WordOrder::ABCD), "300");
+
+        let mut sunspec = scaled_by(CustomRepr::U16, ScaleMode::Pow10, ScaleRepr::Sunspec, 110);
+        assert_eq!(sunspec.evaluate(&[100, 0x0100], WordOrder::ABCD), "1e258");
+        sunspec.scale.as_mut().unwrap().word_order = Some(WordOrder::BADC);
+        assert_eq!(sunspec.evaluate(&[100, 0x0100], WordOrder::ABCD), "1000");
+        assert_eq!(sunspec.numeric(&[100, 0x0080], WordOrder::ABCD), None);
+    }
+
+    #[test]
+    fn a_scale_word_order_round_trips_and_is_omitted_when_unset() {
+        let r = scale_ordered(None, Some(WordOrder::BADC));
+        let json = serde_json::to_string(&r).unwrap();
+        assert_eq!(
+            json,
+            r#"{"repr":"u16","scale":{"register":110,"mode":"mul","repr":"u32","word_order":"badc"}}"#
+        );
+        let back: CustomRule = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.scale, r.scale);
+
+        let unset = scale_ordered(Some(WordOrder::CDAB), None);
+        let json = serde_json::to_string(&unset).unwrap();
+        assert_eq!(
+            json,
+            r#"{"repr":"u16","scale":{"register":110,"mode":"mul","repr":"u32"},"word_order":"cdab"}"#
+        );
+        let back: CustomRule = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.scale.unwrap().word_order, None);
+    }
+
     #[test]
     fn scale_serializes_with_its_type_only_when_not_u16() {
         let r = scaled_by(CustomRepr::I16, ScaleMode::Pow10, ScaleRepr::Sunspec, 40100);
@@ -1243,6 +1313,7 @@ mod tests {
                 register: 40100,
                 mode: ScaleMode::Pow10,
                 repr: U16,
+                ..Default::default()
             })
         );
         assert!(

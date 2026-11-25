@@ -620,6 +620,7 @@ impl Item {
             } else {
                 CustomRepr::U16
             }),
+            word_order: None,
         });
         rule.ops = [
             op(OpKind::Mul, scale, 1.0),
@@ -1594,6 +1595,7 @@ parameters:
                 register: 11,
                 mode: ScaleMode::Mul,
                 repr: ScaleRepr::Plain(CustomRepr::U16),
+                ..Default::default()
             })
         );
         assert_eq!(power.evaluate(&[2000, 500], WordOrder::ABCD), "1000 W");

@@ -1,6 +1,6 @@
 use super::Device;
 use crate::config::Registers;
-use crate::custom::{CustomOp, CustomRepr, CustomRule, OpKind};
+use crate::custom::{ASCII_REGISTERS_MAX, CustomOp, CustomRepr, CustomRule, OpKind};
 use crate::modbus::WordOrder;
 use crate::register::{RegisterCell, RegisterType};
 use serde::Deserialize;
@@ -54,6 +54,7 @@ struct Reading {
     offset: Option<f64>,
     precision: Option<u8>,
     swap: Option<String>,
+    structure: Option<Value>,
 }
 
 #[derive(Deserialize)]
@@ -156,12 +157,115 @@ fn repr(data_type: Option<&str>, count: Option<u8>) -> Option<CustomRepr> {
     })
 }
 
-fn word_order(swap: Option<&str>) -> WordOrder {
-    match swap {
-        Some("byte") => WordOrder::BADC,
-        Some("word") => WordOrder::CDAB,
-        Some("word_byte") => WordOrder::DCBA,
-        _ => WordOrder::ABCD,
+enum Field {
+    Number(CustomRepr),
+    NativeLong { signed: bool },
+    Text(usize),
+}
+
+fn parse_structure(text: &str) -> Option<(bool, Field)> {
+    let (native, little) = match text.chars().next() {
+        Some('<' | '=') => (false, true),
+        Some('>' | '!') => (false, false),
+        _ => (true, true),
+    };
+    let mut chars = text
+        .strip_prefix(['@', '=', '<', '>', '!'])
+        .unwrap_or(text)
+        .chars();
+    let mut fields = Vec::new();
+    while let Some(mut format) = chars.next() {
+        if format.is_ascii_whitespace() {
+            continue;
+        }
+        let mut repeat = None;
+        while let Some(digit) = format.to_digit(10) {
+            repeat = Some(
+                repeat
+                    .unwrap_or(0usize)
+                    .checked_mul(10)?
+                    .checked_add(digit as usize)?,
+            );
+            format = chars.next()?;
+        }
+        fields.push((repeat.unwrap_or(1), format));
+    }
+    let [(repeat, format)] = fields[..] else {
+        return None;
+    };
+    let field = match (format, repeat) {
+        ('s', len) if len > 0 => Field::Text(len),
+        ('l', 1) if native => Field::NativeLong { signed: true },
+        ('L', 1) if native => Field::NativeLong { signed: false },
+        (_, 1) => Field::Number(match format {
+            'h' => CustomRepr::I16,
+            'H' => CustomRepr::U16,
+            'i' | 'l' => CustomRepr::I32,
+            'I' | 'L' => CustomRepr::U32,
+            'q' => CustomRepr::I64,
+            'Q' => CustomRepr::U64,
+            'e' => CustomRepr::F16,
+            'f' => CustomRepr::F32,
+            'd' => CustomRepr::F64,
+            _ => return None,
+        }),
+        _ => return None,
+    };
+    Some((little, field))
+}
+
+fn custom(
+    structure: &str,
+    count: Option<u8>,
+    swap: Option<&str>,
+) -> Option<(CustomRepr, Option<u8>, WordOrder)> {
+    let field = match parse_structure(structure)? {
+        (little, Field::NativeLong { signed }) => {
+            let repr = match (count, signed) {
+                (Some(2), true) => CustomRepr::I32,
+                (Some(2), false) => CustomRepr::U32,
+                (_, true) => CustomRepr::I64,
+                (_, false) => CustomRepr::U64,
+            };
+            (little, Field::Number(repr))
+        }
+        parsed => parsed,
+    };
+    let (repr, registers, order) = match field {
+        (_, Field::NativeLong { .. }) => return None,
+        (little, Field::Number(repr)) => {
+            let order = word_order(swap, little, repr.register_count() > 1);
+            (repr, None, order)
+        }
+        (_, Field::Text(len)) => {
+            let registers = u8::try_from(len.div_ceil(2))
+                .ok()
+                .filter(|&n| n <= ASCII_REGISTERS_MAX)?;
+            (
+                CustomRepr::Ascii,
+                Some(registers),
+                word_order(swap, false, false),
+            )
+        }
+    };
+    let width = registers.map_or_else(|| repr.register_count(), usize::from);
+    count
+        .is_none_or(|count| usize::from(count) == width)
+        .then_some((repr, registers, order))
+}
+
+fn word_order(swap: Option<&str>, little: bool, words: bool) -> WordOrder {
+    let (byte, word) = match swap {
+        Some("byte") => (true, false),
+        Some("word") => (false, true),
+        Some("word_byte") => (true, true),
+        _ => (false, false),
+    };
+    match (byte != little, words && word != little) {
+        (false, false) => WordOrder::ABCD,
+        (true, false) => WordOrder::BADC,
+        (false, true) => WordOrder::CDAB,
+        (true, true) => WordOrder::DCBA,
     }
 }
 
@@ -173,8 +277,18 @@ impl Reading {
         )
     }
 
-    fn rule(&self, unit: Option<&str>) -> Option<CustomRule> {
+    fn layout(&self) -> Option<(CustomRepr, Option<u8>, WordOrder)> {
+        let swap = self.swap.as_deref();
+        if self.data_type.as_deref() == Some("custom") {
+            return custom(self.structure.as_ref()?.as_str()?, self.count, swap);
+        }
         let repr = repr(self.data_type.as_deref(), self.count)?;
+        let registers = self.count.filter(|_| repr == CustomRepr::Ascii);
+        Some((repr, registers, word_order(swap, false, true)))
+    }
+
+    fn rule(&self, unit: Option<&str>) -> Option<CustomRule> {
+        let (repr, registers, order) = self.layout()?;
         let ascii = repr == CustomRepr::Ascii;
         let ops = [
             self.scale
@@ -187,11 +301,11 @@ impl Reading {
         Some(CustomRule {
             address: self.address,
             repr,
-            registers: if ascii { self.count } else { None },
+            registers,
             ops: ops.into_iter().flatten().collect(),
             decimals: if ascii { None } else { self.precision },
             suffix: unit.map_or_default(|unit| format!(" {unit}")),
-            word_order: Some(word_order(self.swap.as_deref())),
+            word_order: Some(order),
             ..Default::default()
         })
     }
@@ -388,7 +502,7 @@ pub fn parse(text: &str) -> Option<Vec<Device>> {
 mod tests {
     use super::parse;
     use crate::config::Registers;
-    use crate::custom::{CustomOp, CustomRepr, OpKind};
+    use crate::custom::{CustomOp, CustomRepr, CustomRule, OpKind};
     use crate::modbus::WordOrder;
     use crate::register::RegisterType::{Coil, Discrete, Holding, Input};
 
@@ -756,5 +870,242 @@ sensors:
         ] {
             assert!(parse(text).is_none(), "{text}");
         }
+    }
+
+    fn ha_registers(bytes: &[u8], swap: &str) -> Vec<u16> {
+        let mut words: Vec<u16> = bytes
+            .chunks(2)
+            .map(|pair| u16::from_be_bytes([pair[0], *pair.get(1).unwrap_or(&0)]))
+            .collect();
+        if matches!(swap, "byte" | "word_byte") {
+            words.iter_mut().for_each(|word| *word = word.swap_bytes());
+        }
+        if matches!(swap, "word" | "word_byte") {
+            words.reverse();
+        }
+        words
+    }
+
+    fn custom_rule(structure: &str, swap: &str, count: Option<u8>) -> Option<CustomRule> {
+        let count = count.map_or_default(|count| format!("\n    count: {count}"));
+        let mut registers = single(&format!(
+            "
+sensors:
+  - name: Value
+    address: 7
+    data_type: custom
+    structure: '{structure}'
+    swap: {swap}{count}
+"
+        ));
+        let entry = registers.holdings.remove(0);
+        assert_eq!(entry.label.as_deref(), Some("Value"), "{structure}");
+        entry.custom
+    }
+
+    fn check(
+        structure: &str,
+        swap: &str,
+        bytes: &[u8],
+        repr: CustomRepr,
+        order: WordOrder,
+        value: &str,
+    ) {
+        let words = ha_registers(bytes, swap);
+        for count in [None, Some(words.len() as u8)] {
+            let rule = custom_rule(structure, swap, count).expect(structure);
+            assert_eq!(rule.repr, repr, "{structure} {swap}");
+            assert_eq!(rule.word_order, Some(order), "{structure} {swap}");
+            assert_eq!(rule.registers, None, "{structure} {swap}");
+            for device in WordOrder::ALL {
+                assert_eq!(rule.evaluate(&words, device), value, "{structure} {swap}");
+            }
+        }
+    }
+
+    #[test]
+    fn custom_structures_compose_the_byte_order_with_the_swap() {
+        use CustomRepr::{F16, F32, F64, I16, I32, I64, U16, U32, U64};
+        use WordOrder::{ABCD, BADC, CDAB, DCBA};
+        let i32 = -123_456_789i32;
+        let i64 = -5_000_000_001i64;
+        let u64 = 5_000_000_001u64;
+        check(">i", "none", &i32.to_be_bytes(), I32, ABCD, "-123456789");
+        check("!i", "none", &i32.to_be_bytes(), I32, ABCD, "-123456789");
+        check("<i", "none", &i32.to_le_bytes(), I32, DCBA, "-123456789");
+        check("=l", "none", &i32.to_le_bytes(), I32, DCBA, "-123456789");
+        check("@l", "none", &i64.to_le_bytes(), I64, DCBA, "-5000000001");
+        check(">h", "none", &(-2i16).to_be_bytes(), I16, ABCD, "-2");
+        check("<h", "none", &(-2i16).to_le_bytes(), I16, BADC, "-2");
+        check("<H", "byte", &4660u16.to_le_bytes(), U16, ABCD, "4660");
+        check("!H", "byte", &4660u16.to_be_bytes(), U16, BADC, "4660");
+        check(">f", "word", &1.5f32.to_be_bytes(), F32, CDAB, "1.5");
+        check("<f", "word", &1.5f32.to_le_bytes(), F32, BADC, "1.5");
+        check(
+            ">I",
+            "word_byte",
+            &0x1234_5678u32.to_be_bytes(),
+            U32,
+            DCBA,
+            "305419896",
+        );
+        check(
+            "<I",
+            "word_byte",
+            &0x1234_5678u32.to_le_bytes(),
+            U32,
+            ABCD,
+            "305419896",
+        );
+        check(">q", "none", &i64.to_be_bytes(), I64, ABCD, "-5000000001");
+        check("<Q", "none", &u64.to_le_bytes(), U64, DCBA, "5000000001");
+        check("<Q", "word", &u64.to_le_bytes(), U64, BADC, "5000000001");
+        check("e", "none", &0x3E00u16.to_le_bytes(), F16, BADC, "1.5");
+        check("1d", "none", &2.25f64.to_le_bytes(), F64, DCBA, "2.25");
+    }
+
+    #[test]
+    fn custom_strings_follow_only_the_byte_swap() {
+        for (structure, swap, count, registers, order) in [
+            ("12s", "none", None, 6, WordOrder::ABCD),
+            ("<12s", "word", Some(6), 6, WordOrder::ABCD),
+            (">12s", "byte", Some(6), 6, WordOrder::BADC),
+            ("=12s", "word_byte", None, 6, WordOrder::BADC),
+            ("11s", "none", Some(6), 6, WordOrder::ABCD),
+            ("1s", "none", None, 1, WordOrder::ABCD),
+        ] {
+            let rule = custom_rule(structure, swap, count).expect(structure);
+            assert_eq!(rule.repr, CustomRepr::Ascii, "{structure}");
+            assert_eq!(rule.registers, Some(registers), "{structure}");
+            assert_eq!(rule.word_order, Some(order), "{structure} {swap}");
+        }
+        let words = ha_registers(b"MTUI inverter", "byte");
+        let rule = custom_rule(">13s", "byte", Some(7)).expect("string");
+        assert_eq!(rule.evaluate(&words, WordOrder::DCBA), "MTUI inverter");
+    }
+
+    #[test]
+    fn unsupported_custom_structures_keep_only_the_label() {
+        for (structure, count) in [
+            (">3h", None),
+            (">hH", None),
+            ("2i", None),
+            ("x", None),
+            (">2xh", None),
+            (">0h", None),
+            (">z", None),
+            (">?", None),
+            (">b", None),
+            (">1 h", None),
+            ("", None),
+            (">", None),
+            ("99999999999999999999999h", None),
+            ("300s", None),
+            ("0s", None),
+            (">i", Some(1)),
+            (">i", Some(4)),
+            ("<q", Some(2)),
+            ("12s", Some(5)),
+            (" >h", None),
+            ("l", Some(3)),
+        ] {
+            assert_eq!(
+                custom_rule(structure, "none", count),
+                None,
+                "{structure} {count:?}"
+            );
+        }
+        let registers = single(
+            "
+sensors:
+  - name: Bare
+    address: 3
+    data_type: custom
+",
+        );
+        assert_eq!(registers.holdings[0].label.as_deref(), Some("Bare"));
+        assert!(registers.holdings[0].custom.is_none());
+
+        let registers = single(
+            "
+sensors:
+  - name: Numeric
+    address: 4
+    data_type: custom
+    structure: 5
+",
+        );
+        assert_eq!(registers.holdings[0].label.as_deref(), Some("Numeric"));
+        assert!(registers.holdings[0].custom.is_none());
+    }
+
+    #[test]
+    fn a_native_long_takes_its_width_from_the_count() {
+        for (structure, count, repr) in [
+            ("l", Some(2), CustomRepr::I32),
+            ("@L", Some(2), CustomRepr::U32),
+            ("l", Some(4), CustomRepr::I64),
+            ("@L", None, CustomRepr::U64),
+        ] {
+            let rule = custom_rule(structure, "none", count).expect(structure);
+            assert_eq!(rule.repr, repr, "{structure} {count:?}");
+            assert_eq!(rule.word_order, Some(WordOrder::DCBA), "{structure}");
+        }
+        let words = ha_registers(&(-7i32).to_le_bytes(), "none");
+        let rule = custom_rule("l", "none", Some(2)).unwrap();
+        assert_eq!(rule.evaluate(&words, WordOrder::ABCD), "-7");
+    }
+
+    #[test]
+    fn custom_sensors_keep_the_reading_options_and_repeat_by_their_width() {
+        let registers = single(
+            "
+sensors:
+  - name: Energy
+    address: 10
+    data_type: custom
+    structure: '<i'
+    count: 2
+    scale: 0.5
+    precision: 2
+    unit_of_measurement: kWh
+    virtual_count: 1
+  - name: Serial
+    address: 20
+    data_type: custom
+    structure: '>5s'
+    precision: 2
+    slave_count: 1
+",
+        );
+        let holdings: Vec<_> = registers
+            .holdings
+            .iter()
+            .map(|e| (e.address, e.label.as_deref().unwrap(), e.custom.is_some()))
+            .collect();
+        assert_eq!(
+            holdings,
+            [
+                (10, "Energy", true),
+                (12, "Energy 1", true),
+                (20, "Serial", true),
+                (23, "Serial 1", true),
+            ]
+        );
+        let energy = registers.holdings[0].custom.as_ref().expect("rule");
+        assert_eq!(
+            energy.ops,
+            [CustomOp {
+                op: OpKind::Mul,
+                v: 0.5
+            }]
+        );
+        assert_eq!(energy.decimals, Some(2));
+        assert_eq!(energy.suffix, " kWh");
+        let words = ha_registers(&(-3i32).to_le_bytes(), "none");
+        assert_eq!(energy.evaluate(&words, WordOrder::ABCD), "-1.50 kWh");
+        let serial = registers.holdings[2].custom.as_ref().expect("rule");
+        assert_eq!(serial.decimals, None);
+        assert_eq!(serial.registers, Some(3));
     }
 }

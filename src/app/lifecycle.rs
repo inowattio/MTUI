@@ -1103,6 +1103,7 @@ mod tests {
             register: 50,
             mode: ScaleMode::Pow10,
             repr: ScaleRepr::Sunspec,
+            ..Default::default()
         });
         assert_eq!(custom_words_outside(&rules, H, 10..=20), cells(&[50]));
         assert_eq!(custom_words_outside(&rules, H, 15..=17), cells(&[18, 50]));
