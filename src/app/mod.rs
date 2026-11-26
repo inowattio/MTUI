@@ -1092,6 +1092,7 @@ mod tests {
 }
 
 mod api;
+mod background;
 mod changes;
 mod columns;
 mod config_io;
@@ -1110,6 +1111,8 @@ mod logs;
 mod panel;
 mod pin;
 mod raw;
+mod reconnect;
+mod refresh;
 mod search;
 mod settings;
 mod stats;
