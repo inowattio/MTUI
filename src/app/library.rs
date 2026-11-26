@@ -13,6 +13,7 @@ use crate::state::{
 };
 use futures::StreamExt;
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::LazyLock;
 use std::time::Duration;
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
@@ -893,7 +894,7 @@ where
     Ok(models)
 }
 
-fn client() -> reqwest::Client {
+static CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
     #[cfg(not(target_arch = "wasm32"))]
     {
         reqwest::Client::builder()
@@ -905,11 +906,11 @@ fn client() -> reqwest::Client {
     {
         reqwest::Client::new()
     }
-}
+});
 
 async fn fetch(url: &str) -> Result<Vec<u8>, String> {
     let request = async {
-        let response = client().get(url).send().await?.error_for_status()?;
+        let response = CLIENT.get(url).send().await?.error_for_status()?;
         response.bytes().await
     };
     match compat::timeout(REQUEST_TIMEOUT, request).await {
