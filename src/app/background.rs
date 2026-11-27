@@ -140,19 +140,14 @@ impl App {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
-    #[cfg(not(target_arch = "wasm32"))]
     use super::{App, BackgroundTask};
-    #[cfg(not(target_arch = "wasm32"))]
     use crate::config::Config;
     use crate::register::RegisterType;
-    #[cfg(not(target_arch = "wasm32"))]
     use std::assert_matches;
-    #[cfg(not(target_arch = "wasm32"))]
     use std::time::Duration;
 
-    #[cfg(not(target_arch = "wasm32"))]
     async fn app_with_refresh_in_flight() -> App {
         let mut app = App::boot(Config::default(), String::new()).await;
         app.refresh();
@@ -164,7 +159,6 @@ mod tests {
         app
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
     #[tokio::test]
     async fn freeing_a_pending_refresh_poisons_the_kept_device() {
         let mut app = app_with_refresh_in_flight().await;
@@ -183,7 +177,6 @@ mod tests {
         assert!(!device.is_poisoned());
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
     #[tokio::test]
     async fn freeing_a_finished_refresh_leaves_the_device_clean() {
         let mut app = app_with_refresh_in_flight().await;

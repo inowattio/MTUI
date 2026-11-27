@@ -356,26 +356,20 @@ impl App {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
-    #[cfg(not(target_arch = "wasm32"))]
     use super::App;
-    #[cfg(not(target_arch = "wasm32"))]
     use crate::config::{Config, CyclePanels};
     use crate::register::RegisterType;
-    #[cfg(not(target_arch = "wasm32"))]
     use crate::scratch::ScratchDir;
-    #[cfg(not(target_arch = "wasm32"))]
     use crate::state::ReadPanel;
 
-    #[cfg(not(target_arch = "wasm32"))]
     fn saved(scratch: &ScratchDir) -> Config {
         let content =
             std::fs::read_to_string(scratch.path("config.json")).expect("config written on exit");
         serde_json::from_str(&content).expect("valid config")
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
     #[tokio::test]
     async fn quitting_saves_the_position_as_startup_when_enabled() {
         let scratch = ScratchDir::new("save-position");
@@ -402,7 +396,6 @@ mod tests {
         );
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
     #[tokio::test]
     async fn quitting_leaves_the_config_alone_when_disabled() {
         let scratch = ScratchDir::new("keep-position");
@@ -415,7 +408,6 @@ mod tests {
         assert!(!scratch.path("config.json").exists());
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
     #[tokio::test]
     async fn a_clean_quit_request_also_saves_the_position() {
         let scratch = ScratchDir::new("request-quit-position");
@@ -433,7 +425,6 @@ mod tests {
         );
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
     #[tokio::test]
     async fn panel_cycle_skips_disabled_panels() {
         let mut app = App::boot(Config::default(), String::new()).await;
@@ -449,7 +440,6 @@ mod tests {
         assert_eq!(app.read_mut().panel, ReadPanel::Main);
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
     #[tokio::test]
     async fn panel_cycle_stays_on_main_when_every_panel_is_disabled() {
         let mut app = App::boot(Config::default(), String::new()).await;

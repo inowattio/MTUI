@@ -102,24 +102,18 @@ impl App {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
-    #[cfg(not(target_arch = "wasm32"))]
     use super::{App, BackgroundTask};
-    #[cfg(not(target_arch = "wasm32"))]
     use crate::config::Config;
-    #[cfg(not(target_arch = "wasm32"))]
     use crate::modbus::{
         DataBits, DeviceConfig, Interface, InterfaceSerialParams, InterfaceTcpParams, ModbusDevice,
         Parity, StopBits,
     };
     use crate::register::RegisterType;
-    #[cfg(not(target_arch = "wasm32"))]
     use crate::state::ConnectionStatus;
-    #[cfg(not(target_arch = "wasm32"))]
     use std::assert_matches;
 
-    #[cfg(not(target_arch = "wasm32"))]
     fn missing_serial_port() -> Interface {
         Interface::Serial(InterfaceSerialParams {
             path: "/nonexistent/mtui-test-port".to_string(),
@@ -130,12 +124,10 @@ mod tests {
         })
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
     async fn settle(app: &mut App) {
         crate::app::settle_until(app, |app| app.background_task.is_none(), "background task").await;
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
     #[tokio::test]
     async fn a_lost_serial_link_is_reconnected_with_backoff() {
         let mut app = App::boot(Config::default(), String::new()).await;
@@ -179,7 +171,6 @@ mod tests {
         assert!(app.reconnect.next_at.is_some());
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
     #[tokio::test]
     async fn no_device_and_no_lost_link_means_no_reconnect() {
         let mut app = App::boot(Config::default(), String::new()).await;
@@ -191,7 +182,6 @@ mod tests {
         assert!(app.background_task.is_none());
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
     #[tokio::test]
     async fn a_unit_id_set_during_a_reconnect_reaches_the_new_device() {
         use crate::modbus::ModbusDevice;
@@ -213,7 +203,6 @@ mod tests {
         assert_eq!(app.device.as_ref().map(ModbusDevice::unit), Some(target));
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
     async fn app_with_silent_device() -> App {
         let mut app = App::boot(Config::default(), String::new()).await;
         let silent = ModbusDevice::new(&DeviceConfig {
@@ -228,7 +217,6 @@ mod tests {
         app
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
     #[tokio::test]
     async fn a_silent_device_counts_as_a_lost_link_by_default() {
         let mut app = app_with_silent_device().await;
@@ -241,7 +229,6 @@ mod tests {
         assert!(app.reconnect.link_lost);
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
     #[tokio::test]
     async fn timeouts_are_left_alone_when_the_setting_is_off() {
         let mut app = app_with_silent_device().await;
@@ -259,7 +246,6 @@ mod tests {
         );
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
     #[tokio::test]
     async fn a_dropped_connection_is_a_lost_link_even_with_the_setting_off() {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -290,7 +276,6 @@ mod tests {
         assert!(app.reconnect.link_lost);
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
     #[tokio::test]
     async fn a_device_answering_with_an_exception_is_not_reconnected() {
         let mut app = App::boot(Config::default(), String::new()).await;
